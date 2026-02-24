@@ -11,6 +11,7 @@ import {
   getTeamLeaderboardApi,
   getTeamMembersApi,
 } from "@/lib/api";
+import { getSiteUrl } from "@/lib/site-url";
 
 type Team = { id: string; name: string; owner_user_id: string; total_score: number };
 type LeaderboardEntry = { rank: number; team_id: string; team_name: string; members_count: number; total_score: number };
@@ -171,7 +172,7 @@ export default function DashboardTeamsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/dashboard/teams/join?team=${team.id}`;
+                  const url = `${getSiteUrl()}/dashboard/teams/join?team=${team.id}`;
                   navigator.clipboard.writeText(url).then(() => setSuccess("Invite link copied.")).catch(() => setError("Could not copy"));
                 }}
                 className="px-4 py-2 rounded-lg border border-white/30 text-fintech-muted hover:text-white hover:border-white/50 text-sm"

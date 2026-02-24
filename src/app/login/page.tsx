@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createBrowserClient } from "@/lib/supabase";
+import { getDashboardUrl } from "@/lib/site-url";
 
 export default function LoginPage() {
   const supabase = createBrowserClient();
@@ -22,8 +23,7 @@ export default function LoginPage() {
     if (err) {
       setError(err.message);
     } else {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-      window.location.href = siteUrl ? `${siteUrl.replace(/\/$/, "")}/dashboard` : "/dashboard";
+      window.location.href = getDashboardUrl();
     }
   }
 

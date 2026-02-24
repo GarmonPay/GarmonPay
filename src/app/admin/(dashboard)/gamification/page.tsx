@@ -95,7 +95,13 @@ export default function AdminGamificationPage() {
       .finally(() => setSaving(false));
   }
 
-  if (!session) return null;
+  if (!session) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[200px]">
+        <p className="text-fintech-muted">Redirecting to admin login…</p>
+      </div>
+    );
+  }
   if (loading || !config) {
     return (
       <div className="p-8">

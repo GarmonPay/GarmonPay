@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase";
+import { getRegisterUrl } from "@/lib/site-url";
 
 export default function RegisterPage() {
   const supabase = createBrowserClient();
@@ -22,12 +23,11 @@ export default function RegisterPage() {
       setError("Password must be at least 8 characters");
       return;
     }
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "");
     const { error: err } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${siteUrl}/register`,
+        emailRedirectTo: getRegisterUrl(),
       },
     });
     if (err) {

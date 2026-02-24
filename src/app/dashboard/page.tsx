@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
+import { getReferralLink } from "@/lib/site-url";
 import { getDashboard, getWithdrawals, convertToAdCredit, getGrowth, getActivities, claimDailyReward, ensureReferralBonus } from "@/lib/api";
 
 function formatCents(cents: number) {
@@ -341,9 +342,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-xs text-fintech-muted mb-1">Your Referral Link:</p>
             <code className="block p-2 rounded bg-black/30 text-fintech-accent text-sm break-all">
-              {typeof window !== "undefined"
-                ? `${(process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin).replace(/\/$/, "")}/register?ref=${data.referralCode ?? ""}`
-                : `${(process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "")}/register?ref=${data.referralCode ?? ""}`}
+              {getReferralLink(data.referralCode ?? "")}
             </code>
           </div>
           <div>

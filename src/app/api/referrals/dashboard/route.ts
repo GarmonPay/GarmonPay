@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
+import { getReferralLink } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase";
 import { countUserReferrals, getUserReferralEarningsCents } from "@/lib/viral-db";
 import {
@@ -83,10 +84,9 @@ export async function GET(request: Request) {
 
     const ids = referredUsersRaw.map((u) => u.id);
     if (ids.length === 0) {
-      const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "");
       return NextResponse.json({
         summary,
-        referralLink: `${siteOrigin}/register?ref=${referralCode}`,
+        referralLink: getReferralLink(referralCode),
         referredUsers: [],
         earningsHistory: await getEarningsHistory(supabase, userId),
       });
@@ -141,8 +141,7 @@ export async function GET(request: Request) {
     }));
 
     const earningsHistory = await getEarningsHistory(supabase, userId);
-    const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "");
-    const referralLink = referralCode ? `${siteOrigin}/register?ref=${referralCode}` : "";
+    const referralLink = referralCode ? getReferralLink(referralCode) : "";
 
     return NextResponse.json({
       summary,

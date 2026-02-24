@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getBanners, getDashboard } from "@/lib/api";
+import { getReferralLink } from "@/lib/site-url";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -56,10 +57,7 @@ export default function BannersPage() {
         ]).then(([bannersData, dash]) => {
           setBanners(bannersData.banners ?? []);
           if (dash?.referralCode) {
-            const base = typeof window !== "undefined"
-              ? (process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin)
-              : (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com");
-            setReferralLink(`${String(base).replace(/\/$/, "")}/register?ref=${dash.referralCode}`);
+            setReferralLink(getReferralLink(dash.referralCode));
           }
         });
       })
