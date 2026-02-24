@@ -28,7 +28,12 @@ export async function GET(request: Request) {
   }
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({
+      summary: { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeCents: 0, lifetimeReferralEarningsCents: 0, referralCode: "" },
+      referralLink: "",
+      referredUsers: [],
+      earningsHistory: [],
+    });
   }
 
   try {
@@ -146,7 +151,19 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     console.error("Referrals dashboard error:", e);
-    return NextResponse.json({ message: "Failed to load" }, { status: 500 });
+    const emptySummary = {
+      totalReferrals: 0,
+      activeReferrals: 0,
+      monthlyReferralIncomeCents: 0,
+      lifetimeReferralEarningsCents: 0,
+      referralCode: "",
+    };
+    return NextResponse.json({
+      summary: emptySummary,
+      referralLink: "",
+      referredUsers: [],
+      earningsHistory: [],
+    });
   }
 }
 

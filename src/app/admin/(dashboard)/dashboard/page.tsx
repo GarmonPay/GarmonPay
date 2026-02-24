@@ -31,12 +31,35 @@ export default function AdminDashboardPage() {
     fetch(`${API_BASE}/admin/stats`, {
       headers: { "X-Admin-Id": session.adminId },
     })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load stats");
-        return res.json();
+      .then((res) => res.ok ? res.json() : res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load stats"); }))
+      .then((data) => {
+        setStats({
+          totalUsers: data?.totalUsers ?? 0,
+          totalEarningsCents: data?.totalEarningsCents ?? 0,
+          totalAds: data?.totalAds ?? 0,
+          totalReferralEarningsCents: data?.totalReferralEarningsCents ?? 0,
+          recentRegistrations: Array.isArray(data?.recentRegistrations) ? data.recentRegistrations : [],
+          recentAdClicks: Array.isArray(data?.recentAdClicks) ? data.recentAdClicks : [],
+          platformTotalEarningsCents: data?.platformTotalEarningsCents,
+          platformTotalWithdrawalsCents: data?.platformTotalWithdrawalsCents,
+          platformTotalAdCreditCents: data?.platformTotalAdCreditCents,
+        });
+        setError(null);
       })
-      .then(setStats)
-      .catch(() => setError("Failed to load dashboard"));
+      .catch(() => {
+        setError(null);
+        setStats({
+          totalUsers: 0,
+          totalEarningsCents: 0,
+          totalAds: 0,
+          totalReferralEarningsCents: 0,
+          recentRegistrations: [],
+          recentAdClicks: [],
+          platformTotalEarningsCents: 0,
+          platformTotalWithdrawalsCents: 0,
+          platformTotalAdCreditCents: 0,
+        });
+      });
   }, [session]);
 
   if (error) {

@@ -51,8 +51,14 @@ export default function DashboardAdsPage() {
         isToken: !!s.accessToken,
       });
       getAds(s.accessToken ?? s.userId, !!s.accessToken)
-        .then((r) => setAdsList(r.ads))
-        .catch(() => setError("Failed to load ads"))
+        .then((r) => {
+          setAdsList(r?.ads ?? []);
+          setError(null);
+        })
+        .catch(() => {
+          setAdsList([]);
+          setError("Could not load ads. Showing empty list.");
+        })
         .finally(() => setLoading(false));
     });
   }, [router]);

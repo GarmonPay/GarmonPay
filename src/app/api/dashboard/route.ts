@@ -15,9 +15,32 @@ export async function GET(request: Request) {
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const userIdHeader = request.headers.get("x-user-id");
 
+  const safeDashboardPayload = {
+    earningsTodayCents: 0,
+    earningsWeekCents: 0,
+    earningsMonthCents: 0,
+    balanceCents: 0,
+    adCreditBalanceCents: 0,
+    withdrawableCents: 0,
+    totalEarningsCents: 0,
+    totalWithdrawnCents: 0,
+    membershipTier: "starter",
+    referralCode: "",
+    referralEarningsCents: 0,
+    totalReferrals: 0,
+    activeReferralSubscriptions: 0,
+    monthlyReferralCommissionCents: 0,
+    lifetimeReferralCommissionCents: 0,
+    announcements: [] as { id: string; title: string; body: string; publishedAt: string }[],
+    availableAds: [] as { id: string; title: string; rewardCents: number }[],
+  };
+
   if (bearerToken) {
     const supabase = createServerClient(bearerToken);
-    if (supabase) {
+    if (!supabase) {
+      return NextResponse.json(safeDashboardPayload, { status: 200 });
+    }
+    {
       try {
         const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
         if (authError || !authUser) {
@@ -104,28 +127,7 @@ export async function GET(request: Request) {
         });
       } catch (err) {
         console.error("Supabase connection failed", err);
-        return NextResponse.json(
-          {
-            earningsTodayCents: 0,
-            earningsWeekCents: 0,
-            earningsMonthCents: 0,
-            balanceCents: 0,
-            adCreditBalanceCents: 0,
-            withdrawableCents: 0,
-            totalEarningsCents: 0,
-            totalWithdrawnCents: 0,
-            membershipTier: "starter",
-            referralCode: "",
-            referralEarningsCents: 0,
-            totalReferrals: 0,
-            activeReferralSubscriptions: 0,
-            monthlyReferralCommissionCents: 0,
-            lifetimeReferralCommissionCents: 0,
-            announcements: [],
-            availableAds: [],
-          },
-          { status: 200 }
-        );
+        return NextResponse.json(safeDashboardPayload, { status: 200 });
       }
     }
   }

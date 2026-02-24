@@ -17,7 +17,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({
+      totalReferrals: 0,
+      referralEarningsCents: 0,
+      leaderboardRank: null,
+      badges: [],
+      canClaimDaily: false,
+    });
   }
   try {
     await ensureBadgesAwarded(userId).catch(() => {});

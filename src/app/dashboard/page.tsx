@@ -62,12 +62,30 @@ export default function DashboardPage() {
           getActivities(tokenOrId, isToken),
         ]).then(([dashRes, wRes, gRes, aRes]) => {
           if (cancelled) return;
-          if (dashRes.status === "fulfilled") {
+          if (dashRes.status === "fulfilled" && dashRes.value != null) {
             setData(dashRes.value);
             setError(null);
           } else {
-            setError("Unable to load dashboard. Check your connection or try again.");
-            setData(null);
+            setError(null);
+            setData({
+              earningsTodayCents: 0,
+              earningsWeekCents: 0,
+              earningsMonthCents: 0,
+              balanceCents: 0,
+              adCreditBalanceCents: 0,
+              withdrawableCents: 0,
+              totalEarningsCents: 0,
+              totalWithdrawnCents: 0,
+              membershipTier: "starter",
+              referralCode: "",
+              referralEarningsCents: 0,
+              totalReferrals: 0,
+              activeReferralSubscriptions: 0,
+              monthlyReferralCommissionCents: 0,
+              lifetimeReferralCommissionCents: 0,
+              announcements: [],
+              availableAds: [],
+            } as Awaited<ReturnType<typeof getDashboard>>);
           }
           if (wRes.status === "fulfilled") {
             setWithdrawals(wRes.value?.withdrawals ?? []);
@@ -273,11 +291,11 @@ export default function DashboardPage() {
           Ad Opportunities
         </h2>
         <p className="text-sm text-fintech-muted mb-4">Available Ads</p>
-        {data.availableAds.length === 0 ? (
+        {(data.availableAds?.length ?? 0) === 0 ? (
           <p className="text-fintech-muted italic">No ads available at the moment. Check back later.</p>
         ) : (
           <ul className="space-y-3">
-            {data.availableAds.map((ad) => (
+            {(data.availableAds ?? []).map((ad) => (
               <li
                 key={ad.id}
                 className="border-l-4 border-fintech-accent pl-4 py-2 hover:bg-white/5 rounded-r"
@@ -489,11 +507,11 @@ export default function DashboardPage() {
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Platform News
         </h2>
-        {data.announcements.length === 0 ? (
+        {(data.announcements?.length ?? 0) === 0 ? (
           <p className="text-fintech-muted italic">No announcements at this time.</p>
         ) : (
           <ul className="space-y-4">
-            {data.announcements.map((a) => (
+            {(data.announcements ?? []).map((a) => (
               <li key={a.id}>
                 <h3 className="font-semibold text-white">{a.title}</h3>
                 <p className="text-sm text-fintech-muted mt-1">{a.body}</p>

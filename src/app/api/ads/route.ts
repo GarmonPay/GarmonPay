@@ -18,6 +18,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ ads });
     } catch (e) {
       console.error("Ads list error:", e);
+      return NextResponse.json({
+        ads: listAdsMemory().map((a) => ({
+          id: a.id,
+          title: a.title,
+          adType: a.adType,
+          rewardCents: a.rewardCents,
+          requiredSeconds: a.requiredSeconds,
+          videoUrl: a.videoUrl,
+          imageUrl: a.imageUrl,
+          textContent: a.textContent,
+          targetUrl: a.targetUrl,
+          active: a.active,
+          createdAt: a.createdAt,
+        })),
+      });
     }
   }
   const ads = listAdsMemory().map((a) => ({

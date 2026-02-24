@@ -22,14 +22,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ withdrawals: [] });
   }
   try {
     const withdrawals = await listAllWithdrawals();
     return NextResponse.json({ withdrawals });
   } catch (e) {
     console.error("Admin list withdrawals error:", e);
-    return NextResponse.json({ message: "Failed to list" }, { status: 500 });
+    return NextResponse.json({ withdrawals: [] });
   }
 }
 
@@ -39,7 +39,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
   }
   let body: { id?: string; status?: string };
   try {

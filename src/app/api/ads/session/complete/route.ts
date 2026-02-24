@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       });
     } catch (e) {
       console.error("Complete session error:", e);
+      return NextResponse.json({ message: "Could not complete ad. Try again." }, { status: 503 });
     }
   }
 

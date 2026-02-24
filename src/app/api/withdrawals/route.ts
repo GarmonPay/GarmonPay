@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ withdrawals: [], minWithdrawalCents: MIN_WITHDRAWAL_CENTS });
   }
   try {
     const list = await listWithdrawalsByUser(userId);
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     console.error("List withdrawals error:", e);
-    return NextResponse.json({ message: "Failed to list withdrawals" }, { status: 500 });
+    return NextResponse.json({ withdrawals: [], minWithdrawalCents: MIN_WITHDRAWAL_CENTS });
   }
 }
 

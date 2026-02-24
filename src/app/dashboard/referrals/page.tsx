@@ -64,15 +64,26 @@ export default function ReferralsPage() {
     );
   }
 
-  if (error || !data) {
+  if (error && !data) {
     return (
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <p className="text-red-400">{error ?? "Failed to load referral dashboard."}</p>
+        <p className="text-red-400">{error}</p>
+        <button type="button" onClick={() => { setError(null); load(); }} className="mt-2 text-sm text-fintech-accent hover:underline">Try again</button>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+        <p className="text-fintech-muted">Loading…</p>
       </div>
     );
   }
 
-  const { summary, referralLink, referredUsers, earningsHistory } = data;
+  const summary = data?.summary ?? { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeCents: 0, lifetimeReferralEarningsCents: 0, referralCode: "" };
+  const referralLink = data?.referralLink ?? "";
+  const referredUsers = data?.referredUsers ?? [];
+  const earningsHistory = data?.earningsHistory ?? [];
 
   return (
     <div className="space-y-6">

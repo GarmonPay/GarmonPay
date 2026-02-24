@@ -94,10 +94,10 @@ export default function WithdrawPage() {
       });
       setSuccess("Withdrawal submitted. It will be reviewed by admin.");
       setForm({ amount: "", method: "crypto", wallet_address: "" });
-      const w = await getWithdrawals(session.tokenOrId, session.isToken);
-      setWithdrawals(w.withdrawals);
-      const dash = await getDashboard(session.tokenOrId, session.isToken);
-      setBalanceCents(dash.balanceCents);
+      const w = await getWithdrawals(session.tokenOrId, session.isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 }));
+      setWithdrawals(w?.withdrawals ?? []);
+      const dash = await getDashboard(session.tokenOrId, session.isToken).catch(() => null);
+      if (dash) setBalanceCents(dash.balanceCents ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
