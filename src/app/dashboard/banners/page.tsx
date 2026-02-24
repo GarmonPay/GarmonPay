@@ -55,8 +55,11 @@ export default function BannersPage() {
           getDashboard(tokenOrId, isToken).catch(() => null),
         ]).then(([bannersData, dash]) => {
           setBanners(bannersData.banners ?? []);
-          if (dash?.referralCode && typeof window !== "undefined") {
-            setReferralLink(`${window.location.origin}/register?ref=${dash.referralCode}`);
+          if (dash?.referralCode) {
+            const base = typeof window !== "undefined"
+              ? (process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin)
+              : (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com");
+            setReferralLink(`${String(base).replace(/\/$/, "")}/register?ref=${dash.referralCode}`);
           }
         });
       })

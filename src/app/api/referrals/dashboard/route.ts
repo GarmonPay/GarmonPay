@@ -83,9 +83,10 @@ export async function GET(request: Request) {
 
     const ids = referredUsersRaw.map((u) => u.id);
     if (ids.length === 0) {
+      const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "");
       return NextResponse.json({
         summary,
-        referralLink: typeof request.url === "string" ? `${new URL(request.url).origin}/register?ref=${referralCode}` : "",
+        referralLink: `${siteOrigin}/register?ref=${referralCode}`,
         referredUsers: [],
         earningsHistory: await getEarningsHistory(supabase, userId),
       });
@@ -140,8 +141,8 @@ export async function GET(request: Request) {
     }));
 
     const earningsHistory = await getEarningsHistory(supabase, userId);
-    const origin = typeof request.url === "string" ? new URL(request.url).origin : "";
-    const referralLink = referralCode ? `${origin}/register?ref=${referralCode}` : "";
+    const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "");
+    const referralLink = referralCode ? `${siteOrigin}/register?ref=${referralCode}` : "";
 
     return NextResponse.json({
       summary,

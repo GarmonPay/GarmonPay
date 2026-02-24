@@ -22,7 +22,8 @@ export default function LoginPage() {
     if (err) {
       setError(err.message);
     } else {
-      window.location.href = "/dashboard";
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+      window.location.href = siteUrl ? `${siteUrl.replace(/\/$/, "")}/dashboard` : "/dashboard";
     }
   }
 

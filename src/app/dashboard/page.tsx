@@ -342,8 +342,8 @@ export default function DashboardPage() {
             <p className="text-xs text-fintech-muted mb-1">Your Referral Link:</p>
             <code className="block p-2 rounded bg-black/30 text-fintech-accent text-sm break-all">
               {typeof window !== "undefined"
-                ? `${(process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin).replace(/\/$/, "")}/register?ref=${data.referralCode ?? ""}`
-                : `${process.env.NEXT_PUBLIC_APP_URL ?? "https://garmonpay.com"}/register?ref=${data.referralCode ?? ""}`}
+                ? `${(process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin).replace(/\/$/, "")}/register?ref=${data.referralCode ?? ""}`
+                : `${(process.env.NEXT_PUBLIC_SITE_URL ?? "https://garmonpay.com").replace(/\/$/, "")}/register?ref=${data.referralCode ?? ""}`}
             </code>
           </div>
           <div>
