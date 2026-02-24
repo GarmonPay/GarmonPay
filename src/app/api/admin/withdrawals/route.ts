@@ -4,6 +4,7 @@ import {
   listAllWithdrawals,
   updateWithdrawalStatus,
   rejectWithdrawal,
+  approveWithdrawal,
   type WithdrawalStatus,
 } from "@/lib/withdrawals-db";
 import { markWithdrawalTransactionCompleted } from "@/lib/transactions-db";
@@ -61,15 +62,24 @@ export async function PATCH(request: Request) {
     if (!result.success) {
       return NextResponse.json({ message: result.message ?? "Reject failed" }, { status: 400 });
     }
-    return NextResponse.json({ message: "Rejected; balance refunded" });
+    return NextResponse.json({ message: "Rejected; withdrawable balance refunded" });
+  }
+
+  if (status === "approved") {
+    const result = await approveWithdrawal(id);
+    if (!result.success) {
+      return NextResponse.json({ message: result.message ?? "Approve failed" }, { status: 400 });
+    }
+    await markWithdrawalTransactionCompleted(id).catch(() => {});
+    return NextResponse.json({ withdrawal: result.withdrawal ?? undefined, message: "Approved; fee recorded" });
   }
 
   const updated = await updateWithdrawalStatus(id, status);
   if (!updated) {
-    return NextResponse.json({ message: "Update failed or withdrawal not pending" }, { status: 400 });
+    return NextResponse.json({ message: "Update failed or withdrawal not in pending/approved" }, { status: 400 });
   }
-  if (status === "paid" || status === "approved") {
-    await markWithdrawalTransactionCompleted(id);
+  if (status === "paid") {
+    await markWithdrawalTransactionCompleted(id).catch(() => {});
   }
   return NextResponse.json({ withdrawal: updated });
 }

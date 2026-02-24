@@ -86,8 +86,8 @@ export default function ReferralsPage() {
   const earningsHistory = data?.earningsHistory ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+    <div className="space-y-4 tablet:space-y-6">
+      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-1">Referral Dashboard</h1>
         <p className="text-fintech-muted text-sm">
           Share your link to refer members. When they subscribe, you earn one-time and monthly commissions.
@@ -95,11 +95,11 @@ export default function ReferralsPage() {
       </div>
 
       {/* Referral summary */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Referral Summary
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 lg:grid-cols-4">
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
             <p className="text-xs text-fintech-muted uppercase">Total referrals</p>
             <p className="text-xl font-bold text-white mt-1">{summary.totalReferrals}</p>
@@ -120,19 +120,19 @@ export default function ReferralsPage() {
       </section>
 
       {/* Referral link + copy */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Your Referral Link
         </h2>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <code className="flex-1 p-3 rounded-lg bg-black/30 border border-white/10 text-fintech-accent text-sm break-all">
+        <div className="flex flex-col gap-3 tablet:flex-row">
+          <code className="flex-1 p-3 rounded-xl bg-black/30 border border-white/10 text-fintech-accent text-sm break-all">
             {referralLink || "—"}
           </code>
           <button
             type="button"
             onClick={copyLink}
             disabled={!referralLink}
-            className="shrink-0 px-4 py-2 rounded-lg bg-fintech-accent text-white font-medium text-sm hover:bg-fintech-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="min-h-touch shrink-0 rounded-xl px-4 py-3 bg-fintech-accent text-white font-medium transition-opacity hover:bg-fintech-accent/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {copied ? "Copied!" : "Copy"}
           </button>
@@ -140,7 +140,7 @@ export default function ReferralsPage() {
       </section>
 
       {/* Your Referral Banners */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Your Referral Banners
         </h2>
@@ -167,7 +167,7 @@ export default function ReferralsPage() {
                     setTimeout(() => setEmbedCopied(false), 2000);
                   });
                 }}
-                className="mt-2 px-4 py-2 rounded-lg bg-fintech-accent text-white font-medium text-sm hover:bg-fintech-accent/90"
+                className="min-h-touch mt-2 w-full rounded-xl px-4 py-3 bg-fintech-accent text-white font-medium transition-opacity hover:bg-fintech-accent/90 active:scale-[0.98] tablet:w-auto"
               >
                 {embedCopied ? "Copied!" : "Copy embed code"}
               </button>
@@ -177,7 +177,7 @@ export default function ReferralsPage() {
       </section>
 
       {/* Referred users table */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 overflow-hidden">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6 overflow-hidden">
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Referred Users
         </h2>
@@ -216,7 +216,7 @@ export default function ReferralsPage() {
       </section>
 
       {/* Referral earnings history */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 overflow-hidden">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6 overflow-hidden">
         <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
           Referral Earnings History
         </h2>

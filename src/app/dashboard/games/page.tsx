@@ -28,6 +28,14 @@ export default function DashboardGamesPage() {
   const [scratching, setScratching] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [openingMystery, setOpeningMystery] = useState(false);
+  const [liveFightsCount, setLiveFightsCount] = useState<number>(0);
+
+  useEffect(() => {
+    fetch("/api/boxing/live-matches")
+      .then((r) => r.ok ? r.json() : { matches: [] })
+      .then((d) => setLiveFightsCount(Array.isArray(d?.matches) ? d.matches.length : 0))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -150,6 +158,12 @@ export default function DashboardGamesPage() {
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <Link href="/dashboard/games/boxing">
+          <div className="bg-zinc-900 p-4 rounded-xl">
+            🥊 Boxing Arena
+          </div>
+        </Link>
+
         {/* Spin Wheel */}
         <div className={cardBase}>
           <div className="flex items-center gap-3 mb-3">
@@ -221,6 +235,21 @@ export default function DashboardGamesPage() {
             {claimingDaily ? "Claiming…" : "Claim Daily Bonus"}
           </button>
         </div>
+
+        {/* Boxing Arena — real-time PvP */}
+        <Link href="/dashboard/games/boxing" className={`game-card ${cardBase} block no-underline text-inherit`}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-3xl">🥊</span>
+            <h2 className="text-lg font-semibold text-white">Boxing Arena</h2>
+          </div>
+          <p className="text-sm text-fintech-muted mb-1">Fight other players. Winner takes the prize.</p>
+          {liveFightsCount > 0 && (
+            <p className="text-sm text-green-400 mb-3">Live fights happening now</p>
+          )}
+          <span className="inline-block w-full py-3 rounded-lg bg-fintech-accent text-white font-semibold text-center hover:opacity-90 transition-all">
+            Enter Arena
+          </span>
+        </Link>
 
         {/* Leaderboard — link only */}
         <Link href="/dashboard/leaderboard" className={`${cardBase} block no-underline text-inherit`}>

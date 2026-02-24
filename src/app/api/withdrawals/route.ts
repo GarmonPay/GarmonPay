@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import {
-  submitWithdrawal,
+  requestWithdrawal,
   listWithdrawalsByUser,
   MIN_WITHDRAWAL_CENTS,
   type WithdrawalMethod,
@@ -64,7 +64,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Wallet address required" }, { status: 400 });
   }
 
-  const result = await submitWithdrawal(userId, amountCents, method, walletAddress);
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    null;
+  const result = await requestWithdrawal(userId, amountCents, method, walletAddress, ip);
   if (!result.success) {
     return NextResponse.json({ message: result.message }, { status: 400 });
   }

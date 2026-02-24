@@ -1,16 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getRegisterUrl } from "@/lib/site-url";
 
+const REF_STORAGE_KEY = "garmonpay_ref";
+
 export default function RegisterPage() {
+  const searchParams = useSearchParams();
   const supabase = createBrowserClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const ref = searchParams.get("ref")?.trim();
+    if (ref && typeof localStorage !== "undefined") {
+      localStorage.setItem(REF_STORAGE_KEY, ref);
+    }
+  }, [searchParams]);
 
   async function register() {
     setError("");

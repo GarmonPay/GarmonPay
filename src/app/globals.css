@@ -3,13 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --fintech-bg: #0a0e17;
+  --fintech-bg: #0B0F1A;
   --fintech-bg-card: #111827;
-  --fintech-accent: #2563eb;
-  --fintech-money: #10b981;
-  --fintech-highlight: #f59e0b;
-  --fintech-muted: #6b7280;
-  --fintech-text: #f9fafb;
+  --fintech-accent: #3B82F6;
+  --fintech-success: #22C55E;
+  --fintech-danger: #EF4444;
+  --fintech-text: #FFFFFF;
+  --fintech-text-secondary: #9CA3AF;
+  --fintech-muted: #9CA3AF;
 }
 
 *,
@@ -29,8 +30,10 @@ body {
   width: 100%;
   background: var(--fintech-bg);
   color: var(--fintech-text);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -40,4 +43,70 @@ a {
 input, button, select, textarea {
   font: inherit;
   color: inherit;
+}
+
+/* Luxury card: soft shadow + rounded */
+@layer components {
+  .card-lux {
+    @apply rounded-2xl border border-white/[0.06] bg-fintech-bg-card shadow-card transition-all duration-app;
+  }
+  .card-lux:hover {
+    @apply shadow-card-hover border-white/[0.08];
+  }
+  /* Glass bar (header / bottom nav) */
+  .glass-bar {
+    @apply bg-fintech-bg-card/80 backdrop-blur-xl border-white/[0.06];
+  }
+  /* Button press */
+  .btn-press:active {
+    transform: scale(0.98);
+  }
+  /* Fight Arena: dark + gold */
+  .arena-bg {
+    background: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(180, 120, 40, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 30, 0.08) 0%, transparent 50%),
+                linear-gradient(180deg, #0B0F1A 0%, #0d1220 50%, #0B0F1A 100%);
+  }
+  .arena-glow {
+    box-shadow: 0 0 40px -10px rgba(212, 175, 55, 0.25);
+  }
+  .arena-border {
+    border-color: rgba(212, 175, 55, 0.2);
+  }
+  @keyframes arenaPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+  }
+  .arena-bg {
+    animation: arenaPulse 8s ease-in-out infinite;
+  }
+}
+
+/* Mobile: safe area for notches / home indicator */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-area-pt { padding-top: env(safe-area-inset-top); }
+}
+
+/* Touch-friendly: minimum tap target 48px */
+@media (pointer: coarse) {
+  button:not(.no-min-touch),
+  a[role="button"],
+  .min-h-touch {
+    min-height: 48px;
+  }
+}
+
+/* Dashboard mobile: app-like cards and full-width buttons */
+@media (max-width: 767px) {
+  .dashboard-main .card-lux {
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .dashboard-main .btn-press,
+  .dashboard-main a.btn-press {
+    width: 100%;
+  }
 }

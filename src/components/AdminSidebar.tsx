@@ -13,6 +13,7 @@ const links = [
   { href: "/admin/withdrawals", label: "Withdrawals" },
   { href: "/admin/earnings", label: "Earnings" },
   { href: "/admin/profit", label: "Profit" },
+  { href: "/admin/revenue", label: "Revenue" },
   { href: "/admin/tournaments", label: "Tournaments" },
   { href: "/admin/referrals", label: "Referrals" },
   { href: "/admin/settings", label: "Settings" },

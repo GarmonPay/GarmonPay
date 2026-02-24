@@ -7,9 +7,8 @@ export async function processAdRevenue(supabase, userId, adValue) {
 
   await supabase.from("earnings").insert({
     user_id: userId,
-    amount: adValue,
-    platform_fee: platformAmount,
-    user_amount: userAmount,
+    amount: userAmount,
+    source: "ad",
   });
 
   await supabase.from("platform_revenue").insert({

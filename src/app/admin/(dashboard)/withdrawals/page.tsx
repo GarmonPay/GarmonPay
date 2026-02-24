@@ -9,10 +9,13 @@ type WithdrawalRow = {
   id: string;
   user_id: string;
   amount: number;
+  platform_fee?: number;
+  net_amount?: number;
   status: string;
   method: string;
   wallet_address: string;
   created_at: string;
+  processed_at?: string | null;
   user_email?: string;
 };
 
@@ -100,6 +103,8 @@ export default function AdminWithdrawalsPage() {
                 <tr className="border-b border-white/10">
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Amount</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Fee</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Net</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Method</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Wallet / details</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
@@ -112,6 +117,8 @@ export default function AdminWithdrawalsPage() {
                   <tr key={w.id} className="border-b border-white/5">
                     <td className="p-3 text-white">{w.user_email ?? w.user_id}</td>
                     <td className="p-3 text-white font-medium">{formatCents(w.amount)}</td>
+                    <td className="p-3 text-[#9ca3af]">{formatCents(w.platform_fee ?? 0)}</td>
+                    <td className="p-3 text-white">{formatCents(w.net_amount ?? w.amount)}</td>
                     <td className="p-3 text-[#9ca3af] capitalize">{w.method}</td>
                     <td className="p-3 text-[#9ca3af] font-mono text-sm max-w-xs truncate" title={w.wallet_address}>
                       {w.wallet_address}

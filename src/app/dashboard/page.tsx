@@ -4,8 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
-import { getReferralLink } from "@/lib/site-url";
-import { getDashboard, getWithdrawals, convertToAdCredit, getGrowth, getActivities, claimDailyReward, ensureReferralBonus } from "@/lib/api";
+import { generateReferralLink } from "@/lib/referrals";
+import {
+  getDashboard,
+  getWithdrawals,
+  getGrowth,
+  getActivities,
+  claimDailyReward,
+  ensureReferralBonus,
+  convertToAdCredit,
+} from "@/lib/api";
 
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -122,27 +130,27 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [session]);
 
-  const loadingStyle: React.CSSProperties = { color: "#9ca3af", minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" };
+  const loadingStyle: React.CSSProperties = { color: "#9CA3AF", minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" };
   if (session === "pending") {
-    return <div className="flex items-center justify-center min-h-[60vh] text-fintech-muted" style={loadingStyle}>Loading…</div>;
+    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Loading…</div>;
   }
   if (session === null) {
-    return <div className="flex items-center justify-center min-h-[60vh] text-fintech-muted" style={loadingStyle}>Redirecting to login…</div>;
+    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Redirecting to login…</div>;
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[60vh] text-fintech-muted" style={loadingStyle}>Loading dashboard…</div>;
+    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Loading dashboard…</div>;
   }
 
   if (error || !data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
-        <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-6 max-w-md text-center">
-          <p className="text-red-400 mb-4">{error ?? "Failed to load dashboard"}</p>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center p-6">
+        <div className="card-lux max-w-md p-6 text-center">
+          <p className="mb-4 text-fintech-danger">{error ?? "Failed to load dashboard"}</p>
           <button
             type="button"
             onClick={() => { setError(null); setLoading(true); window.location.reload(); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition"
+            className="btn-press min-h-touch rounded-xl bg-fintech-accent px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
           >
             Try again
           </button>
@@ -193,80 +201,88 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Welcome to GarmonPay Dashboard</h1>
-      <div className="grid gap-6 lg:grid-cols-12">
-      {/* Today's Earnings Report — main feature */}
-      <section className="lg:col-span-8 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-fintech-highlight uppercase tracking-wide mb-4 border-b border-fintech-highlight/30 pb-2">
-          Today&apos;s Earnings Report
-        </h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs text-fintech-muted uppercase">Today</p>
-            <p className="text-2xl font-bold text-fintech-money">{formatCents(data.earningsTodayCents)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted uppercase">This week</p>
-            <p className="text-2xl font-bold text-fintech-money">{formatCents(data.earningsWeekCents)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted uppercase">This month</p>
-            <p className="text-2xl font-bold text-fintech-money">{formatCents(data.earningsMonthCents)}</p>
-          </div>
+    <div className="space-y-5 tablet:space-y-6">
+      {/* ——— Wallet-style Balance Card ——— */}
+      <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
+        <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
+        <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
+          {formatCents(balanceCents)}
+        </p>
+        <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
+          <Link
+            href="/dashboard"
+            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98]"
+          >
+            Deposit
+          </Link>
+          <Link
+            href="/dashboard/withdraw"
+            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+          >
+            Withdraw
+          </Link>
+          <button
+            type="button"
+            onClick={() => setConvertModal(true)}
+            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50"
+            disabled={balanceCents < 100}
+          >
+            Transfer
+          </button>
         </div>
       </section>
 
-      {/* Account Summary */}
-      <section className="lg:col-span-4 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Account Summary
-        </h2>
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs text-fintech-muted">Main Balance</p>
-            <p className="text-xl font-bold text-fintech-money">{formatCents(balanceCents)}</p>
+      {/* ——— Earnings, Referral, Ad cards ——— */}
+      <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:gap-5">
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Earnings</p>
+          <p className="mt-2 text-2xl font-bold text-white tablet:text-3xl">{formatCents(data.earningsTodayCents)}</p>
+          <p className="mt-1 text-sm text-fintech-muted">Today</p>
+          <div className="mt-4 flex gap-4 border-t border-white/[0.06] pt-4">
+            <div>
+              <p className="text-lg font-semibold text-white">{formatCents(data.earningsWeekCents)}</p>
+              <p className="text-xs text-fintech-muted">This week</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-white">{formatCents(data.earningsMonthCents)}</p>
+              <p className="text-xs text-fintech-muted">This month</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Ad Credit Balance</p>
-            <p className="text-xl font-bold text-fintech-highlight">{formatCents(adCreditBalanceCents)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Total Earnings</p>
-            <p className="text-lg font-semibold text-fintech-money">{formatCents(totalEarningsCents)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Total Withdrawn</p>
-            <p className="text-lg font-semibold text-white">{formatCents(totalWithdrawnCents)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Membership Tier</p>
-            <p className="text-lg font-semibold text-fintech-highlight capitalize">{data.membershipTier}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setConvertModal(true)}
-          disabled={balanceCents < 100}
-          className="mt-4 w-full py-2 rounded-lg border border-fintech-accent text-fintech-accent text-sm font-medium hover:bg-fintech-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Convert Balance to Ad Credit
-        </button>
-        <Link
-          href="/dashboard/transactions"
-          className="mt-2 inline-block w-full text-center text-sm text-fintech-muted hover:text-fintech-accent"
-        >
-          View transaction history →
-        </Link>
-      </section>
+          <Link href="/dashboard/earnings" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            View details →
+          </Link>
+        </section>
 
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Referral Earnings</p>
+          <p className="mt-2 text-2xl font-bold text-fintech-success tablet:text-3xl">{formatCents(data.referralEarningsCents ?? 0)}</p>
+          <p className="mt-1 text-sm text-fintech-muted">{data.totalReferrals ?? 0} referrals</p>
+          <Link href="/dashboard/referrals" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            Referral dashboard →
+          </Link>
+        </section>
+
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Ad Credit</p>
+          <p className="mt-2 text-2xl font-bold text-fintech-highlight tablet:text-3xl">{formatCents(adCreditBalanceCents)}</p>
+          <p className="mt-1 text-sm text-fintech-muted">Balance</p>
+          <Link href="/dashboard/ads" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            Watch ads →
+          </Link>
+        </section>
+      </div>
+
+      {/* ——— Convert to Ad Credit modal ——— */}
       {convertModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !convertSubmitting && setConvertModal(false)}>
-          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-2">Convert to Ad Credit</h3>
-            <p className="text-sm text-fintech-muted mb-4">Move funds from Main Balance to Ad Credit. Minimum $1.</p>
-            {convertError && <p className="text-sm text-red-400 mb-2">{convertError}</p>}
-            <form onSubmit={handleConvertToAdCredit}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+          onClick={() => !convertSubmitting && setConvertModal(false)}
+        >
+          <div className="card-lux w-full max-w-sm p-6 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">Transfer to Ad Credit</h3>
+            <p className="mt-1 text-sm text-fintech-muted">Move funds from balance. Minimum $1.</p>
+            {convertError && <p className="mt-2 text-sm text-fintech-danger">{convertError}</p>}
+            <form onSubmit={handleConvertToAdCredit} className="mt-4">
               <input
                 type="number"
                 step="0.01"
@@ -275,252 +291,196 @@ export default function DashboardPage() {
                 value={convertAmount}
                 onChange={(e) => setConvertAmount(e.target.value)}
                 placeholder="Amount (USD)"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white mb-4"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none"
               />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setConvertModal(false)} disabled={convertSubmitting} className="flex-1 py-2 rounded-lg border border-white/20 text-white text-sm">Cancel</button>
-                <button type="submit" disabled={convertSubmitting} className="flex-1 py-2 rounded-lg bg-fintech-accent text-white text-sm font-medium disabled:opacity-50">{convertSubmitting ? "Converting…" : "Convert"}</button>
+              <div className="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConvertModal(false)}
+                  disabled={convertSubmitting}
+                  className="btn-press min-h-touch flex-1 rounded-xl border border-white/20 py-3 text-white transition-opacity hover:bg-white/5 active:opacity-90 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={convertSubmitting}
+                  className="btn-press min-h-touch flex-1 rounded-xl bg-fintech-accent py-3 font-semibold text-white transition-opacity hover:opacity-90 active:opacity-90 disabled:opacity-50"
+                >
+                  {convertSubmitting ? "Converting…" : "Transfer"}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Ad Opportunities — newspaper headlines */}
-      <section className="lg:col-span-8 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Ad Opportunities
-        </h2>
-        <p className="text-sm text-fintech-muted mb-4">Available Ads</p>
-        {(data.availableAds?.length ?? 0) === 0 ? (
-          <p className="text-fintech-muted italic">No ads available at the moment. Check back later.</p>
-        ) : (
-          <ul className="space-y-3">
-            {(data.availableAds ?? []).map((ad) => (
-              <li
-                key={ad.id}
-                className="border-l-4 border-fintech-accent pl-4 py-2 hover:bg-white/5 rounded-r"
-              >
-                <span className="font-semibold text-white">{ad.title}</span>
-                <span className="ml-2 text-fintech-money text-sm">+{formatCents(ad.rewardCents)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Withdrawals + Referral Section — same column */}
-      <div className="lg:col-span-4 space-y-6">
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Withdrawals
-        </h2>
-        <div className="space-y-3">
-          <p className="text-sm text-fintech-muted">
-            Pending: <span className="text-amber-400 font-medium">{withdrawals.filter((w) => w.status === "pending").length}</span>
-            {" · "}
-            Completed: <span className="text-green-400 font-medium">{withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length}</span>
-          </p>
-          {withdrawals.filter((w) => w.status === "pending").length > 0 && (
-            <p className="text-xs text-fintech-muted">Your pending requests are under review.</p>
+      {/* ——— Account summary + Ad opportunities ——— */}
+      <div className="grid grid-cols-1 gap-4 tablet:gap-5 lg:grid-cols-12">
+        <section className="animate-slide-up card-lux p-5 tablet:p-6 lg:col-span-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Ad Opportunities</h2>
+          {(data.availableAds?.length ?? 0) === 0 ? (
+            <p className="mt-3 text-fintech-muted">No ads available. Check back later.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {(data.availableAds ?? []).map((ad) => (
+                <li key={ad.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3">
+                  <span className="font-medium text-white">{ad.title}</span>
+                  <span className="text-fintech-success font-medium">+{formatCents(ad.rewardCents)}</span>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-        <Link
-          href="/dashboard/withdraw"
-          className="mt-4 inline-block text-sm text-fintech-accent hover:underline"
-        >
-          Withdraw or view history →
-        </Link>
-      </section>
+          <Link href="/dashboard/ads" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            View all ads →
+          </Link>
+        </section>
 
-      {/* Referral Section */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Referrals
-        </h2>
-        <div className="space-y-4">
-          <div>
-            <p className="text-xs text-fintech-muted mb-1">Your Referral Link:</p>
-            <code className="block p-2 rounded bg-black/30 text-fintech-accent text-sm break-all">
-              {getReferralLink(data.referralCode ?? "")}
-            </code>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Total referrals</p>
-            <p className="text-xl font-bold text-white">{data.totalReferrals ?? 0}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fintech-muted">Referral earnings</p>
-            <p className="text-xl font-bold text-fintech-money">{formatCents(data.referralEarningsCents ?? 0)}</p>
-          </div>
-        </div>
-        <Link
-          href="/dashboard/referrals"
-          className="mt-4 inline-block text-sm text-fintech-accent hover:underline"
-        >
-          Referral dashboard →
-        </Link>
-      </section>
-
-      {/* Referral Summary */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Referral Summary
-        </h2>
-        <div className="space-y-3">
-          <div className="flex justify-between items-baseline">
-            <p className="text-xs text-fintech-muted">Total referrals</p>
-            <p className="text-lg font-bold text-white">{data.totalReferrals}</p>
-          </div>
-          <div className="flex justify-between items-baseline">
-            <p className="text-xs text-fintech-muted">One-time referral earnings</p>
-            <p className="text-lg font-semibold text-fintech-money">{formatCents(data.referralEarningsCents)}</p>
-          </div>
-          {(data as { activeReferralSubscriptions?: number }).activeReferralSubscriptions != null && (
-            <div className="flex justify-between items-baseline">
-              <p className="text-xs text-fintech-muted">Active referral subscriptions</p>
-              <p className="text-lg font-semibold text-white">{(data as { activeReferralSubscriptions?: number }).activeReferralSubscriptions}</p>
+        <section className="animate-slide-up card-lux p-5 tablet:p-6 lg:col-span-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Summary</h2>
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-xs text-fintech-muted">Total earned</p>
+              <p className="text-lg font-semibold text-fintech-success">{formatCents(totalEarningsCents)}</p>
             </div>
-          )}
-          {(() => {
-            const cents = (data as { monthlyReferralCommissionCents?: number }).monthlyReferralCommissionCents;
-            return cents != null && cents > 0 && (
-              <div className="flex justify-between items-baseline">
-                <p className="text-xs text-fintech-muted">This month (recurring)</p>
-                <p className="text-lg font-semibold text-fintech-money">{formatCents(cents)}</p>
-              </div>
-            );
-          })()}
-          {(() => {
-            const cents = (data as { lifetimeReferralCommissionCents?: number }).lifetimeReferralCommissionCents;
-            return cents != null && cents > 0 && (
-              <div className="flex justify-between items-baseline">
-                <p className="text-xs text-fintech-muted">Lifetime recurring</p>
-                <p className="text-lg font-semibold text-fintech-money">{formatCents(cents)}</p>
-              </div>
-            );
-          })()}
-        </div>
-      </section>
+            <div>
+              <p className="text-xs text-fintech-muted">Total withdrawn</p>
+              <p className="text-lg font-semibold text-white">{formatCents(totalWithdrawnCents)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-fintech-muted">Membership</p>
+              <p className="text-lg font-semibold text-white capitalize">{data.membershipTier}</p>
+            </div>
+          </div>
+          <Link href="/dashboard/transactions" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            Transaction history →
+          </Link>
+        </section>
       </div>
 
-      {/* Games & Rewards */}
-      <section className="lg:col-span-12 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Games & Rewards
-        </h2>
-        <p className="text-sm text-fintech-muted mb-4">Spin the wheel, claim daily bonuses, and earn more.</p>
-        <div className="flex flex-wrap gap-3">
+      {/* ——— Withdrawals + Referral link ——— */}
+      <div className="grid grid-cols-1 gap-4 tablet:grid-cols-2 tablet:gap-5">
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Withdrawals</h2>
+          <p className="mt-3 text-sm text-fintech-muted">
+            Pending: <span className="font-medium text-fintech-highlight">{withdrawals.filter((w) => w.status === "pending").length}</span>
+            {" · "}
+            Completed: <span className="font-medium text-fintech-success">{withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length}</span>
+          </p>
+          <Link href="/dashboard/withdraw" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            Withdraw or view history →
+          </Link>
+        </section>
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Referral link</h2>
+          <code className="mt-3 block break-all rounded-xl bg-black/20 px-3 py-2 text-sm text-fintech-accent">
+            {generateReferralLink(session.userId)}
+          </code>
+          <Link href="/dashboard/referrals" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
+            Referral dashboard →
+          </Link>
+        </section>
+      </div>
+
+      {/* ——— Games & Rewards ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Games & Rewards</h2>
+        <p className="mt-2 text-sm text-fintech-muted">Spin the wheel, daily bonuses, and more.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
           <Link
             href="/dashboard/games"
-            className="inline-flex items-center px-5 py-2.5 rounded-lg bg-fintech-accent text-white font-medium hover:opacity-90 transition-opacity"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
             Play Games
           </Link>
           <Link
             href="/dashboard/rewards"
-            className="inline-flex items-center px-5 py-2.5 rounded-lg border border-fintech-accent/60 text-fintech-accent font-medium hover:bg-fintech-accent/10 transition-colors"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             Spin Wheel
           </Link>
           <Link
             href="/dashboard/rewards"
-            className="inline-flex items-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-medium hover:bg-white/5 transition-colors"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             Daily Bonus
           </Link>
         </div>
       </section>
 
-      {/* Your Growth — viral section */}
-      <section className="lg:col-span-12 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-fintech-accent/30 pb-2 flex items-center gap-2">
-          <span className="text-fintech-highlight">📈</span> Your Growth
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-          <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Total Referrals</p>
-            <p className="text-2xl font-bold text-white mt-1">{growth?.totalReferrals ?? 0}</p>
+      {/* ——— Growth + Daily check-in ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Your Growth</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+            <p className="text-xs text-fintech-muted">Total Referrals</p>
+            <p className="text-2xl font-bold text-white">{growth?.totalReferrals ?? 0}</p>
           </div>
-          <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Leaderboard Position</p>
-            <p className="text-2xl font-bold text-fintech-highlight mt-1">
-              {growth?.leaderboardRank != null ? `#${growth.leaderboardRank}` : "—"}
-            </p>
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+            <p className="text-xs text-fintech-muted">Leaderboard</p>
+            <p className="text-2xl font-bold text-white">{growth?.leaderboardRank != null ? `#${growth.leaderboardRank}` : "—"}</p>
           </div>
-          <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Badges</p>
-            <div className="flex flex-wrap gap-2 mt-2">
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+            <p className="text-xs text-fintech-muted">Badges</p>
+            <div className="mt-1 flex flex-wrap gap-1">
               {(growth?.badges ?? []).length === 0 ? (
-                <span className="text-fintech-muted text-sm">None yet</span>
+                <span className="text-sm text-fintech-muted">None yet</span>
               ) : (
                 (growth?.badges ?? []).map((b) => (
-                  <span key={b.code} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-fintech-accent/20 text-fintech-accent text-sm" title={b.name}>
-                    {b.icon} {b.name}
-                  </span>
+                  <span key={b.code} className="rounded-full bg-fintech-accent/20 px-2 py-0.5 text-xs text-fintech-accent" title={b.name}>{b.icon} {b.name}</span>
                 ))
               )}
             </div>
           </div>
-          <div className="rounded-lg bg-black/20 border border-white/10 p-4 flex flex-col justify-center">
-            <p className="text-xs text-fintech-muted uppercase mb-2">Daily Check-In</p>
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+            <p className="text-xs text-fintech-muted">Daily Check-In</p>
             <button
               type="button"
               onClick={handleDailyClaim}
               disabled={dailyClaiming || !growth?.canClaimDaily}
-              className="py-2 px-4 rounded-lg bg-fintech-money/20 border border-fintech-money/50 text-fintech-money font-medium hover:bg-fintech-money/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-press min-h-touch mt-2 w-full rounded-xl border border-fintech-success/40 bg-fintech-success/10 py-3 font-medium text-fintech-success transition-opacity hover:bg-fintech-success/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {dailyClaiming ? "Claiming…" : growth?.canClaimDaily ? "Daily Check-In" : "Claimed today"}
+              {dailyClaiming ? "Claiming…" : growth?.canClaimDaily ? "Claim daily" : "Claimed today"}
             </button>
           </div>
         </div>
-        <Link href="/dashboard/leaderboard" className="text-sm text-fintech-accent hover:underline">
+        <Link href="/dashboard/leaderboard" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
           View leaderboard →
         </Link>
       </section>
 
-      {/* Live Activity Feed */}
-      <section className="lg:col-span-12 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2 flex items-center gap-2">
-          <span className="text-fintech-accent">◆</span> Live Activity
-        </h2>
+      {/* ——— Activity ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Recent Activity</h2>
         {activities.length === 0 ? (
-          <p className="text-fintech-muted italic">No recent activity.</p>
+          <p className="mt-3 text-fintech-muted">No recent activity.</p>
         ) : (
-          <ul className="space-y-2 max-h-64 overflow-y-auto">
+          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
             {activities.slice(0, 20).map((a) => (
-              <li key={a.id} className="flex items-center justify-between py-2 border-b border-white/5 text-sm">
-                <span className="text-white truncate">{a.description}</span>
-                {a.amountCents != null && (
-                  <span className="text-fintech-money font-medium shrink-0 ml-2">{formatCents(a.amountCents)}</span>
-                )}
-                <span className="text-fintech-muted text-xs shrink-0 ml-2">{new Date(a.createdAt).toLocaleString()}</span>
+              <li key={a.id} className="flex items-center justify-between border-b border-white/[0.06] py-2 text-sm">
+                <span className="truncate text-white">{a.description}</span>
+                {a.amountCents != null && <span className="ml-2 shrink-0 font-medium text-fintech-success">{formatCents(a.amountCents)}</span>}
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      {/* Announcements — Platform News */}
-      <section className="lg:col-span-12 rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
-          Platform News
-        </h2>
-        {(data.announcements?.length ?? 0) === 0 ? (
-          <p className="text-fintech-muted italic">No announcements at this time.</p>
-        ) : (
-          <ul className="space-y-4">
+      {/* ——— Announcements ——— */}
+      {(data.announcements?.length ?? 0) > 0 && (
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Platform News</h2>
+          <ul className="mt-3 space-y-4">
             {(data.announcements ?? []).map((a) => (
               <li key={a.id}>
                 <h3 className="font-semibold text-white">{a.title}</h3>
-                <p className="text-sm text-fintech-muted mt-1">{a.body}</p>
-                <p className="text-xs text-fintech-muted mt-2">{new Date(a.publishedAt).toLocaleDateString()}</p>
+                <p className="mt-1 text-sm text-fintech-muted">{a.body}</p>
+                <p className="mt-2 text-xs text-fintech-muted">{new Date(a.publishedAt).toLocaleDateString()}</p>
               </li>
             ))}
           </ul>
-        )}
-      </section>
-      </div>
+        </section>
+      )}
     </div>
   );
 }

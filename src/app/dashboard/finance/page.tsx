@@ -40,7 +40,7 @@ export default function FinancePage() {
 
   if (loading) {
     return (
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <div className="card-lux p-6">
         <p className="text-fintech-muted">Loading…</p>
       </div>
     );
@@ -48,8 +48,8 @@ export default function FinancePage() {
 
   if (error) {
     return (
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <p className="text-red-400 mb-4">{error}</p>
+      <div className="card-lux p-6">
+        <p className="mb-4 text-fintech-danger">{error}</p>
         <button
           type="button"
           onClick={() => window.location.reload()}
@@ -65,34 +65,34 @@ export default function FinancePage() {
   const completed = withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length;
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h1 className="text-xl font-bold text-white mb-2">Finance</h1>
-        <p className="text-fintech-muted text-sm mb-6">Balance and withdrawal management.</p>
-        <div className="grid gap-4 sm:grid-cols-2 mb-6">
-          <div className="p-4 rounded-lg bg-black/20 border border-white/10">
+    <div className="space-y-4 tablet:space-y-6">
+      <div className="animate-slide-up card-lux p-4 tablet:p-6">
+        <h1 className="mb-2 text-xl font-bold text-white">Finance</h1>
+        <p className="mb-4 text-sm text-fintech-muted tablet:mb-6">Balance and withdrawal management.</p>
+        <div className="mb-6 grid grid-cols-1 gap-4 tablet:grid-cols-2">
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Available Balance</p>
             <p className="text-2xl font-bold text-fintech-money mt-1">
               {formatCents(balanceCents ?? 0)}
             </p>
           </div>
-          <div className="p-4 rounded-lg bg-black/20 border border-white/10">
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Withdrawals</p>
             <p className="text-lg font-semibold text-white mt-1">
               Pending: {pending} · Completed: {completed}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 tablet:flex-row tablet:flex-wrap">
           <Link
             href="/dashboard/withdraw"
-            className="inline-flex items-center px-5 py-2.5 rounded-lg bg-fintech-accent text-white font-medium hover:opacity-90"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
             Withdraw
           </Link>
           <Link
             href="/dashboard/transactions"
-            className="inline-flex items-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-medium hover:bg-white/5"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             Transaction history
           </Link>

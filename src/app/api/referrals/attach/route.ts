@@ -12,29 +12,46 @@ export async function POST(request: Request) {
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
-  let body: { referralCode?: string };
+  let body: { referralCode?: string; referrerId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 });
   }
   const code = typeof body.referralCode === "string" ? body.referralCode.trim().toUpperCase() : "";
-  if (!code) {
-    return NextResponse.json({ message: "referralCode required" }, { status: 400 });
+  const referrerIdParam = typeof body.referrerId === "string" ? body.referrerId.trim() : "";
+  if (!code && !referrerIdParam) {
+    return NextResponse.json({ message: "referralCode or referrerId required" }, { status: 400 });
   }
   const supabase = createAdminClient();
   if (!supabase) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
-  const { data: referrer } = await supabase
-    .from("users")
-    .select("id")
-    .eq("referral_code", code)
-    .maybeSingle();
-  if (!referrer || !(referrer as { id?: string }).id) {
-    return NextResponse.json({ message: "Invalid referral code" }, { status: 400 });
+  let referrerId: string;
+  let referrerCode: string;
+  if (referrerIdParam) {
+    const { data: referrer } = await supabase
+      .from("users")
+      .select("id, referral_code")
+      .eq("id", referrerIdParam)
+      .maybeSingle();
+    if (!referrer || !(referrer as { id?: string }).id) {
+      return NextResponse.json({ message: "Invalid referrer" }, { status: 400 });
+    }
+    referrerId = (referrer as { id: string }).id;
+    referrerCode = ((referrer as { referral_code?: string }).referral_code ?? "").trim().toUpperCase();
+  } else {
+    const { data: referrer } = await supabase
+      .from("users")
+      .select("id, referral_code")
+      .eq("referral_code", code)
+      .maybeSingle();
+    if (!referrer || !(referrer as { id?: string }).id) {
+      return NextResponse.json({ message: "Invalid referral code" }, { status: 400 });
+    }
+    referrerId = (referrer as { id: string }).id;
+    referrerCode = ((referrer as { referral_code?: string }).referral_code ?? "").trim().toUpperCase();
   }
-  const referrerId = (referrer as { id: string }).id;
   if (referrerId === userId) {
     return NextResponse.json({ message: "Self-referral not allowed" }, { status: 400 });
   }
@@ -42,7 +59,7 @@ export async function POST(request: Request) {
     .from("users")
     .update({
       referred_by: referrerId,
-      referred_by_code: code,
+      referred_by_code: referrerCode,
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId);

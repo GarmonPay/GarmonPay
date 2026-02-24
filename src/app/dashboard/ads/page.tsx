@@ -99,11 +99,11 @@ export default function DashboardAdsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 tablet:space-y-6">
       <div className="max-w-2xl">
         <BannerRotator placement="ads-page" />
       </div>
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">Ad Opportunities</h1>
         <p className="text-sm text-fintech-muted mb-6">
           Watch or complete ads to earn rewards. Rewards are issued only after the required time and verified by the backend.
@@ -117,11 +117,11 @@ export default function DashboardAdsPage() {
         {adsList.length === 0 ? (
           <p className="text-fintech-muted">No ads available right now. Check back later.</p>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-3">
             {adsList.map((ad) => (
               <li
                 key={ad.id}
-                className="rounded-xl border border-white/10 bg-black/20 p-5 hover:border-fintech-accent/50 transition-colors"
+                className="rounded-xl border border-white/10 bg-black/20 p-4 tablet:p-5 hover:border-fintech-accent/50 transition-colors"
               >
                 <h2 className="font-semibold text-white mb-1">{ad.title}</h2>
                 <div className="flex flex-wrap gap-2 text-sm text-fintech-muted mb-3">
@@ -134,7 +134,7 @@ export default function DashboardAdsPage() {
                 <button
                   type="button"
                   onClick={() => handleStartAd(ad)}
-                  className="w-full py-2 rounded-lg bg-fintech-accent text-white font-medium hover:opacity-90"
+                  className="min-h-touch w-full rounded-xl py-3 bg-fintech-accent text-white font-medium transition-opacity hover:opacity-90 active:opacity-90"
                 >
                   Start
                 </button>

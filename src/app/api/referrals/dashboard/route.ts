@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     if (ids.length === 0) {
       return NextResponse.json({
         summary,
-        referralLink: getReferralLink(referralCode),
+        referralLink: getReferralLink(referralCode || userId),
         referredUsers: [],
         earningsHistory: await getEarningsHistory(supabase, userId),
       });
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
     }));
 
     const earningsHistory = await getEarningsHistory(supabase, userId);
-    const referralLink = referralCode ? getReferralLink(referralCode) : "";
+    const referralLink = getReferralLink(referralCode || userId);
 
     return NextResponse.json({
       summary,

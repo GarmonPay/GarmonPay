@@ -248,6 +248,28 @@ export async function attachReferral(accessToken: string, referralCode: string) 
   });
 }
 
+/** Attach referrer by referrer user ID (e.g. when ref=userId in URL). */
+export async function attachReferralByReferrerId(accessToken: string, referrerId: string) {
+  return api<{ ok: boolean }>("/referrals/attach", {
+    method: "POST",
+    headers: { ...authHeaders(accessToken, true), "Content-Type": "application/json" },
+    body: JSON.stringify({ referrerId: referrerId.trim() }),
+  });
+}
+
+/** Attach referrer by referrer user ID (supports token or userId auth). */
+export async function attachReferralByReferrerIdSession(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  referrerId: string
+) {
+  return api<{ ok: boolean }>("/referrals/attach", {
+    method: "POST",
+    headers: { ...authHeaders(accessTokenOrUserId, isToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ referrerId: referrerId.trim() }),
+  });
+}
+
 // Gamification
 export async function getGamificationSummary(accessTokenOrUserId: string, isToken: boolean) {
   return api<{
@@ -358,4 +380,82 @@ export async function getTeamMembersApi(accessTokenOrUserId: string, isToken: bo
 
 export async function getTournamentTeamLeaderboardApi(tournamentId: string) {
   return api<{ leaderboard: Array<{ rank: number; team_id: string; team_name: string; members_count: number; total_score: number }> }>(`/tournaments/${tournamentId}/team-leaderboard`);
+}
+
+// Fight Arena
+export type FightStatus = "open" | "active" | "completed" | "cancelled";
+export interface FightArenaFight {
+  id: string;
+  host_user_id: string;
+  opponent_user_id: string | null;
+  entry_fee: number;
+  platform_fee: number;
+  total_pot: number;
+  status: FightStatus;
+  winner_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getFightArenaFights(accessTokenOrUserId: string, isToken: boolean, status?: FightStatus) {
+  const q = status ? `?status=${status}` : "";
+  return api<{ fights: FightArenaFight[] }>(`/fight-arena/fights${q}`, { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+export async function getFightArenaFight(accessTokenOrUserId: string, isToken: boolean, fightId: string) {
+  return api<{ fight: FightArenaFight }>(`/fight-arena/fights/${fightId}`, { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+export async function createFightArenaFight(accessTokenOrUserId: string, isToken: boolean, entryFeeCents: number) {
+  return api<{ fight: FightArenaFight }>("/fight-arena/fights", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify({ entryFeeCents }),
+  });
+}
+
+export async function joinFightArenaFight(accessTokenOrUserId: string, isToken: boolean, fightId: string) {
+  return api<{ fight: FightArenaFight }>(`/fight-arena/fights/${fightId}/join`, {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+  });
+}
+
+export async function endFightArenaFight(accessTokenOrUserId: string, isToken: boolean, fightId: string, winnerUserId: string) {
+  return api<{ fight: FightArenaFight }>(`/fight-arena/fights/${fightId}/end`, {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify({ winnerUserId }),
+  });
+}
+
+// Boxing Arena
+export interface BoxingMatch {
+  id: string;
+  player1_id: string;
+  player2_id: string | null;
+  entry_fee: number;
+  winner_id: string | null;
+  status: string;
+  created_at: string;
+}
+
+export async function boxingEnter(accessTokenOrUserId: string, isToken: boolean, entryFeeCents?: number) {
+  return api<{ match: BoxingMatch; outcome: "created" | "joined" | "completed" }>("/boxing/enter", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify({ entryFeeCents: entryFeeCents ?? 100 }),
+  });
+}
+
+export async function getBoxingMatches(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ matches: BoxingMatch[] }>("/boxing/matches", {
+    headers: authHeaders(accessTokenOrUserId, isToken),
+  });
+}
+
+export async function getBoxingStats(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ wins: number; losses: number; earningsCents: number }>("/boxing/stats", {
+    headers: authHeaders(accessTokenOrUserId, isToken),
+  });
 }

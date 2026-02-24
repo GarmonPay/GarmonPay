@@ -76,11 +76,11 @@ export default function EarningsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+    <div className="space-y-4 tablet:space-y-6">
+      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">Earnings</h1>
-        <p className="text-fintech-muted text-sm mb-6">Earnings history and breakdown.</p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <p className="text-fintech-muted text-sm mb-4 tablet:mb-6">Earnings history and breakdown.</p>
+        <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 lg:grid-cols-4 mb-6">
           <div className="p-4 rounded-lg bg-black/20 border border-white/10">
             <p className="text-xs text-fintech-muted uppercase">Today</p>
             <p className="text-xl font-bold text-fintech-money mt-1">{formatCents(data.earningsTodayCents)}</p>
@@ -110,7 +110,7 @@ export default function EarningsPage() {
         </Link>
       </div>
       {transactions.length > 0 && (
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+        <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
           <h2 className="text-lg font-bold text-white mb-4">Recent activity</h2>
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {transactions.slice(0, 20).map((t) => (

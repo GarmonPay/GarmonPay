@@ -107,9 +107,9 @@ export default function DashboardRewardsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 tablet:space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">Rewards & Games</h1>
+        <h1 className="text-xl font-bold text-white tablet:text-2xl">Rewards & Games</h1>
         <p className="text-sm text-fintech-muted mt-1">
           Spin the wheel, open mystery boxes, build your streak, and complete missions. All rewards are budget-controlled.
         </p>
@@ -126,7 +126,7 @@ export default function DashboardRewardsPage() {
 
       {/* Rank */}
       {summary.rank && (
-        <section className="rounded-xl bg-gradient-to-br from-fintech-accent/20 to-fintech-money/10 border border-white/10 p-6">
+        <section className="animate-slide-up rounded-xl bg-gradient-to-br from-fintech-accent/20 to-fintech-money/10 border border-white/10 p-4 tablet:p-6">
           <h2 className="text-lg font-semibold text-white mb-2">Your Rank</h2>
           <p className="text-2xl font-bold text-fintech-highlight">{summary.rank.name}</p>
           <p className="text-sm text-fintech-muted mt-1">
@@ -137,7 +137,7 @@ export default function DashboardRewardsPage() {
 
       {/* Spin wheel */}
       {summary.spinWheel?.enabled && (
-        <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+        <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
           <h2 className="text-lg font-semibold text-white mb-2">Daily Spin</h2>
           <p className="text-sm text-fintech-muted mb-4">
             Spins today: {summary.spinWheel.usedToday} / {summary.spinWheel.dailyLimit}
@@ -146,7 +146,7 @@ export default function DashboardRewardsPage() {
             type="button"
             onClick={handleSpin}
             disabled={spinning || summary.spinWheel.usedToday >= summary.spinWheel.dailyLimit}
-            className="px-6 py-3 rounded-xl bg-fintech-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95"
+            className="min-h-touch w-full rounded-xl px-6 py-3 bg-fintech-accent text-white font-medium transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed tablet:w-auto"
           >
             {spinning ? "Spinning…" : "Spin"}
           </button>
@@ -162,14 +162,14 @@ export default function DashboardRewardsPage() {
 
       {/* Mystery box */}
       {summary.mysteryBox?.enabled && (
-        <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+        <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
           <h2 className="text-lg font-semibold text-white mb-2">Mystery Box</h2>
           <p className="text-sm text-fintech-muted mb-4">Open for a random reward (balance or ad credit).</p>
           <button
             type="button"
             onClick={handleOpenMystery}
             disabled={opening}
-            className="px-6 py-3 rounded-xl bg-fintech-highlight/90 text-white font-medium hover:opacity-90 disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+            className="min-h-touch w-full rounded-xl px-6 py-3 bg-fintech-highlight/90 text-white font-medium transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 tablet:w-auto"
           >
             {opening ? "Opening…" : "Open Box"}
           </button>
@@ -182,7 +182,7 @@ export default function DashboardRewardsPage() {
       )}
 
       {/* Streak */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-semibold text-white mb-2">Login Streak</h2>
         <p className="text-sm text-fintech-muted mb-2">
           Current streak: <strong className="text-white">{summary.streak.currentStreakDays}</strong> day
@@ -192,20 +192,20 @@ export default function DashboardRewardsPage() {
           type="button"
           onClick={handleClaimStreak}
           disabled={streakClaiming}
-          className="px-6 py-3 rounded-xl bg-fintech-money/80 text-white font-medium hover:opacity-90 disabled:opacity-50"
+          className="min-h-touch w-full rounded-xl px-6 py-3 bg-fintech-money/80 text-white font-medium transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50 tablet:w-auto"
         >
           {streakClaiming ? "Claiming…" : "Claim streak reward"}
         </button>
       </section>
 
       {/* Missions */}
-      <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Missions</h2>
         <ul className="space-y-3">
           {summary.missions.map((m) => (
             <li
               key={m.code}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-black/20 p-4 border border-white/10"
+              className="flex flex-col gap-3 rounded-lg bg-black/20 p-4 border border-white/10 tablet:flex-row tablet:items-center tablet:justify-between"
             >
               <div>
                 <span className="font-medium text-white">{m.name}</span>
@@ -217,7 +217,7 @@ export default function DashboardRewardsPage() {
                 type="button"
                 onClick={() => handleCompleteMission(m.code)}
                 disabled={missionCompleting !== null || m.completedToday >= m.dailyLimit}
-                className="px-4 py-2 rounded-lg bg-fintech-accent text-white text-sm font-medium disabled:opacity-50"
+                className="min-h-touch w-full rounded-xl px-4 py-3 bg-fintech-accent text-white text-sm font-medium transition-opacity disabled:opacity-50 active:scale-[0.98] tablet:w-auto tablet:py-2"
               >
                 {missionCompleting === m.code ? "…" : m.completedToday >= m.dailyLimit ? "Done" : "Complete"}
               </button>

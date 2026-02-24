@@ -38,7 +38,7 @@ export function DashboardHeader() {
   }
 
   return (
-    <header className="border-b border-white/10 bg-fintech-bg-card/80 backdrop-blur" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", backgroundColor: "rgba(17,24,39,0.9)" }}>
+    <header className="glass-bar border-b border-white/[0.06] shadow-soft">
       <div className="max-w-7xl mx-auto px-4 py-4" style={{ maxWidth: "80rem", marginLeft: "auto", marginRight: "auto", padding: "1rem 1.5rem" }}>
         <div className="flex flex-wrap items-center justify-between gap-4" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
           <Link href="/dashboard" className="text-xl font-bold text-white" style={{ color: "#fff", fontSize: "1.25rem", fontWeight: 700, textDecoration: "none" }}>

@@ -10,9 +10,9 @@ export function getSiteUrl(): string {
   return typeof url === "string" && url ? url.replace(/\/$/, "") : PRODUCTION_URL;
 }
 
-/** Base URL for referral signup links: {siteUrl}/register?ref=CODE */
-export function getReferralLink(referralCode: string): string {
-  return `${getSiteUrl()}/register?ref=${referralCode || ""}`;
+/** Base URL for referral signup links: {siteUrl}/register?ref=CODE_OR_USER_ID */
+export function getReferralLink(referralCodeOrUserId: string): string {
+  return `${getSiteUrl()}/register?ref=${referralCodeOrUserId || ""}`;
 }
 
 /** Base URL for auth redirects: {siteUrl}/dashboard etc. */

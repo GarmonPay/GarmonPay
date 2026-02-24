@@ -22,6 +22,8 @@ function formatDate(iso: string) {
 type WithdrawalItem = {
   id: string;
   amount: number;
+  platform_fee?: number;
+  net_amount?: number;
   status: string;
   method: string;
   wallet_address: string;
@@ -31,8 +33,8 @@ type WithdrawalItem = {
 export default function WithdrawPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
-  const [minCents, setMinCents] = useState(100);
+  const [withdrawableCents, setWithdrawableCents] = useState<number | null>(null);
+  const [minCents, setMinCents] = useState(1000);
   const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export default function WithdrawPage() {
         getWithdrawals(tokenOrId, isToken),
       ])
         .then(([dash, w]) => {
-          setBalanceCents(dash.balanceCents);
+          setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? 0);
           setMinCents(w.minWithdrawalCents);
           setWithdrawals(w.withdrawals);
         })
@@ -77,8 +79,8 @@ export default function WithdrawPage() {
       setError(`Minimum withdrawal is ${formatCents(minCents)}`);
       return;
     }
-    if (balanceCents != null && amountCents > balanceCents) {
-      setError("Amount exceeds your balance");
+    if (withdrawableCents != null && amountCents > withdrawableCents) {
+      setError("Amount exceeds your withdrawable balance");
       return;
     }
     if (!form.wallet_address.trim()) {
@@ -97,7 +99,7 @@ export default function WithdrawPage() {
       const w = await getWithdrawals(session.tokenOrId, session.isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 }));
       setWithdrawals(w?.withdrawals ?? []);
       const dash = await getDashboard(session.tokenOrId, session.isToken).catch(() => null);
-      if (dash) setBalanceCents(dash.balanceCents ?? 0);
+      if (dash) setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -123,18 +125,18 @@ export default function WithdrawPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+    <div className="space-y-4 tablet:space-y-6">
+      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">Withdraw</h1>
-        <p className="text-sm text-fintech-muted mb-6">
-          Request a withdrawal. Funds are held until admin approval. Minimum withdrawal is {formatCents(minCents)}.
+        <p className="text-sm text-fintech-muted mb-4 tablet:mb-6">
+          Request a withdrawal. Funds are held until admin approval. Minimum {formatCents(minCents)}. 10% platform fee applies. Max 3 per day; 5 min between requests.
         </p>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 tablet:gap-6 tablet:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-black/20 p-5">
-            <p className="text-sm text-fintech-muted">Current balance</p>
+            <p className="text-sm text-fintech-muted">Withdrawable balance</p>
             <p className="text-2xl font-bold text-fintech-money">
-              {balanceCents != null ? formatCents(balanceCents) : "—"}
+              {withdrawableCents != null ? formatCents(withdrawableCents) : "—"}
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-5">
@@ -189,15 +191,15 @@ export default function WithdrawPage() {
           </div>
           <button
             type="submit"
-            disabled={submitting || (balanceCents != null && balanceCents < minCents)}
-            className="w-full py-3 rounded-lg bg-fintech-accent text-white font-medium hover:opacity-90 disabled:opacity-50"
+            disabled={submitting || (withdrawableCents != null && withdrawableCents < minCents)}
+            className="min-h-touch w-full rounded-xl py-3 bg-fintech-accent text-white font-medium transition-opacity hover:opacity-90 active:opacity-90 disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit withdrawal"}
           </button>
         </form>
       </div>
 
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
+      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h2 className="text-lg font-bold text-white mb-4">Withdrawal history</h2>
         {withdrawals.length === 0 ? (
           <p className="text-fintech-muted">No withdrawals yet.</p>
@@ -210,6 +212,9 @@ export default function WithdrawPage() {
               >
                 <div>
                   <span className="font-semibold text-fintech-money">{formatCents(w.amount)}</span>
+                  {w.net_amount != null && w.net_amount !== w.amount && (
+                    <span className="text-fintech-muted text-sm ml-2">(net {formatCents(w.net_amount)})</span>
+                  )}
                   <span className="text-fintech-muted text-sm ml-2 capitalize">{w.method}</span>
                 </div>
                 <div className="text-sm text-fintech-muted">

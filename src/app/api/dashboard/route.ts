@@ -48,7 +48,7 @@ export async function GET(request: Request) {
         }
         const { data: row, error: rowError } = await supabase
           .from("users")
-          .select("id, email, role, membership, balance, ad_credit_balance, referral_code")
+          .select("id, email, role, membership, balance, ad_credit_balance, withdrawable_balance, referral_code")
           .eq("id", authUser.id)
           .single();
 
@@ -102,9 +102,10 @@ export async function GET(request: Request) {
         // referral_commissions / subscriptions tables may be missing
       }
 
-      const userRow = row as { balance?: number; ad_credit_balance?: number; membership?: string; referral_code?: string } | null;
+      const userRow = row as { balance?: number; ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
       const balanceCents = Number(userRow?.balance ?? 0);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
+      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
 
         return NextResponse.json({
           earningsTodayCents,
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
           earningsMonthCents,
           balanceCents,
           adCreditBalanceCents,
-          withdrawableCents: balanceCents,
+          withdrawableCents,
           totalEarningsCents,
           totalWithdrawnCents,
           membershipTier: userRow?.membership ?? "starter",
