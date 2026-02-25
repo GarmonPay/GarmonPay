@@ -200,6 +200,26 @@ export default function DashboardPage() {
     }
   }
 
+  const upgrade = async (tier: string) => {
+    const res = await fetch("/api/stripe/create-membership-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier }),
+    });
+    const data = await res.json();
+    if (data?.url) window.location.href = data.url;
+  };
+
+  const addFunds = async (amount: number) => {
+    const res = await fetch("/api/stripe/add-funds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+    const data = await res.json();
+    if (data?.url) window.location.href = data.url;
+  };
+
   return (
     <div className="space-y-5 tablet:space-y-6">
       {/* ——— Wallet-style Balance Card ——— */}
@@ -228,6 +248,58 @@ export default function DashboardPage() {
             disabled={balanceCents < 100}
           >
             Transfer
+          </button>
+        </div>
+      </section>
+
+      {/* ——— Upgrade Membership & Add Funds ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6" style={{ marginTop: "30px" }}>
+        <h2 className="text-lg font-bold text-white">Upgrade Membership</h2>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => upgrade("starter")}
+            className="btn-press min-h-touch rounded-xl bg-white/10 px-4 py-3 font-medium text-white hover:bg-white/20 active:scale-[0.98]"
+          >
+            Starter — $19
+          </button>
+          <button
+            type="button"
+            onClick={() => upgrade("pro")}
+            className="btn-press min-h-touch rounded-xl bg-fintech-accent px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
+          >
+            Pro — $49
+          </button>
+          <button
+            type="button"
+            onClick={() => upgrade("elite")}
+            className="btn-press min-h-touch rounded-xl bg-fintech-highlight/80 px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
+          >
+            Elite — $99
+          </button>
+        </div>
+        <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => addFunds(25)}
+            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
+          >
+            Add $25
+          </button>
+          <button
+            type="button"
+            onClick={() => addFunds(50)}
+            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
+          >
+            Add $50
+          </button>
+          <button
+            type="button"
+            onClick={() => addFunds(100)}
+            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
+          >
+            Add $100
           </button>
         </div>
       </section>
