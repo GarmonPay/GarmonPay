@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
+import Footer from "@/components/Footer";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -50,8 +51,9 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
-      <body className="font-sans antialiased">
+      <body className="font-sans antialiased flex min-h-screen flex-col">
         {children}
+        <Footer />
       </body>
     </html>
   );

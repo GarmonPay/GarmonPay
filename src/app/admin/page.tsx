@@ -1,28 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AdminPage() {
-  const [data, setData] = useState<any[]>([]);
-
+  const router = useRouter();
   useEffect(() => {
-    fetch("/api/admin")
-      .then((res) => res.json())
-      .then(setData);
-  }, []);
-
+    router.replace("/admin/dashboard");
+  }, [router]);
   return (
-    <div className="min-h-screen bg-fintech-bg p-6">
-      <h1 className="text-2xl font-bold text-white mb-6">Admin Revenue Dashboard</h1>
-      {Array.isArray(data) && data.length === 0 && (
-        <p className="text-fintech-muted">No revenue transactions yet.</p>
-      )}
-      {Array.isArray(data) &&
-        data.map((item, i) => (
-          <div key={item.id ?? i} className="py-2 border-b border-white/10 text-white">
-            {item.email} — ${Number(item.amount).toFixed(2)} ({item.type})
-          </div>
-        ))}
+    <div className="min-h-screen bg-fintech-bg flex items-center justify-center text-fintech-muted">
+      Redirecting to dashboard…
     </div>
   );
 }

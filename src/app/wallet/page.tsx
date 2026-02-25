@@ -13,6 +13,34 @@ function WalletContent() {
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+
+  const handleDeposit = async () => {
+    const amount = Number(depositAmount);
+    if (!Number.isFinite(amount) || amount < 5 || amount > 1000) {
+      setDepositError("Enter an amount between $5 and $1,000.");
+      return;
+    }
+    setDepositError(null);
+    setDepositLoading(true);
+    try {
+      const res = await fetch("/api/stripe/add-funds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 503 || !data?.url) {
+        setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+        return;
+      }
+      window.location.href = data.url;
+    } catch (e) {
+      setDepositError("Network error. Please try again.");
+    } finally {
+      setDepositLoading(false);
+    }
+  };
 
   useEffect(() => {
     getSessionAsync().then((session) => {
@@ -36,8 +64,8 @@ function WalletContent() {
         {success ? (
           <>
             <div className="text-5xl mb-4">✓</div>
-            <h1 className="text-2xl font-bold text-white mb-2">Funds added</h1>
-            <p className="text-fintech-muted mb-6">Your wallet has been topped up successfully.</p>
+            <h1 className="text-2xl font-bold text-white mb-2">Funds added successfully</h1>
+            <p className="text-fintech-muted mb-6">Your wallet has been topped up.</p>
           </>
         ) : (
           <>
@@ -51,32 +79,19 @@ function WalletContent() {
             {depositError && (
               <p className="text-red-400 text-sm mb-3">{depositError}</p>
             )}
+            <input
+              type="number"
+              id="depositAmount"
+              min={5}
+              max={1000}
+              step="0.01"
+              placeholder="Enter amount ($5–$1,000)"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none mb-3"
+            />
             <button
-              onClick={async () => {
-                setDepositError(null);
-                setDepositLoading(true);
-                try {
-                  const res = await fetch("/api/stripe/add-funds", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      amount: 25,
-                    }),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (res.status === 503 || !data?.url) {
-                    setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
-                    return;
-                  }
-                  window.location.href = data.url;
-                } catch (e) {
-                  setDepositError("Network error. Please try again.");
-                } finally {
-                  setDepositLoading(false);
-                }
-              }}
+              onClick={handleDeposit}
               disabled={depositLoading}
               className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
             >

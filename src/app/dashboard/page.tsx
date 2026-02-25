@@ -38,6 +38,9 @@ export default function DashboardPage() {
   } | null>(null);
   const [activities, setActivities] = useState<Array<{ id: string; email: string; activityType: string; description: string; amountCents: number | null; createdAt: string }>>([]);
   const [dailyClaiming, setDailyClaiming] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([
@@ -223,6 +226,21 @@ export default function DashboardPage() {
     else if (data?.error) setCheckoutError(data.error);
   };
 
+  const handleDeposit = async () => {
+    const amount = Number(depositAmount);
+    if (!Number.isFinite(amount) || amount < 5 || amount > 1000) {
+      setCheckoutError("Enter an amount between $5 and $1,000.");
+      return;
+    }
+    setCheckoutError(null);
+    setDepositLoading(true);
+    try {
+      await addFunds(amount);
+    } finally {
+      setDepositLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-5 tablet:space-y-6">
       {/* ——— Wallet-style Balance Card ——— */}
@@ -232,12 +250,13 @@ export default function DashboardPage() {
           {formatCents(balanceCents)}
         </p>
         <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
-          <Link
-            href="/wallet"
-            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98]"
+          <button
+            type="button"
+            onClick={() => { setDepositModalOpen(true); setCheckoutError(null); setDepositAmount(""); }}
+            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
             Deposit
-          </Link>
+          </button>
           <Link
             href="/dashboard/withdraw"
             className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
@@ -281,37 +300,63 @@ export default function DashboardPage() {
           </button>
           <button
             type="button"
-            onClick={() => upgrade("elite")}
+            onClick={() => upgrade("vip")}
             className="btn-press min-h-touch rounded-xl bg-fintech-highlight/80 px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
           >
-            Elite — $99
+            VIP — $99
           </button>
         </div>
         <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => addFunds(25)}
-            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
-          >
-            Add $25
-          </button>
-          <button
-            type="button"
-            onClick={() => addFunds(50)}
-            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
-          >
-            Add $50
-          </button>
-          <button
-            type="button"
-            onClick={() => addFunds(100)}
-            className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-3 font-medium text-white hover:bg-white/5 active:scale-[0.98]"
-          >
-            Add $100
-          </button>
-        </div>
+        <p className="mt-1 text-sm text-fintech-muted">Click Deposit above to add funds ($5–$1,000).</p>
       </section>
+
+      {/* ——— Deposit modal ——— */}
+      {depositModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => !depositLoading && setDepositModalOpen(false)}
+        >
+          <div
+            className="card-lux w-full max-w-sm p-6 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white">Deposit</h3>
+            <p className="mt-1 text-sm text-fintech-muted">Enter amount between $5 and $1,000.</p>
+            {checkoutError && (
+              <p className="mt-2 text-sm text-red-400">{checkoutError}</p>
+            )}
+            <input
+              type="number"
+              id="depositAmount"
+              min={5}
+              max={1000}
+              step="0.01"
+              placeholder="Enter amount"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none"
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDepositModalOpen(false)}
+                disabled={depositLoading}
+                className="btn-press min-h-touch flex-1 rounded-xl border border-white/20 py-3 text-white hover:bg-white/5 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeposit}
+                disabled={depositLoading}
+                className="btn-press min-h-touch flex-1 rounded-xl bg-fintech-accent py-3 font-semibold text-white hover:opacity-90 disabled:opacity-70"
+              >
+                {depositLoading ? "Redirecting…" : "Deposit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ——— Earnings, Referral, Ad cards ——— */}
       <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:gap-5">

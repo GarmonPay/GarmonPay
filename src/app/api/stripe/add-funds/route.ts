@@ -10,11 +10,19 @@ export async function POST(req: Request) {
   if (!secret?.startsWith("sk_")) {
     return NextResponse.json({ error: "Stripe is not configured", url: null }, { status: 503 });
   }
+  let body: { amount?: number };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON", url: null }, { status: 400 });
+  }
+  const amount = body?.amount;
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 5 || amount > 1000) {
+    return NextResponse.json({ error: "Amount must be between $5 and $1000 (USD)", url: null }, { status: 400 });
+  }
   const stripe = new Stripe(secret, {
     apiVersion: "2026-01-28.clover",
   });
-  const { amount } = await req.json();
-
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -25,7 +33,7 @@ export async function POST(req: Request) {
           product_data: {
             name: "GarmonPay Add Funds",
           },
-          unit_amount: amount * 100,
+          unit_amount: Math.round(amount * 100),
         },
         quantity: 1,
       },

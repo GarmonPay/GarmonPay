@@ -2,11 +2,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { BannerRotator } from "@/components/banners/BannerRotator";
+import { logout } from "@/lib/api";
+import { clearSession } from "@/lib/session";
+import { createBrowserClient } from "@/lib/supabase";
 
 export function MobileLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  async function handleLogout() {
+    setSidebarOpen(false);
+    const supabase = createBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    } else {
+      try {
+        await logout();
+      } finally {
+        clearSession();
+      }
+    }
+    router.push("/");
+  }
 
   return (
     <div
@@ -38,13 +58,23 @@ export function MobileLayout({ children }: { children: React.ReactNode }) {
         >
           GarmonPay
         </Link>
-        <Link
-          href="/dashboard/notifications"
-          className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-white/10 active:scale-95"
-          aria-label="Notifications"
-        >
-          <span className="text-xl" aria-hidden>🔔</span>
-        </Link>
+        <div className="flex items-center gap-0">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors active:scale-95"
+            aria-label="Log out"
+          >
+            <span className="text-sm font-medium">Log out</span>
+          </button>
+          <Link
+            href="/dashboard/notifications"
+            className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-white/10 active:scale-95"
+            aria-label="Notifications"
+          >
+            <span className="text-xl" aria-hidden>🔔</span>
+          </Link>
+        </div>
       </header>
 
       {/* Sidebar drawer: hidden until menu clicked */}

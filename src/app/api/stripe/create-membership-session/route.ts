@@ -24,9 +24,9 @@ export async function POST(req: Request) {
     name = "Pro";
   }
 
-  if (tier === "elite") {
+  if (tier === "elite" || tier === "vip") {
     price = 9900;
-    name = "Elite";
+    name = "VIP";
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com";

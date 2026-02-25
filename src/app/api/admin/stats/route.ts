@@ -18,10 +18,11 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   if (admin) {
     try {
-      const [platformTotals, ads, clicksRes] = await Promise.all([
+      const [platformTotals, ads, clicksRes, revenueRes] = await Promise.all([
         getPlatformTotals(),
         listAllAds(),
         admin.from("ad_clicks").select("id, ad_id, user_id, created_at").order("created_at", { ascending: false }).limit(20),
+        admin.from("revenue_transactions").select("amount, type"),
       ]);
       const recentAdClicks = (clicksRes.data ?? []).map((c: { id: string; ad_id: string; user_id: string; created_at: string }) => ({
         id: c.id,
@@ -29,6 +30,13 @@ export async function GET(request: Request) {
         adId: c.ad_id,
         clickedAt: c.created_at,
       }));
+      let totalDepositsCents = 0;
+      for (const r of revenueRes.data ?? []) {
+        const row = r as { amount?: number; type?: string };
+        if (row.type === "payment" && typeof row.amount === "number") {
+          totalDepositsCents += Math.round(row.amount * 100);
+        }
+      }
       return NextResponse.json({
         ...stats,
         totalAds: ads.length,
@@ -36,6 +44,7 @@ export async function GET(request: Request) {
         platformTotalEarningsCents: platformTotals.totalEarningsCents,
         platformTotalWithdrawalsCents: platformTotals.totalWithdrawalsCents,
         platformTotalAdCreditCents: platformTotals.totalAdCreditCents,
+        totalDepositsCents,
         recentAdClicks,
       });
     } catch (_) {
