@@ -29,26 +29,6 @@ function WalletContent() {
       .catch(() => setBalanceCents(0));
   }, [user?.accessToken]);
 
-  const deposit = async () => {
-    setDepositError(null);
-    const res = await fetch("/api/stripe/add-funds", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: user?.id ?? null,
-        amount: 25,
-      }),
-    });
-    const data = await res.json();
-    if (res.status === 503 || !data?.url) {
-      setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
-      return;
-    }
-    window.location.href = data.url;
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-fintech-bg">
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-8 max-w-md w-full text-center">
@@ -71,7 +51,24 @@ function WalletContent() {
               <p className="text-red-400 text-sm mb-3">{depositError}</p>
             )}
             <button
-              onClick={deposit}
+              onClick={async () => {
+                setDepositError(null);
+                const res = await fetch("/api/stripe/add-funds", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    amount: 25,
+                  }),
+                });
+                const data = await res.json();
+                if (res.status === 503 || !data?.url) {
+                  setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+                  return;
+                }
+                window.location.href = data.url;
+              }}
               className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3"
             >
               Deposit

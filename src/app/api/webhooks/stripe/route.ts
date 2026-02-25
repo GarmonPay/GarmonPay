@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-01-28.clover",
-});
+function getStripe(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key?.startsWith("sk_")) return null;
+  return new Stripe(key, { apiVersion: "2026-01-28.clover" });
+}
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,6 +26,11 @@ export async function POST(req: Request) {
 
   if (!signature || !secret) {
     return NextResponse.json({ error: "Missing webhook signature or secret" }, { status: 400 });
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
   }
 
   let event: Stripe.Event;

@@ -14,9 +14,7 @@ export async function POST(req: Request) {
     apiVersion: "2026-01-28.clover",
   });
 
-  const { user_id, amount } = await req.json();
-
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com";
+  const { amount } = await req.json();
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
@@ -26,19 +24,18 @@ export async function POST(req: Request) {
         price_data: {
           currency: "usd",
           product_data: {
-            name: "Add Funds",
+            name: "Add Funds - GarmonPay Wallet",
           },
           unit_amount: Number(amount) * 100,
         },
         quantity: 1,
       },
     ],
-    success_url: `${baseUrl}/wallet?success=true`,
-    cancel_url: `${baseUrl}/wallet`,
-    metadata: {
-      user_id: user_id ?? "",
-    },
+    success_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com"}/wallet?success=true`,
+    cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com"}/wallet`,
   });
 
-  return NextResponse.json({ url: session.url });
+  return NextResponse.json({
+    url: session.url,
+  });
 }
