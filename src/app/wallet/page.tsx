@@ -21,6 +21,24 @@ function WalletContent() {
           <>
             <h1 className="text-2xl font-bold text-white mb-2">Wallet</h1>
             <p className="text-fintech-muted mb-6">Add funds from your dashboard to get started.</p>
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/stripe/add-funds", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    amount: 25,
+                  }),
+                });
+                const data = await res.json();
+                window.location.href = data.url;
+              }}
+              className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3"
+            >
+              Deposit
+            </button>
           </>
         )}
         <Link
