@@ -7,8 +7,12 @@ const DEFAULT_SUCCESS = "/payment-success";
 const DEFAULT_CANCEL = "/payment-cancel";
 
 function getBaseUrl(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3000";
-  const proto = request.headers.get("x-forwarded-proto") ?? "http";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (siteUrl && typeof siteUrl === "string" && siteUrl.startsWith("http")) {
+    return siteUrl.replace(/\/$/, "");
+  }
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "garmonpay.com";
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
   return `${proto}://${host}`;
 }
 

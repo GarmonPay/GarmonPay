@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-01-28.clover",
-});
-
 export async function POST(req: Request) {
+  const secret = process.env.STRIPE_SECRET_KEY;
+  if (!secret?.startsWith("sk_")) {
+    return NextResponse.json(
+      { error: "Stripe is not configured", url: null },
+      { status: 503 }
+    );
+  }
+
+  const stripe = new Stripe(secret, {
+    apiVersion: "2026-01-28.clover",
+  });
+
   const { tier } = await req.json();
 
   let price = 1900;
@@ -20,6 +28,8 @@ export async function POST(req: Request) {
     price = 9900;
     name = "Elite";
   }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com";
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
@@ -39,8 +49,8 @@ export async function POST(req: Request) {
         quantity: 1,
       },
     ],
-    success_url: "https://garmonpay.com/dashboard?upgraded=true",
-    cancel_url: "https://garmonpay.com/dashboard",
+    success_url: `${baseUrl}/dashboard?upgraded=true`,
+    cancel_url: `${baseUrl}/dashboard`,
   });
 
   return NextResponse.json({

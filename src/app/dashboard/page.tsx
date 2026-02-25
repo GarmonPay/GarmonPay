@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [convertModal, setConvertModal] = useState(false);
   const [convertAmount, setConvertAmount] = useState("");
   const [convertSubmitting, setConvertSubmitting] = useState(false);
@@ -208,6 +209,7 @@ export default function DashboardPage() {
     });
     const data = await res.json();
     if (data?.url) window.location.href = data.url;
+    else if (data?.error) setCheckoutError(data.error);
   };
 
   const addFunds = async (amount: number) => {
@@ -218,6 +220,7 @@ export default function DashboardPage() {
     });
     const data = await res.json();
     if (data?.url) window.location.href = data.url;
+    else if (data?.error) setCheckoutError(data.error);
   };
 
   return (
@@ -230,7 +233,7 @@ export default function DashboardPage() {
         </p>
         <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
           <Link
-            href="/dashboard"
+            href="/wallet"
             className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98]"
           >
             Deposit
@@ -254,6 +257,12 @@ export default function DashboardPage() {
 
       {/* ——— Upgrade Membership & Add Funds ——— */}
       <section className="animate-slide-up card-lux p-5 tablet:p-6" style={{ marginTop: "30px" }}>
+        {checkoutError && (
+          <p className="mb-3 text-sm text-red-400">
+            {checkoutError}
+            <button type="button" onClick={() => setCheckoutError(null)} className="ml-2 underline">Dismiss</button>
+          </p>
+        )}
         <h2 className="text-lg font-bold text-white">Upgrade Membership</h2>
         <div className="mt-3 flex flex-wrap gap-3">
           <button

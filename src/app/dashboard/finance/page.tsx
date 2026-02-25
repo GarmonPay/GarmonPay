@@ -97,6 +97,12 @@ export default function FinancePage() {
         </div>
         <div className="flex flex-col gap-3 tablet:flex-row tablet:flex-wrap">
           <Link
+            href="/wallet"
+            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-highlight/90 px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
+          >
+            Add funds (Wallet)
+          </Link>
+          <Link
             href="/dashboard/withdraw"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >

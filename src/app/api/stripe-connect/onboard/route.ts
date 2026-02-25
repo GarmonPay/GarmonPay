@@ -50,9 +50,13 @@ export async function POST(request: Request) {
         .eq("id", userId);
     }
 
-    const origin = request.headers.get("x-forwarded-host")
-      ? `${request.headers.get("x-forwarded-proto") ?? "https"}://${request.headers.get("x-forwarded-host")}`
-      : request.headers.get("origin") ?? "http://localhost:3000";
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+    const origin =
+      (siteUrl && siteUrl.startsWith("http") ? siteUrl : null) ||
+      (request.headers.get("x-forwarded-host")
+        ? `${request.headers.get("x-forwarded-proto") ?? "https"}://${request.headers.get("x-forwarded-host")}`
+        : request.headers.get("origin")) ||
+      "https://garmonpay.com";
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,

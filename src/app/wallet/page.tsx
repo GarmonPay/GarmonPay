@@ -12,6 +12,7 @@ function WalletContent() {
   const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
+  const [depositLoading, setDepositLoading] = useState(false);
 
   useEffect(() => {
     getSessionAsync().then((session) => {
@@ -53,25 +54,33 @@ function WalletContent() {
             <button
               onClick={async () => {
                 setDepositError(null);
-                const res = await fetch("/api/stripe/add-funds", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    amount: 25,
-                  }),
-                });
-                const data = await res.json();
-                if (res.status === 503 || !data?.url) {
-                  setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
-                  return;
+                setDepositLoading(true);
+                try {
+                  const res = await fetch("/api/stripe/add-funds", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      amount: 25,
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.status === 503 || !data?.url) {
+                    setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+                    return;
+                  }
+                  window.location.href = data.url;
+                } catch (e) {
+                  setDepositError("Network error. Please try again.");
+                } finally {
+                  setDepositLoading(false);
                 }
-                window.location.href = data.url;
               }}
-              className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3"
+              disabled={depositLoading}
+              className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              Deposit
+              {depositLoading ? "Redirecting to checkout…" : "Deposit"}
             </button>
           </>
         )}
