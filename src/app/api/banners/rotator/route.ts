@@ -6,7 +6,6 @@ import { createAdminClient } from "@/lib/supabase";
 export async function GET() {
   try {
     if (!createAdminClient()) {
-      console.error("Banners rotator: Supabase not configured");
       return NextResponse.json({ banners: [] });
     }
     const banners = await listActiveBanners();

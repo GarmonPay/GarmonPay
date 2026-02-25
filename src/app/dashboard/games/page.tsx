@@ -134,6 +134,9 @@ export default function DashboardGamesPage() {
         <p className="text-sm text-fintech-muted mt-1">
           Rewards are drawn from the platform budget. Play fair — all calculations are server-side.
         </p>
+        <Link href="/dashboard/games/boxing" className="inline-block mt-2 text-fintech-accent hover:underline">
+          🥊 Boxing Arena
+        </Link>
       </div>
 
       {noRewards && (

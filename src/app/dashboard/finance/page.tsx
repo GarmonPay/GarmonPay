@@ -6,16 +6,27 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals } from "@/lib/api";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
+  return isToken
+    ? { Authorization: `Bearer ${accessTokenOrUserId}` }
+    : { "X-User-Id": accessTokenOrUserId };
+}
+
 export default function FinancePage() {
   const router = useRouter();
+  const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [connectLoading, setConnectLoading] = useState(false);
 
   useEffect(() => {
     getSessionAsync()
@@ -26,6 +37,7 @@ export default function FinancePage() {
         }
         const tokenOrId = s.accessToken ?? s.userId;
         const isToken = !!s.accessToken;
+        setSession({ tokenOrId, isToken });
         return Promise.all([
           getDashboard(tokenOrId, isToken),
           getWithdrawals(tokenOrId, isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 })),
@@ -96,6 +108,99 @@ export default function FinancePage() {
           >
             Transaction history
           </Link>
+        </div>
+
+        {/* Stripe: Subscribe / Upgrade / Platform access */}
+        <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+          <h2 className="text-sm font-semibold text-white mb-2">Payments</h2>
+          <p className="text-sm text-fintech-muted mb-3">Subscribe, upgrade, or pay for platform access via Stripe.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!session || checkoutLoading}
+              onClick={async () => {
+                if (!session) return;
+                setCheckoutLoading(true);
+                setError(null);
+                try {
+                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
+                    body: JSON.stringify({
+                      productType: "subscription",
+                      amountCents: 999,
+                      name: "Pro Subscription",
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error((data as { message?: string }).message || "Checkout failed");
+                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Checkout failed");
+                } finally {
+                  setCheckoutLoading(false);
+                }
+              }}
+              className="btn-press min-h-touch rounded-xl bg-fintech-highlight/90 px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {checkoutLoading ? "Redirecting…" : "Subscribe ($9.99)"}
+            </button>
+            <button
+              type="button"
+              disabled={!session || checkoutLoading}
+              onClick={async () => {
+                if (!session) return;
+                setCheckoutLoading(true);
+                setError(null);
+                try {
+                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
+                    body: JSON.stringify({
+                      productType: "upgrade",
+                      amountCents: 1999,
+                      name: "Platform Upgrade",
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error((data as { message?: string }).message || "Checkout failed");
+                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Checkout failed");
+                } finally {
+                  setCheckoutLoading(false);
+                }
+              }}
+              className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/5 disabled:opacity-50"
+            >
+              Upgrade ($19.99)
+            </button>
+            <button
+              type="button"
+              disabled={!session || connectLoading}
+              onClick={async () => {
+                if (!session) return;
+                setConnectLoading(true);
+                setError(null);
+                try {
+                  const res = await fetch(`${API_BASE || ""}/api/stripe-connect/onboard`, {
+                    method: "POST",
+                    headers: authHeaders(session.tokenOrId, session.isToken),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error((data as { message?: string }).message || "Onboarding failed");
+                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Connect onboarding failed");
+                } finally {
+                  setConnectLoading(false);
+                }
+              }}
+              className="btn-press min-h-touch rounded-xl border border-fintech-accent/50 px-4 py-2.5 text-sm font-medium text-fintech-accent hover:bg-fintech-accent/10 disabled:opacity-50"
+            >
+              {connectLoading ? "Redirecting…" : "Set up payouts (Stripe Connect)"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

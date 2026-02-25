@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase";
 import { getTeamLeaderboard } from "@/lib/team-db";
 import { getTeams } from "@/lib/teams";
 
 /** GET /api/teams/leaderboard — rank teams by total_score DESC. */
 export async function GET() {
+  if (!createAdminClient()) {
+    return NextResponse.json({ leaderboard: [] });
+  }
   try {
     const leaderboard = await getTeamLeaderboard(50);
     return NextResponse.json({ leaderboard });

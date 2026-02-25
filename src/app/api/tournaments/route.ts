@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase";
 import { listTournaments } from "@/lib/tournament-db";
 import { getTournaments } from "@/lib/tournaments";
 
 /** GET /api/tournaments — list active and upcoming tournaments. */
 export async function GET(_request: Request) {
+  if (!createAdminClient()) {
+    return NextResponse.json({ tournaments: [] });
+  }
   try {
     const list = await listTournaments(["active", "upcoming"]);
     return NextResponse.json({ tournaments: list });

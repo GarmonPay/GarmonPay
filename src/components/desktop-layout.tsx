@@ -12,7 +12,7 @@ export function DesktopLayout({ children }: { children: React.ReactNode }) {
         <DashboardHeader />
       </div>
       <div className="mx-auto flex max-w-7xl">
-        <aside className="hidden md:block w-56 shrink-0 border-r border-white/[0.06] bg-fintech-bg-card/50 py-4 px-3">
+        <aside className="hidden tablet:block w-56 shrink-0 border-r border-white/[0.06] bg-fintech-bg-card/50 py-4 px-3" aria-label="Dashboard navigation">
           <Sidebar onNavigate={() => {}} />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-6">

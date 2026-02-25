@@ -35,12 +35,12 @@ export default function DashboardLayout({
 
   return (
     <>
-      {/* Mobile: show only on small screens; no sidebar rendered here */}
-      <div className="block md:hidden">
+      {/* Mobile: default under 768px; bottom nav, no sidebar */}
+      <div className="block tablet:hidden">
         <MobileLayout>{children}</MobileLayout>
       </div>
-      {/* Desktop: sidebar + main */}
-      <div className="hidden md:block">
+      {/* Desktop: 768px and up — sidebar + main */}
+      <div className="hidden tablet:block">
         <DesktopLayout>{children}</DesktopLayout>
       </div>
       <MobileNav />
