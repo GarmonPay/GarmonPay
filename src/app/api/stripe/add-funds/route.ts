@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-01-28.clover",
-});
-
 export async function POST(req: Request) {
+  const secret = process.env.STRIPE_SECRET_KEY;
+  if (!secret?.startsWith("sk_")) {
+    return NextResponse.json(
+      { error: "Stripe is not configured", url: null },
+      { status: 503 }
+    );
+  }
+
+  const stripe = new Stripe(secret, {
+    apiVersion: "2026-01-28.clover",
+  });
+
   const { user_id, amount } = await req.json();
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://garmonpay.com";

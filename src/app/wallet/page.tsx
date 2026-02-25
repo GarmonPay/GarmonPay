@@ -9,15 +9,28 @@ import { getSessionAsync } from "@/lib/session";
 function WalletContent() {
   const searchParams = useSearchParams();
   const success = searchParams.get("success") === "true" || searchParams.get("funded") === "true";
-  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [depositError, setDepositError] = useState<string | null>(null);
 
   useEffect(() => {
     getSessionAsync().then((session) => {
-      if (session) setUser({ id: session.userId });
+      if (session) setUser({ id: session.userId, accessToken: session.accessToken });
     });
   }, []);
 
+  useEffect(() => {
+    if (!user?.accessToken) return;
+    fetch("/api/dashboard", {
+      headers: { Authorization: `Bearer ${user.accessToken}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ balanceCents: 0 })))
+      .then((data) => setBalanceCents(data.balanceCents ?? 0))
+      .catch(() => setBalanceCents(0));
+  }, [user?.accessToken]);
+
   const deposit = async () => {
+    setDepositError(null);
     const res = await fetch("/api/stripe/add-funds", {
       method: "POST",
       headers: {
@@ -29,9 +42,11 @@ function WalletContent() {
       }),
     });
     const data = await res.json();
-    if (data?.url) {
-      window.location.href = data.url;
+    if (res.status === 503 || !data?.url) {
+      setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+      return;
     }
+    window.location.href = data.url;
   };
 
   return (
@@ -46,7 +61,15 @@ function WalletContent() {
         ) : (
           <>
             <h1 className="text-2xl font-bold text-white mb-2">Wallet</h1>
+            {balanceCents !== null && (
+              <p className="text-fintech-muted mb-2">
+                Balance: <span className="text-white font-semibold">${((balanceCents ?? 0) / 100).toFixed(2)}</span>
+              </p>
+            )}
             <p className="text-fintech-muted mb-6">Add funds from your dashboard to get started.</p>
+            {depositError && (
+              <p className="text-red-400 text-sm mb-3">{depositError}</p>
+            )}
             <button
               onClick={deposit}
               className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity mb-3"
