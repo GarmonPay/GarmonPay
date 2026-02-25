@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { createAdminClient } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-01-28.clover",
 });
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
 
 export async function GET() {
   return NextResponse.json({ status: "live" });
@@ -31,32 +38,18 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const email = session.customer_details?.email ?? session.customer_email ?? null;
     const amountTotal = session.amount_total ?? 0;
-    const mode = session.mode;
+    const amount = amountTotal / 100;
+    const mode = session.mode ?? "payment";
 
-    const supabase = createAdminClient();
+    const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
     }
 
-    if (mode === "payment" && amountTotal > 0) {
-      const amountCents = Math.round(amountTotal);
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
-
-      const userId = (userRow as { id?: string } | null)?.id;
-      if (userId) {
-        await supabase.rpc("increment_user_balance", {
-          p_user_id: userId,
-          p_amount_cents: amountCents,
-        });
-      }
-
-      await supabase.rpc("increment_wallet_balance", {
-        p_email: email,
-        p_amount_cents: amountCents,
+    if (mode === "payment" && amount > 0 && email) {
+      await supabase.rpc("add_funds", {
+        user_email: email,
+        amount,
       });
     }
 
@@ -65,6 +58,14 @@ export async function POST(req: Request) {
         .from("users")
         .update({ membership: "active", updated_at: new Date().toISOString() })
         .eq("email", email);
+    }
+
+    if (email) {
+      await supabase.from("revenue_transactions").insert({
+        email,
+        amount,
+        type: mode,
+      });
     }
   }
 
