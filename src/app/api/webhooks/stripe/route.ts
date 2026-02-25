@@ -46,11 +46,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
     }
 
-    if (mode === "payment" && amount > 0 && email) {
-      await supabase.rpc("add_funds", {
-        user_email: email,
-        amount,
-      });
+    if (mode === "payment" && amountTotal > 0) {
+      const amountCents = Math.round(amountTotal);
+      const amountDollars = amountTotal / 100;
+      const userId = (session.metadata as { user_id?: string } | null)?.user_id;
+
+      if (email) {
+        await supabase.rpc("add_funds", {
+          user_email: email,
+          amount: amountDollars,
+        });
+      }
+
+      if (userId) {
+        await supabase.rpc("increment_user_balance", {
+          p_user_id: userId,
+          p_amount_cents: amountCents,
+        });
+      }
     }
 
     if (mode === "subscription" && email) {
@@ -62,7 +75,7 @@ export async function POST(req: Request) {
 
     if (email) {
       await supabase.from("revenue_transactions").insert({
-        email,
+        email: email ?? "",
         amount,
         type: mode,
       });
