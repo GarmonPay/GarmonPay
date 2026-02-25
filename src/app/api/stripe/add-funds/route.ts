@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { getAuthUserId } from "@/lib/auth-request";
 
 export async function GET() {
   return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
@@ -20,12 +21,16 @@ export async function POST(req: Request) {
   if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 5 || amount > 1000) {
     return NextResponse.json({ error: "Amount must be between $5 and $1000 (USD)", url: null }, { status: 400 });
   }
+
+  const userId = await getAuthUserId(req);
+
   const stripe = new Stripe(secret, {
     apiVersion: "2026-01-28.clover",
   });
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    ...(userId ? { metadata: { user_id: userId } } : {}),
     line_items: [
       {
         price_data: {

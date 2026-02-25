@@ -216,9 +216,13 @@ export default function DashboardPage() {
   };
 
   const addFunds = async (amount: number) => {
+    const session = await getSessionAsync();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+    else if (session?.userId) headers["X-User-Id"] = session.userId;
     const res = await fetch("/api/stripe/add-funds", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ amount }),
     });
     const data = await res.json();
