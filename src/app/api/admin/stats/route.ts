@@ -18,11 +18,13 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   if (admin) {
     try {
-      const [platformTotals, ads, clicksRes, revenueRes] = await Promise.all([
+      const [platformTotals, ads, clicksRes, revenueRes, usersCountRes, recentUsersRes] = await Promise.all([
         getPlatformTotals(),
         listAllAds(),
         admin.from("ad_clicks").select("id, ad_id, user_id, created_at").order("created_at", { ascending: false }).limit(20),
         admin.from("revenue_transactions").select("amount, type"),
+        admin.from("users").select("id", { count: "exact", head: true }),
+        admin.from("users").select("id, email, role, created_at").order("created_at", { ascending: false }).limit(10),
       ]);
       const recentAdClicks = (clicksRes.data ?? []).map((c: { id: string; ad_id: string; user_id: string; created_at: string }) => ({
         id: c.id,
@@ -30,6 +32,14 @@ export async function GET(request: Request) {
         adId: c.ad_id,
         clickedAt: c.created_at,
       }));
+      const recentRegistrations = (recentUsersRes.data ?? []).map(
+        (u: { id: string; email: string | null; role: string | null; created_at: string | null }) => ({
+          id: u.id,
+          email: u.email ?? "",
+          role: u.role ?? "user",
+          createdAt: u.created_at ?? new Date().toISOString(),
+        })
+      );
       let totalDepositsCents = 0;
       for (const r of revenueRes.data ?? []) {
         const row = r as { amount?: number; type?: string };
@@ -39,6 +49,8 @@ export async function GET(request: Request) {
       }
       return NextResponse.json({
         ...stats,
+        totalUsers: usersCountRes.count ?? stats.totalUsers,
+        recentRegistrations: recentRegistrations.length > 0 ? recentRegistrations : stats.recentRegistrations,
         totalAds: ads.length,
         totalEarningsCents: platformTotals.totalEarningsCents,
         platformTotalEarningsCents: platformTotals.totalEarningsCents,
