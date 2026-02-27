@@ -28,13 +28,14 @@ export default function AdminDashboardPage() {
   const session = useMemo(() => getAdminSession(), []);
 
   useEffect(() => {
-    if (!session) return;
+    const adminId = session?.adminId;
+    if (!adminId) return;
     let cancelled = false;
 
     async function loadStats() {
       try {
         const res = await fetch(`${API_BASE}/admin/stats`, {
-          headers: { "X-Admin-Id": session.adminId },
+          headers: { "X-Admin-Id": adminId },
           cache: "no-store",
         });
         const body = (await res.json().catch(() => ({}))) as {

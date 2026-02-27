@@ -34,8 +34,9 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const adminId = session?.adminId;
 
-    if (!session) {
+    if (!adminId) {
       setError("Admin session not found.");
       setLoading(false);
       return () => {
@@ -48,7 +49,7 @@ export default function AdminUsersPage() {
       setError(null);
       try {
         const res = await fetch(`${API_BASE}/admin/users`, {
-          headers: { "X-Admin-Id": session.adminId },
+          headers: { "X-Admin-Id": adminId },
           cache: "no-store",
         });
         const body = (await res.json().catch(() => ({}))) as AdminUsersResponse;
