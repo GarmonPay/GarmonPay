@@ -70,6 +70,32 @@ export async function POST(request: Request) {
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
 
     if (supabase) {
+      let depositUserId = userId;
+      if (!depositUserId && email) {
+        const { data: matchedUser, error: matchedUserError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+        if (matchedUserError) {
+          console.error(matchedUserError);
+        }
+        depositUserId = (matchedUser as { id?: string } | null)?.id ?? null;
+      }
+
+      if (depositUserId && amountTotal > 0 && (productType === "payment" || productType === "wallet_fund")) {
+        const amount = amountTotal / 100;
+        const { error: depositError } = await supabase.from("deposits").insert({
+          user_id: depositUserId,
+          amount,
+          stripe_session: sessionId,
+          status: "completed",
+        });
+        if (depositError) {
+          console.error("Stripe webhook: insert deposits error", depositError);
+        }
+      }
+
       const { error } = await supabase.from("stripe_payments").insert({
         user_id: userId || null,
         email: email || "unknown",
@@ -100,7 +126,7 @@ export async function POST(request: Request) {
       const userId = sub.metadata?.user_id as string | undefined;
       const status = sub.status;
       const periodEnd = sub.current_period_end;
-      await supabase
+      const { error: updateSubError } = await supabase
         .from("stripe_subscriptions")
         .update({
           status: status as "active" | "past_due" | "canceled" | "incomplete" | "trialing",
@@ -108,8 +134,17 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("stripe_subscription_id", sub.id);
+      if (updateSubError) {
+        console.error("Stripe webhook: stripe_subscriptions update error", updateSubError);
+      }
       if (userId && (status === "canceled" || status === "unpaid" || status === "incomplete_expired")) {
-        await supabase.from("users").update({ membership: "starter", updated_at: new Date().toISOString() }).eq("id", userId);
+        const { error: userUpdateError } = await supabase
+          .from("users")
+          .update({ membership: "starter", updated_at: new Date().toISOString() })
+          .eq("id", userId);
+        if (userUpdateError) {
+          console.error("Stripe webhook: users membership downgrade error", userUpdateError);
+        }
       }
     }
   }
@@ -118,10 +153,13 @@ export async function POST(request: Request) {
     const account = event.data.object as Stripe.Account;
     const supabase = createAdminClient();
     if (supabase && account.metadata?.user_id) {
-      await supabase
+      const { error } = await supabase
         .from("users")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", account.metadata.user_id);
+      if (error) {
+        console.error("Stripe webhook: users account.updated sync error", error);
+      }
     }
   }
 

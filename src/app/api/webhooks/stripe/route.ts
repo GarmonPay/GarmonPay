@@ -53,39 +53,77 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
     }
 
+    const sessionId = session.id;
+    let depositUserId = (session.metadata as { user_id?: string } | null)?.user_id ?? null;
+    if (!depositUserId && email) {
+      const { data: matchedUser, error: matchedUserError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (matchedUserError) {
+        console.error(matchedUserError);
+      }
+      depositUserId = (matchedUser as { id?: string } | null)?.id ?? null;
+    }
+
+    if (depositUserId && amountTotal > 0 && mode === "payment") {
+      const { error: depositError } = await supabase.from("deposits").insert({
+        user_id: depositUserId,
+        amount: amountTotal / 100,
+        stripe_session: sessionId,
+        status: "completed",
+      });
+      if (depositError) {
+        console.error("Stripe webhook insert deposits error:", depositError);
+      }
+    }
+
     if (mode === "payment" && amountTotal > 0) {
       const amountCents = Math.round(amountTotal);
       const amountDollars = amountTotal / 100;
       const userId = (session.metadata as { user_id?: string } | null)?.user_id;
 
       if (email) {
-        await supabase.rpc("add_funds", {
+        const { error: addFundsError } = await supabase.rpc("add_funds", {
           user_email: email,
           amount: amountDollars,
         });
+        if (addFundsError) {
+          console.error("Stripe webhook add_funds error:", addFundsError);
+        }
       }
 
       if (userId) {
-        await supabase.rpc("increment_user_balance", {
+        const { error: incrementError } = await supabase.rpc("increment_user_balance", {
           p_user_id: userId,
           p_amount_cents: amountCents,
         });
+        if (incrementError) {
+          console.error("Stripe webhook increment_user_balance error:", incrementError);
+        }
       }
     }
 
     if (mode === "subscription" && email) {
-      await supabase
+      const { error: membershipError } = await supabase
         .from("users")
         .update({ membership: "active", updated_at: new Date().toISOString() })
         .eq("email", email);
+      if (membershipError) {
+        console.error("Stripe webhook subscription membership update error:", membershipError);
+      }
     }
 
     if (email) {
-      await supabase.from("revenue_transactions").insert({
+      const { error: revenueError } = await supabase.from("revenue_transactions").insert({
         email: email ?? "",
         amount,
         type: mode,
       });
+      if (revenueError) {
+        console.error("Stripe webhook revenue_transactions insert error:", revenueError);
+      }
     }
   }
 
