@@ -1,9 +1,9 @@
 /**
- * Get authenticated user id from request (Bearer token or x-user-id).
+ * Get authenticated user id from request (Bearer token).
+ * Optionally allow x-user-id only when ALLOW_INSECURE_USER_ID_HEADER=true.
  * Used by API routes that require auth.
  */
 
-import { findUserById } from "./auth-store";
 import { createServerClient } from "./supabase";
 
 export async function getAuthUserId(request: Request): Promise<string | null> {
@@ -19,9 +19,8 @@ export async function getAuthUserId(request: Request): Promise<string | null> {
     }
   }
 
-  if (userIdHeader) {
-    const user = findUserById(userIdHeader);
-    if (user) return user.id;
+  if (userIdHeader && process.env.ALLOW_INSECURE_USER_ID_HEADER === "true") {
+    return userIdHeader;
   }
 
   return null;

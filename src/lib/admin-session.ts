@@ -10,6 +10,7 @@ export interface AdminSession {
   email: string;
   expiresAt: string;
   isSuperAdmin?: boolean;
+  accessToken?: string;
 }
 
 export function getAdminSession(): AdminSession | null {
@@ -19,6 +20,10 @@ export function getAdminSession(): AdminSession | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as AdminSession;
     if (new Date(data.expiresAt) <= new Date()) {
+      clearAdminSession();
+      return null;
+    }
+    if (!data.accessToken) {
       clearAdminSession();
       return null;
     }
@@ -44,4 +49,9 @@ export function clearAdminSession(): void {
   } catch {
     // ignore
   }
+}
+
+export function getAdminRequestHeaders(session: AdminSession | null): Record<string, string> {
+  if (!session?.accessToken) return {};
+  return { Authorization: `Bearer ${session.accessToken}` };
 }

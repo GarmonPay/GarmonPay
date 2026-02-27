@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import { createAdminClient } from "@/lib/supabase";
-
-/** Create bucket "ad-media" (public) in Supabase Dashboard → Storage if uploads fail. */
-const BUCKET = "ad-media";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { authenticateAdminRequest } from "@/lib/admin-auth";
+import { uploadAdsAsset } from "@/lib/ads-storage";
 
 /** POST: Upload ad media (video or image). Admin only. Returns { url }. */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
   const supabase = createAdminClient();
   if (!supabase) {
@@ -26,15 +18,17 @@ export async function POST(request: Request) {
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ message: "No file" }, { status: 400 });
   }
-  const ext = file.name.split(".").pop() ?? "bin";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (error) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  const kind = file.type.startsWith("video/") ? "video" : "image";
+  try {
+    const url = await uploadAdsAsset({
+      supabase,
+      userId: auth.context.userId,
+      file,
+      kind,
+    });
+    return NextResponse.json({ url });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return NextResponse.json({ message }, { status: 400 });
   }
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return NextResponse.json({ url: urlData.publicUrl });
 }

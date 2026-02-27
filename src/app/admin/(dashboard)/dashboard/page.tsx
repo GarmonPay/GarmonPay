@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminRequestHeaders, getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 interface AdminStats {
   totalUsers: number;
-  totalEarningsCents: number;
+  totalDepositsCents: number;
+  totalRevenueCents: number;
+  totalProfitCents: number;
+  totalWithdrawalsCents: number;
   totalAds: number;
-  totalReferralEarningsCents: number;
-  totalDepositsCents?: number;
   recentRegistrations: { id: string; email: string; role: string; createdAt: string }[];
   recentAdClicks: { id: string; userId: string; adId: string; clickedAt: string }[];
-  platformTotalEarningsCents?: number;
-  platformTotalWithdrawalsCents?: number;
-  platformTotalAdCreditCents?: number;
 }
 
 function formatCents(cents: number) {
@@ -30,38 +28,24 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (!session) return;
     fetch(`${API_BASE}/admin/stats`, {
-      headers: { "X-Admin-Id": session.adminId },
+      headers: getAdminRequestHeaders(session),
     })
       .then((res) => res.ok ? res.json() : res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load stats"); }))
       .then((data) => {
         setStats({
           totalUsers: data?.totalUsers ?? 0,
-          totalEarningsCents: data?.totalEarningsCents ?? 0,
+          totalDepositsCents: data?.totalDepositsCents ?? 0,
+          totalRevenueCents: data?.totalRevenueCents ?? 0,
+          totalProfitCents: data?.totalProfitCents ?? 0,
+          totalWithdrawalsCents: data?.totalWithdrawalsCents ?? 0,
           totalAds: data?.totalAds ?? 0,
-          totalReferralEarningsCents: data?.totalReferralEarningsCents ?? 0,
-          totalDepositsCents: data?.totalDepositsCents,
           recentRegistrations: Array.isArray(data?.recentRegistrations) ? data.recentRegistrations : [],
           recentAdClicks: Array.isArray(data?.recentAdClicks) ? data.recentAdClicks : [],
-          platformTotalEarningsCents: data?.platformTotalEarningsCents,
-          platformTotalWithdrawalsCents: data?.platformTotalWithdrawalsCents,
-          platformTotalAdCreditCents: data?.platformTotalAdCreditCents,
         });
         setError(null);
       })
-      .catch(() => {
-        setError(null);
-        setStats({
-          totalUsers: 0,
-          totalEarningsCents: 0,
-          totalAds: 0,
-          totalReferralEarningsCents: 0,
-          recentRegistrations: [],
-          recentAdClicks: [],
-          platformTotalEarningsCents: 0,
-          platformTotalWithdrawalsCents: 0,
-          platformTotalAdCreditCents: 0,
-          totalDepositsCents: 0,
-        });
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load stats");
       });
   }, [session]);
 
@@ -87,7 +71,7 @@ export default function AdminDashboardPage() {
     <div className="p-6">
       <h1 className="text-2xl font-bold text-white mb-6">Dashboard</h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Users</p>
           <p className="text-2xl font-bold text-white mt-1">{stats.totalUsers}</p>
@@ -95,45 +79,33 @@ export default function AdminDashboardPage() {
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Deposits</p>
           <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents(stats.totalDepositsCents ?? 0)}
+            {formatCents(stats.totalDepositsCents)}
           </p>
         </div>
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Withdrawals</p>
           <p className="text-2xl font-bold text-white mt-1">
-            {formatCents(stats.platformTotalWithdrawalsCents ?? 0)}
+            {formatCents(stats.totalWithdrawalsCents)}
           </p>
         </div>
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Revenue</p>
           <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents((stats.platformTotalEarningsCents ?? 0) + (stats.totalDepositsCents ?? 0))}
-          </p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Platform Earnings</p>
-          <p className="text-2xl font-bold text-white mt-1">
-            {formatCents(stats.platformTotalEarningsCents ?? stats.totalEarningsCents ?? 0)}
+            {formatCents(stats.totalRevenueCents)}
           </p>
         </div>
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Ad Credit Usage</p>
+          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Profit</p>
           <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents(stats.platformTotalAdCreditCents ?? 0)}
+            {formatCents(stats.totalProfitCents)}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-8">
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Ads</p>
           <p className="text-2xl font-bold text-white mt-1">{stats.totalAds}</p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Referral Earnings</p>
-          <p className="text-2xl font-bold text-[#10b981] mt-1">{formatCents(stats.totalReferralEarningsCents)}</p>
         </div>
       </div>
 

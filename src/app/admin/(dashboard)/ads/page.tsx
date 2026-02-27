@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminRequestHeaders, getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -55,7 +55,7 @@ export default function AdminAdsPage() {
   function loadAds() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/ads`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/ads`, { headers: getAdminRequestHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load ads");
         return res.json();
@@ -83,7 +83,7 @@ export default function AdminAdsPage() {
         fd.set("file", file);
         const res = await fetch(`${API_BASE}/admin/ads/upload`, {
           method: "POST",
-          headers: { "X-Admin-Id": session.adminId },
+          headers: getAdminRequestHeaders(session),
           body: fd,
         });
         const data = await res.json().catch(() => ({}));
@@ -119,7 +119,7 @@ export default function AdminAdsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
+          ...getAdminRequestHeaders(session),
         },
         body: JSON.stringify(payload),
       });
@@ -154,7 +154,7 @@ export default function AdminAdsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
+          ...getAdminRequestHeaders(session),
         },
         body: JSON.stringify({ id: ad.id, status: newStatus }),
       });

@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail, getUserRole, hasAdminAccess, isSuperAdmin } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -13,22 +9,50 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return NextResponse.json({ message: "Authentication is not configured" }, { status: 503 });
+    }
+
+    const authClient = createClient(url, anonKey);
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (authError || !authData.user || !authData.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
-    if (!hasAdminAccess(user)) {
+
+    const admin = createAdminClient();
+    if (!admin) {
+      return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
+    }
+
+    const { data: profile, error: profileError } = await admin
+      .from("users")
+      .select("role, is_super_admin")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+    if (profileError || !profile) {
       return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+
+    const role = String((profile as { role?: string }).role ?? "member");
+    const isSuper = Boolean((profile as { is_super_admin?: boolean }).is_super_admin);
+    if (role !== "admin" && !isSuper) {
+      return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8h for admin
+
+    const expiresAt = authData.session.expires_at
+      ? new Date(authData.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: authData.user.id, email: authData.user.email ?? email.trim() },
       expiresAt,
-      is_super_admin: isSuperAdmin(user),
+      accessToken: authData.session.access_token,
+      is_super_admin: isSuper,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminRequestHeaders, getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -35,7 +35,7 @@ export default function AdminRevenuePage() {
   useEffect(() => {
     if (!session) return;
     fetch(`${API_BASE}/admin/revenue`, {
-      headers: { "X-Admin-Id": session.adminId },
+      headers: getAdminRequestHeaders(session),
     })
       .then((res) => {
         if (!res.ok) return res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load revenue"); });

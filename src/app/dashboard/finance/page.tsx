@@ -6,8 +6,6 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -129,7 +127,7 @@ export default function FinancePage() {
                 setCheckoutLoading(true);
                 setError(null);
                 try {
-                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
+                  const res = await fetch(`/api/create-checkout-session`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
                     body: JSON.stringify({
@@ -159,7 +157,7 @@ export default function FinancePage() {
                 setCheckoutLoading(true);
                 setError(null);
                 try {
-                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
+                  const res = await fetch(`/api/create-checkout-session`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
                     body: JSON.stringify({
@@ -189,7 +187,7 @@ export default function FinancePage() {
                 setConnectLoading(true);
                 setError(null);
                 try {
-                  const res = await fetch(`${API_BASE || ""}/api/stripe-connect/onboard`, {
+                  const res = await fetch(`/api/stripe-connect/onboard`, {
                     method: "POST",
                     headers: authHeaders(session.tokenOrId, session.isToken),
                   });

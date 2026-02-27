@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import {
   getCommissionConfig,
   setCommissionPercentage,
@@ -8,18 +7,13 @@ import {
   type MembershipTier,
 } from "@/lib/referral-commissions-db";
 import { createAdminClient } from "@/lib/supabase";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { authenticateAdminRequest } from "@/lib/admin-auth";
 
 /** GET /api/admin/referral-commissions — config + stats (total paid, active referral subs). */
 export async function GET(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
   if (!createAdminClient()) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
@@ -43,8 +37,9 @@ export async function GET(request: Request) {
 
 /** PATCH /api/admin/referral-commissions — set commission % per tier. */
 export async function PATCH(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
   if (!createAdminClient()) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });

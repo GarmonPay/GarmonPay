@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { createUserWithEmailPassword, findUserByEmail, generateReferralCode } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -16,16 +12,42 @@ export async function POST(request: Request) {
     if (password.length < 8) {
       return NextResponse.json({ message: "Password must be at least 8 characters" }, { status: 400 });
     }
-    const existing = findUserByEmail(email);
-    if (existing) {
-      return NextResponse.json({ message: "Email already registered" }, { status: 409 });
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return NextResponse.json({ message: "Authentication is not configured" }, { status: 503 });
     }
-    const passwordHash = hashPassword(password);
-    const user = createUserWithEmailPassword(email, passwordHash, referralCode ?? null);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const authClient = createClient(url, anonKey);
+    const { data, error } = await authClient.auth.signUp({
+      email: email.trim(),
+      password,
+    });
+    if (error || !data.user) {
+      const message = error?.message ?? "Registration failed";
+      const status = error?.message?.toLowerCase().includes("already registered") ? 409 : 400;
+      return NextResponse.json({ message }, { status });
+    }
+
+    const normalizedReferralCode = typeof referralCode === "string" ? referralCode.trim() : "";
+    if (normalizedReferralCode) {
+      const admin = createAdminClient();
+      if (admin) {
+        await admin
+          .from("users")
+          .update({ referred_by_code: normalizedReferralCode })
+          .eq("id", data.user.id);
+      }
+    }
+
+    const expiresAt = data.session?.expires_at
+      ? new Date(data.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 60 * 60 * 1000).toISOString();
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: data.user.id, email: data.user.email ?? email.trim() },
       expiresAt,
+      accessToken: data.session?.access_token ?? null,
     });
   } catch {
     return NextResponse.json({ message: "Registration failed" }, { status: 500 });

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById } from "@/lib/auth-store";
 import { getEarningsForUser, listAds } from "@/lib/ads-db";
 import { getTotalsForUser } from "@/lib/transactions-db";
 import { countUserReferrals, getUserReferralEarningsCents } from "@/lib/viral-db";
@@ -13,7 +12,6 @@ import { createServerClient } from "@/lib/supabase";
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const userIdHeader = request.headers.get("x-user-id");
 
   const safeDashboardPayload = {
     earningsTodayCents: 0,
@@ -131,26 +129,6 @@ export async function GET(request: Request) {
         return NextResponse.json(safeDashboardPayload, { status: 200 });
       }
     }
-  }
-
-  if (userIdHeader) {
-    const user = findUserById(userIdHeader);
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json({
-      earningsTodayCents: 0,
-      earningsWeekCents: 0,
-      earningsMonthCents: 0,
-      balanceCents: 0,
-      withdrawableCents: 0,
-      membershipTier: "starter",
-      referralCode: user.referralCode,
-      referralEarningsCents: 0,
-      totalReferrals: 0,
-      announcements: [],
-      availableAds: [],
-    });
   }
 
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

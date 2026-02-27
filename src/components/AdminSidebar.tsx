@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clearAdminSession } from "@/lib/admin-session";
+import { createBrowserClient } from "@/lib/supabase";
 
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -22,7 +23,11 @@ const links = [
 export function AdminSidebar() {
   const pathname = usePathname();
 
-  function handleLogout() {
+  async function handleLogout() {
+    const supabase = createBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     clearAdminSession();
     window.location.href = "/admin/login";
   }
