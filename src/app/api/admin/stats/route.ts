@@ -1,8 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
-import { getAdminStats } from "@/lib/admin-stats";
-import { getPlatformTotals } from "@/lib/transactions-db";
-import { listAllAds } from "@/lib/ads-db";
 import { createAdminClient } from "@/lib/supabase";
 
 export async function GET(request: Request) {
@@ -10,46 +6,42 @@ export async function GET(request: Request) {
   if (!adminId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
+
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ message: "Supabase is not configured" }, { status: 503 });
+  }
+
+  const { data: adminUser, error: adminError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", adminId)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if (adminError || !adminUser) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
-  const stats = getAdminStats();
-  const admin = createAdminClient();
-  if (admin) {
-    try {
-      const [platformTotals, ads, clicksRes, revenueRes] = await Promise.all([
-        getPlatformTotals(),
-        listAllAds(),
-        admin.from("ad_clicks").select("id, ad_id, user_id, created_at").order("created_at", { ascending: false }).limit(20),
-        admin.from("revenue_transactions").select("amount, type"),
-      ]);
-      const recentAdClicks = (clicksRes.data ?? []).map((c: { id: string; ad_id: string; user_id: string; created_at: string }) => ({
-        id: c.id,
-        userId: c.user_id,
-        adId: c.ad_id,
-        clickedAt: c.created_at,
-      }));
-      let totalDepositsCents = 0;
-      for (const r of revenueRes.data ?? []) {
-        const row = r as { amount?: number; type?: string };
-        if (row.type === "payment" && typeof row.amount === "number") {
-          totalDepositsCents += Math.round(row.amount * 100);
-        }
-      }
-      return NextResponse.json({
-        ...stats,
-        totalAds: ads.length,
-        totalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalWithdrawalsCents: platformTotals.totalWithdrawalsCents,
-        platformTotalAdCreditCents: platformTotals.totalAdCreditCents,
-        totalDepositsCents,
-        recentAdClicks,
-      });
-    } catch (_) {
-      // ad_clicks or other tables may not exist yet
-    }
+
+  const { count: totalUsers, error: usersError } = await supabase
+    .from("users")
+    .select("*", { count: "exact", head: true });
+  const { data: deposits, error: depositsError } = await supabase
+    .from("deposits")
+    .select("amount");
+
+  if (usersError || depositsError) {
+    return NextResponse.json(
+      { message: usersError?.message ?? depositsError?.message ?? "Failed to load stats" },
+      { status: 500 }
+    );
   }
-  return NextResponse.json(stats);
+
+  const totalDeposits = deposits?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
+
+  return NextResponse.json({
+    totalUsers: totalUsers ?? 0,
+    totalDeposits,
+    totalRevenue: totalDeposits,
+  });
 }

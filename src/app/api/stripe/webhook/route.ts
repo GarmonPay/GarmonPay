@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     }
 
     const amountCents = Math.round(amountTotal);
+    const amount = amountTotal / 100;
     const metadata = (session.metadata ?? {}) as Record<string, string>;
     const userId = metadata.user_id ?? metadata.userId ?? null;
     const email = session.customer_details?.email ?? session.customer_email ?? null;
@@ -67,13 +68,22 @@ export async function POST(req: Request) {
     if (email && !userId) {
       await supabase.rpc("add_funds", {
         user_email: email,
-        amount: amountTotal / 100,
+        amount,
       });
+    }
+
+    const { error: depositError } = await supabase.from("deposits").insert({
+      user_id: userId,
+      amount,
+      status: "completed",
+    });
+    if (depositError) {
+      console.error("Stripe webhook deposits insert error:", depositError);
     }
 
     await supabase.from("revenue_transactions").insert({
       email: email ?? "",
-      amount: amountTotal / 100,
+      amount,
       type: session.mode ?? "payment",
     });
   }

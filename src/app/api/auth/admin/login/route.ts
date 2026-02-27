@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail, getUserRole, hasAdminAccess, isSuperAdmin } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   try {
@@ -13,22 +8,40 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return NextResponse.json({ message: "Supabase is not configured" }, { status: 503 });
+    }
+
+    const supabase = createClient(url, anonKey);
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (authError || !authData.user) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
-    if (!hasAdminAccess(user)) {
+
+    const { data: adminUser, error: adminError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", authData.user.email ?? "")
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (adminError || !adminUser) {
+      await supabase.auth.signOut();
       return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
-    }
+
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8h for admin
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: authData.user.id, email: authData.user.email ?? email.trim() },
       expiresAt,
-      is_super_admin: isSuperAdmin(user),
+      is_super_admin: !!(adminUser as { is_super_admin?: boolean }).is_super_admin,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });
