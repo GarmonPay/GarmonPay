@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -25,44 +25,61 @@ function formatCents(cents: number) {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const session = getAdminSession();
+  const session = useMemo(() => getAdminSession(), []);
 
   useEffect(() => {
-    if (!session) return;
-    fetch(`${API_BASE}/admin/stats`, {
-      headers: { "X-Admin-Id": session.adminId },
-    })
-      .then((res) => res.ok ? res.json() : res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load stats"); }))
-      .then((data) => {
+    const adminId = session?.adminId;
+    if (!adminId) return;
+    const adminIdHeader: string = adminId;
+    let cancelled = false;
+
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/stats`, {
+          headers: { "X-Admin-Id": adminIdHeader },
+          cache: "no-store",
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+          totalUsers?: number;
+          totalEarningsCents?: number;
+          totalAds?: number;
+          totalReferralEarningsCents?: number;
+          totalDepositsCents?: number;
+          recentRegistrations?: AdminStats["recentRegistrations"];
+          recentAdClicks?: AdminStats["recentAdClicks"];
+          platformTotalEarningsCents?: number;
+          platformTotalWithdrawalsCents?: number;
+          platformTotalAdCreditCents?: number;
+        };
+        if (!res.ok) {
+          throw new Error(body.message ?? "Failed to load stats");
+        }
+        if (cancelled) return;
         setStats({
-          totalUsers: data?.totalUsers ?? 0,
-          totalEarningsCents: data?.totalEarningsCents ?? 0,
-          totalAds: data?.totalAds ?? 0,
-          totalReferralEarningsCents: data?.totalReferralEarningsCents ?? 0,
-          totalDepositsCents: data?.totalDepositsCents,
-          recentRegistrations: Array.isArray(data?.recentRegistrations) ? data.recentRegistrations : [],
-          recentAdClicks: Array.isArray(data?.recentAdClicks) ? data.recentAdClicks : [],
-          platformTotalEarningsCents: data?.platformTotalEarningsCents,
-          platformTotalWithdrawalsCents: data?.platformTotalWithdrawalsCents,
-          platformTotalAdCreditCents: data?.platformTotalAdCreditCents,
+          totalUsers: body.totalUsers ?? 0,
+          totalEarningsCents: body.totalEarningsCents ?? 0,
+          totalAds: body.totalAds ?? 0,
+          totalReferralEarningsCents: body.totalReferralEarningsCents ?? 0,
+          totalDepositsCents: body.totalDepositsCents,
+          recentRegistrations: Array.isArray(body.recentRegistrations) ? body.recentRegistrations : [],
+          recentAdClicks: Array.isArray(body.recentAdClicks) ? body.recentAdClicks : [],
+          platformTotalEarningsCents: body.platformTotalEarningsCents,
+          platformTotalWithdrawalsCents: body.platformTotalWithdrawalsCents,
+          platformTotalAdCreditCents: body.platformTotalAdCreditCents,
         });
         setError(null);
-      })
-      .catch(() => {
-        setError(null);
-        setStats({
-          totalUsers: 0,
-          totalEarningsCents: 0,
-          totalAds: 0,
-          totalReferralEarningsCents: 0,
-          recentRegistrations: [],
-          recentAdClicks: [],
-          platformTotalEarningsCents: 0,
-          platformTotalWithdrawalsCents: 0,
-          platformTotalAdCreditCents: 0,
-          totalDepositsCents: 0,
-        });
-      });
+      } catch (err) {
+        if (cancelled) return;
+        setStats(null);
+        setError(err instanceof Error ? err.message : "Failed to load stats");
+      }
+    }
+
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   if (error) {
@@ -90,7 +107,7 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Users</p>
-          <p className="text-2xl font-bold text-white mt-1">{stats.totalUsers}</p>
+          <p className="text-2xl font-bold text-white mt-1">{stats.totalUsers.toLocaleString()}</p>
         </div>
         <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
           <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Deposits</p>
