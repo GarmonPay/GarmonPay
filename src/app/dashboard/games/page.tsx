@@ -161,12 +161,6 @@ export default function DashboardGamesPage() {
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Link href="/dashboard/games/boxing">
-          <div className="bg-zinc-900 p-4 rounded-xl">
-            🥊 Boxing Arena
-          </div>
-        </Link>
-
         {/* Spin Wheel */}
         <div className={cardBase}>
           <div className="flex items-center gap-3 mb-3">

@@ -164,7 +164,7 @@ export default function FightArenaMatchPage() {
                   {fight.opponent_user_id && (
                     <button
                       type="button"
-                      onClick={() => handleEndFight(fight.opponent_user_id!)}
+                      onClick={() => handleEndFight(fight.opponent_user_id)}
                       disabled={!!endingFor}
                       className="min-h-touch flex-1 rounded-xl border border-white/20 bg-white/5 py-2 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
                     >
