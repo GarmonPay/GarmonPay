@@ -36,6 +36,7 @@ export default function AdminLoginPage() {
       });
       router.replace("/admin/dashboard");
     } catch (err) {
+      console.error(err);
       setError(err instanceof Error ? err.message : "Admin login failed");
     } finally {
       setLoading(false);

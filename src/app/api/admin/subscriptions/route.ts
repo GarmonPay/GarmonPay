@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import { createAdminClient } from "@/lib/supabase";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 /** POST /api/admin/subscriptions — create a subscription (for testing / backoffice). */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const access = await requireAdminAccess(request);
+  if (!access.ok) {
+    return access.response;
   }
   if (!createAdminClient()) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });

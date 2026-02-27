@@ -48,8 +48,9 @@ export default function AdminDashboardPage() {
         });
         setError(null);
       })
-      .catch(() => {
-        setError(null);
+      .catch((err) => {
+        console.error(err);
+        setError(err instanceof Error ? err.message : "Failed to load stats");
         setStats({
           totalUsers: 0,
           totalEarningsCents: 0,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import { createAdminClient } from "@/lib/supabase";
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 export interface RevenueChartPoint {
   date: string; // YYYY-MM-DD
@@ -29,13 +29,9 @@ function startOfMonthUTC(d: Date): Date {
 }
 
 export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const access = await requireAdminAccess(request);
+  if (!access.ok) {
+    return access.response;
   }
 
   const admin = createAdminClient();
@@ -60,6 +56,7 @@ export async function GET(request: Request) {
       .gte("created_at", thirtyDaysAgo.toISOString());
 
     if (error) {
+      console.error(error);
       return NextResponse.json(
         { message: "Failed to fetch revenue", error: error.message },
         { status: 500 }

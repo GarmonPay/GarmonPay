@@ -1,55 +1,101 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
-import { getAdminStats } from "@/lib/admin-stats";
 import { getPlatformTotals } from "@/lib/transactions-db";
 import { listAllAds } from "@/lib/ads-db";
 import { createAdminClient } from "@/lib/supabase";
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const access = await requireAdminAccess(request);
+  if (!access.ok) {
+    return access.response;
   }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
-  const stats = getAdminStats();
+
   const admin = createAdminClient();
-  if (admin) {
-    try {
-      const [platformTotals, ads, clicksRes, revenueRes] = await Promise.all([
-        getPlatformTotals(),
-        listAllAds(),
-        admin.from("ad_clicks").select("id, ad_id, user_id, created_at").order("created_at", { ascending: false }).limit(20),
-        admin.from("revenue_transactions").select("amount, type"),
-      ]);
-      const recentAdClicks = (clicksRes.data ?? []).map((c: { id: string; ad_id: string; user_id: string; created_at: string }) => ({
-        id: c.id,
-        userId: c.user_id,
-        adId: c.ad_id,
-        clickedAt: c.created_at,
-      }));
-      let totalDepositsCents = 0;
-      for (const r of revenueRes.data ?? []) {
-        const row = r as { amount?: number; type?: string };
-        if (row.type === "payment" && typeof row.amount === "number") {
-          totalDepositsCents += Math.round(row.amount * 100);
-        }
-      }
-      return NextResponse.json({
-        ...stats,
-        totalAds: ads.length,
-        totalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalWithdrawalsCents: platformTotals.totalWithdrawalsCents,
-        platformTotalAdCreditCents: platformTotals.totalAdCreditCents,
-        totalDepositsCents,
-        recentAdClicks,
-      });
-    } catch (_) {
-      // ad_clicks or other tables may not exist yet
-    }
+  if (!admin) {
+    return NextResponse.json({ message: "Admin client not available" }, { status: 503 });
   }
-  return NextResponse.json(stats);
+
+  const { count: totalUsers, error: usersCountError } = await admin
+    .from("users")
+    .select("*", { count: "exact", head: true });
+  if (usersCountError) {
+    console.error(usersCountError);
+  }
+
+  const { data: deposits, error: depositsError } = await admin
+    .from("deposits")
+    .select("amount");
+  if (depositsError) {
+    console.error(depositsError);
+  }
+  const totalDeposits =
+    (deposits ?? []).reduce((sum, d) => sum + Number((d as { amount?: number }).amount ?? 0), 0) || 0;
+  const totalDepositsCents = Math.round(totalDeposits * 100);
+
+  const { data: users, error: usersError } = await admin
+    .from("users")
+    .select("id, email, role, created_at")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (usersError) {
+    console.error(usersError);
+  }
+
+  const { data: adClicks, error: adClicksError } = await admin
+    .from("ad_clicks")
+    .select("id, ad_id, user_id, created_at")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (adClicksError) {
+    console.error(adClicksError);
+  }
+
+  let totalAds = 0;
+  try {
+    const ads = await listAllAds();
+    totalAds = ads.length;
+  } catch (error) {
+    console.error(error);
+  }
+
+  let platformTotalEarningsCents = 0;
+  let platformTotalWithdrawalsCents = 0;
+  let platformTotalAdCreditCents = 0;
+  try {
+    const totals = await getPlatformTotals();
+    platformTotalEarningsCents = totals.totalEarningsCents;
+    platformTotalWithdrawalsCents = totals.totalWithdrawalsCents;
+    platformTotalAdCreditCents = totals.totalAdCreditCents;
+  } catch (error) {
+    console.error(error);
+  }
+
+  return NextResponse.json({
+    totalUsers: totalUsers ?? 0,
+    totalEarningsCents: platformTotalEarningsCents,
+    totalAds,
+    totalReferralEarningsCents: 0,
+    platformTotalEarningsCents,
+    platformTotalWithdrawalsCents,
+    platformTotalAdCreditCents,
+    totalDepositsCents,
+    recentRegistrations: (users ?? []).map((u) => {
+      const row = u as { id: string; email?: string; role?: string; created_at?: string };
+      return {
+        id: row.id,
+        email: row.email ?? "unknown",
+        role: row.role ?? "user",
+        createdAt: row.created_at ?? new Date().toISOString(),
+      };
+    }),
+    recentAdClicks: (adClicks ?? []).map((c) => {
+      const row = c as { id: string; ad_id: string; user_id: string; created_at: string };
+      return {
+        id: row.id,
+        userId: row.user_id,
+        adId: row.ad_id,
+        clickedAt: row.created_at,
+      };
+    }),
+  });
 }

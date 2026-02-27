@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import {
   getSpinWheelConfig,
   getMysteryBoxConfig,
@@ -9,21 +8,12 @@ import {
 } from "@/lib/gamification-db";
 import { getAndMaybeResetGlobalBudget, updateGlobalBudget } from "@/lib/reward-budget";
 import { createAdminClient } from "@/lib/supabase";
-
-function requireAdmin(request: Request): NextResponse | null {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
-  return null;
-}
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 /** GET — return all gamification configs and global budget. */
 export async function GET(request: Request) {
-  const err = requireAdmin(request);
-  if (err) return err;
+  const access = await requireAdminAccess(request);
+  if (!access.ok) return access.response;
   if (!createAdminClient()) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
 
   try {
@@ -44,14 +34,15 @@ export async function GET(request: Request) {
       ranks,
     });
   } catch (e) {
+    console.error(e);
     return NextResponse.json({ message: (e as Error).message }, { status: 500 });
   }
 }
 
 /** PATCH — update one or more configs. Body: { globalBudget?, spinWheel?, mysteryBox?, streak?, missions?, ranks? } */
 export async function PATCH(request: Request) {
-  const err = requireAdmin(request);
-  if (err) return err;
+  const access = await requireAdminAccess(request);
+  if (!access.ok) return access.response;
   if (!createAdminClient()) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
 
   let body: Record<string, unknown>;

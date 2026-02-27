@@ -46,12 +46,39 @@ export async function POST(req: Request) {
 
     const amountCents = Math.round(amountTotal);
     const metadata = (session.metadata ?? {}) as Record<string, string>;
-    const userId = metadata.user_id ?? metadata.userId ?? null;
+    const userId: string | null = metadata.user_id ?? metadata.userId ?? null;
     const email = session.customer_details?.email ?? session.customer_email ?? null;
+    const sessionId = session.id;
 
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+    }
+
+    let depositUserId: string | null = userId;
+    if (!depositUserId && email) {
+      const { data: matchedUser, error: matchedUserError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (matchedUserError) {
+        console.error(matchedUserError);
+      }
+      depositUserId = (matchedUser as { id?: string } | null)?.id ?? null;
+    }
+
+    if (depositUserId && session.mode === "payment" && amountTotal > 0) {
+      const amount = amountTotal / 100;
+      const { error: depositError } = await supabase.from("deposits").insert({
+        user_id: depositUserId,
+        amount,
+        stripe_session: sessionId,
+        status: "completed",
+      });
+      if (depositError) {
+        console.error("Stripe webhook insert deposits error:", depositError);
+      }
     }
 
     if (userId) {
@@ -65,17 +92,23 @@ export async function POST(req: Request) {
     }
 
     if (email && !userId) {
-      await supabase.rpc("add_funds", {
+      const { error } = await supabase.rpc("add_funds", {
         user_email: email,
         amount: amountTotal / 100,
       });
+      if (error) {
+        console.error("Stripe webhook add_funds error:", error);
+      }
     }
 
-    await supabase.from("revenue_transactions").insert({
+    const { error: revenueError } = await supabase.from("revenue_transactions").insert({
       email: email ?? "",
       amount: amountTotal / 100,
       type: session.mode ?? "payment",
     });
+    if (revenueError) {
+      console.error("Stripe webhook revenue_transactions insert error:", revenueError);
+    }
   }
 
   return NextResponse.json({ received: true });

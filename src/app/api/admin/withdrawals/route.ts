@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import {
   listAllWithdrawals,
   updateWithdrawalStatus,
@@ -9,18 +8,13 @@ import {
 } from "@/lib/withdrawals-db";
 import { markWithdrawalTransactionCompleted } from "@/lib/transactions-db";
 import { createAdminClient } from "@/lib/supabase";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 /** GET /api/admin/withdrawals — list all withdrawals with user email. */
 export async function GET(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const access = await requireAdminAccess(request);
+  if (!access.ok) {
+    return access.response;
   }
   if (!createAdminClient()) {
     return NextResponse.json({ withdrawals: [] });
@@ -36,8 +30,9 @@ export async function GET(request: Request) {
 
 /** PATCH /api/admin/withdrawals — approve, reject, or mark paid. */
 export async function PATCH(request: Request) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const access = await requireAdminAccess(request);
+  if (!access.ok) {
+    return access.response;
   }
   if (!createAdminClient()) {
     return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
