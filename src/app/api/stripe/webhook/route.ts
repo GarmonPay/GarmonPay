@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     const amountCents = Math.round(amountTotal);
     const metadata = (session.metadata ?? {}) as Record<string, string>;
-    const userId = metadata.user_id ?? metadata.userId ?? null;
+    const userId: string | null = metadata.user_id ?? metadata.userId ?? null;
     const email = session.customer_details?.email ?? session.customer_email ?? null;
     const sessionId = session.id;
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
     }
 
-    let depositUserId = userId;
+    let depositUserId: string | null = userId;
     if (!depositUserId && email) {
       const { data: matchedUser, error: matchedUserError } = await supabase
         .from("users")
