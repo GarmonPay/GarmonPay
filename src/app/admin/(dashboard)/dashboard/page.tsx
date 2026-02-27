@@ -30,12 +30,13 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const adminId = session?.adminId;
     if (!adminId) return;
+    const adminIdHeader: string = adminId;
     let cancelled = false;
 
     async function loadStats() {
       try {
         const res = await fetch(`${API_BASE}/admin/stats`, {
-          headers: { "X-Admin-Id": adminId },
+          headers: { "X-Admin-Id": adminIdHeader },
           cache: "no-store",
         });
         const body = (await res.json().catch(() => ({}))) as {

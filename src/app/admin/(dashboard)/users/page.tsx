@@ -43,13 +43,14 @@ export default function AdminUsersPage() {
         cancelled = true;
       };
     }
+    const adminIdHeader: string = adminId;
 
     async function loadUsers() {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`${API_BASE}/admin/users`, {
-          headers: { "X-Admin-Id": adminId },
+          headers: { "X-Admin-Id": adminIdHeader },
           cache: "no-store",
         });
         const body = (await res.json().catch(() => ({}))) as AdminUsersResponse;
