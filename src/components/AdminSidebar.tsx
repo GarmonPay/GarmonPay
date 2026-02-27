@@ -6,17 +6,8 @@ import { clearAdminSession } from "@/lib/admin-session";
 
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/gamification", label: "Gamification" },
   { href: "/admin/users", label: "Users" },
-  { href: "/admin/ads", label: "Ads" },
-  { href: "/admin/banners", label: "Banners" },
-  { href: "/admin/withdrawals", label: "Withdrawals" },
-  { href: "/admin/earnings", label: "Earnings" },
-  { href: "/admin/profit", label: "Profit" },
-  { href: "/admin/revenue", label: "Revenue" },
-  { href: "/admin/tournaments", label: "Tournaments" },
-  { href: "/admin/referrals", label: "Referrals" },
-  { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/deposits", label: "Deposits" },
 ];
 
 export function AdminSidebar() {

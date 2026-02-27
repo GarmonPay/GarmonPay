@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
     if (mode === "payment" && amountTotal > 0) {
       const amountCents = Math.round(amountTotal);
-      const amountDollars = amountTotal / 100;
+      const amountDollars = amount;
       const userId = (session.metadata as { user_id?: string } | null)?.user_id;
 
       if (email) {
@@ -70,6 +70,15 @@ export async function POST(req: Request) {
           p_user_id: userId,
           p_amount_cents: amountCents,
         });
+      }
+
+      const { error: depositError } = await supabase.from("deposits").insert({
+        user_id: userId ?? null,
+        amount: amountDollars,
+        status: "completed",
+      });
+      if (depositError) {
+        console.error("Stripe webhook deposits insert error:", depositError);
       }
     }
 

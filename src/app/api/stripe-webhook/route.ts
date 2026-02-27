@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     if (session.payment_status !== "paid") return NextResponse.json({ received: true });
 
     const amountTotal = session.amount_total ?? 0;
+    const amount = amountTotal / 100;
     const currency = (session.currency ?? "usd").toLowerCase();
     const sessionId = session.id;
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
@@ -70,6 +71,13 @@ export async function POST(request: Request) {
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
 
     if (supabase) {
+      const { error: depositError } = await supabase.from("deposits").insert({
+        user_id: userId || null,
+        amount,
+        status: "completed",
+      });
+      if (depositError) console.error("Stripe webhook: insert deposits error", depositError);
+
       const { error } = await supabase.from("stripe_payments").insert({
         user_id: userId || null,
         email: email || "unknown",
