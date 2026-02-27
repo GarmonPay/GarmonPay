@@ -82,7 +82,11 @@ export default function FightArenaLobbyPage() {
       setCreating(true);
       try {
         const res = await createFightArenaFight(session.tokenOrId, session.isToken, entryFeeCents);
-        router.push(`/dashboard/fight-arena/match/${res.fight.id}`);
+        const createdFightId = res?.fight?.id;
+        if (!createdFightId) {
+          throw new Error("Fight created but match link is unavailable. Please refresh.");
+        }
+        router.push(`/dashboard/fight-arena/match/${createdFightId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to create fight");
       } finally {
@@ -92,7 +96,11 @@ export default function FightArenaLobbyPage() {
       setJoiningId(fightId);
       try {
         const res = await joinFightArenaFight(session.tokenOrId, session.isToken, fightId);
-        router.push(`/dashboard/fight-arena/match/${res.fight.id}`);
+        const joinedFightId = res?.fight?.id;
+        if (!joinedFightId) {
+          throw new Error("Joined fight but match link is unavailable. Please refresh.");
+        }
+        router.push(`/dashboard/fight-arena/match/${joinedFightId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to join");
       } finally {

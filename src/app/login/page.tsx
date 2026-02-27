@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase";
 import { getDashboardUrl } from "@/lib/site-url";
 
@@ -50,6 +51,12 @@ export default function LoginPage() {
         </button>
 
         {error && <p className="text-red-500 mt-3">{error}</p>}
+        <p className="mt-4 text-gray-400 text-sm">
+          New to GarmonPay?{" "}
+          <Link href="/register" className="text-blue-400 underline">
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );
