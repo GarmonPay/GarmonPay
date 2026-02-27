@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
-import { findUserById, isSuperAdmin } from "@/lib/auth-store";
-import { createAdminClient } from "@/lib/supabase";
 import { getGodModeStats, getOwnerFlags, getPlatformProfitCents } from "@/lib/god-mode-db";
-
-async function isSuperAdminRequest(request: Request): Promise<boolean> {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  if (user && isSuperAdmin(user)) return true;
-  const supabase = createAdminClient();
-  if (supabase) {
-    const { data } = await supabase.from("users").select("is_super_admin").eq("id", adminId).maybeSingle();
-    if ((data as { is_super_admin?: boolean } | null)?.is_super_admin) return true;
-  }
-  return false;
-}
+import { authenticateSuperAdminRequest } from "@/lib/admin-auth";
 
 /** GET /api/god-mode — platform stats + activity. Only super admin. */
 export async function GET(request: Request) {
-  if (!(await isSuperAdminRequest(request))) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateSuperAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
   try {
     const [stats, flags] = await Promise.all([getGodModeStats(), getOwnerFlags()]);

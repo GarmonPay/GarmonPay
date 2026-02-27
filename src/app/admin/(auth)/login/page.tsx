@@ -28,11 +28,16 @@ export default function AdminLoginPage() {
       if (!res.ok) {
         throw new Error((data as { message?: string }).message ?? "Admin login failed");
       }
+      const accessToken = (data as { accessToken?: string }).accessToken;
+      if (!accessToken) {
+        throw new Error("Missing access token from server");
+      }
       setAdminSession({
         adminId: data.user.id,
         email: data.user.email,
         expiresAt: data.expiresAt,
         isSuperAdmin: !!(data as { is_super_admin?: boolean }).is_super_admin,
+        accessToken,
       });
       router.replace("/admin/dashboard");
     } catch (err) {

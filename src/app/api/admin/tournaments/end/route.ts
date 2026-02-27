@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import { endTournament, getTournament } from "@/lib/tournament-db";
 import { getTournamentTeamLeaderboard, distributeTeamPrize } from "@/lib/team-db";
 import { createAdminClient } from "@/lib/supabase";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { authenticateAdminRequest } from "@/lib/admin-auth";
 
 /** POST /api/admin/tournaments/end — end tournament; distribute prizes (50/30/20). Body: tournamentId, distributeAs?: "individual" | "team". */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
+  }
   let body: { tournamentId?: string; distributeAs?: string };
   try {
     body = await request.json();

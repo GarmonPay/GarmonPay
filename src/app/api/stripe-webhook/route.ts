@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import Stripe from "stripe";
+import { handleStripeCheckoutDeposit } from "@/lib/stripe-webhook-deposits";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -82,15 +83,10 @@ export async function POST(request: Request) {
         status: "completed",
       });
       if (error) console.error("Stripe webhook: insert stripe_payments error", error);
-
-      if (productType === "wallet_fund" && userId && amountTotal > 0) {
-        const { error: rpcError } = await supabase.rpc("increment_user_balance", {
-          p_user_id: userId,
-          p_amount_cents: amountTotal,
-        });
-        if (rpcError) console.error("Stripe webhook: increment_user_balance error", rpcError);
-      }
     }
+    await handleStripeCheckoutDeposit(session).catch((e) => {
+      console.error("Stripe webhook: deposit sync error", e);
+    });
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {

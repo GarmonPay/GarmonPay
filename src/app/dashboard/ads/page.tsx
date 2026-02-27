@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getAds, startAdSession, completeAdSession } from "@/lib/api";
 import { AdViewerModal } from "@/components/ads/AdViewerModal";
@@ -104,7 +105,15 @@ export default function DashboardAdsPage() {
         <BannerRotator placement="ads-page" />
       </div>
       <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
-        <h1 className="text-xl font-bold text-white mb-2">Ad Opportunities</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h1 className="text-xl font-bold text-white">Ad Opportunities</h1>
+          <Link
+            href="/dashboard/ads/create"
+            className="min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Create Ad
+          </Link>
+        </div>
         <p className="text-sm text-fintech-muted mb-6">
           Watch or complete ads to earn rewards. Rewards are issued only after the required time and verified by the backend.
         </p>

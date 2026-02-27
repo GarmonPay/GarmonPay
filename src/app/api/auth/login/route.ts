@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail } from "@/lib/auth-store";
-import { createHash } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
 
 export async function POST(request: Request) {
   try {
@@ -14,12 +9,18 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return NextResponse.json({ message: "Authentication is not configured" }, { status: 503 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
+
+    const authClient = createClient(url, anonKey);
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (authError || !authData.user || !authData.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
 
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
         const { data: row } = await supabase
           .from("users")
           .select("role, is_super_admin")
-          .eq("id", user.id)
+          .eq("id", authData.user.id)
           .maybeSingle();
         if (row && (row as { role?: string }).role === "admin") {
           role = "admin";
@@ -43,16 +44,16 @@ export async function POST(request: Request) {
     } catch (_) {
       // keep default member
     }
-    if (role === "admin" && (user as { is_super_admin?: boolean }).is_super_admin) {
-      is_super_admin = true;
-    }
 
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = authData.session.expires_at
+      ? new Date(authData.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 60 * 60 * 1000).toISOString();
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: authData.user.id, email: authData.user.email ?? email.trim() },
       expiresAt,
       role,
       is_super_admin: role === "admin" ? is_super_admin : false,
+      accessToken: authData.session.access_token,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });

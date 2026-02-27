@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminRequestHeaders, getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -52,7 +52,7 @@ export default function GodModePage() {
       return;
     }
     setAllowed(true);
-    fetch(`${API_BASE}/god-mode`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/god-mode`, { headers: getAdminRequestHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -84,7 +84,7 @@ export default function GodModePage() {
     try {
       const res = await fetch(`${API_BASE}/god-mode/controls`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: { "Content-Type": "application/json", ...getAdminRequestHeaders(session) },
         body: JSON.stringify({ [key]: next }),
       });
       const data = await res.json().catch(() => ({}));

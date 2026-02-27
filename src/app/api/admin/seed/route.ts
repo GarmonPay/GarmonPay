@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { createUserWithEmailPassword, findUserByEmail, listUsers, setUserRole, getUserRole } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createAdminClient } from "@/lib/supabase";
 
 /**
  * One-time seed: create first admin if none exist.
- * Set ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD in env. Only runs when no admin exists.
+ * Requires ADMIN_SEED_EMAIL, ADMIN_SEED_PASSWORD, and ADMIN_SEED_SECRET.
  */
-export async function POST() {
+export async function POST(request: Request) {
+  const secret = process.env.ADMIN_SEED_SECRET;
+  if (!secret) {
+    return NextResponse.json({ message: "Not found" }, { status: 404 });
+  }
+  const provided = request.headers.get("x-seed-secret");
+  if (provided !== secret) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
   const email = process.env.ADMIN_SEED_EMAIL;
   const password = process.env.ADMIN_SEED_PASSWORD;
   if (!email || !password) {
@@ -19,16 +23,42 @@ export async function POST() {
       { status: 400 }
     );
   }
-  const hasAdmin = listUsers().some((u) => getUserRole(u) === "admin");
-  if (hasAdmin) {
+
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
+  }
+
+  const { data: existingAdmin } = await supabase
+    .from("users")
+    .select("id")
+    .or("role.eq.admin,is_super_admin.eq.true")
+    .limit(1)
+    .maybeSingle();
+  if (existingAdmin?.id) {
     return NextResponse.json({ message: "An admin already exists" }, { status: 409 });
   }
-  const existing = findUserByEmail(email);
-  if (existing) {
-    setUserRole(existing.id, "admin");
-    return NextResponse.json({ message: "Existing user promoted to admin", user: { id: existing.id, email: existing.email } });
+
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (createError || !created.user) {
+    return NextResponse.json({ message: createError?.message ?? "Failed to create admin" }, { status: 500 });
   }
-  const hash = hashPassword(password);
-  const user = createUserWithEmailPassword(email, hash, null, "admin");
-  return NextResponse.json({ message: "Admin created", user: { id: user.id, email: user.email } });
+
+  const { error: upsertError } = await supabase
+    .from("users")
+    .upsert({
+      id: created.user.id,
+      email,
+      role: "admin",
+      updated_at: new Date().toISOString(),
+    });
+  if (upsertError) {
+    return NextResponse.json({ message: upsertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ message: "Admin created", user: { id: created.user.id, email } });
 }

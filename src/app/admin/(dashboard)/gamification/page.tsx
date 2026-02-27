@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminRequestHeaders, getAdminSession } from "@/lib/admin-session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -61,7 +61,7 @@ export default function AdminGamificationPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/gamification`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/gamification`, { headers: getAdminRequestHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -82,7 +82,7 @@ export default function AdminGamificationPage() {
     setError(null);
     fetch(`${API_BASE}/admin/gamification`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+      headers: { "Content-Type": "application/json", ...getAdminRequestHeaders(session) },
       body: JSON.stringify(updates),
     })
       .then((r) => {

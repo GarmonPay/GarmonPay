@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
-    ...(userId ? { metadata: { user_id: userId } } : {}),
+    ...(userId ? { metadata: { user_id: userId, product_type: "wallet_fund" } } : {}),
     line_items: [
       {
         price_data: {

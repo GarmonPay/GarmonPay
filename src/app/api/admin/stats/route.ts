@@ -1,55 +1,107 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
-import { getAdminStats } from "@/lib/admin-stats";
-import { getPlatformTotals } from "@/lib/transactions-db";
-import { listAllAds } from "@/lib/ads-db";
 import { createAdminClient } from "@/lib/supabase";
+import { authenticateAdminRequest } from "@/lib/admin-auth";
+
+function sumAmounts(rows: Array<Record<string, unknown>>, key: string): number {
+  return rows.reduce((total, row) => {
+    const value = Number(row[key] ?? 0);
+    return Number.isFinite(value) ? total + Math.round(value) : total;
+  }, 0);
+}
 
 export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
-  const stats = getAdminStats();
+
   const admin = createAdminClient();
-  if (admin) {
-    try {
-      const [platformTotals, ads, clicksRes, revenueRes] = await Promise.all([
-        getPlatformTotals(),
-        listAllAds(),
-        admin.from("ad_clicks").select("id, ad_id, user_id, created_at").order("created_at", { ascending: false }).limit(20),
-        admin.from("revenue_transactions").select("amount, type"),
-      ]);
-      const recentAdClicks = (clicksRes.data ?? []).map((c: { id: string; ad_id: string; user_id: string; created_at: string }) => ({
-        id: c.id,
-        userId: c.user_id,
-        adId: c.ad_id,
-        clickedAt: c.created_at,
-      }));
-      let totalDepositsCents = 0;
-      for (const r of revenueRes.data ?? []) {
-        const row = r as { amount?: number; type?: string };
-        if (row.type === "payment" && typeof row.amount === "number") {
-          totalDepositsCents += Math.round(row.amount * 100);
-        }
-      }
-      return NextResponse.json({
-        ...stats,
-        totalAds: ads.length,
-        totalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalEarningsCents: platformTotals.totalEarningsCents,
-        platformTotalWithdrawalsCents: platformTotals.totalWithdrawalsCents,
-        platformTotalAdCreditCents: platformTotals.totalAdCreditCents,
-        totalDepositsCents,
-        recentAdClicks,
-      });
-    } catch (_) {
-      // ad_clicks or other tables may not exist yet
-    }
+  if (!admin) {
+    return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
   }
-  return NextResponse.json(stats);
+
+  const [
+    totalUsersRes,
+    recentUsersRes,
+    depositsRes,
+    withdrawalsRes,
+    platformRevenueRes,
+    adsRes,
+    adClicksRes,
+  ] = await Promise.all([
+    admin.from("users").select("id", { count: "exact", head: true }),
+    admin
+      .from("users")
+      .select("id, email, role, created_at")
+      .order("created_at", { ascending: false })
+      .limit(10),
+    admin.from("deposits").select("amount_cents, status"),
+    admin.from("withdrawals").select("amount, status"),
+    admin.from("platform_revenue").select("amount"),
+    admin.from("ads").select("id, profit_amount, status"),
+    admin
+      .from("ad_clicks")
+      .select("id, ad_id, user_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  const allErrors = [
+    totalUsersRes.error,
+    recentUsersRes.error,
+    depositsRes.error,
+    withdrawalsRes.error,
+    platformRevenueRes.error,
+    adsRes.error,
+    adClicksRes.error,
+  ].filter(Boolean);
+
+  if (allErrors.length > 0) {
+    const message = allErrors[0]?.message ?? "Failed to load admin stats";
+    return NextResponse.json({ message }, { status: 500 });
+  }
+
+  const depositRows = ((depositsRes.data ?? []) as Array<Record<string, unknown>>).filter((row) => {
+    const status = String(row.status ?? "succeeded");
+    return status === "succeeded" || status === "pending";
+  });
+  const withdrawalRows = ((withdrawalsRes.data ?? []) as Array<Record<string, unknown>>).filter((row) => {
+    const status = String(row.status ?? "");
+    return status !== "rejected" && status !== "failed";
+  });
+  const revenueRows = (platformRevenueRes.data ?? []) as Array<Record<string, unknown>>;
+  const adsRows = (adsRes.data ?? []) as Array<Record<string, unknown>>;
+
+  const totalDepositsCents = sumAmounts(depositRows, "amount_cents");
+  const totalWithdrawalsCents = sumAmounts(withdrawalRows, "amount");
+  const platformRevenueCents = sumAmounts(revenueRows, "amount");
+  const adsProfitCents = sumAmounts(adsRows, "profit_amount");
+  const totalRevenueCents = totalDepositsCents + platformRevenueCents + adsProfitCents;
+  const totalProfitCents = totalRevenueCents - totalWithdrawalsCents;
+
+  return NextResponse.json({
+    totalUsers: totalUsersRes.count ?? 0,
+    totalDepositsCents,
+    totalRevenueCents,
+    totalProfitCents,
+    totalWithdrawalsCents,
+    totalAds: adsRows.length,
+    totalEarningsCents: totalRevenueCents,
+    totalReferralEarningsCents: 0,
+    platformTotalEarningsCents: totalRevenueCents,
+    platformTotalWithdrawalsCents: totalWithdrawalsCents,
+    platformTotalAdCreditCents: 0,
+    recentRegistrations: (recentUsersRes.data ?? []).map((u) => ({
+      id: String((u as { id?: string }).id ?? ""),
+      email: String((u as { email?: string }).email ?? ""),
+      role: String((u as { role?: string }).role ?? "member"),
+      createdAt: String((u as { created_at?: string }).created_at ?? new Date().toISOString()),
+    })),
+    recentAdClicks: (adClicksRes.data ?? []).map((c) => ({
+      id: String((c as { id?: string }).id ?? ""),
+      userId: String((c as { user_id?: string }).user_id ?? ""),
+      adId: String((c as { ad_id?: string }).ad_id ?? ""),
+      clickedAt: String((c as { created_at?: string }).created_at ?? new Date().toISOString()),
+    })),
+  });
 }

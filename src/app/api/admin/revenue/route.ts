@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
 import { createAdminClient } from "@/lib/supabase";
+import { authenticateAdminRequest } from "@/lib/admin-auth";
 
 export interface RevenueChartPoint {
   date: string; // YYYY-MM-DD
@@ -29,13 +29,9 @@ function startOfMonthUTC(d: Date): Date {
 }
 
 export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await authenticateAdminRequest(request);
+  if (!auth.ok) {
+    return NextResponse.json({ message: auth.message }, { status: auth.status });
   }
 
   const admin = createAdminClient();
