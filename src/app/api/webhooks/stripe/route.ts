@@ -59,77 +59,42 @@ export async function POST(req: Request) {
   }
 
   // 4. Handle checkout.session.completed
-  if (event.type !== "checkout.session.completed") {
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const email = session.customer_email;
+    const amount = (session.amount_total ?? 0) / 100;
 
-  const session = event.data.object as Stripe.Checkout.Session;
+    const supabase = getSupabase();
+    if (!supabase) {
+      console.error("Supabase not initialized");
+      return new Response("Supabase error", { status: 500 });
+    }
 
-  // 5. Extract customer_email and amount_total
-  const customer_email =
-    session.customer_details?.email ?? session.customer_email ?? null;
-  const amount_total = session.amount_total ?? 0;
-  const mode = session.mode ?? "payment";
-
-  if (mode !== "payment" || amount_total <= 0) {
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
-
-  const amountCents = Math.round(amount_total);
-  const amountDollars = amount_total / 100;
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
-  }
-
-  // 6. Find user: prefer metadata.user_id, else by email
-  let userId: string | null = (session.metadata as { user_id?: string } | null)?.user_id ?? null;
-  if (!userId && customer_email) {
-    const { data: userRow } = await supabase
+    const { data: user, error: userError } = await supabase
       .from("users")
-      .select("id")
-      .eq("email", customer_email)
-      .maybeSingle();
-    userId = (userRow as { id?: string } | null)?.id ?? null;
-  }
-
-  if (!userId) {
-    console.error("Stripe webhook: no user found for session", session.id, "email:", customer_email);
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
-
-  try {
-    // 7. Add amount to user's balance
-    const { data: userRow } = await supabase
-      .from("users")
-      .select("balance")
-      .eq("id", userId)
+      .select("*")
+      .eq("email", email)
       .single();
-    const currentBalance = Number(userRow?.balance ?? 0);
-    await supabase
-      .from("users")
-      .update({ balance: currentBalance + amountCents })
-      .eq("id", userId);
 
-    // 8. Save transaction record (and deposit)
-    await supabase.from("transactions").insert({
-      user_id: userId,
-      type: "deposit",
-      amount: amountCents,
-      status: "completed",
-      description: "Stripe payment",
-    });
-    await supabase.from("deposits").insert({
-      user_id: userId,
-      amount: amountDollars,
-      stripe_session: session.id ?? null,
-    });
-  } catch (err) {
-    console.error("Stripe webhook processing error:", err);
-    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    if (userError || !user) {
+      console.error("User not found:", email);
+      return new Response("User not found", { status: 404 });
+    }
+
+    const newBalance = (user.balance || 0) + amount;
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ balance: newBalance })
+      .eq("email", email);
+
+    if (updateError) {
+      console.error("Balance update failed:", updateError);
+      return new Response("Update failed", { status: 500 });
+    }
+
+    console.log("Balance updated for:", email, amount);
   }
 
-  // 9. Return 200 to Stripe
   return NextResponse.json({ received: true }, { status: 200 });
 }
