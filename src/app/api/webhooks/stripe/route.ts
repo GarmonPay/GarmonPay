@@ -8,13 +8,6 @@ function getStripe(): Stripe | null {
   return new Stripe(key, { apiVersion: "2026-01-28.clover" });
 }
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
-
 /** GET /api/webhooks/stripe — health check for Stripe webhook endpoint. */
 export async function GET() {
   return NextResponse.json({ status: "live" });
@@ -72,11 +65,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false });
     }
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      console.error("Supabase not initialized");
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Supabase not initialized (missing URL or SERVICE_ROLE_KEY)");
       return NextResponse.json({ ok: false }, { status: 500 });
     }
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: user } = await supabase
       .from("users")
