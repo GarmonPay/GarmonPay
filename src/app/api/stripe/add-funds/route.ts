@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
+import { createAdminClient } from "@/lib/supabase";
 
 export async function GET() {
   return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
@@ -23,6 +24,14 @@ export async function POST(req: Request) {
   }
 
   const userId = await getAuthUserId(req);
+  let customer_email: string | undefined;
+  if (userId) {
+    const supabase = createAdminClient();
+    if (supabase) {
+      const { data: userRow } = await supabase.from("users").select("email").eq("id", userId).single();
+      customer_email = (userRow as { email?: string } | null)?.email;
+    }
+  }
 
   const stripe = new Stripe(secret, {
     apiVersion: "2026-01-28.clover",
@@ -30,6 +39,7 @@ export async function POST(req: Request) {
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    ...(customer_email ? { customer_email } : {}),
     ...(userId ? { metadata: { user_id: userId } } : {}),
     line_items: [
       {
