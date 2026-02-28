@@ -36,14 +36,14 @@ export async function POST(req: Request) {
   const stripe = new Stripe(secret, {
     apiVersion: "2026-01-28.clover",
   });
+  const domain = process.env.NEXT_PUBLIC_APP_URL || "https://garmonpay.com";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: customer_email,
-
     metadata: {
-      user_id: userId
-    }, 
+      user_id: userId ?? "",
+    },
     line_items: [
       {
         price_data: {
@@ -56,8 +56,8 @@ export async function POST(req: Request) {
         quantity: 1,
       },
     ],
-    success_url: "https://garmonpay.com/wallet?success=true",
-    cancel_url: "https://garmonpay.com/wallet",
+    success_url: `${domain}/dashboard`,
+    cancel_url: `${domain}/dashboard`,
   });
 
   return NextResponse.json({

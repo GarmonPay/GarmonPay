@@ -60,8 +60,11 @@ export async function POST(req: Request) {
 
   // 4. Handle checkout.session.completed
   if (event.type === "checkout.session.completed") {
+
     const session = event.data.object as Stripe.Checkout.Session;
+
     const email = session.customer_email;
+
     const amount = (session.amount_total ?? 0) / 100;
 
     const supabase = getSupabase();
@@ -70,30 +73,27 @@ export async function POST(req: Request) {
       return new Response("Supabase error", { status: 500 });
     }
 
-    const { data: user, error: userError } = await supabase
+    const { data: user } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
       .single();
 
-    if (userError || !user) {
+    if (!user) {
       console.error("User not found:", email);
-      return new Response("User not found", { status: 404 });
+      return new Response("User not found");
     }
 
     const newBalance = (user.balance || 0) + amount;
 
-    const { error: updateError } = await supabase
+    await supabase
       .from("users")
-      .update({ balance: newBalance })
-      .eq("email", email);
+      .update({
+        balance: newBalance,
+        total_deposits: (user.total_deposits || 0) + amount,
+      })
+      .eq("id", user.id);
 
-    if (updateError) {
-      console.error("Balance update failed:", updateError);
-      return new Response("Update failed", { status: 500 });
-    }
-
-    console.log("Balance updated for:", email, amount);
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

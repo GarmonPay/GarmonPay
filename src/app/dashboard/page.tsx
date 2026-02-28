@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
 import { generateReferralLink } from "@/lib/referrals";
+import { createBrowserClient } from "@/lib/supabase";
 import {
   getDashboard,
   getWithdrawals,
@@ -41,6 +42,27 @@ export default function DashboardPage() {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [balanceCentsFromSupabase, setBalanceCentsFromSupabase] = useState<number | null>(null);
+
+  async function fetchBalance() {
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("users")
+      .select("balance")
+      .eq("id", user.id)
+      .single();
+    if (data != null && typeof (data as { balance?: unknown }).balance !== "undefined") {
+      const balance = Number((data as { balance: number }).balance ?? 0);
+      setBalanceCentsFromSupabase(Math.round(balance * 100));
+    }
+  }
+
+  useEffect(() => {
+    fetchBalance();
+  }, []);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([
@@ -53,6 +75,7 @@ export default function DashboardPage() {
       setWithdrawals(w.withdrawals ?? []);
       setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
       setActivities("activities" in a ? a.activities : []);
+      fetchBalance();
     });
   }
 
@@ -110,6 +133,7 @@ export default function DashboardPage() {
           if (aRes.status === "fulfilled" && aRes.value && typeof aRes.value === "object" && "activities" in aRes.value) {
             setActivities((aRes.value as { activities?: typeof activities }).activities ?? []);
           }
+          fetchBalance();
         });
       })
       .catch((err) => {
@@ -163,7 +187,7 @@ export default function DashboardPage() {
     );
   }
 
-  const balanceCents = data.balanceCents ?? 0;
+  const balanceCents = balanceCentsFromSupabase ?? data?.balanceCents ?? 0;
   const adCreditBalanceCents = (data as { adCreditBalanceCents?: number }).adCreditBalanceCents ?? 0;
   const totalEarningsCents = (data as { totalEarningsCents?: number }).totalEarningsCents ?? 0;
   const totalWithdrawnCents = (data as { totalWithdrawnCents?: number }).totalWithdrawnCents ?? 0;
