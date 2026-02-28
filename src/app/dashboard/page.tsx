@@ -48,11 +48,11 @@ export default function DashboardPage() {
     const supabase = createBrowserClient();
     if (!supabase) return;
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user?.email) return;
     const { data } = await supabase
       .from("users")
       .select("balance")
-      .eq("id", user.id)
+      .eq("email", user.email)
       .single();
     if (data != null && typeof (data as { balance?: unknown }).balance !== "undefined") {
       const balance = Number((data as { balance: number }).balance ?? 0);

@@ -65,53 +65,39 @@ export async function POST(req: Request) {
 
     const email = session.customer_email;
 
-    const amount = (session.amount_total || 0) / 100;
-
-    console.log("Webhook received:", email, amount);
+    const amount = (session.amount_total ?? 0) / 100;
 
     if (!email) {
       console.error("No email in session");
-      return new Response("No email", { status: 400 });
+      return NextResponse.json({ ok: false });
     }
 
     const supabase = getSupabase();
     if (!supabase) {
       console.error("Supabase not initialized");
-      return new Response("Supabase error", { status: 500 });
+      return NextResponse.json({ ok: false }, { status: 500 });
     }
 
-    const { data: user, error: userError } = await supabase
+    const { data: user } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
       .single();
 
-    if (userError) {
-      console.error("User lookup failed:", email, userError);
-      return new Response("User lookup failed", { status: 500 });
-    }
-
     if (!user) {
       console.error("User not found:", email);
-      return new Response("User not found", { status: 404 });
+      return NextResponse.json({ ok: false });
     }
 
-    const newBalance = (user.balance || 0) + amount;
+    const newBalance = (user.balance ?? 0) + amount;
 
-    const { error: updateError } = await supabase
+    await supabase
       .from("users")
       .update({
         balance: newBalance,
-        total_deposits: (user.total_deposits || 0) + amount,
+        total_deposits: (user.total_deposits ?? 0) + amount
       })
-      .eq("id", user.id);
-
-    if (updateError) {
-      console.error("Balance update failed:", email, updateError);
-      return new Response("Balance update failed", { status: 500 });
-    }
-
-    console.log("Balance updated for:", email, amount, "newBalance:", newBalance);
+      .eq("email", email);
 
   }
 
