@@ -1,53 +1,39 @@
-"use client";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { createServerClient } from "@/lib/supabase";
+import { isAdmin } from "@/lib/admin";
+import { AdminDashboardShell } from "./AdminDashboardShell";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getAdminSessionAsync } from "@/lib/admin-supabase";
-import { createBrowserClient } from "@/lib/supabase";
-import { AdminSidebar } from "@/components/AdminSidebar";
+export default async function AdminDashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("sb-access-token")?.value;
 
-export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "allowed" | "forbidden">("loading");
-
-  useEffect(() => {
-    const supabase = createBrowserClient();
-    if (!supabase) {
-      router.replace("/admin/login");
-      return;
-    }
-    const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        router.replace("/admin/login");
-        setStatus("forbidden");
-        return;
-      }
-      const adminSession = await getAdminSessionAsync();
-      if (!adminSession) {
-        router.replace("/admin/login");
-        setStatus("forbidden");
-        return;
-      }
-      setStatus("allowed");
-    };
-    check();
-  }, [router]);
-
-  if (status === "loading" || status === "forbidden") {
-    return (
-      <div className="min-h-screen bg-[#0a0e17] text-[#9ca3af] flex items-center justify-center">
-        {status === "forbidden" ? "Redirecting to login…" : "Loading…"}
-      </div>
-    );
+  if (!token) {
+    redirect("/admin/login");
   }
 
-  return (
-    <div className="min-h-screen flex bg-[#0a0e17]">
-      <AdminSidebar />
-      <main className="flex-1 overflow-auto min-h-screen flex flex-col">
-        {children}
-      </main>
-    </div>
-  );
+  const supabase = createServerClient(token);
+  if (!supabase) {
+    redirect("/admin/login");
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    redirect("/admin/login");
+  }
+
+  const admin = await isAdmin(user.id);
+  if (!admin) {
+    redirect("/dashboard");
+  }
+
+  return <AdminDashboardShell>{children}</AdminDashboardShell>;
 }

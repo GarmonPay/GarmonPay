@@ -17,17 +17,9 @@ function hasAuthCookie(request: NextRequest): boolean {
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Always redirect /admin (exact) to dashboard or login — prevents cached old "minimal" admin page
-  if (pathname === "/admin") {
-    const hasAuth = hasAuthCookie(request);
-    const target = hasAuth ? "/admin/dashboard" : "/admin/login";
-    return NextResponse.redirect(new URL(target, request.url));
-  }
-
-  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
-    if (!hasAuthCookie(request)) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
-    }
+  // Allow all /admin routes through; server layout handles auth and redirect to /admin/login
+  if (pathname.startsWith("/admin")) {
+    return NextResponse.next();
   }
 
   const url = request.nextUrl.clone();

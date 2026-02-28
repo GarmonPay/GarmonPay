@@ -86,7 +86,7 @@ export async function POST(req: Request) {
 
     const newBalance = (user.balance ?? 0) + amount;
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("users")
       .update({
         balance: newBalance,
@@ -94,6 +94,13 @@ export async function POST(req: Request) {
       })
       .eq("email", email);
 
+    if (updateError) {
+      console.error("Stripe webhook balance update failed:", email, updateError);
+      return NextResponse.json(
+        { error: "Balance update failed", details: updateError.message },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

@@ -41,6 +41,10 @@ export async function POST(request: Request) {
           return NextResponse.json({ message: "User exists in Auth but no profile. Add a row in public.users with role='admin'." }, { status: 400 });
         }
         userId = (existing as { id: string }).id;
+        const { error: updatePwError } = await supabase.auth.admin.updateUserById(userId, { password });
+        if (updatePwError) {
+          return NextResponse.json({ message: "Could not set password: " + updatePwError.message }, { status: 400 });
+        }
       } else {
         return NextResponse.json({ message: createError.message || "Failed to create user" }, { status: 400 });
       }

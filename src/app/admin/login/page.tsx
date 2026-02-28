@@ -39,36 +39,31 @@ export default function AdminLogin() {
       return;
     }
 
-    const userId = data.user?.id;
-    if (!userId) {
+    const token = data.session?.access_token;
+    if (!token) {
       setError("Invalid response from sign in.");
       setLoading(false);
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role, is_super_admin")
-      .eq("id", userId)
-      .maybeSingle();
+    // Use server-side admin check (bypasses RLS) so login works when client cannot read public.users
+    const meRes = await fetch("/api/auth/admin/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const meData = await meRes.json();
 
-    if (!profile) {
-      setError("No profile found. Run the database migration so auth users are synced to public.users, or use Ensure Admin setup.");
-      setLoading(false);
-      return;
-    }
-
-    const row = profile as { role?: string; is_super_admin?: boolean };
-    const isAdmin = row.role?.toLowerCase() === "admin" || !!row.is_super_admin;
-    if (!isAdmin) {
+    if (!meRes.ok || !meData?.ok) {
       await supabase.auth.signOut();
-      setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users.");
+      if (meRes.status === 403) {
+        setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users.");
+      } else {
+        setError("Could not verify admin access. Try again.");
+      }
       setLoading(false);
       return;
     }
 
-    const token = data.session?.access_token;
-    if (token) setSessionCookie(token);
+    setSessionCookie(token);
     localStorage.setItem("admin", "true");
 
     setLoading(false);
