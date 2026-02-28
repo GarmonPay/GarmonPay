@@ -65,7 +65,14 @@ export async function POST(req: Request) {
 
     const email = session.customer_email;
 
-    const amount = (session.amount_total ?? 0) / 100;
+    const amount = (session.amount_total || 0) / 100;
+
+    console.log("Webhook received:", email, amount);
+
+    if (!email) {
+      console.error("No email in session");
+      return new Response("No email", { status: 400 });
+    }
 
     const supabase = getSupabase();
     if (!supabase) {
@@ -73,26 +80,38 @@ export async function POST(req: Request) {
       return new Response("Supabase error", { status: 500 });
     }
 
-    const { data: user } = await supabase
+    const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
       .single();
 
+    if (userError) {
+      console.error("User lookup failed:", email, userError);
+      return new Response("User lookup failed", { status: 500 });
+    }
+
     if (!user) {
       console.error("User not found:", email);
-      return new Response("User not found");
+      return new Response("User not found", { status: 404 });
     }
 
     const newBalance = (user.balance || 0) + amount;
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("users")
       .update({
         balance: newBalance,
         total_deposits: (user.total_deposits || 0) + amount,
       })
       .eq("id", user.id);
+
+    if (updateError) {
+      console.error("Balance update failed:", email, updateError);
+      return new Response("Balance update failed", { status: 500 });
+    }
+
+    console.log("Balance updated for:", email, amount, "newBalance:", newBalance);
 
   }
 
