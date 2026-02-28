@@ -1,7 +1,7 @@
 /**
  * Cookie options for production: Secure, SameSite.
  * Use when setting cookies in API routes or server components.
- * Session/admin session currently use localStorage; use this when adding cookie-based auth.
+ * Admin session uses Supabase auth only (no localStorage).
  */
 
 export function getSecureCookieOptions(): {

@@ -1,14 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
+import { isAdmin } from "@/lib/admin-auth";
 
 /**
  * Create a transfer to a user's Stripe Connect account (payout).
@@ -19,7 +12,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Stripe is not configured" }, { status: 503 });
   }
 
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 

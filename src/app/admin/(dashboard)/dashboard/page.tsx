@@ -1,181 +1,176 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+export default function Dashboard() {
+  const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalDeposits: 0,
+    totalWithdrawals: 0,
+    totalBalance: 0,
+    totalProfit: 0,
+    totalRevenue: 0,
+    recentTransactions: [] as { id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[],
+  });
+  const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsMessage, setStatsMessage] = useState<string | null>(null);
 
-interface AdminStats {
-  totalUsers: number;
-  totalEarningsCents: number;
-  totalAds: number;
-  totalReferralEarningsCents: number;
-  totalDepositsCents?: number;
-  recentRegistrations: { id: string; email: string; role: string; createdAt: string }[];
-  recentAdClicks: { id: string; userId: string; adId: string; clickedAt: string }[];
-  platformTotalEarningsCents?: number;
-  platformTotalWithdrawalsCents?: number;
-  platformTotalAdCreditCents?: number;
-}
-
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const session = getAdminSession();
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
-    fetch(`${API_BASE}/admin/stats`, {
-      headers: { "X-Admin-Id": session.adminId },
-    })
-      .then((res) => res.ok ? res.json() : res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load stats"); }))
-      .then((data) => {
-        setStats({
-          totalUsers: data?.totalUsers ?? 0,
-          totalEarningsCents: data?.totalEarningsCents ?? 0,
-          totalAds: data?.totalAds ?? 0,
-          totalReferralEarningsCents: data?.totalReferralEarningsCents ?? 0,
-          totalDepositsCents: data?.totalDepositsCents,
-          recentRegistrations: Array.isArray(data?.recentRegistrations) ? data.recentRegistrations : [],
-          recentAdClicks: Array.isArray(data?.recentAdClicks) ? data.recentAdClicks : [],
-          platformTotalEarningsCents: data?.platformTotalEarningsCents,
-          platformTotalWithdrawalsCents: data?.platformTotalWithdrawalsCents,
-          platformTotalAdCreditCents: data?.platformTotalAdCreditCents,
-        });
-        setError(null);
-      })
-      .catch(() => {
-        setError(null);
-        setStats({
-          totalUsers: 0,
-          totalEarningsCents: 0,
-          totalAds: 0,
-          totalReferralEarningsCents: 0,
-          recentRegistrations: [],
-          recentAdClicks: [],
-          platformTotalEarningsCents: 0,
-          platformTotalWithdrawalsCents: 0,
-          platformTotalAdCreditCents: 0,
-          totalDepositsCents: 0,
-        });
+    (async () => {
+      await fetch("/api/admin/sync-users", {
+        headers: { "X-Admin-Id": session.adminId },
       });
+      load();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  if (error) {
+  async function load() {
+    if (!session) return;
+    setStatsError(null);
+    setStatsMessage(null);
+    const headers = { "X-Admin-Id": session.adminId };
+    // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
+    const dashboardRes = await fetch("/api/admin/dashboard", { headers });
+    const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
+    const totalUsers = dashboardRes.ok ? (dashboardData.totalUsers ?? 0) : 0;
+    const totalDeposits = dashboardRes.ok ? (dashboardData.totalDeposits ?? 0) : 0;
+    if (!dashboardRes.ok) {
+      setStatsError(dashboardData?.message ?? `Dashboard metrics failed (${dashboardRes.status}). Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.`);
+    }
+    // Other metrics and recent transactions from /api/admin/stats
+    const statsRes = await fetch("/api/admin/stats", { headers });
+    const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
+    if (!statsRes.ok && !dashboardRes.ok) {
+      setStatsError((s) => s || statsData?.message || `Stats failed (${statsRes.status}).`);
+    }
+    if (statsRes.ok && statsData.message) setStatsMessage(statsData.message);
+    setStats({
+      totalUsers,
+      totalDeposits,
+      totalWithdrawals: statsRes.ok ? (statsData.totalWithdrawals ?? 0) : 0,
+      totalBalance: statsRes.ok ? (statsData.totalBalance ?? 0) : 0,
+      totalProfit: statsRes.ok ? (statsData.totalProfit ?? 0) : 0,
+      totalRevenue: statsRes.ok ? (statsData.totalRevenue ?? 0) : 0,
+      recentTransactions: statsRes.ok && Array.isArray(statsData.recentTransactions) ? statsData.recentTransactions : [],
+    });
+    setLoading(false);
+  }
+
+  if (!session) {
     return (
-      <div className="p-6">
-        <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4 text-red-400">
-          {error}
-        </div>
+      <div className="flex items-center justify-center min-h-[50vh] text-[#9ca3af]">
+        Redirecting to admin login…
       </div>
     );
   }
 
-  if (!stats) {
+  if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[40vh] text-[#9ca3af]">
+      <div className="flex items-center justify-center min-h-[50vh] text-[#9ca3af]">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-6">Dashboard</h1>
+    <div className="flex flex-col min-h-full">
+      <header className="shrink-0 border-b border-white/10 bg-[#0f172a]/80 px-6 py-4">
+        <h1 className="text-xl font-semibold text-white">Admin Dashboard</h1>
+        <p className="text-sm text-[#9ca3af] mt-0.5">Overview of platform stats and recent activity</p>
+      </header>
+      <div className="p-6 flex-1">
+        {statsError && (
+          <div className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm flex items-center justify-between gap-4">
+            <span>{statsError}</span>
+            <button type="button" onClick={() => { setLoading(true); load(); }} className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium">
+              Retry
+            </button>
+          </div>
+        )}
+        {statsMessage && !statsError && (
+          <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-blue-200 text-sm">
+            {statsMessage}
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Users</h2>
+            <p className="text-2xl font-bold text-white mt-2">{stats.totalUsers}</p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Deposits</h2>
+            <p className="text-2xl font-bold text-[#10b981] mt-2">
+              ${(stats.totalDeposits / 100).toFixed(2)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Withdrawals</h2>
+            <p className="text-2xl font-bold text-amber-400 mt-2">
+              ${(stats.totalWithdrawals / 100).toFixed(2)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">User Balances (total)</h2>
+            <p className="text-2xl font-bold text-white mt-2">
+              ${(stats.totalBalance / 100).toFixed(2)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Profit</h2>
+            <p className="text-2xl font-bold text-[#10b981] mt-2">
+              ${(Number(stats.totalProfit) / 100).toFixed(2)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Revenue</h2>
+            <p className="text-2xl font-bold text-white mt-2">
+              ${(Number(stats.totalRevenue) / 100).toFixed(2)}
+            </p>
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Users</p>
-          <p className="text-2xl font-bold text-white mt-1">{stats.totalUsers}</p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Deposits</p>
-          <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents(stats.totalDepositsCents ?? 0)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Withdrawals</p>
-          <p className="text-2xl font-bold text-white mt-1">
-            {formatCents(stats.platformTotalWithdrawalsCents ?? 0)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Revenue</p>
-          <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents((stats.platformTotalEarningsCents ?? 0) + (stats.totalDepositsCents ?? 0))}
-          </p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Platform Earnings</p>
-          <p className="text-2xl font-bold text-white mt-1">
-            {formatCents(stats.platformTotalEarningsCents ?? stats.totalEarningsCents ?? 0)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Ad Credit Usage</p>
-          <p className="text-2xl font-bold text-[#10b981] mt-1">
-            {formatCents(stats.platformTotalAdCreditCents ?? 0)}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Total Ads</p>
-          <p className="text-2xl font-bold text-white mt-1">{stats.totalAds}</p>
-        </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] uppercase tracking-wide">Referral Earnings</p>
-          <p className="text-2xl font-bold text-[#10b981] mt-1">{formatCents(stats.totalReferralEarningsCents)}</p>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <section className="rounded-xl bg-[#111827] border border-white/10 p-6">
-          <h2 className="text-lg font-bold text-white mb-4">Recent Registrations</h2>
-          {stats.recentRegistrations.length === 0 ? (
-            <p className="text-[#9ca3af] text-sm">No registrations yet.</p>
+        <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
+          <h2 className="text-sm font-medium text-[#9ca3af] uppercase tracking-wider mb-4">Recent Transactions</h2>
+          {stats.recentTransactions.length === 0 ? (
+            <p className="text-[#6b7280] text-sm">No transactions yet.</p>
           ) : (
-            <ul className="space-y-3">
-              {stats.recentRegistrations.map((u) => (
-                <li
-                  key={u.id}
-                  className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
-                >
-                  <span className="text-white font-medium truncate">{u.email}</span>
-                  <span className="text-[#9ca3af] text-sm capitalize">{u.role}</span>
-                  <span className="text-[#6b7280] text-xs">
-                    {new Date(u.createdAt).toLocaleDateString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        <section className="rounded-xl bg-[#111827] border border-white/10 p-6">
-          <h2 className="text-lg font-bold text-white mb-4">Recent Ad Clicks</h2>
-          {stats.recentAdClicks.length === 0 ? (
-            <p className="text-[#9ca3af] text-sm">No ad clicks yet.</p>
-          ) : (
-            <ul className="space-y-3">
-              {stats.recentAdClicks.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center justify-between py-2 border-b border-white/5 last:border-0 text-sm"
-                >
-                  <span className="text-[#9ca3af]">User {c.userId.slice(0, 12)}…</span>
-                  <span className="text-[#6b7280]">{c.adId}</span>
-                  <span className="text-[#6b7280]">{new Date(c.clickedAt).toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-[#9ca3af]">
+                    <th className="pb-3 pr-4 font-medium">Date</th>
+                    <th className="pb-3 pr-4 font-medium">User</th>
+                    <th className="pb-3 pr-4 font-medium">Type</th>
+                    <th className="pb-3 pr-4 font-medium">Status</th>
+                    <th className="pb-3 pr-4 text-right font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentTransactions.slice(0, 20).map((tx) => (
+                    <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="py-3 pr-4 text-[#9ca3af]">
+                        {tx.created_at ? new Date(tx.created_at).toLocaleString() : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-white truncate max-w-[180px]">{tx.user_email ?? tx.id ?? "—"}</td>
+                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{tx.type}</td>
+                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{tx.status}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-white">
+                        ${(Number(tx.amount) / 100).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </div>

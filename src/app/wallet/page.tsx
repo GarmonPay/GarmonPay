@@ -60,7 +60,7 @@ function WalletContent() {
       .then((res) => (res.ok ? res.json() : Promise.resolve({ balanceCents: 0 })))
       .then((data) => setBalanceCents(data.balanceCents ?? 0))
       .catch(() => setBalanceCents(0));
-  }, [user?.accessToken]);
+  }, [user?.accessToken, success]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-fintech-bg">
@@ -108,6 +108,12 @@ function WalletContent() {
           className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity"
         >
           Back to Dashboard
+        </Link>
+        <Link
+          href="/dashboard/transactions"
+          className="inline-block w-full py-2 mt-2 text-sm text-fintech-muted hover:text-white"
+        >
+          View transaction history
         </Link>
       </div>
     </div>

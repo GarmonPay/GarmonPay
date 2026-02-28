@@ -15,24 +15,41 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+/** GET /api/webhooks/stripe — health check for Stripe webhook endpoint. */
 export async function GET() {
   return NextResponse.json({ status: "live" });
 }
 
+/**
+ * POST /api/webhooks/stripe — production Stripe webhook handler.
+ * 1. Accept POST from Stripe
+ * 2. Read raw body
+ * 3. Verify signature with STRIPE_WEBHOOK_SECRET
+ * 4. Handle checkout.session.completed
+ * 5. Extract customer_email, amount_total → find user by email (or metadata.user_id), add to balance, save transaction
+ * 6. Return 200 to Stripe
+ */
 export async function POST(req: Request) {
-  const body = await req.text();
+  // 1. Read raw body (required for signature verification)
+  let body: string;
+  try {
+    body = await req.text();
+  } catch {
+    return NextResponse.json({ error: "Failed to read body" }, { status: 400 });
+  }
+
+  // 2. Get signature and secret
   const signature = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-
   if (!signature || !secret) {
     return NextResponse.json({ error: "Missing webhook signature or secret" }, { status: 400 });
   }
 
+  // 3. Verify Stripe signature
   const stripe = getStripe();
   if (!stripe) {
-    return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   }
-
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, secret);
@@ -41,53 +58,78 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const email = session.customer_details?.email ?? session.customer_email ?? null;
-    const amountTotal = session.amount_total ?? 0;
-    const amount = amountTotal / 100;
-    const mode = session.mode ?? "payment";
-
-    const supabase = getSupabase();
-    if (!supabase) {
-      return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
-    }
-
-    if (mode === "payment" && amountTotal > 0) {
-      const amountCents = Math.round(amountTotal);
-      const amountDollars = amountTotal / 100;
-      const userId = (session.metadata as { user_id?: string } | null)?.user_id;
-
-      if (email) {
-        await supabase.rpc("add_funds", {
-          user_email: email,
-          amount: amountDollars,
-        });
-      }
-
-      if (userId) {
-        await supabase.rpc("increment_user_balance", {
-          p_user_id: userId,
-          p_amount_cents: amountCents,
-        });
-      }
-    }
-
-    if (mode === "subscription" && email) {
-      await supabase
-        .from("users")
-        .update({ membership: "active", updated_at: new Date().toISOString() })
-        .eq("email", email);
-    }
-
-    if (email) {
-      await supabase.from("revenue_transactions").insert({
-        email: email ?? "",
-        amount,
-        type: mode,
-      });
-    }
+  // 4. Handle checkout.session.completed
+  if (event.type !== "checkout.session.completed") {
+    return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  return NextResponse.json({ received: true });
+  const session = event.data.object as Stripe.Checkout.Session;
+
+  // 5. Extract customer_email and amount_total
+  const customer_email =
+    session.customer_details?.email ?? session.customer_email ?? null;
+  const amount_total = session.amount_total ?? 0;
+  const mode = session.mode ?? "payment";
+
+  if (mode !== "payment" || amount_total <= 0) {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  const amountCents = Math.round(amount_total);
+  const amountDollars = amount_total / 100;
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+  }
+
+  // 6. Find user: prefer metadata.user_id, else by email
+  let userId: string | null = (session.metadata as { user_id?: string } | null)?.user_id ?? null;
+  if (!userId && customer_email) {
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", customer_email)
+      .maybeSingle();
+    userId = (userRow as { id?: string } | null)?.id ?? null;
+  }
+
+  if (!userId) {
+    console.error("Stripe webhook: no user found for session", session.id, "email:", customer_email);
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  try {
+    // 7. Add amount to user's balance
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("balance")
+      .eq("id", userId)
+      .single();
+    const currentBalance = Number(userRow?.balance ?? 0);
+    await supabase
+      .from("users")
+      .update({ balance: currentBalance + amountCents })
+      .eq("id", userId);
+
+    // 8. Save transaction record (and deposit)
+    await supabase.from("transactions").insert({
+      user_id: userId,
+      type: "deposit",
+      amount: amountCents,
+      status: "completed",
+      description: "Stripe payment",
+    });
+    await supabase.from("deposits").insert({
+      user_id: userId,
+      amount: amountDollars,
+      stripe_session: session.id ?? null,
+    });
+  } catch (err) {
+    console.error("Stripe webhook processing error:", err);
+    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
+
+  // 9. Return 200 to Stripe
+  return NextResponse.json({ received: true }, { status: 200 });
 }

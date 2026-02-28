@@ -8,6 +8,7 @@ const emptyTransactionsResponse = {
   totalEarningsCents: 0,
   totalWithdrawnCents: 0,
   totalAdCreditConvertedCents: 0,
+  totalDepositsCents: 0,
 };
 
 /** GET /api/transactions — list current user's transactions and totals. */
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
       totalEarningsCents: totals.totalEarningsCents,
       totalWithdrawnCents: totals.totalWithdrawnCents,
       totalAdCreditConvertedCents: totals.totalAdCreditConvertedCents,
+      totalDepositsCents: totals.totalDepositsCents,
     });
   } catch (e) {
     console.error("Transactions list error:", e);

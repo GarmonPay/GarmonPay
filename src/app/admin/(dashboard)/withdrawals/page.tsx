@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -28,12 +28,16 @@ function formatDate(iso: string) {
 }
 
 export default function AdminWithdrawalsPage() {
-  const session = getAdminSession();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   function load() {
     if (!session) return;

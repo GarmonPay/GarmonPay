@@ -10,7 +10,6 @@
 
 import { createBrowserClient } from "@/core/supabase";
 import { setSession, clearSession } from "@/lib/session";
-import { setAdminSession, clearAdminSession } from "@/lib/admin-session";
 
 export interface AuthUser {
   id: string;
@@ -29,7 +28,10 @@ export async function login(email: string, password: string): Promise<LoginResul
   if (!supabase) {
     return { ok: false, message: "Auth not configured" };
   }
-  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  const trimmedEmail = email.trim();
+  if (!trimmedEmail) return { ok: false, message: "Email is required" };
+  if (!password) return { ok: false, message: "Password is required" };
+  const { data, error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
   if (error) return { ok: false, message: error.message };
   if (!data.session?.user) return { ok: false, message: "No session" };
   const uid = data.user.id;
@@ -39,21 +41,14 @@ export async function login(email: string, password: string): Promise<LoginResul
   if (row && (row as { role?: string }).role) role = (row as { role: string }).role;
   if (row) isSuperAdmin = !!(row as { is_super_admin?: boolean }).is_super_admin;
   const user: AuthUser = { id: data.user.id, email: data.user.email ?? "", role, isSuperAdmin };
-  if (role === "admin") {
-    setAdminSession({
-      adminId: data.user.id,
-      email: data.user.email ?? email.trim(),
-      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-      isSuperAdmin,
-    });
-  }
+  const isAdmin = role === "admin" || isSuperAdmin;
   setSession({
     userId: data.user.id,
     email: data.user.email ?? "",
     expiresAt: data.session.expires_at ? new Date(data.session.expires_at * 1000).toISOString() : "",
     accessToken: data.session.access_token,
   });
-  return { ok: true, user, isAdmin: role === "admin" };
+  return { ok: true, user, isAdmin: role === "admin" || isSuperAdmin };
 }
 
 export interface RegisterOptions {
@@ -90,7 +85,16 @@ export async function register(options: RegisterOptions): Promise<RegisterResult
       created_at: new Date().toISOString(),
     }]);
   } catch {
-    // Ignore users table insert errors; auth succeeded
+    // Insert may fail (e.g. RLS); sync-user with service role will ensure row exists
+  }
+  try {
+    await fetch(`${typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sync-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: data.user.id, email: data.user.email }),
+    });
+  } catch {
+    // Best-effort sync
   }
   if (referralCode) {
     await supabase.from("users").update({ referred_by_code: referralCode }).eq("id", data.user.id);
@@ -132,5 +136,4 @@ export async function logout(): Promise<void> {
   const supabase = createBrowserClient();
   if (supabase) await supabase.auth.signOut();
   clearSession();
-  clearAdminSession();
 }

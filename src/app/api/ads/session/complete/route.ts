@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { completeAdSessionAndIssueReward as completeDb } from "@/lib/ads-db";
-import { completeAdSessionAndIssueReward as completeMemory } from "@/lib/ads-store";
 import { recordActivity } from "@/lib/viral-db";
 import { completeMission } from "@/lib/gamification-db";
 import { createAdminClient } from "@/lib/supabase";
 
-/**
- * POST /api/ads/session/complete — BACKEND ONLY reward issuance.
- * Body: { sessionId }. Verifies session, timer elapsed, then updates balance + earnings in DB.
- */
+/** POST /api/ads/session/complete — complete session and issue reward. Production: Supabase only. */
 export async function POST(request: Request) {
   const userId = await getAuthUserId(request);
   if (!userId) {
@@ -25,33 +21,23 @@ export async function POST(request: Request) {
   if (!sessionId || typeof sessionId !== "string") {
     return NextResponse.json({ message: "sessionId required" }, { status: 400 });
   }
-
-  if (createAdminClient()) {
-    try {
-      const result = await completeDb(userId, sessionId);
-      if (!result.success) {
-        return NextResponse.json({ message: result.message }, { status: 400 });
-      }
-      recordActivity(userId, "earned", "Earned from ad", result.rewardCents).catch(() => {});
-      completeMission(userId, "watch_ad").catch(() => {});
-      return NextResponse.json({
-        success: true,
-        rewardCents: result.rewardCents,
-        message: "Reward issued",
-      });
-    } catch (e) {
-      console.error("Complete session error:", e);
-      return NextResponse.json({ message: "Could not complete ad. Try again." }, { status: 503 });
+  if (!createAdminClient()) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  try {
+    const result = await completeDb(userId, sessionId);
+    if (!result.success) {
+      return NextResponse.json({ message: result.message }, { status: 400 });
     }
+    recordActivity(userId, "earned", "Earned from ad", result.rewardCents).catch(() => {});
+    completeMission(userId, "watch_ad").catch(() => {});
+    return NextResponse.json({
+      success: true,
+      rewardCents: result.rewardCents,
+      message: "Reward issued",
+    });
+  } catch (e) {
+    console.error("Complete session error:", e);
+    return NextResponse.json({ message: "Could not complete ad. Try again." }, { status: 503 });
   }
-
-  const result = completeMemory(userId, sessionId);
-  if (!result.success) {
-    return NextResponse.json({ message: result.message }, { status: 400 });
-  }
-  return NextResponse.json({
-    success: true,
-    rewardCents: result.rewardCents,
-    message: "Reward issued",
-  });
 }

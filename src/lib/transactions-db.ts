@@ -70,11 +70,12 @@ export async function getUserBalances(userId: string): Promise<{
   };
 }
 
-/** Totals from transactions for a user: total earnings, total withdrawn. */
+/** Totals from transactions for a user: total earnings, total withdrawn, total deposits. */
 export async function getTotalsForUser(userId: string): Promise<{
   totalEarningsCents: number;
   totalWithdrawnCents: number;
   totalAdCreditConvertedCents: number;
+  totalDepositsCents: number;
 }> {
   const { data, error } = await supabase()
     .from("transactions")
@@ -85,10 +86,13 @@ export async function getTotalsForUser(userId: string): Promise<{
   let totalEarningsCents = 0;
   let totalWithdrawnCents = 0;
   let totalAdCreditConvertedCents = 0;
+  let totalDepositsCents = 0;
   const earningTypes = ["earning", "referral", "referral_commission", "spin_wheel", "scratch_card", "mystery_box", "streak", "mission", "tournament_prize", "team_prize"];
   for (const r of rows) {
     const amt = Number(r.amount);
-    if (earningTypes.includes(r.type)) {
+    if (r.type === "deposit" && r.status === "completed") {
+      totalDepositsCents += amt;
+    } else if (earningTypes.includes(r.type)) {
       if (r.status === "completed") totalEarningsCents += amt;
     } else if (r.type === "withdrawal") {
       if (r.status === "completed" || r.status === "pending") totalWithdrawnCents += amt;
@@ -96,7 +100,7 @@ export async function getTotalsForUser(userId: string): Promise<{
       if (r.status === "completed") totalAdCreditConvertedCents += amt;
     }
   }
-  return { totalEarningsCents, totalWithdrawnCents, totalAdCreditConvertedCents };
+  return { totalEarningsCents, totalWithdrawnCents, totalAdCreditConvertedCents, totalDepositsCents };
 }
 
 /** Mark withdrawal transaction as completed (when admin marks paid). */
@@ -125,10 +129,11 @@ export async function listAllTransactions(): Promise<(TransactionRow & { user_em
   return rows.map((r) => ({ ...r, user_email: emails.get(r.user_id) }));
 }
 
-/** Admin: platform totals (total earnings, total withdrawals, total ad credit converted). */
+/** Admin: platform totals (deposits, withdrawals, earnings, ad credit). */
 export async function getPlatformTotals(): Promise<{
-  totalEarningsCents: number;
+  totalDepositsCents: number;
   totalWithdrawalsCents: number;
+  totalEarningsCents: number;
   totalAdCreditCents: number;
 }> {
   const { data, error } = await supabase()
@@ -136,19 +141,22 @@ export async function getPlatformTotals(): Promise<{
     .select("type, amount, status");
   if (error) throw error;
   const rows = (data ?? []) as { type: string; amount: number; status: string }[];
-  let totalEarningsCents = 0;
+  let totalDepositsCents = 0;
   let totalWithdrawalsCents = 0;
+  let totalEarningsCents = 0;
   let totalAdCreditCents = 0;
   const earningTypes = ["earning", "referral", "referral_commission", "spin_wheel", "scratch_card", "mystery_box", "streak", "mission", "tournament_prize", "team_prize"];
   for (const r of rows) {
     const amt = Number(r.amount);
-    if (earningTypes.includes(r.type)) {
-      if (r.status === "completed") totalEarningsCents += amt;
-    } else if (r.type === "withdrawal") {
-      if (r.status !== "rejected") totalWithdrawalsCents += amt;
-    } else if (r.type === "ad_credit") {
-      if (r.status === "completed") totalAdCreditCents += amt;
+    if (r.type === "deposit" && r.status === "completed") {
+      totalDepositsCents += amt;
+    } else if (r.type === "withdrawal" && r.status !== "rejected") {
+      totalWithdrawalsCents += amt;
+    } else if (earningTypes.includes(r.type) && r.status === "completed") {
+      totalEarningsCents += amt;
+    } else if (r.type === "ad_credit" && r.status === "completed") {
+      totalAdCreditCents += amt;
     }
   }
-  return { totalEarningsCents, totalWithdrawalsCents, totalAdCreditCents };
+  return { totalDepositsCents, totalWithdrawalsCents, totalEarningsCents, totalAdCreditCents };
 }

@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import { createAd, listAllAds, updateAd } from "@/lib/ads-db";
 import { adRowToApi } from "@/lib/ads-mapper";
 import { createAdminClient } from "@/lib/supabase";
 
 const AD_TYPES = ["video", "image", "text", "link"] as const;
 
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
-
 /** GET: List all ads (admin). */
 export async function GET(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
@@ -33,7 +26,7 @@ export async function GET(request: Request) {
 
 /** POST: Create ad (admin). Body: title, description?, type, media_url?, advertiser_price, user_reward, duration_seconds, status? */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
@@ -82,7 +75,7 @@ export async function POST(request: Request) {
 
 /** PATCH: Update ad (admin). Body: id, and any of status, title, description, type, media_url, advertiser_price, user_reward, duration_seconds */
 export async function PATCH(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
 export interface RevenueChartPoint {
@@ -13,6 +13,8 @@ export interface AdminRevenueResponse {
   monthlyRevenueCents: number;
   fightCount: number;
   chartData: RevenueChartPoint[];
+  /** Total from transactions type=deposit (Stripe top-ups). */
+  revenue: number;
 }
 
 function startOfDayUTC(d: Date): Date {
@@ -28,13 +30,18 @@ function startOfMonthUTC(d: Date): Date {
   return x;
 }
 
-export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+function buildEmptyChartData(now: Date): RevenueChartPoint[] {
+  const chartData: RevenueChartPoint[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    chartData.push({ date: d.toISOString().slice(0, 10), amountCents: 0 });
   }
-  const user = findUserById(adminId);
-  if (!user || !hasAdminAccess(user)) {
+  return chartData;
+}
+
+export async function GET(request: Request) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
@@ -53,18 +60,37 @@ export async function GET(request: Request) {
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: rows, error } = await admin
-      .from("platform_revenue")
-      .select("amount, created_at, fight_id")
-      .eq("source", "fight")
-      .gte("created_at", thirtyDaysAgo.toISOString());
+    const [platformRes, depositRes] = await Promise.all([
+      admin
+        .from("platform_revenue")
+        .select("amount, created_at, fight_id")
+        .eq("source", "fight")
+        .gte("created_at", thirtyDaysAgo.toISOString()),
+      admin.from("transactions").select("amount").eq("type", "deposit"),
+    ]);
+
+    const { data: rows, error } = platformRes;
 
     if (error) {
-      return NextResponse.json(
-        { message: "Failed to fetch revenue", error: error.message },
-        { status: 500 }
+      console.error("Admin revenue fetch error:", error);
+      const depositTotal = (depositRes.data ?? []).reduce(
+        (s, t) => s + Number((t as { amount?: number }).amount ?? 0),
+        0
       );
+      return NextResponse.json({
+        totalFightRevenueCents: 0,
+        dailyRevenueCents: 0,
+        monthlyRevenueCents: 0,
+        fightCount: 0,
+        chartData: buildEmptyChartData(now),
+        revenue: depositTotal,
+      });
     }
+
+    let depositRevenue = 0;
+    (depositRes.data ?? []).forEach((t) => {
+      depositRevenue += Number((t as { amount?: number }).amount ?? 0);
+    });
 
     const list = (rows ?? []) as { amount: number; created_at: string; fight_id: string | null }[];
     let totalFightRevenueCents = 0;
@@ -101,6 +127,7 @@ export async function GET(request: Request) {
       monthlyRevenueCents,
       fightCount: fightIds.size,
       chartData,
+      revenue: depositRevenue,
     };
     return NextResponse.json(body);
   } catch (e) {

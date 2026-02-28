@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -28,17 +28,29 @@ function formatShortDate(dateStr: string) {
 }
 
 export default function AdminRevenuePage() {
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [data, setData] = useState<AdminRevenueData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const session = getAdminSession();
+
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
+    setError(null);
     fetch(`${API_BASE}/admin/revenue`, {
       headers: { "X-Admin-Id": session.adminId },
     })
       .then((res) => {
-        if (!res.ok) return res.json().then((b: { message?: string }) => { throw new Error(b.message ?? "Failed to load revenue"); });
+        if (res.status === 403) {
+          throw new Error("Access denied. Ensure your user has role = 'admin' or is_super_admin = true in public.users.");
+        }
+        if (!res.ok) {
+          return res.json().then((b: { message?: string }) => {
+            throw new Error(b.message ?? "Failed to load revenue");
+          });
+        }
         return res.json();
       })
       .then((body: AdminRevenueData) => {

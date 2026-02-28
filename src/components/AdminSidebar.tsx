@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { clearAdminSession } from "@/lib/admin-session";
+import { createBrowserClient } from "@/lib/supabase";
 
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/gamification", label: "Gamification" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/ads", label: "Ads" },
   { href: "/admin/banners", label: "Banners" },
@@ -14,8 +13,10 @@ const links = [
   { href: "/admin/earnings", label: "Earnings" },
   { href: "/admin/profit", label: "Profit" },
   { href: "/admin/revenue", label: "Revenue" },
+  { href: "/admin/gamification", label: "Gamification" },
   { href: "/admin/tournaments", label: "Tournaments" },
   { href: "/admin/referrals", label: "Referrals" },
+  { href: "/admin/boxing", label: "Boxing" },
   { href: "/admin/settings", label: "Settings" },
 ];
 
@@ -23,7 +24,8 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   function handleLogout() {
-    clearAdminSession();
+    const supabase = createBrowserClient();
+    if (supabase) supabase.auth.signOut();
     window.location.href = "/admin/login";
   }
 

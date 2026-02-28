@@ -30,12 +30,17 @@ export default function RegisterPage() {
       setError("Registration not configured.");
       return;
     }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError("Email is required.");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
     }
-    const { error: err } = await supabase.auth.signUp({
-      email,
+    const { data, error: err } = await supabase.auth.signUp({
+      email: trimmedEmail,
       password,
       options: {
         emailRedirectTo: getRegisterUrl(),
@@ -43,9 +48,21 @@ export default function RegisterPage() {
     });
     if (err) {
       setError(err.message);
-    } else {
-      setMessage("Check your email to confirm your account, or sign in if already confirmed.");
+      return;
     }
+    if (data?.user) {
+      const res = await fetch("/api/auth/sync-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: data.user.id, email: data.user.email ?? trimmedEmail }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        setError(json.message || "Account created but could not sync to database. Please contact support.");
+        return;
+      }
+    }
+    setMessage("Check your email to confirm your account, or sign in if already confirmed.");
   }
 
   return (
@@ -57,6 +74,7 @@ export default function RegisterPage() {
           type="email"
           className="w-full p-2 mb-3 text-black"
           placeholder="Email"
+          value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
 
@@ -64,6 +82,7 @@ export default function RegisterPage() {
           type="password"
           className="w-full p-2 mb-3 text-black"
           placeholder="Password (min 8 characters)"
+          value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
 

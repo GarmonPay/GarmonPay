@@ -17,15 +17,20 @@ function formatDate(iso: string) {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  earning: "Ad / Earning",
+  deposit: "Deposit",
   withdrawal: "Withdrawal",
+  earning: "Ad / Earning",
   ad_credit: "Ad credit conversion",
   referral: "Referral",
+  bonus: "Bonus",
+  profit: "Profit",
+  adjustment: "Adjustment",
 };
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "text-amber-400",
   completed: "text-green-400",
+  failed: "text-red-400",
   rejected: "text-red-400",
   cancelled: "text-fintech-muted",
 };
@@ -43,7 +48,12 @@ export default function TransactionsPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [transactions, setTransactions] = useState<Tx[]>([]);
-  const [totals, setTotals] = useState({ totalEarningsCents: 0, totalWithdrawnCents: 0, totalAdCreditConvertedCents: 0 });
+  const [totals, setTotals] = useState({
+    totalEarningsCents: 0,
+    totalWithdrawnCents: 0,
+    totalAdCreditConvertedCents: 0,
+    totalDepositsCents: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,10 +67,12 @@ export default function TransactionsPage() {
       getTransactions(s.accessToken ?? s.userId, !!s.accessToken)
         .then((res) => {
           setTransactions(res.transactions);
+          const r = res as { totalEarningsCents: number; totalWithdrawnCents: number; totalAdCreditConvertedCents: number; totalDepositsCents?: number };
           setTotals({
-            totalEarningsCents: res.totalEarningsCents,
-            totalWithdrawnCents: res.totalWithdrawnCents,
-            totalAdCreditConvertedCents: res.totalAdCreditConvertedCents,
+            totalEarningsCents: r.totalEarningsCents,
+            totalWithdrawnCents: r.totalWithdrawnCents,
+            totalAdCreditConvertedCents: r.totalAdCreditConvertedCents,
+            totalDepositsCents: r.totalDepositsCents ?? 0,
           });
         })
         .catch(() => setError("Failed to load transactions"))
@@ -99,6 +111,10 @@ export default function TransactionsPage() {
         {/* Statement summary */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 p-4 rounded-xl bg-black/20 border border-white/10">
           <div>
+            <p className="text-xs text-fintech-muted uppercase">Total Deposits</p>
+            <p className="text-lg font-bold text-fintech-money">{formatCents(totals.totalDepositsCents)}</p>
+          </div>
+          <div>
             <p className="text-xs text-fintech-muted uppercase">Total Earnings</p>
             <p className="text-lg font-bold text-fintech-money">{formatCents(totals.totalEarningsCents)}</p>
           </div>
@@ -133,8 +149,8 @@ export default function TransactionsPage() {
                 </tr>
               ) : (
                 transactions.map((tx) => {
-                  const isCredit = tx.type === "earning" || tx.type === "referral";
-                  const isDebit = tx.type === "withdrawal" || tx.type === "ad_credit";
+                  const isCredit = ["earning", "referral", "deposit", "bonus", "profit"].includes(tx.type) || (tx.type === "adjustment" && tx.amount > 0);
+                  const isDebit = tx.type === "withdrawal" || tx.type === "ad_credit" || (tx.type === "adjustment" && tx.amount < 0);
                   const amountDisplay = isCredit
                     ? `+${formatCents(tx.amount)}`
                     : isDebit

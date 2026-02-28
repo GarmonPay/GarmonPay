@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -37,6 +37,7 @@ type Flags = { pause_ads: boolean; pause_withdrawals: boolean; maintenance_mode:
 
 export default function GodModePage() {
   const router = useRouter();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [flags, setFlags] = useState<Flags | null>(null);
@@ -44,9 +45,13 @@ export default function GodModePage() {
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    const session = getAdminSession();
-    if (!session?.isSuperAdmin) {
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    if (!session.isSuperAdmin) {
       router.replace("/dashboard");
       setAllowed(false);
       return;
@@ -63,21 +68,9 @@ export default function GodModePage() {
       })
       .catch(() => setError("Failed to load"))
       .finally(() => setLoading(false));
-  }, [router]);
-
-  useEffect(() => {
-    const session = getAdminSession();
-    if (!session?.isSuperAdmin) {
-      router.replace("/dashboard");
-      setAllowed(false);
-      return;
-    }
-    setAllowed(true);
-    load();
-  }, [router, load]);
+  }, [router, session]);
 
   async function toggleFlag(key: keyof Flags) {
-    const session = getAdminSession();
     if (!session?.isSuperAdmin || !flags) return;
     setToggling(key);
     const next = !flags[key];

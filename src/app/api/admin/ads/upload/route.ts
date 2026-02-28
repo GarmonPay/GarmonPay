@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
-/** Create bucket "ad-media" (public) in Supabase Dashboard → Storage if uploads fail. */
 const BUCKET = "ad-media";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
 
 /** POST: Upload ad media (video or image). Admin only. Returns { url }. */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   const supabase = createAdminClient();
@@ -33,7 +25,7 @@ export async function POST(request: Request) {
     upsert: false,
   });
   if (error) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return NextResponse.json({ url: urlData.publicUrl });

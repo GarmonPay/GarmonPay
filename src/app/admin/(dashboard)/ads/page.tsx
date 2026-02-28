@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -31,7 +31,7 @@ type AdItem = {
 };
 
 export default function AdminAdsPage() {
-  const session = getAdminSession();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +51,10 @@ export default function AdminAdsPage() {
   });
 
   const profit = Math.max(0, (form.advertiser_price ?? 0) - (form.user_reward ?? 0));
+
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   function loadAds() {
     if (!session) return;
@@ -350,6 +354,53 @@ export default function AdminAdsPage() {
             Add ad
           </button>
         </form>
+      </div>
+
+      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Video ads</h2>
+        {loading ? (
+          <div className="p-6 text-[#9ca3af]">Loading…</div>
+        ) : (
+          (() => {
+            const videoAds = (ads ?? []).filter((a) => (a.adType === "website_visit" ? "link" : a.adType) === "video");
+            return videoAds.length === 0 ? (
+              <div className="p-6 text-[#9ca3af]">No video ads. Create one above and set type to Video.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Title</th>
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Video URL</th>
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Reward</th>
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Duration</th>
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
+                      <th className="p-3 text-sm font-medium text-[#9ca3af]">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {videoAds.map((ad) => (
+                      <tr key={ad.id} className="border-b border-white/5">
+                        <td className="p-3 text-white">{ad.title}</td>
+                        <td className="p-3 text-[#9ca3af] truncate max-w-[200px]" title={ad.videoUrl ?? ""}>{ad.videoUrl ? "✓ Set" : "—"}</td>
+                        <td className="p-3 text-[#9ca3af]">${(ad.rewardCents / 100).toFixed(2)}</td>
+                        <td className="p-3 text-[#9ca3af]">{ad.requiredSeconds}s</td>
+                        <td className="p-3">
+                          <span className={ad.active ? "text-green-400" : "text-[#6b7280]"}>{ad.active ? "Active" : "Inactive"}</span>
+                        </td>
+                        <td className="p-3">
+                          <button type="button" onClick={() => toggleStatus(ad)} className="text-sm px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20">
+                            {ad.active ? "Deactivate" : "Activate"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()
+        )}
       </div>
 
       <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">

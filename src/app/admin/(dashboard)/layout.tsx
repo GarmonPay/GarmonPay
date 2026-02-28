@@ -2,34 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
+import { createBrowserClient } from "@/lib/supabase";
 import { AdminSidebar } from "@/components/AdminSidebar";
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [ok, setOk] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<"loading" | "allowed" | "forbidden">("loading");
 
   useEffect(() => {
-    if (!getAdminSession()) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
       router.replace("/admin/login");
-      setOk(false);
-    } else {
-      setOk(true);
+      return;
     }
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        router.replace("/admin/login");
+        setStatus("forbidden");
+        return;
+      }
+      const adminSession = await getAdminSessionAsync();
+      if (!adminSession) {
+        router.replace("/admin/login");
+        setStatus("forbidden");
+        return;
+      }
+      setStatus("allowed");
+    };
+    check();
   }, [router]);
 
-  if (ok === null || ok === false) {
+  if (status === "loading" || status === "forbidden") {
     return (
-      <div style={{ minHeight: "100vh", background: "#0a0e17", color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {ok === false ? "Redirecting to admin login…" : "Loading…"}
+      <div className="min-h-screen bg-[#0a0e17] text-[#9ca3af] flex items-center justify-center">
+        {status === "forbidden" ? "Redirecting to login…" : "Loading…"}
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0e17", display: "flex" }}>
+    <div className="min-h-screen flex bg-[#0a0e17]">
       <AdminSidebar />
-      <main style={{ flex: 1, overflow: "auto" }}>{children}</main>
+      <main className="flex-1 overflow-auto min-h-screen flex flex-col">
+        {children}
+      </main>
     </div>
   );
 }

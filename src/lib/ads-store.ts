@@ -8,8 +8,9 @@ import type { Ad, AdSessionRecord, AdType } from "@/types/ads";
 const ads = new Map<string, Ad>();
 const sessions = new Map<string, AdSessionRecord>();
 
-/** Seed sample ads for development. Remove or replace with DB in production. */
+/** Seed sample ads for development only. Never runs in production — admin and dashboard use real Supabase data only. */
 function seedSampleAds(): void {
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "production") return;
   if (ads.size > 0) return;
   createAd({
     title: "Welcome to GarmonPay",

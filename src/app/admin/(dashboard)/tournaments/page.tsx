@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -19,7 +19,7 @@ type Tournament = {
 };
 
 export default function AdminTournamentsPage() {
-  const session = getAdminSession();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,10 @@ export default function AdminTournamentsPage() {
     start_date: new Date().toISOString().slice(0, 16),
     end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
   });
+
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   function loadTournaments() {
     if (!session) return;

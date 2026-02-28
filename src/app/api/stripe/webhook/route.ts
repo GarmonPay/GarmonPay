@@ -55,6 +55,19 @@ export async function POST(req: Request) {
     }
 
     if (userId) {
+      const { data: row } = await supabase.from("users").select("balance").eq("id", userId).single();
+      const currentCents = Number((row as { balance?: number } | null)?.balance ?? 0);
+      const newBalance = currentCents + amountCents;
+      await supabase
+        .from("users")
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+      await supabase.from("transactions").insert({
+        user_id: userId,
+        type: "deposit",
+        amount: amountCents,
+        status: "completed",
+      });
       const { error } = await supabase.rpc("increment_user_balance", {
         p_user_id: userId,
         p_amount_cents: amountCents,

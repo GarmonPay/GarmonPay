@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
 import Footer from "@/components/Footer";
+import { AuthStateProvider } from "@/components/AuthStateProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -52,7 +53,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="font-sans antialiased flex min-h-screen flex-col">
-        {children}
+        <AuthStateProvider>
+          {children}
+        </AuthStateProvider>
         <Footer />
       </body>
     </html>

@@ -117,6 +117,38 @@ export default function DashboardAdsPage() {
         {adsList.length === 0 ? (
           <p className="text-fintech-muted">No ads available right now. Check back later.</p>
         ) : (
+          <>
+            {adsList.filter((a) => a.adType === "video").length > 0 && (
+              <section className="mb-8">
+                <h2 className="text-lg font-semibold text-white mb-3">Video ads</h2>
+                <p className="text-sm text-fintech-muted mb-4">Watch video ads to earn rewards.</p>
+                <ul className="grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-3 mb-6">
+                  {adsList
+                    .filter((ad) => ad.adType === "video")
+                    .map((ad) => (
+                      <li
+                        key={ad.id}
+                        className="rounded-xl border border-white/10 bg-black/20 p-4 tablet:p-5 hover:border-fintech-accent/50 transition-colors"
+                      >
+                        <h3 className="font-semibold text-white mb-1">{ad.title}</h3>
+                        <div className="flex flex-wrap gap-2 text-sm text-fintech-muted mb-3">
+                          <span className="px-2 py-0.5 rounded bg-white/10">Video</span>
+                          <span className="text-fintech-money font-medium">{formatReward(ad.rewardCents)}</span>
+                          <span>{ad.requiredSeconds}s</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleStartAd(ad)}
+                          className="min-h-touch w-full rounded-xl py-3 bg-fintech-accent text-white font-medium transition-opacity hover:opacity-90"
+                        >
+                          Watch video
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            )}
+            <h2 className="text-lg font-semibold text-white mb-3">All ad opportunities</h2>
           <ul className="grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-3">
             {adsList.map((ad) => (
               <li
@@ -141,6 +173,7 @@ export default function DashboardAdsPage() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
 

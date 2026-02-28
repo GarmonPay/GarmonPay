@@ -1,13 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { useEffect, useState } from "react";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 import { AdminSidebar } from "@/components/AdminSidebar";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const isLogin = pathname === "/admin/login";
 
   if (isLogin) {
@@ -23,27 +22,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
 function ProtectedAdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [session, setSession] = useState<AdminSession | null | "loading">("loading");
 
   useEffect(() => {
-    const session = getAdminSession();
-    if (!session) {
-      router.replace("/admin/login");
-    }
+    getAdminSessionAsync().then((s) => {
+      setSession(s ?? null);
+      if (!s) router.replace("/admin/login");
+    });
   }, [router]);
 
-  if (typeof window === "undefined") {
+  if (session === "loading" || !session) {
     return (
       <div style={{ minHeight: "100vh", background: "#0a0e17", color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        Loading…
-      </div>
-    );
-  }
-
-  const session = getAdminSession();
-  if (!session) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#0a0e17", color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        Redirecting to admin login…
+        {!session && session !== "loading" ? "Redirecting to login…" : "Loading…"}
       </div>
     );
   }

@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
 
 /** POST /api/admin/subscriptions — create a subscription (for testing / backoffice). */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
-  if (!createAdminClient()) {
+  const supabase = createAdminClient();
+  if (!supabase) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
   let body: { userId: string; membershipTier: string; monthlyPriceCents: number; nextBillingDate?: string };
@@ -32,7 +26,6 @@ export async function POST(request: Request) {
     : (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d; })();
   const nextBillingDate = nextBilling.toISOString().slice(0, 10);
   try {
-    const supabase = createAdminClient()!;
     const { data, error } = await supabase
       .from("subscriptions")
       .insert({
@@ -49,7 +42,6 @@ export async function POST(request: Request) {
     if (error) throw error;
     return NextResponse.json({ subscription: data });
   } catch (e) {
-    console.error("Create subscription error:", e);
     return NextResponse.json({ message: "Failed to create subscription" }, { status: 500 });
   }
 }

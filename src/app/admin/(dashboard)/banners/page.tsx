@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -29,22 +29,30 @@ function ctr(impressions: number, clicks: number): string {
 }
 
 export default function AdminBannersPage() {
-  const session = getAdminSession();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [banners, setBanners] = useState<BannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
+
   function load() {
     if (!session) return;
     setLoading(true);
+    setError(null);
     fetch(`${API_BASE}/admin/banners`, { headers: { "X-Admin-Id": session.adminId } })
       .then((r) => {
-        if (!r.ok) throw new Error("Failed to load");
+        if (!r.ok) throw new Error(r.status === 403 ? "Access denied" : "Failed to load");
         return r.json();
       })
-      .then((data) => setBanners(data.banners ?? []))
+      .then((data) => {
+        setBanners(data.banners ?? []);
+        setError(null);
+      })
       .catch(() => setError("Failed to load banners"))
       .finally(() => setLoading(false));
   }

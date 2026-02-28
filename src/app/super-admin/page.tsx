@@ -2,20 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
 
 export default function SuperAdminPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const session = getAdminSession();
-    if (!session?.isSuperAdmin) {
-      router.replace("/dashboard");
-      setAllowed(false);
-    } else {
-      setAllowed(true);
-    }
+    getAdminSessionAsync().then((session) => {
+      if (!session?.isSuperAdmin) {
+        router.replace("/dashboard");
+        setAllowed(false);
+      } else {
+        setAllowed(true);
+      }
+    });
   }, [router]);
 
   if (allowed === null || allowed === false) {

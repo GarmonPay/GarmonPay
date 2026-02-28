@@ -1,27 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@/lib/supabase";
 import { getDashboardUrl } from "@/lib/site-url";
+import { login as authLogin } from "@/core/auth";
 
 export default function LoginPage() {
-  const supabase = createBrowserClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  async function login() {
+  async function login(e?: React.FormEvent) {
+    e?.preventDefault();
     setError("");
-    if (!supabase) {
-      setError("Login not configured.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError("Email is required");
       return;
     }
-    const { error: err } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (err) {
-      setError(err.message);
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+    const result = await authLogin(trimmedEmail, password);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    if (result.isAdmin) {
+      window.location.href = "/admin";
     } else {
       window.location.href = getDashboardUrl();
     }
@@ -32,24 +38,31 @@ export default function LoginPage() {
       <div className="bg-gray-900 p-8 rounded w-96">
         <h1 className="text-2xl mb-4">Member Login</h1>
 
-        <input
-          className="w-full p-2 mb-3 text-black"
-          placeholder="Email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <form onSubmit={login}>
+          <input
+            type="email"
+            autoComplete="email"
+            className="w-full p-2 mb-3 text-black"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-        <input
-          type="password"
-          className="w-full p-2 mb-3 text-black"
-          placeholder="Password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <input
+            type="password"
+            autoComplete="current-password"
+            className="w-full p-2 mb-3 text-black"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-        <button type="button" onClick={login} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full py-3 rounded-lg transition">
-          Login
-        </button>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full py-3 rounded-lg transition">
+            Login
+          </button>
 
-        {error && <p className="text-red-500 mt-3">{error}</p>}
+          {error && <p className="text-red-500 mt-3">{error}</p>}
+        </form>
       </div>
     </div>
   );

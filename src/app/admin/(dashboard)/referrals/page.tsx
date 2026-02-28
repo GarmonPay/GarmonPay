@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -16,7 +16,7 @@ function tierLabel(t: string) {
 }
 
 export default function AdminReferralsPage() {
-  const session = getAdminSession();
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [config, setConfig] = useState<Array<{ tier: string; percentage: number }>>([]);
   const [totalPaidCents, setTotalPaidCents] = useState(0);
   const [activeReferralSubs, setActiveReferralSubs] = useState(0);
@@ -25,6 +25,10 @@ export default function AdminReferralsPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [editPct, setEditPct] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getAdminSessionAsync().then(setSession);
+  }, []);
 
   function load() {
     if (!session) return;

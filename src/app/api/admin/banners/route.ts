@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 import {
   listAllBanners,
@@ -8,19 +8,13 @@ import {
   type BannerRow,
 } from "@/lib/banners-db";
 
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
-
 /** GET /api/admin/banners — list all banners with optional owner email. */
 export async function GET(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
-  if (!createAdminClient()) {
+  const client = createAdminClient();
+  if (!client) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
   try {
@@ -28,7 +22,6 @@ export async function GET(request: Request) {
     const ownerIds = Array.from(new Set((banners as BannerRow[]).map((b) => b.owner_user_id).filter(Boolean))) as string[];
     const emails = new Map<string, string>();
     if (ownerIds.length > 0) {
-      const client = createAdminClient()!;
       const { data: users } = await client.from("users").select("id, email").in("id", ownerIds);
       (users ?? []).forEach((u: { id: string; email: string }) => emails.set(u.id, u.email));
     }
@@ -39,13 +32,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ banners: list });
   } catch (e) {
     console.error("Admin list banners error:", e);
-    return NextResponse.json({ message: "Failed to load" }, { status: 500 });
+    return NextResponse.json({ banners: [] });
   }
 }
 
 /** PATCH /api/admin/banners — approve, pause, or delete. */
 export async function PATCH(request: Request) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {

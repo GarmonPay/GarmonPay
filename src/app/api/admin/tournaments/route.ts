@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
-import { findUserById, hasAdminAccess } from "@/lib/auth-store";
+import { isAdmin } from "@/lib/admin-auth";
 import {
   listAllTournaments,
   createTournament,
   updateTournament,
-  endTournament,
 } from "@/lib/tournament-db";
-
-function isAdmin(request: Request): boolean {
-  const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  return !!(user && hasAdminAccess(user));
-}
 
 /** GET /api/admin/tournaments — list all tournaments. */
 export async function GET(request: Request) {
-  if (!isAdmin(request)) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   try {
     const tournaments = await listAllTournaments();
     return NextResponse.json({ tournaments });
@@ -28,7 +20,7 @@ export async function GET(request: Request) {
 
 /** POST /api/admin/tournaments — create tournament. */
 export async function POST(request: Request) {
-  if (!isAdmin(request)) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   let body: { name?: string; entry_fee?: number; prize_pool?: number; start_date?: string; end_date?: string };
   try {
     body = await request.json();
@@ -52,7 +44,7 @@ export async function POST(request: Request) {
 
 /** PATCH /api/admin/tournaments — update tournament (body: id, name?, entry_fee?, prize_pool?, start_date?, end_date?, status?). */
 export async function PATCH(request: Request) {
-  if (!isAdmin(request)) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   let body: { id?: string; name?: string; entry_fee?: number; prize_pool?: number; start_date?: string; end_date?: string; status?: string };
   try {
     body = await request.json();
