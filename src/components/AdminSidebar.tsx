@@ -7,7 +7,9 @@ import { createBrowserClient } from "@/lib/supabase";
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/deposits", label: "Deposits" },
   { href: "/admin/withdrawals", label: "Withdrawals" },
+  { href: "/admin/transactions", label: "Transactions" },
   { href: "/admin/rewards", label: "Rewards" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/ads", label: "Ads" },
@@ -28,6 +30,10 @@ export function AdminSidebar() {
   function handleLogout() {
     const supabase = createBrowserClient();
     if (supabase) supabase.auth.signOut();
+    const secure = typeof window !== "undefined" && window.location?.protocol === "https:";
+    let cookie = "sb-access-token=; path=/; max-age=0; SameSite=Lax";
+    if (secure) cookie += "; Secure";
+    document.cookie = cookie;
     window.location.href = "/admin/login";
   }
 

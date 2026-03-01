@@ -28,14 +28,14 @@ function WalletContent() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
       else if (session?.userId) headers["X-User-Id"] = session.userId;
-      const res = await fetch("/api/stripe/add-funds", {
+      const res = await fetch("/api/wallet/deposit", {
         method: "POST",
         headers,
         body: JSON.stringify({ amount }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 503 || !data?.url) {
-        setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+        setDepositError(data?.message || "Deposit is unavailable. Check server configuration.");
         return;
       }
       window.location.href = data.url;
@@ -54,11 +54,11 @@ function WalletContent() {
 
   useEffect(() => {
     if (!user?.accessToken) return;
-    fetch("/api/dashboard", {
+    fetch("/api/wallet/balance", {
       headers: { Authorization: `Bearer ${user.accessToken}` },
     })
       .then((res) => (res.ok ? res.json() : Promise.resolve({ balanceCents: 0 })))
-      .then((data) => setBalanceCents(data.balanceCents ?? 0))
+      .then((data) => setBalanceCents(data.balanceCents ?? data.balance ?? 0))
       .catch(() => setBalanceCents(0));
   }, [user?.accessToken, success]);
 

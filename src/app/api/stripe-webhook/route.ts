@@ -28,8 +28,10 @@ export async function POST(request: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const userId = (session.metadata?.user_id ?? session.client_reference_id) as string | null;
-    const email = (session.customer_email ?? session.metadata?.email) as string;
+    const metadataUserId = (session.metadata?.user_id ?? session.client_reference_id) as string | null;
+    const customerEmail = String(session.customer_email ?? session.metadata?.email ?? "")
+      .trim()
+      .toLowerCase();
     const productType = (session.metadata?.product_type as string) ?? "payment";
     const supabase = createAdminClient();
 
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
       const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
       const membershipTierRaw = String(session.metadata?.tier ?? "pro").toLowerCase();
       const membershipTier = membershipTierRaw === "vip" || membershipTierRaw === "starter" ? membershipTierRaw : "pro";
-      if (supabase && userId) {
+      if (supabase && metadataUserId) {
         try {
           const stripe = getStripe();
           const sub = await stripe.subscriptions.retrieve(subId) as Stripe.Subscription;
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
           const periodEnd = (sub as { current_period_end?: number }).current_period_end;
           await supabase.from("stripe_subscriptions").upsert(
             {
-              user_id: userId,
+              user_id: metadataUserId,
               stripe_subscription_id: sub.id,
               stripe_price_id: priceId,
               status: sub.status as "active" | "past_due" | "canceled" | "incomplete" | "trialing",
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
             },
             { onConflict: "stripe_subscription_id" }
           );
-          await supabase.from("users").update({ membership: membershipTier, updated_at: new Date().toISOString() }).eq("id", userId);
+          await supabase.from("users").update({ membership: membershipTier, updated_at: new Date().toISOString() }).eq("id", metadataUserId);
         } catch (e) {
           console.error("Stripe webhook: subscription save error", e);
         }
@@ -70,10 +72,28 @@ export async function POST(request: Request) {
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
     const transactionId = paymentIntentId ?? sessionId;
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
-    // Backward compatibility: older add-funds sessions used product_type="payment".
-    const shouldCreditWallet = !!userId && amountTotal > 0 && (productType === "wallet_fund" || productType === "payment");
 
     if (supabase) {
+      let resolvedUserId: string | null = metadataUserId;
+      if (customerEmail) {
+        const byEmail = await supabase
+          .from("users")
+          .select("id")
+          .ilike("email", customerEmail)
+          .maybeSingle();
+        if (byEmail.data?.id) {
+          resolvedUserId = (byEmail.data as { id: string }).id;
+        } else if (byEmail.error) {
+          console.error("Stripe webhook: user lookup by email error", byEmail.error);
+        }
+      }
+
+      // Backward compatibility: older add-funds sessions used product_type="payment".
+      const shouldCreditWallet =
+        !!resolvedUserId &&
+        amountTotal > 0 &&
+        (productType === "wallet_fund" || productType === "payment");
+
       let alreadyProcessed = false;
       const { data: existingPayment, error: existingPaymentError } = await supabase
         .from("stripe_payments")
@@ -89,8 +109,8 @@ export async function POST(request: Request) {
 
       if (!alreadyProcessed) {
         const { error } = await supabase.from("stripe_payments").insert({
-          user_id: userId || null,
-          email: email || "unknown",
+          user_id: resolvedUserId || null,
+          email: customerEmail || "unknown",
           amount_cents: amountTotal,
           currency,
           transaction_id: transactionId,
@@ -109,33 +129,69 @@ export async function POST(request: Request) {
       }
 
       if (!alreadyProcessed && shouldCreditWallet) {
-        const { error: rpcError } = await supabase.rpc("increment_user_balance", {
-          p_user_id: userId,
-          p_amount_cents: amountTotal,
-        });
-        if (rpcError) {
-          console.error("Stripe webhook: increment_user_balance error", rpcError);
-          const { data: userRow, error: userFetchError } = await supabase
+        const walletUserId = resolvedUserId as string;
+        let currentBalance = 0;
+        let currentTotalDeposits = 0;
+        let hasTotalDeposits = true;
+
+        const userWithTotals = await supabase
+          .from("users")
+          .select("balance, total_deposits")
+          .eq("id", walletUserId)
+          .maybeSingle();
+
+        if (!userWithTotals.error && userWithTotals.data) {
+          currentBalance = Number((userWithTotals.data as { balance?: number }).balance ?? 0);
+          currentTotalDeposits = Number((userWithTotals.data as { total_deposits?: number }).total_deposits ?? 0);
+        } else {
+          hasTotalDeposits = false;
+          if (userWithTotals.error) {
+            console.error("Stripe webhook: users(balance,total_deposits) fetch error", userWithTotals.error);
+          }
+          const fallback = await supabase
             .from("users")
             .select("balance")
-            .eq("id", userId)
-            .single();
-          if (!userFetchError && userRow) {
-            const currentBalance = Number((userRow as { balance?: number }).balance ?? 0);
-            const { error: updateError } = await supabase
+            .eq("id", walletUserId)
+            .maybeSingle();
+          if (!fallback.error && fallback.data) {
+            currentBalance = Number((fallback.data as { balance?: number }).balance ?? 0);
+          } else {
+            console.error("Stripe webhook: users(balance) fetch error", fallback.error);
+          }
+        }
+
+        if (currentBalance || currentBalance === 0) {
+          const updatePayload: Record<string, unknown> = {
+            balance: currentBalance + amountTotal,
+            updated_at: new Date().toISOString(),
+          };
+          if (hasTotalDeposits) {
+            updatePayload.total_deposits = currentTotalDeposits + amountTotal;
+          }
+
+          const updateUser = await supabase
+            .from("users")
+            .update(updatePayload)
+            .eq("id", walletUserId);
+          if (updateUser.error && hasTotalDeposits) {
+            // Retry for environments where total_deposits column may not yet exist.
+            const fallbackUpdate = await supabase
               .from("users")
-              .update({ balance: currentBalance + amountTotal, updated_at: new Date().toISOString() })
-              .eq("id", userId);
-            if (updateError) {
-              console.error("Stripe webhook: fallback users.balance update error", updateError);
+              .update({
+                balance: currentBalance + amountTotal,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", walletUserId);
+            if (fallbackUpdate.error) {
+              console.error("Stripe webhook: users balance update fallback error", fallbackUpdate.error);
             }
-          } else if (userFetchError) {
-            console.error("Stripe webhook: fallback users.balance fetch error", userFetchError);
+          } else if (updateUser.error) {
+            console.error("Stripe webhook: users update error", updateUser.error);
           }
         }
 
         const { error: txError } = await supabase.from("transactions").insert({
-          user_id: userId,
+          user_id: walletUserId,
           type: "deposit",
           amount: amountTotal,
           status: "completed",
@@ -145,6 +201,15 @@ export async function POST(request: Request) {
         if (txError) {
           console.error("Stripe webhook: insert transactions deposit error", txError);
         }
+
+        await supabase
+          .from("deposits")
+          .insert({
+            user_id: walletUserId,
+            amount: amountTotal,
+            status: "completed",
+            stripe_session: sessionId,
+          });
       }
     }
   }

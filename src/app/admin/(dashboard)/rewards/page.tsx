@@ -28,18 +28,27 @@ export default function AdminRewardsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/transactions`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/transactions`, {
+      headers: {
+        "X-Admin-Id": session.adminId,
+        ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+      },
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
       })
-      .then((data: TxRow[]) => {
-        const list = Array.isArray(data) ? data : [];
-        setTransactions(list.filter((t) => t.type === "reward"));
+      .then((data: TxRow[] | { transactions?: TxRow[] }) => {
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { transactions?: TxRow[] }).transactions)
+            ? (data as { transactions: TxRow[] }).transactions
+            : [];
+        setTransactions(list.filter((t) => t.type === "reward" || t.type === "earning"));
       })
       .catch(() => setError("Failed to load reward activity"))
       .finally(() => setLoading(false));
-  }, [session?.adminId]);
+  }, [session]);
 
   return (
     <div className="p-6">

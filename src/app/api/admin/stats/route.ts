@@ -52,12 +52,26 @@ export async function GET(request: Request) {
     totalBalance += Number(r?.balance ?? 0);
   });
 
-  // 3) Total deposits: sum from public.deposits (amount in dollars) + fallback to transactions (cents)
+  // 3) Total deposits (cents): prefer users.total_deposits, then transactions type=deposit.
   let totalDepositsCents = 0;
-  const { data: depositsRows, error: depositsError } = await supabase.from("deposits").select("amount");
-  if (depositsError) console.error("Admin stats deposits error:", depositsError);
-  const totalDepositsDollars = (depositsRows ?? []).reduce((sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0), 0);
-  totalDepositsCents = Math.round(totalDepositsDollars * 100);
+  const userDepositRows = await supabase.from("users").select("total_deposits");
+  if (!userDepositRows.error) {
+    totalDepositsCents = (userDepositRows.data ?? []).reduce(
+      (sum: number, d: { total_deposits?: number | null }) => sum + Number(d?.total_deposits ?? 0),
+      0
+    );
+  } else {
+    const txDeposits = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("type", "deposit")
+      .eq("status", "completed");
+    if (txDeposits.error) console.error("Admin stats deposits error:", txDeposits.error);
+    totalDepositsCents = (txDeposits.data ?? []).reduce(
+      (sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0),
+      0
+    );
+  }
 
   let totalWithdrawalsCents = 0;
   try {

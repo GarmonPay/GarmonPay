@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
 import { generateReferralLink } from "@/lib/referrals";
-import { createBrowserClient } from "@/lib/supabase";
 import {
   getDashboard,
   getWithdrawals,
@@ -18,6 +17,12 @@ import {
 
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
+  return isToken
+    ? { Authorization: `Bearer ${accessTokenOrUserId}` }
+    : { "X-User-Id": accessTokenOrUserId };
 }
 
 export default function DashboardPage() {
@@ -44,19 +49,34 @@ export default function DashboardPage() {
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [balanceCentsFromSupabase, setBalanceCentsFromSupabase] = useState<number | null>(null);
 
-  async function fetchBalance() {
-    const supabase = createBrowserClient();
-    if (!supabase) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id) return;
-    const { data } = await supabase
-      .from("users")
-      .select("balance")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (data != null && typeof (data as { balance?: unknown }).balance !== "undefined") {
-      const balance = Number((data as { balance: number }).balance ?? 0);
-      setBalanceCentsFromSupabase(Math.round(balance));
+  async function fetchBalance(accessTokenOrUserId?: string, isToken = true) {
+    try {
+      let tokenOrId = accessTokenOrUserId;
+      let tokenMode = isToken;
+
+      if (!tokenOrId) {
+        const session = await getSessionAsync();
+        if (!session?.accessToken) return;
+        tokenOrId = session.accessToken;
+        tokenMode = true;
+      }
+
+      const res = await fetch("/api/wallet/balance", {
+        headers: authHeaders(tokenOrId, tokenMode),
+      });
+      if (!res.ok) return;
+      const payload = await res.json().catch(() => ({}));
+      const cents =
+        typeof (payload as { balanceCents?: unknown }).balanceCents === "number"
+          ? Number((payload as { balanceCents: number }).balanceCents)
+          : typeof (payload as { balance?: unknown }).balance === "number"
+            ? Number((payload as { balance: number }).balance)
+            : null;
+      if (cents != null) {
+        setBalanceCentsFromSupabase(Math.round(cents));
+      }
+    } catch {
+      // Non-fatal: dashboard can still render with API dashboard payload.
     }
   }
 
@@ -75,7 +95,7 @@ export default function DashboardPage() {
       setWithdrawals(w.withdrawals ?? []);
       setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
       setActivities("activities" in a ? a.activities : []);
-      fetchBalance();
+      if (isToken) fetchBalance(tokenOrId, isToken);
     });
   }
 
@@ -133,7 +153,7 @@ export default function DashboardPage() {
           if (aRes.status === "fulfilled" && aRes.value && typeof aRes.value === "object" && "activities" in aRes.value) {
             setActivities((aRes.value as { activities?: typeof activities }).activities ?? []);
           }
-          fetchBalance();
+          if (isToken) fetchBalance(tokenOrId, isToken);
         });
       })
       .catch((err) => {
@@ -248,14 +268,14 @@ export default function DashboardPage() {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
     else if (session?.userId) headers["X-User-Id"] = session.userId;
-    const res = await fetch("/api/stripe/add-funds", {
+    const res = await fetch("/api/wallet/deposit", {
       method: "POST",
       headers,
       body: JSON.stringify({ amount }),
     });
     const data = await res.json();
     if (data?.url) window.location.href = data.url;
-    else if (data?.error) setCheckoutError(data.error);
+    else if (data?.message) setCheckoutError(data.message);
   };
 
   const handleDeposit = async () => {

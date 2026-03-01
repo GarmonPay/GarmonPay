@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
+import { listAllTransactions } from "@/lib/transactions-db";
 
 /** GET /api/admin/transactions — list all transactions (admin only). */
 export async function GET(request: Request) {
@@ -13,14 +14,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  try {
+    const transactions = await listAllTransactions();
+    return NextResponse.json({ transactions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load transactions";
+    return NextResponse.json({ message, transactions: [] }, { status: 500 });
   }
-
-  return NextResponse.json(data ?? []);
 }

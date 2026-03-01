@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id")
+    .select("id, balance")
     .eq("id", userId)
     .single();
 
@@ -48,13 +48,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
 
-  await supabase.from("transactions").insert({
-    user_id: userId,
-    type: "deposit",
-    amount: amountCents,
-    status: "completed",
-    description: "Admin add funds",
+  const rpcCredit = await supabase.rpc("increment_user_balance", {
+    p_user_id: userId,
+    p_amount_cents: amountCents,
   });
 
-  return NextResponse.json({ success: true, amountCents });
+  if (rpcCredit.error) {
+    const currentBalance = Number((user as { balance?: number }).balance ?? 0);
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({
+        balance: currentBalance + amountCents,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+    if (updateError) {
+      return NextResponse.json({ message: updateError.message }, { status: 500 });
+    }
+  }
+
+  const { error: txError } = await supabase.from("transactions").insert({
+    user_id: userId,
+    type: "admin_credit",
+    amount: amountCents,
+    status: "completed",
+    description: "Admin manual fund",
+  });
+  if (txError) {
+    return NextResponse.json({ message: txError.message }, { status: 500 });
+  }
+
+  const { data: updatedUser } = await supabase
+    .from("users")
+    .select("balance")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return NextResponse.json({
+    success: true,
+    userId,
+    amountCents,
+    balance: Number((updatedUser as { balance?: number } | null)?.balance ?? 0),
+  });
 }

@@ -42,7 +42,12 @@ export default function AdminWithdrawalsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/withdrawals`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/withdrawals?status=pending`, {
+      headers: {
+        "X-Admin-Id": session.adminId,
+        ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+      },
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -67,6 +72,7 @@ export default function AdminWithdrawalsPage() {
         headers: {
           "Content-Type": "application/json",
           "X-Admin-Id": session.adminId,
+          ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         },
         body: JSON.stringify({ id, status }),
       });
@@ -87,7 +93,7 @@ export default function AdminWithdrawalsPage() {
     <div className="p-6">
       <h1 className="text-2xl font-bold text-white mb-2">Withdrawals</h1>
       <p className="text-[#9ca3af] mb-6">
-        Review and approve, reject, or mark as paid. Rejecting refunds the user&apos;s balance.
+        Review pending withdrawals and either approve or reject.
       </p>
       {actionError && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{actionError}</div>
@@ -98,7 +104,7 @@ export default function AdminWithdrawalsPage() {
       {loading ? (
         <div className="text-[#9ca3af]">Loading…</div>
       ) : withdrawals.length === 0 ? (
-        <div className="text-[#9ca3af]">No withdrawal requests.</div>
+        <div className="text-[#9ca3af]">No pending withdrawal requests.</div>
       ) : (
         <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
@@ -160,25 +166,7 @@ export default function AdminWithdrawalsPage() {
                           >
                             Reject
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStatus(w.id, "paid")}
-                            disabled={updatingId === w.id}
-                            className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
-                          >
-                            Mark paid
-                          </button>
                         </div>
-                      )}
-                      {w.status === "approved" && (
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(w.id, "paid")}
-                          disabled={updatingId === w.id}
-                          className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
-                        >
-                          Mark paid
-                        </button>
                       )}
                     </td>
                   </tr>
