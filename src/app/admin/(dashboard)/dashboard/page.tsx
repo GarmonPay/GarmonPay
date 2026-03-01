@@ -16,7 +16,6 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [statsMessage, setStatsMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getAdminSessionAsync().then(setSession);
@@ -40,36 +39,39 @@ export default function Dashboard() {
   async function load() {
     if (!session) return;
     setStatsError(null);
-    setStatsMessage(null);
     const headers = {
       "X-Admin-Id": session.adminId,
       ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
     };
-    // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
-    const dashboardRes = await fetch("/api/admin/dashboard", { headers });
-    const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
-    const totalUsers = dashboardRes.ok ? (dashboardData.totalUsers ?? 0) : 0;
-    const totalDeposits = dashboardRes.ok ? (dashboardData.totalDeposits ?? 0) : 0;
-    if (!dashboardRes.ok) {
-      setStatsError(dashboardData?.message ?? `Dashboard metrics failed (${dashboardRes.status}). Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.`);
+    try {
+      const statsRes = await fetch("/api/admin/stats", { headers });
+      const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
+      if (!statsRes.ok) {
+        setStatsError(statsData?.message ?? `Stats failed (${statsRes.status}).`);
+      }
+      setStats({
+        totalUsers: statsRes.ok ? (statsData.totalUsers ?? 0) : 0,
+        totalDeposits: statsRes.ok ? (statsData.totalDeposits ?? 0) : 0,
+        totalWithdrawals: statsRes.ok ? (statsData.totalWithdrawals ?? 0) : 0,
+        totalBalance: statsRes.ok ? (statsData.totalBalance ?? 0) : 0,
+        totalProfit: statsRes.ok ? (statsData.totalProfit ?? 0) : 0,
+        totalRevenue: statsRes.ok ? (statsData.totalRevenue ?? 0) : 0,
+        recentTransactions: statsRes.ok && Array.isArray(statsData.recentTransactions) ? statsData.recentTransactions : [],
+      });
+    } catch {
+      setStatsError("Failed to load admin stats.");
+      setStats({
+        totalUsers: 0,
+        totalDeposits: 0,
+        totalWithdrawals: 0,
+        totalBalance: 0,
+        totalProfit: 0,
+        totalRevenue: 0,
+        recentTransactions: [],
+      });
+    } finally {
+      setLoading(false);
     }
-    // Other metrics and recent transactions from /api/admin/stats
-    const statsRes = await fetch("/api/admin/stats", { headers });
-    const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
-    if (!statsRes.ok && !dashboardRes.ok) {
-      setStatsError((s) => s || statsData?.message || `Stats failed (${statsRes.status}).`);
-    }
-    if (statsRes.ok && statsData.message) setStatsMessage(statsData.message);
-    setStats({
-      totalUsers,
-      totalDeposits,
-      totalWithdrawals: statsRes.ok ? (statsData.totalWithdrawals ?? 0) : 0,
-      totalBalance: statsRes.ok ? (statsData.totalBalance ?? 0) : 0,
-      totalProfit: statsRes.ok ? (statsData.totalProfit ?? 0) : 0,
-      totalRevenue: statsRes.ok ? (statsData.totalRevenue ?? 0) : 0,
-      recentTransactions: statsRes.ok && Array.isArray(statsData.recentTransactions) ? statsData.recentTransactions : [],
-    });
-    setLoading(false);
   }
 
   if (!session) {
@@ -101,11 +103,6 @@ export default function Dashboard() {
             <button type="button" onClick={() => { setLoading(true); load(); }} className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium">
               Retry
             </button>
-          </div>
-        )}
-        {statsMessage && !statsError && (
-          <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-blue-200 text-sm">
-            {statsMessage}
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin-auth";
-import { createAdminClient } from "@/lib/supabase";
-import { getPlatformTotals, listAllTransactions } from "@/lib/transactions-db";
 
 /** GET /api/admin/stats — real data from public.users, deposits, transactions. */
 export async function GET(request: Request) {
@@ -12,16 +10,7 @@ export async function GET(request: Request) {
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  let supabase = createAdminClient();
-  let usingAnonKey = false;
-  if (!supabase && url && anonKey) {
-    supabase = createClient(url, anonKey);
-    usingAnonKey = true;
-  }
-
-  if (!supabase) {
+  if (!url || !serviceKey) {
     return NextResponse.json(
       {
         totalUsers: 0,
@@ -31,11 +20,13 @@ export async function GET(request: Request) {
         totalProfit: 0,
         totalRevenue: 0,
         recentTransactions: [],
-        message: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. For full stats set SUPABASE_SERVICE_ROLE_KEY.",
+        message: "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY on the server.",
       },
       { status: 503 }
     );
   }
+
+  const supabase = createClient(url, serviceKey);
 
   // 1) User count from public.users
   const { count, error: countError } = await supabase
@@ -52,7 +43,7 @@ export async function GET(request: Request) {
     totalBalance += Number(r?.balance ?? 0);
   });
 
-  // 3) Total deposits: sum from public.deposits (amount in dollars) + fallback to transactions (cents)
+  // 3) Total deposits: sum from public.deposits (amount in dollars)
   let totalDepositsCents = 0;
   const { data: depositsRows, error: depositsError } = await supabase.from("deposits").select("amount");
   if (depositsError) console.error("Admin stats deposits error:", depositsError);
@@ -72,25 +63,42 @@ export async function GET(request: Request) {
     // ignore
   }
   let recentTransactions: { id: string; user_id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[] = [];
-  if (serviceKey) {
-    try {
-      const totals = await getPlatformTotals();
-      if (totalDepositsCents === 0) totalDepositsCents = totals.totalDepositsCents;
-      if (totalWithdrawalsCents === 0) totalWithdrawalsCents = totals.totalWithdrawalsCents;
-      const all = await listAllTransactions();
-      recentTransactions = all.slice(0, 50).map((r) => ({
-        id: r.id,
-        user_id: r.user_id,
-        type: r.type,
-        amount: r.amount,
-        status: r.status,
-        description: r.description ?? null,
-        created_at: r.created_at,
-        user_email: (r as { user_email?: string }).user_email,
-      }));
-    } catch (e) {
-      console.error("Admin stats transactions error:", e);
+  try {
+    const { data: txRows, error: txError } = await supabase
+      .from("transactions")
+      .select("id, user_id, type, amount, status, description, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (txError) throw txError;
+    const transactions = (txRows ?? []) as {
+      id: string;
+      user_id: string;
+      type: string;
+      amount: number;
+      status: string;
+      description: string | null;
+      created_at: string;
+    }[];
+    const userIds = Array.from(new Set(transactions.map((row) => row.user_id).filter(Boolean)));
+    const emailByUserId = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: usersData, error: usersError } = await supabase
+        .from("users")
+        .select("id, email")
+        .in("id", userIds);
+      if (usersError) throw usersError;
+      for (const user of usersData ?? []) {
+        const id = String((user as { id?: string }).id ?? "");
+        const email = (user as { email?: string | null }).email;
+        if (id && email) emailByUserId.set(id, email);
+      }
     }
+    recentTransactions = transactions.map((tx) => ({
+      ...tx,
+      user_email: emailByUserId.get(tx.user_id),
+    }));
+  } catch (e) {
+    console.error("Admin stats transactions error:", e);
   }
 
   // 4) Revenue
@@ -127,6 +135,5 @@ export async function GET(request: Request) {
     totalProfit: totalProfitCents,
     totalRevenue: totalRevenueCents,
     recentTransactions,
-    ...(usingAnonKey && { message: "Set SUPABASE_SERVICE_ROLE_KEY in Vercel for full admin stats (users/deposits may be limited by RLS)." }),
   });
 }
