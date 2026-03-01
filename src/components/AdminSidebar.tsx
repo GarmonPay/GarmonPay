@@ -7,9 +7,11 @@ import { createBrowserClient } from "@/lib/supabase";
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/withdrawals", label: "Withdrawals" },
+  { href: "/admin/rewards", label: "Rewards" },
+  { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/ads", label: "Ads" },
   { href: "/admin/banners", label: "Banners" },
-  { href: "/admin/withdrawals", label: "Withdrawals" },
   { href: "/admin/earnings", label: "Earnings" },
   { href: "/admin/profit", label: "Profit" },
   { href: "/admin/revenue", label: "Revenue" },
