@@ -55,9 +55,13 @@ export default function AdminLogin() {
     if (!meRes.ok || !meData?.ok) {
       await supabase.auth.signOut();
       if (meRes.status === 403) {
-        setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users.");
+        setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users. Run the SQL in Supabase: UPDATE public.users SET role = 'admin' WHERE email = 'admin123@garmonpay.com';");
+      } else if (meRes.status === 401) {
+        setError("Session invalid. Try logging in again.");
+      } else if (meRes.status === 503) {
+        setError("Server configuration error. Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel.");
       } else {
-        setError("Could not verify admin access. Try again.");
+        setError(meData?.message || "Could not verify admin access. Try again.");
       }
       setLoading(false);
       return;
