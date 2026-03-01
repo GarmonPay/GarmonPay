@@ -3,6 +3,30 @@ import { createAdminClient } from "@/lib/supabase";
 
 const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 
+async function findAuthUserIdByEmail(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  email: string
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+
+  // Supabase Auth Admin has listUsers pagination; scan pages to locate email.
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 200,
+    });
+    if (error) {
+      console.error("Ensure admin listUsers error:", error);
+      return null;
+    }
+    const users = data?.users ?? [];
+    const match = users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    if (match?.id) return match.id;
+    if (users.length < 200) break;
+  }
+  return null;
+}
+
 /**
  * One-time setup: ensure an admin user exists in Supabase Auth and public.users.
  * Only allows the fixed admin email. Creates the user if missing and sets role=admin.
@@ -25,38 +49,75 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Server not configured" }, { status: 503 });
     }
 
-    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-      email,
+    let userId = await findAuthUserIdByEmail(supabase, email);
+
+    // 1) Create admin in Supabase Auth if not exists.
+    if (!userId) {
+      const { data: created, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+      if (createError) {
+        const msg = (createError.message || "").toLowerCase();
+        if (!msg.includes("already") && !msg.includes("registered")) {
+          return NextResponse.json(
+            { message: createError.message || "Failed to create admin auth user" },
+            { status: 400 }
+          );
+        }
+        // Race-safe fallback when account already exists.
+        userId = await findAuthUserIdByEmail(supabase, email);
+      } else {
+        userId = created?.user?.id ?? null;
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Could not resolve admin auth user id" },
+        { status: 500 }
+      );
+    }
+
+    // Keep password in sync for this bootstrap endpoint.
+    const { error: updatePwError } = await supabase.auth.admin.updateUserById(userId, {
       password,
       email_confirm: true,
     });
-
-    let userId: string;
-
-    if (createError) {
-      const msg = createError.message || "";
-      if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("registered")) {
-        const { data: existing } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
-        if (!existing) {
-          return NextResponse.json({ message: "User exists in Auth but no profile. Add a row in public.users with role='admin'." }, { status: 400 });
-        }
-        userId = (existing as { id: string }).id;
-        const { error: updatePwError } = await supabase.auth.admin.updateUserById(userId, { password });
-        if (updatePwError) {
-          return NextResponse.json({ message: "Could not set password: " + updatePwError.message }, { status: 400 });
-        }
-      } else {
-        return NextResponse.json({ message: createError.message || "Failed to create user" }, { status: 400 });
-      }
-    } else if (newUser?.user?.id) {
-      userId = newUser.user.id;
-    } else {
-      return NextResponse.json({ message: "Failed to create user" }, { status: 500 });
+    if (updatePwError) {
+      return NextResponse.json(
+        { message: `Could not set admin password: ${updatePwError.message}` },
+        { status: 400 }
+      );
     }
 
-    await supabase.from("users").update({ role: "admin", updated_at: new Date().toISOString() }).eq("id", userId);
+    // 2) Ensure public.users row exists and has role=admin.
+    const { error: profileError } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: userId,
+          email,
+          role: "admin",
+        },
+        { onConflict: "id" }
+      );
+    if (profileError) {
+      console.error("Ensure admin profile upsert error:", profileError);
+      return NextResponse.json(
+        { message: "Created auth user but failed to update public.users role" },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ ok: true, message: "Admin account ready. Sign in with the email and password you used." });
+    return NextResponse.json({
+      ok: true,
+      userId,
+      role: "admin",
+      message: "Admin account ready. Sign in with the email and password you used.",
+    });
   } catch (e) {
     console.error("Ensure admin error:", e);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
