@@ -5,20 +5,22 @@ const PRODUCTION_ORIGIN = "https://garmonpay.com";
 
 /** Check if request has a Supabase auth cookie (session). */
 function hasAuthCookie(request: NextRequest): boolean {
-  const token = request.cookies.get("sb-access-token")?.value;
-  if (token) return true;
-  const all = request.cookies.getAll();
-  const hasSupabaseAuth = all.some(
-    (c) => c.name.startsWith("sb-") && c.name.includes("auth") && c.value
-  );
-  return !!hasSupabaseAuth;
+  const token = request.cookies.get("sb-admin-token")?.value
+    ?? request.cookies.get("sb-access-token")?.value;
+  return !!token;
 }
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Allow all /admin routes through; server layout handles auth and redirect to /admin/login
+  // Guard admin pages early to avoid loading dashboard shell without a session cookie.
   if (pathname.startsWith("/admin")) {
+    if (pathname !== "/admin/login" && !hasAuthCookie(request)) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/admin/login";
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
     return NextResponse.next();
   }
 

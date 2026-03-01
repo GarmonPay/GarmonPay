@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail, getUserRole, hasAdminAccess, isSuperAdmin } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -13,22 +8,47 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
+
+    const client = createServerClient();
+    if (!client) {
+      return NextResponse.json({ message: "Auth not configured" }, { status: 503 });
+    }
+
+    const { data: signIn, error: signInError } = await client.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInError || !signIn.user || !signIn.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
-    if (!hasAdminAccess(user)) {
+
+    const adminClient = createAdminClient() ?? createServerClient(signIn.session.access_token);
+    if (!adminClient) {
+      return NextResponse.json({ message: "Admin verification unavailable" }, { status: 503 });
+    }
+
+    const { data: profile, error: profileError } = await adminClient
+      .from("users")
+      .select("role, is_super_admin")
+      .eq("id", signIn.user.id)
+      .maybeSingle();
+    if (profileError || !profile) {
       return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+    const row = profile as { role?: string; is_super_admin?: boolean };
+    const admin = row.role?.toLowerCase() === "admin" || !!row.is_super_admin;
+    if (!admin) {
+      return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8h for admin
+
+    const expiresAt = signIn.session.expires_at
+      ? new Date(signIn.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: signIn.user.id, email: signIn.user.email ?? email.trim() },
       expiresAt,
-      is_super_admin: isSuperAdmin(user),
+      is_super_admin: !!row.is_super_admin,
+      accessToken: signIn.session.access_token,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });

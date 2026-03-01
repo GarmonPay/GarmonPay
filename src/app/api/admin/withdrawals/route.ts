@@ -63,7 +63,6 @@ export async function PATCH(request: Request) {
     if (!result.success) {
       return NextResponse.json({ message: result.message ?? "Approve failed" }, { status: 400 });
     }
-    await markWithdrawalTransactionCompleted(id).catch(() => {});
     return NextResponse.json({ withdrawal: result.withdrawal ?? undefined, message: "Approved; fee recorded" });
   }
 

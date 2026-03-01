@@ -71,16 +71,18 @@ export async function POST(req: Request) {
     seenSessionIds.add(sessionId);
 
     const email = session.customer_email;
-    const amountTotal = session.amount_total ?? 0;
-    const amount = amountTotal / 100;
+    const metadataUserId = typeof session.metadata?.user_id === "string"
+      ? session.metadata.user_id
+      : (typeof session.client_reference_id === "string" ? session.client_reference_id : null);
+    const amountCents = session.amount_total ?? 0;
 
-    if (!email) {
+    if (!email && !metadataUserId) {
       result.skippedNoEmail += 1;
       result.skipped += 1;
       continue;
     }
 
-    if (amount <= 0) {
+    if (amountCents <= 0) {
       result.skipped += 1;
       continue;
     }
@@ -102,43 +104,96 @@ export async function POST(req: Request) {
       continue;
     }
 
-    const { data: user, error: userError } = await supabase
+    let userQuery = supabase
       .from("users")
       .select("id, balance, total_deposits")
-      .eq("email", email)
-      .single();
+      .limit(1);
+    if (metadataUserId) {
+      userQuery = userQuery.eq("id", metadataUserId);
+    } else {
+      userQuery = userQuery.eq("email", email);
+    }
+    const { data: user, error: userError } = await userQuery.single();
 
     if (userError || !user) {
       result.skippedUserNotFound += 1;
       result.skipped += 1;
-      result.errors.push(`User not found: ${email}`);
+      result.errors.push(`User not found: ${metadataUserId ?? email}`);
       continue;
     }
 
-    const newBalance = (Number(user.balance) || 0) + amount;
-    const newTotalDeposits = (Number(user.total_deposits) || 0) + amount;
+    const newBalance = (Number(user.balance) || 0) + amountCents;
+    const newTotalDeposits = (Number(user.total_deposits) || 0) + amountCents;
 
-    const { error: updateError } = await supabase
+    let { error: updateError } = await supabase
       .from("users")
       .update({
         balance: newBalance,
         total_deposits: newTotalDeposits,
+        updated_at: new Date().toISOString(),
       })
-      .eq("email", email);
+      .eq("id", user.id);
+    if (updateError && updateError.message?.toLowerCase().includes("total_deposits")) {
+      const retry = await supabase
+        .from("users")
+        .update({
+          balance: newBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+      updateError = retry.error;
+    }
 
     if (updateError) {
-      result.errors.push(`${email}: ${updateError.message}`);
+      result.errors.push(`${metadataUserId ?? email ?? user.id}: ${updateError.message}`);
       continue;
     }
 
     const { error: insertError } = await supabase.from("recovered_stripe_sessions").insert({
       session_id: sessionId,
       user_id: user.id,
-      amount,
+      amount: amountCents,
     });
 
     if (insertError) {
       result.errors.push(`Record recovery for ${sessionId}: ${insertError.message}`);
+    }
+
+    try {
+      const { data: existingTx } = await supabase
+        .from("transactions")
+        .select("id")
+        .eq("type", "deposit")
+        .eq("reference_id", sessionId)
+        .maybeSingle();
+      if (!existingTx) {
+        await supabase.from("transactions").insert({
+          user_id: user.id,
+          type: "deposit",
+          amount: amountCents,
+          status: "completed",
+          description: `Recovered Stripe checkout ${sessionId}`,
+          reference_id: sessionId,
+        });
+      }
+    } catch (txErr) {
+      const message = txErr instanceof Error ? txErr.message : "Unknown transaction recovery error";
+      result.errors.push(`Transaction recovery ${sessionId}: ${message}`);
+    }
+
+    try {
+      const { error: depositError } = await supabase.from("deposits").insert({
+        user_id: user.id,
+        amount: amountCents / 100,
+        status: "completed",
+        stripe_session: sessionId,
+        created_at: new Date().toISOString(),
+      });
+      if (depositError && (depositError as { code?: string }).code !== "23505") {
+        result.errors.push(`Deposit record ${sessionId}: ${depositError.message}`);
+      }
+    } catch {
+      // deposits table may differ between environments; transactions remain source of truth.
     }
 
     result.processed += 1;

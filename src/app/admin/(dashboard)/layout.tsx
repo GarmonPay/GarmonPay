@@ -10,7 +10,9 @@ export default async function AdminDashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("sb-access-token")?.value;
+  const token =
+    cookieStore.get("sb-admin-token")?.value ??
+    cookieStore.get("sb-access-token")?.value;
 
   if (!token) {
     redirect("/admin/login");

@@ -11,47 +11,84 @@ function hasAdminRole(row: { role?: string; is_super_admin?: boolean } | null | 
   return (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
 }
 
-/** Returns true if request has valid admin: X-Admin-Id matches a user in public.users with role = 'admin' or is_super_admin = true. */
-export async function isAdmin(request: Request): Promise<boolean> {
-  const adminId = request.headers.get("x-admin-id");
+export interface AdminAuthContext {
+  adminId: string;
+  email: string;
+  role: string;
+  isSuperAdmin: boolean;
+  accessToken: string;
+}
+
+function parseCookieValue(cookieHeader: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+  return match ? decodeURIComponent(match[1].trim()) : null;
+}
+
+function getTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-  // Preferred path: verify Bearer token identity, then verify admin role.
-  // This keeps admin API auth functional even if service role key is temporarily missing.
-  if (bearerToken) {
-    const userClient = createServerClient(bearerToken);
-    if (!userClient) return false;
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return false;
-    if (adminId && adminId !== user.id) return false;
-
-    const adminClient = createAdminClient();
-    const profileClient = adminClient ?? userClient;
-    const { data, error } = await profileClient
-      .from("users")
-      .select("role, is_super_admin")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (error || !data) {
-      if (error) console.error("Admin auth users query error:", error);
-      return false;
-    }
-    return hasAdminRole(data as { role?: string; is_super_admin?: boolean });
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
   }
 
-  if (!adminId) return false;
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  return (
+    parseCookieValue(cookieHeader, "sb-admin-token") ??
+    parseCookieValue(cookieHeader, "sb-access-token")
+  );
+}
+
+/**
+ * Returns validated admin auth context when request token belongs to a user whose
+ * public.users role is admin or is_super_admin=true.
+ */
+export async function getAdminAuthContext(request: Request): Promise<AdminAuthContext | null> {
+  const token = getTokenFromRequest(request);
+  if (!token) return null;
+
+  const userClient = createServerClient(token);
+  if (!userClient) return null;
+
+  const { data: { user }, error: authError } = await userClient.auth.getUser();
+  if (authError || !user) return null;
+
+  const adminIdHeader = request.headers.get("x-admin-id");
+  if (adminIdHeader && adminIdHeader !== user.id) {
+    return null;
+  }
 
   const adminClient = createAdminClient();
-  if (!adminClient) return false;
-  const { data, error } = await adminClient
+  const profileClient = adminClient ?? userClient;
+  const { data: profile, error: profileError } = await profileClient
     .from("users")
-    .select("role, is_super_admin")
-    .eq("id", adminId)
+    .select("role, is_super_admin, email")
+    .eq("id", user.id)
     .maybeSingle();
-  if (error || !data) {
-    if (error) console.error("Admin auth users query error:", error);
-    return false;
+
+  if (profileError || !profile) {
+    if (profileError) console.error("Admin auth users query error:", profileError);
+    return null;
   }
-  return hasAdminRole(data as { role?: string; is_super_admin?: boolean });
+
+  const row = profile as { role?: string; is_super_admin?: boolean; email?: string };
+  if (!hasAdminRole(row)) return null;
+
+  return {
+    adminId: user.id,
+    email: user.email ?? row.email ?? "",
+    role: row.role ?? "user",
+    isSuperAdmin: !!row.is_super_admin,
+    accessToken: token,
+  };
+}
+
+/** Returns true if request has valid admin auth context. */
+export async function isAdmin(request: Request): Promise<boolean> {
+  return !!(await getAdminAuthContext(request));
+}
+
+/** Returns true if request is authenticated as a super admin user. */
+export async function isSuperAdminRequest(request: Request): Promise<boolean> {
+  const ctx = await getAdminAuthContext(request);
+  return !!ctx?.isSuperAdmin;
 }

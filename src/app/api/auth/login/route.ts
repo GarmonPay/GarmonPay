@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail } from "@/lib/auth-store";
-import { createHash } from "crypto";
-import { createAdminClient } from "@/lib/supabase";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -14,45 +8,46 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+
+    const client = createServerClient();
+    if (!client) {
+      return NextResponse.json({ message: "Auth not configured" }, { status: 503 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
+
+    const { data: signIn, error: signInError } = await client.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInError || !signIn.user || !signIn.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
 
-    let role: "member" | "admin" = "member";
+    let role = "member";
     let is_super_admin = false;
     try {
-      const supabase = createAdminClient();
-      if (supabase) {
-        const { data: row } = await supabase
+      const adminClient = createAdminClient() ?? createServerClient(signIn.session.access_token);
+      if (adminClient) {
+        const { data: row } = await adminClient
           .from("users")
           .select("role, is_super_admin")
-          .eq("id", user.id)
+          .eq("id", signIn.user.id)
           .maybeSingle();
-        if (row && (row as { role?: string }).role === "admin") {
-          role = "admin";
-        } else if (row && (row as { role?: string }).role) {
-          role = (row as { role: "member" | "admin" }).role;
-        }
+        if (row && (row as { role?: string }).role) role = (row as { role: string }).role;
         is_super_admin = !!(row as { is_super_admin?: boolean } | null)?.is_super_admin;
       }
     } catch (_) {
       // keep default member
     }
-    if (role === "admin" && (user as { is_super_admin?: boolean }).is_super_admin) {
-      is_super_admin = true;
-    }
 
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = signIn.session.expires_at
+      ? new Date(signIn.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: signIn.user.id, email: signIn.user.email ?? email.trim() },
       expiresAt,
       role,
-      is_super_admin: role === "admin" ? is_super_admin : false,
+      is_super_admin: is_super_admin,
+      accessToken: signIn.session.access_token,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });

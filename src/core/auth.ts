@@ -88,11 +88,17 @@ export async function register(options: RegisterOptions): Promise<RegisterResult
     // Insert may fail (e.g. RLS); sync-user with service role will ensure row exists
   }
   try {
-    await fetch(`${typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sync-user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: data.user.id, email: data.user.email }),
-    });
+    const accessToken = data.session?.access_token;
+    if (accessToken) {
+      await fetch(`${typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sync-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ id: data.user.id, email: data.user.email }),
+      });
+    }
   } catch {
     // Best-effort sync
   }

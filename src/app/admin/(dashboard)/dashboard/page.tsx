@@ -28,7 +28,7 @@ export default function Dashboard() {
     (async () => {
       await fetch("/api/admin/sync-users", {
         headers,
-      });
+      }).catch(() => null);
       load();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,32 +38,43 @@ export default function Dashboard() {
     if (!session) return;
     setStatsError(null);
     setStatsMessage(null);
-    const headers = adminApiHeaders(session);
-    // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
-    const dashboardRes = await fetch("/api/admin/dashboard", { headers });
-    const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
-    const totalUsers = dashboardRes.ok ? (dashboardData.totalUsers ?? 0) : 0;
-    const totalDeposits = dashboardRes.ok ? (dashboardData.totalDeposits ?? 0) : 0;
-    if (!dashboardRes.ok) {
-      setStatsError(dashboardData?.message ?? `Dashboard metrics failed (${dashboardRes.status}). Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.`);
+    try {
+      const headers = adminApiHeaders(session);
+      const dashboardRes = await fetch("/api/admin/dashboard?limit=100", { headers });
+      const dashboardData = dashboardRes.ok
+        ? await dashboardRes.json()
+        : await dashboardRes.json().catch(() => ({}));
+      if (!dashboardRes.ok) {
+        setStatsError(dashboardData?.message ?? `Dashboard metrics failed (${dashboardRes.status}).`);
+      }
+      if (dashboardData?.message) setStatsMessage(dashboardData.message);
+      setStats({
+        totalUsers: dashboardRes.ok ? (dashboardData.totalUsers ?? 0) : 0,
+        totalDeposits: dashboardRes.ok ? (dashboardData.totalDeposits ?? 0) : 0,
+        totalWithdrawals: dashboardRes.ok ? (dashboardData.totalWithdrawals ?? 0) : 0,
+        totalBalance: dashboardRes.ok ? (dashboardData.totalBalance ?? 0) : 0,
+        totalProfit: dashboardRes.ok ? (dashboardData.totalProfit ?? 0) : 0,
+        totalRevenue: dashboardRes.ok ? (dashboardData.totalRevenue ?? 0) : 0,
+        recentTransactions: dashboardRes.ok
+          ? (Array.isArray(dashboardData.transactions)
+              ? dashboardData.transactions
+              : (Array.isArray(dashboardData.recentTransactions) ? dashboardData.recentTransactions : []))
+          : [],
+      });
+    } catch {
+      setStatsError("Failed to load dashboard metrics");
+      setStats({
+        totalUsers: 0,
+        totalDeposits: 0,
+        totalWithdrawals: 0,
+        totalBalance: 0,
+        totalProfit: 0,
+        totalRevenue: 0,
+        recentTransactions: [],
+      });
+    } finally {
+      setLoading(false);
     }
-    // Other metrics and recent transactions from /api/admin/stats
-    const statsRes = await fetch("/api/admin/stats", { headers });
-    const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
-    if (!statsRes.ok && !dashboardRes.ok) {
-      setStatsError((s) => s || statsData?.message || `Stats failed (${statsRes.status}).`);
-    }
-    if (statsRes.ok && statsData.message) setStatsMessage(statsData.message);
-    setStats({
-      totalUsers,
-      totalDeposits,
-      totalWithdrawals: statsRes.ok ? (statsData.totalWithdrawals ?? 0) : 0,
-      totalBalance: statsRes.ok ? (statsData.totalBalance ?? 0) : 0,
-      totalProfit: statsRes.ok ? (statsData.totalProfit ?? 0) : 0,
-      totalRevenue: statsRes.ok ? (statsData.totalRevenue ?? 0) : 0,
-      recentTransactions: statsRes.ok && Array.isArray(statsData.recentTransactions) ? statsData.recentTransactions : [],
-    });
-    setLoading(false);
   }
 
   if (!session) {

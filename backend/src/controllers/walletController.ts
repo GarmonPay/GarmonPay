@@ -17,11 +17,12 @@ export async function getWallet(req: Request, res: Response): Promise<void> {
     res.status(404).json({ message: 'Wallet not found' });
     return;
   }
-  const balance = Number((data as any).balance ?? 0);
-  const totalDeposits = Number((data as any).total_deposits ?? 0);
+  const balanceCents = Math.round(Number((data as any).balance ?? 0));
+  const totalDepositsCents = Math.round(Number((data as any).total_deposits ?? 0));
   res.json({
-    balance,
-    totalDeposits,
-    balanceCents: Math.round(balance * 100),
+    balanceCents,
+    totalDepositsCents,
+    balance: balanceCents / 100,
+    totalDeposits: totalDepositsCents / 100,
   });
 }
