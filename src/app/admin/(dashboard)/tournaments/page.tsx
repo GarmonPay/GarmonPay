@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -41,7 +41,7 @@ export default function AdminTournamentsPage() {
   function loadTournaments() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/tournaments`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/tournaments`, { headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load tournaments");
         return res.json();
@@ -77,7 +77,7 @@ export default function AdminTournamentsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
+          ...adminApiHeaders(session),
         },
         body: JSON.stringify(payload),
       });
@@ -107,7 +107,7 @@ export default function AdminTournamentsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
+          ...adminApiHeaders(session),
         },
         body: JSON.stringify({ tournamentId }),
       });

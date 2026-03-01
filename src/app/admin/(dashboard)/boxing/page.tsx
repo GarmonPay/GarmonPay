@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -17,7 +17,7 @@ export default function AdminBoxingPage() {
   useEffect(() => {
     if (!session) return;
     fetch(`${API_BASE}/admin/boxing/revenue`, {
-      headers: { "X-Admin-Id": session.adminId },
+      headers: adminApiHeaders(session),
     })
       .then((r) => (r.ok ? r.json() : { revenue: 0 }))
       .then((d) => {

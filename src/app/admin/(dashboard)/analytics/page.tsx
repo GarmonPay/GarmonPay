@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -26,7 +26,7 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/analytics?limit=200`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/analytics?limit=200`, { headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getGamificationConfig } from "@/lib/gamification";
-import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -43,7 +43,7 @@ export default function GamificationPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
+          ...adminApiHeaders(session),
         },
         body: JSON.stringify({ referral_reward: referralReward, spin_reward: spinReward }),
       });

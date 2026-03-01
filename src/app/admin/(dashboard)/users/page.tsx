@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 type UserRow = {
   id: string;
@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
     setError("");
     try {
       const res = await fetch("/api/admin/users", {
-        headers: { "X-Admin-Id": session!.adminId },
+        headers: adminApiHeaders(session),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -67,7 +67,7 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch("/api/admin/add-funds", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ userId: addFundsUser.id, amount }),
       });
       const data = await res.json().catch(() => ({}));

@@ -13,6 +13,14 @@ export interface AdminSession {
   accessToken?: string;
 }
 
+/** Headers for admin API calls. Include Bearer when available so isAdmin() works without service role key. */
+export function adminApiHeaders(session: AdminSession | null): Record<string, string> {
+  if (!session) return {};
+  const headers: Record<string, string> = { "X-Admin-Id": session.adminId };
+  if (session.accessToken) headers["Authorization"] = `Bearer ${session.accessToken}`;
+  return headers;
+}
+
 function getAccessTokenFromCookie(): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(/sb-access-token=([^;]+)/);

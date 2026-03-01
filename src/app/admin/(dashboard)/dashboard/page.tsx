@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders } from "@/lib/admin-supabase";
 
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
@@ -24,10 +24,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!session) return;
-    const headers = {
-      "X-Admin-Id": session.adminId,
-      ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-    };
+    const headers = adminApiHeaders(session);
     (async () => {
       await fetch("/api/admin/sync-users", {
         headers,
@@ -41,10 +38,7 @@ export default function Dashboard() {
     if (!session) return;
     setStatsError(null);
     setStatsMessage(null);
-    const headers = {
-      "X-Admin-Id": session.adminId,
-      ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-    };
+    const headers = adminApiHeaders(session);
     // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
     const dashboardRes = await fetch("/api/admin/dashboard", { headers });
     const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
