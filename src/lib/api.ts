@@ -94,7 +94,7 @@ export async function submitWithdrawalRequest(
   data: { amount: number; method: string; wallet_address: string }
 ) {
   return api<{ withdrawal: { id: string; amount: number; status: string; method: string; wallet_address: string; created_at: string }; message: string }>(
-    "/withdrawals",
+    "/wallet/withdraw",
     {
       method: "POST",
       headers: authHeaders(accessTokenOrUserId, isToken),

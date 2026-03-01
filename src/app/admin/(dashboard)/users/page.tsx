@@ -6,8 +6,8 @@ import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
 type UserRow = {
   id: string;
   email: string | null;
-  role?: string;
   balance?: number;
+  total_deposits?: number;
   created_at?: string;
 };
 
@@ -37,7 +37,10 @@ export default function AdminUsersPage() {
     setError("");
     try {
       const res = await fetch("/api/admin/users", {
-        headers: { "X-Admin-Id": session!.adminId },
+        headers: {
+          "X-Admin-Id": session!.adminId,
+          ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        },
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -67,7 +70,11 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch("/api/admin/add-funds", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Id": session.adminId,
+          ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        },
         body: JSON.stringify({ userId: addFundsUser.id, amount }),
       });
       const data = await res.json().catch(() => ({}));
@@ -131,8 +138,8 @@ export default function AdminUsersPage() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Email</th>
-                  <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Role</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Balance</th>
+                  <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Total Deposits</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Joined</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Actions</th>
                 </tr>
@@ -141,9 +148,11 @@ export default function AdminUsersPage() {
                 {filtered.map((u) => (
                   <tr key={u.id} className="border-b border-white/5">
                     <td className="py-3 pr-4 text-white font-medium truncate max-w-[200px]">{u.email ?? "—"}</td>
-                    <td className="py-3 pr-4 text-[#9ca3af] capitalize">{u.role ?? "user"}</td>
                     <td className="py-3 pr-4 text-[#10b981]">
                       ${typeof u.balance === "number" ? (u.balance / 100).toFixed(2) : "0.00"}
+                    </td>
+                    <td className="py-3 pr-4 text-[#9ca3af]">
+                      ${typeof u.total_deposits === "number" ? (u.total_deposits / 100).toFixed(2) : "0.00"}
                     </td>
                     <td className="py-3 pr-4 text-[#6b7280]">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
@@ -154,7 +163,7 @@ export default function AdminUsersPage() {
                         onClick={() => { setAddFundsUser(u); setAddFundsAmount(""); setAddFundsError(""); }}
                         className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white"
                       >
-                        Add funds
+                        Add Funds
                       </button>
                     </td>
                   </tr>
@@ -173,7 +182,7 @@ export default function AdminUsersPage() {
       {addFundsUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => !addFundsSubmitting && setAddFundsUser(null)}>
           <div className="rounded-xl bg-[#111827] border border-white/10 p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-1">Add funds</h3>
+            <h3 className="text-lg font-semibold text-white mb-1">Add Funds</h3>
             <p className="text-sm text-[#9ca3af] mb-4 truncate">{addFundsUser.email ?? addFundsUser.id}</p>
             <label className="block text-sm text-[#9ca3af] mb-1">Amount (USD)</label>
             <input

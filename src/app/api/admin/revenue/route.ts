@@ -66,7 +66,11 @@ export async function GET(request: Request) {
         .select("amount, created_at, fight_id")
         .eq("source", "fight")
         .gte("created_at", thirtyDaysAgo.toISOString()),
-      admin.from("transactions").select("amount").eq("type", "deposit"),
+      admin
+        .from("transactions")
+        .select("amount")
+        .eq("type", "deposit")
+        .eq("status", "completed"),
     ]);
 
     const { data: rows, error } = platformRes;

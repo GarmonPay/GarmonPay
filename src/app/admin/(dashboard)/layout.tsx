@@ -1,8 +1,20 @@
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createServerClient } from "@/lib/supabase";
-import { isAdmin } from "@/lib/admin";
 import { AdminDashboardShell } from "./AdminDashboardShell";
+
+function resolveOrigin(headerStore: { get(name: string): string | null }): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicit && explicit.startsWith("http")) {
+    return explicit.replace(/\/$/, "");
+  }
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const proto = headerStore.get("x-forwarded-proto") ?? "https";
+  if (!host) {
+    return "http://localhost:3000";
+  }
+  return `${proto}://${host}`;
+}
 
 export default async function AdminDashboardLayout({
   children,
@@ -10,39 +22,36 @@ export default async function AdminDashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
+  const headerStore = await headers();
   const token = cookieStore.get("sb-access-token")?.value;
 
   if (!token) {
     redirect("/admin/login");
   }
 
-  const supabase = createServerClient(token);
-  if (!supabase) {
+  const origin = resolveOrigin(headerStore);
+
+  let verifyRes: Response | null = null;
+  try {
+    verifyRes = await fetch(`${origin}/api/admin/verify`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
     redirect("/admin/login");
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
+  if (!verifyRes) {
     redirect("/admin/login");
   }
 
-  let admin = await isAdmin(user.id);
-  if (!admin) {
-    // Fallback for environments missing service role key: try checking current user's own row via auth token client.
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role, is_super_admin")
-      .eq("id", user.id)
-      .maybeSingle();
-    const row = profile as { role?: string; is_super_admin?: boolean } | null;
-    admin = (row?.role?.toLowerCase() === "admin") || !!row?.is_super_admin;
+  if (verifyRes.status === 401) {
+    redirect("/admin/login");
   }
 
-  if (!admin) {
+  const verifyData = (await verifyRes.json().catch(() => ({}))) as { isAdmin?: boolean };
+
+  if (!verifyData.isAdmin) {
     redirect("/dashboard");
   }
 

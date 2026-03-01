@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerClient, createAdminClient } from "@/lib/supabase";
+import { verifyAdminAccess } from "@/lib/admin-verify";
 
 /**
  * GET /api/auth/admin/me
@@ -10,36 +10,19 @@ import { createServerClient, createAdminClient } from "@/lib/supabase";
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!bearerToken) {
+
+  const result = await verifyAdminAccess(bearerToken);
+  if (!result.isAuthenticated || !result.userId) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  const supabase = createServerClient(bearerToken);
-  if (!supabase) {
-    return NextResponse.json({ ok: false }, { status: 503 });
-  }
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ ok: false }, { status: 401 });
-  }
-  const admin = createAdminClient();
-  const profileClient = admin ?? supabase;
-  const { data: profile, error: profileError } = await profileClient
-    .from("users")
-    .select("role, is_super_admin")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (profileError || !profile) {
+  if (!result.isAdmin) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
-  const row = profile as { role?: string; is_super_admin?: boolean };
-  const isAdmin = (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
-  if (!isAdmin) {
-    return NextResponse.json({ ok: false }, { status: 403 });
-  }
+
   return NextResponse.json({
     ok: true,
-    adminId: user.id,
-    email: user.email ?? "",
-    isSuperAdmin: !!row.is_super_admin,
+    adminId: result.userId,
+    email: result.email ?? "",
+    isSuperAdmin: result.isSuperAdmin,
   });
 }

@@ -13,6 +13,14 @@ function setSessionCookie(accessToken: string) {
   document.cookie = cookie;
 }
 
+function clearSessionCookie() {
+  if (typeof document === "undefined") return;
+  const secure = window.location?.protocol === "https:";
+  let cookie = "sb-access-token=; path=/; max-age=0; SameSite=Lax";
+  if (secure) cookie += "; Secure";
+  document.cookie = cookie;
+}
+
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,20 +54,24 @@ export default function AdminLogin() {
       return;
     }
 
-    // Use server-side admin check (bypasses RLS) so login works when client cannot read public.users
-    const meRes = await fetch("/api/auth/admin/me", {
+    // Verify role server-side via dedicated admin endpoint.
+    const verifyRes = await fetch("/api/admin/verify", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const meData = await meRes.json();
+    const verifyData = await verifyRes.json().catch(() => ({}));
 
-    if (!meRes.ok || !meData?.ok) {
+    if (verifyRes.status === 401) {
       await supabase.auth.signOut();
-      if (meRes.status === 403) {
-        setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users.");
-      } else {
-        setError("Could not verify admin access. Try again.");
-      }
+      clearSessionCookie();
+      setError("Could not verify your session. Please sign in again.");
       setLoading(false);
+      return;
+    }
+
+    if (!verifyData?.isAdmin) {
+      clearSessionCookie();
+      setLoading(false);
+      window.location.href = "/dashboard";
       return;
     }
 

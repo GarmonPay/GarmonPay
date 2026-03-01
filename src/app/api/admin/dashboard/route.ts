@@ -37,22 +37,33 @@ export async function GET(request: Request) {
   }
   const totalUsers = count ?? 0;
 
-  // TOTAL DEPOSITS: public.deposits sum of amount
-  const { data: depositsData, error: depositsError } = await supabase
-    .from("deposits")
-    .select("amount");
-  if (depositsError) {
-    console.error("Admin dashboard deposits error:", depositsError);
-    return NextResponse.json(
-      { totalUsers, totalDeposits: 0, message: depositsError.message },
-      { status: 500 }
+  // TOTAL DEPOSITS (cents): prefer users.total_deposits; fallback to transactions type=deposit.
+  let totalDeposits = 0;
+  const userDeposits = await supabase.from("users").select("total_deposits");
+  if (!userDeposits.error) {
+    totalDeposits = (userDeposits.data ?? []).reduce(
+      (sum: number, row: { total_deposits?: number | null }) =>
+        sum + Number(row?.total_deposits ?? 0),
+      0
+    );
+  } else {
+    const txDeposits = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("type", "deposit")
+      .eq("status", "completed");
+    if (txDeposits.error) {
+      console.error("Admin dashboard deposits error:", txDeposits.error);
+      return NextResponse.json(
+        { totalUsers, totalDeposits: 0, message: txDeposits.error.message },
+        { status: 500 }
+      );
+    }
+    totalDeposits = (txDeposits.data ?? []).reduce(
+      (sum: number, row: { amount?: number | null }) => sum + Number(row?.amount ?? 0),
+      0
     );
   }
-  const sumAmounts = (depositsData ?? []).reduce(
-    (sum: number, row: { amount?: number | null }) => sum + Number(row?.amount ?? 0),
-    0
-  );
-  const totalDeposits = Math.round(sumAmounts * 100);
 
   return NextResponse.json({ totalUsers, totalDeposits });
 }
