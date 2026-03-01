@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@/lib/supabase";
 
 /** Set session cookie so middleware allows access to /admin. */
 function setSessionCookie(accessToken: string) {
@@ -21,48 +20,38 @@ export default function AdminLogin() {
 
   async function login(e?: React.FormEvent) {
     e?.preventDefault();
-    const supabase = createBrowserClient();
-    if (!supabase) {
-      setError("Admin login is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      return;
-    }
     setLoading(true);
     setError("");
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+
+    const loginRes = await fetch("/api/auth/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+      }),
     });
+    const loginData = await loginRes.json().catch(() => null);
 
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-
-    const token = data.session?.access_token;
-    if (!token) {
-      setError("Invalid response from sign in.");
-      setLoading(false);
-      return;
-    }
-
-    // Use server-side admin check (bypasses RLS) so login works when client cannot read public.users
-    const meRes = await fetch("/api/auth/admin/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const meData = await meRes.json();
-
-    if (!meRes.ok || !meData?.ok) {
-      await supabase.auth.signOut();
-      if (meRes.status === 403) {
-        setError("Not an admin. Your account needs role=admin or is_super_admin=true in public.users. Run the SQL in Supabase: UPDATE public.users SET role = 'admin' WHERE email = 'admin123@garmonpay.com';");
-      } else if (meRes.status === 401) {
-        setError("Session invalid. Try logging in again.");
-      } else if (meRes.status === 503) {
+    if (!loginRes.ok || !loginData?.ok) {
+      if (loginRes.status === 403) {
+        setError(
+          "Not an admin. Your account needs role='admin' in public.users. Run: UPDATE public.users SET role = 'admin' WHERE email = 'admin123@garmonpay.com';"
+        );
+      } else if (loginRes.status === 401) {
+        setError("Invalid email or password.");
+      } else if (loginRes.status === 503) {
         setError("Server configuration error. Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel.");
       } else {
-        setError(meData?.message || "Could not verify admin access. Try again.");
+        setError(loginData?.message || "Could not verify admin access. Try again.");
       }
+      setLoading(false);
+      return;
+    }
+
+    const token = typeof loginData.accessToken === "string" ? loginData.accessToken : "";
+    if (!token) {
+      setError("Invalid response from sign in.");
       setLoading(false);
       return;
     }

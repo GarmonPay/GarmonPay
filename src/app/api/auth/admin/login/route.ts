@@ -1,36 +1,77 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail, getUserRole, hasAdminAccess, isSuperAdmin } from "@/lib/auth-store";
-import { createHash } from "crypto";
+import { createAdminClient } from "@/lib/supabase";
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+type AdminProfile = {
+  role?: string | null;
+  is_super_admin?: boolean | null;
+};
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, password } = body as { email?: string; password?: string };
-    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+    const body = await request.json().catch(() => ({}));
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+
+    if (!email || !password) {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
+
+    // IMPORTANT: this endpoint must use SUPABASE_SERVICE_ROLE_KEY (server-only).
+    const supabase = createAdminClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { message: "Server not configured. Missing SUPABASE_SERVICE_ROLE_KEY." },
+        { status: 503 }
+      );
+    }
+
+    // Step 1: Authenticate with Supabase Auth.
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (authError || !authData.user || !authData.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
-    if (!hasAdminAccess(user)) {
+
+    // Step 2: Fetch role from public.users by auth user id.
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role, is_super_admin")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Admin login profile query error:", profileError);
+      return NextResponse.json({ message: "Could not verify admin access" }, { status: 500 });
+    }
+
+    // Step 3: Require role = 'admin' to allow admin login.
+    const row = profile as AdminProfile | null;
+    const role = row?.role?.toLowerCase() ?? "";
+    if (role !== "admin") {
       return NextResponse.json({ message: "Access denied. Admin only." }, { status: 403 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
-    }
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8h for admin
+
+    // Step 4: Allow access.
+    const expiresAt = authData.session.expires_at
+      ? new Date(authData.session.expires_at * 1000).toISOString()
+      : new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      ok: true,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email ?? email,
+      },
+      role: "admin",
+      is_super_admin: !!row?.is_super_admin,
+      accessToken: authData.session.access_token,
+      refreshToken: authData.session.refresh_token,
       expiresAt,
-      is_super_admin: isSuperAdmin(user),
     });
-  } catch {
+  } catch (error) {
+    console.error("Admin login route error:", error);
     return NextResponse.json({ message: "Login failed" }, { status: 500 });
   }
 }
