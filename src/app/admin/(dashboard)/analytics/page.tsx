@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -26,7 +27,7 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/analytics?limit=200`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/analytics?limit=200`, { headers: buildAdminAuthHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -34,7 +35,7 @@ export default function AdminAnalyticsPage() {
       .then((data: { events?: EventRow[] }) => setEvents(data.events ?? []))
       .catch(() => setError("Failed to load analytics"))
       .finally(() => setLoading(false));
-  }, [session?.adminId]);
+  }, [session]);
 
   return (
     <div className="p-6">

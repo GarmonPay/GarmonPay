@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getGamificationConfig } from "@/lib/gamification";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -41,10 +42,9 @@ export default function GamificationPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/gamification-config`, {
         method: "PATCH",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify({ referral_reward: referralReward, spin_reward: spinReward }),
       });
       const data = await res.json().catch(() => ({}));

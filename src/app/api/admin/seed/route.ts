@@ -11,6 +11,10 @@ function hashPassword(password: string): string {
  * Set ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD in env. Only runs when no admin exists.
  */
 export async function POST() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ message: "Disabled in production" }, { status: 403 });
+  }
+
   const email = process.env.ADMIN_SEED_EMAIL;
   const password = process.env.ADMIN_SEED_PASSWORD;
   if (!email || !password) {

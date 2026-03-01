@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     if (existing) {
       const { error: updateError } = await supabase
         .from("users")
-        .update({ email: emailVal })
+        .update({ email: emailVal, updated_at: new Date().toISOString() })
         .eq("id", id);
       if (updateError) {
         console.error("Sync-user update error:", updateError);
@@ -36,9 +36,15 @@ export async function POST(req: Request) {
       const { error: insertError } = await supabase.from("users").insert({
         id,
         email: emailVal,
-        role: "user",
+        role: "member",
         balance: 0,
+        withdrawable_balance: 0,
+        pending_balance: 0,
+        total_deposits: 0,
+        total_withdrawals: 0,
+        total_earnings: 0,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
       if (insertError) {
         console.error("Sync-user insert error:", insertError);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -42,7 +43,7 @@ export default function AdminWithdrawalsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/withdrawals`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/withdrawals`, { headers: buildAdminAuthHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -64,10 +65,9 @@ export default function AdminWithdrawalsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/withdrawals`, {
         method: "PATCH",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify({ id, status }),
       });
       const data = await res.json().catch(() => ({}));

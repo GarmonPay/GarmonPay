@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail } from "@/lib/auth-store";
-import { createHash } from "crypto";
-import { createAdminClient } from "@/lib/supabase";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -14,45 +8,72 @@ export async function POST(request: Request) {
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
-    const user = findUserByEmail(email);
-    if (!user) {
-      return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+    const supabase = createServerClient();
+    if (!supabase) {
+      return NextResponse.json({ message: "Auth not configured" }, { status: 503 });
     }
-    const hash = hashPassword(password);
-    if (hash !== user.passwordHash) {
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error || !data.user || !data.session) {
       return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
     }
 
-    let role: "member" | "admin" = "member";
-    let is_super_admin = false;
+    const userId = data.user.id;
+    const admin = createAdminClient();
+    const profileClient = admin ?? supabase;
+    let role = "member";
+    let isSuperAdmin = false;
+    let isBanned = false;
     try {
-      const supabase = createAdminClient();
-      if (supabase) {
-        const { data: row } = await supabase
-          .from("users")
-          .select("role, is_super_admin")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (row && (row as { role?: string }).role === "admin") {
-          role = "admin";
-        } else if (row && (row as { role?: string }).role) {
-          role = (row as { role: "member" | "admin" }).role;
-        }
-        is_super_admin = !!(row as { is_super_admin?: boolean } | null)?.is_super_admin;
+      const { data: row } = await profileClient
+        .from("users")
+        .select("role, is_super_admin, is_banned")
+        .eq("id", userId)
+        .maybeSingle();
+      if (row && (row as { role?: string }).role) {
+        role = String((row as { role: string }).role);
       }
+      isSuperAdmin = !!(row as { is_super_admin?: boolean } | null)?.is_super_admin;
+      isBanned = !!(row as { is_banned?: boolean } | null)?.is_banned;
     } catch (_) {
-      // keep default member
-    }
-    if (role === "admin" && (user as { is_super_admin?: boolean }).is_super_admin) {
-      is_super_admin = true;
+      // keep defaults
     }
 
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    if (isBanned) {
+      await supabase.auth.signOut().catch(() => {});
+      return NextResponse.json({ message: "Account is suspended" }, { status: 403 });
+    }
+
+    // Ensure user row exists for downstream wallet/admin features.
+    if (admin) {
+      const { error: upsertError } = await admin
+        .from("users")
+        .upsert(
+          {
+            id: userId,
+            email: data.user.email ?? email.trim(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+      if (upsertError) {
+        console.warn("Auth login users upsert warning:", upsertError.message);
+      }
+    }
+
+    const expiresAt = data.session.expires_at
+      ? new Date(data.session.expires_at * 1000).toISOString()
+      : "";
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: userId, email: data.user.email ?? email.trim() },
       expiresAt,
       role,
-      is_super_admin: role === "admin" ? is_super_admin : false,
+      is_super_admin: role === "admin" ? isSuperAdmin : false,
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
     });
   } catch {
     return NextResponse.json({ message: "Login failed" }, { status: 500 });

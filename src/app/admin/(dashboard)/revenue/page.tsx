@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -40,7 +41,7 @@ export default function AdminRevenuePage() {
     if (!session) return;
     setError(null);
     fetch(`${API_BASE}/admin/revenue`, {
-      headers: { "X-Admin-Id": session.adminId },
+      headers: buildAdminAuthHeaders(session),
     })
       .then((res) => {
         if (res.status === 403) {

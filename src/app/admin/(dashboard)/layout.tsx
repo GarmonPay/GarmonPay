@@ -1,49 +1,58 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createServerClient } from "@/lib/supabase";
-import { isAdmin } from "@/lib/admin";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
 import { AdminDashboardShell } from "./AdminDashboardShell";
 
-export default async function AdminDashboardLayout({
+export default function AdminDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("sb-access-token")?.value;
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+  const [allowed, setAllowed] = useState(false);
 
-  if (!token) {
-    redirect("/admin/login");
+  useEffect(() => {
+    let mounted = true;
+    getAdminSessionAsync()
+      .then((session) => {
+        if (!mounted) return;
+        if (!session) {
+          setAllowed(false);
+          setChecking(false);
+          router.replace("/admin/login");
+          return;
+        }
+        setAllowed(true);
+        setChecking(false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAllowed(false);
+        setChecking(false);
+        router.replace("/admin/login");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-[#9ca3af]">
+        Checking admin session…
+      </div>
+    );
   }
 
-  const supabase = createServerClient(token);
-  if (!supabase) {
-    redirect("/admin/login");
-  }
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    redirect("/admin/login");
-  }
-
-  let admin = await isAdmin(user.id);
-  if (!admin) {
-    // Fallback for environments missing service role key: try checking current user's own row via auth token client.
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role, is_super_admin")
-      .eq("id", user.id)
-      .maybeSingle();
-    const row = profile as { role?: string; is_super_admin?: boolean } | null;
-    admin = (row?.role?.toLowerCase() === "admin") || !!row?.is_super_admin;
-  }
-
-  if (!admin) {
-    redirect("/dashboard");
+  if (!allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-[#9ca3af]">
+        Redirecting to admin login…
+      </div>
+    );
   }
 
   return <AdminDashboardShell>{children}</AdminDashboardShell>;

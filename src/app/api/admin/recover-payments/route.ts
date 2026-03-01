@@ -72,7 +72,7 @@ export async function POST(req: Request) {
 
     const email = session.customer_email;
     const amountTotal = session.amount_total ?? 0;
-    const amount = amountTotal / 100;
+    const amountCents = amountTotal;
 
     if (!email) {
       result.skippedNoEmail += 1;
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       continue;
     }
 
-    if (amount <= 0) {
+    if (amountCents <= 0) {
       result.skipped += 1;
       continue;
     }
@@ -115,8 +115,8 @@ export async function POST(req: Request) {
       continue;
     }
 
-    const newBalance = (Number(user.balance) || 0) + amount;
-    const newTotalDeposits = (Number(user.total_deposits) || 0) + amount;
+    const newTotalDeposits = (Number(user.total_deposits) || 0) + amountCents;
+    const newBalance = (Number(user.balance) || 0) + amountCents;
 
     const { error: updateError } = await supabase
       .from("users")
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
     const { error: insertError } = await supabase.from("recovered_stripe_sessions").insert({
       session_id: sessionId,
       user_id: user.id,
-      amount,
+      amount: amountCents,
     });
 
     if (insertError) {

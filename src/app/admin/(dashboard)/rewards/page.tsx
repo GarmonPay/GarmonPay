@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -28,18 +29,31 @@ export default function AdminRewardsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/transactions`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/transactions`, { headers: buildAdminAuthHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
       })
       .then((data: TxRow[]) => {
         const list = Array.isArray(data) ? data : [];
-        setTransactions(list.filter((t) => t.type === "reward"));
+        setTransactions(
+          list.filter((t) =>
+            [
+              "earning",
+              "referral",
+              "referral_commission",
+              "spin_wheel",
+              "scratch_card",
+              "mystery_box",
+              "streak",
+              "mission",
+            ].includes(t.type)
+          )
+        );
       })
       .catch(() => setError("Failed to load reward activity"))
       .finally(() => setLoading(false));
-  }, [session?.adminId]);
+  }, [session]);
 
   return (
     <div className="p-6">
@@ -69,7 +83,7 @@ export default function AdminRewardsPage() {
                 {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-white/5">
                     <td className="p-3 text-white font-mono text-sm">{t.user_id}</td>
-                    <td className="p-3 text-white">${Number(t.amount).toFixed(2)}</td>
+                    <td className="p-3 text-white">${(Number(t.amount) / 100).toFixed(2)}</td>
                     <td className="p-3 text-[#9ca3af]">{t.description ?? "—"}</td>
                     <td className="p-3 text-[#9ca3af]">{t.status}</td>
                     <td className="p-3 text-[#9ca3af] text-sm">{new Date(t.created_at).toLocaleString()}</td>

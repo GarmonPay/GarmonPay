@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { applyWalletAdjustment } from "@/lib/wallet-ledger";
 import Stripe from "stripe";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -109,41 +110,66 @@ export async function POST(request: Request) {
       }
 
       if (!alreadyProcessed && shouldCreditWallet) {
-        const { error: rpcError } = await supabase.rpc("increment_user_balance", {
-          p_user_id: userId,
-          p_amount_cents: amountTotal,
+        const walletUserId = userId as string;
+        const walletResult = await applyWalletAdjustment({
+          userId: walletUserId,
+          amountCents: amountTotal,
+          direction: "credit",
+          track: "deposit",
+          affectWithdrawable: true,
+          allowNegative: false,
         });
-        if (rpcError) {
-          console.error("Stripe webhook: increment_user_balance error", rpcError);
-          const { data: userRow, error: userFetchError } = await supabase
-            .from("users")
-            .select("balance")
-            .eq("id", userId)
-            .single();
-          if (!userFetchError && userRow) {
-            const currentBalance = Number((userRow as { balance?: number }).balance ?? 0);
-            const { error: updateError } = await supabase
-              .from("users")
-              .update({ balance: currentBalance + amountTotal, updated_at: new Date().toISOString() })
-              .eq("id", userId);
-            if (updateError) {
-              console.error("Stripe webhook: fallback users.balance update error", updateError);
+        if (!walletResult.success) {
+          console.error("Stripe webhook: wallet adjustment failed", walletResult.message);
+        } else {
+          const { data: existingDeposit } = await supabase
+            .from("deposits")
+            .select("id")
+            .eq("stripe_session", sessionId)
+            .maybeSingle();
+          if (!existingDeposit) {
+            const richDepositInsert = await supabase.from("deposits").insert({
+              user_id: walletUserId,
+              amount: amountTotal,
+              status: "completed",
+              stripe_session: sessionId,
+              created_at: new Date().toISOString(),
+            });
+            if (richDepositInsert.error) {
+              const fallbackDepositInsert = await supabase.from("deposits").insert({
+                user_id: walletUserId,
+                amount: amountTotal,
+                stripe_session: sessionId,
+                created_at: new Date().toISOString(),
+              });
+              if (fallbackDepositInsert.error) {
+                console.error(
+                  "Stripe webhook: insert deposits error",
+                  fallbackDepositInsert.error
+                );
+              }
             }
-          } else if (userFetchError) {
-            console.error("Stripe webhook: fallback users.balance fetch error", userFetchError);
           }
-        }
 
-        const { error: txError } = await supabase.from("transactions").insert({
-          user_id: userId,
-          type: "deposit",
-          amount: amountTotal,
-          status: "completed",
-          description: `Stripe checkout ${sessionId}`,
-          reference_id: sessionId,
-        });
-        if (txError) {
-          console.error("Stripe webhook: insert transactions deposit error", txError);
+          const { data: existingDepositTx } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("reference_id", sessionId)
+            .eq("type", "deposit")
+            .maybeSingle();
+          if (!existingDepositTx) {
+            const { error: txError } = await supabase.from("transactions").insert({
+              user_id: walletUserId,
+              type: "deposit",
+              amount: amountTotal,
+              status: "completed",
+              description: `Stripe checkout ${sessionId}`,
+              reference_id: sessionId,
+            });
+            if (txError) {
+              console.error("Stripe webhook: insert transactions deposit error", txError);
+            }
+          }
         }
       }
     }

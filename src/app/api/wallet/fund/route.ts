@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { getWalletSnapshot } from "@/lib/wallet-ledger";
 
 /**
  * POST /api/wallet/fund
@@ -17,6 +18,13 @@ export async function POST(request: Request) {
   const userId = await getAuthUserId(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  const wallet = await getWalletSnapshot(userId);
+  if (!wallet) {
+    return NextResponse.json({ message: "Wallet not found" }, { status: 404 });
+  }
+  if (wallet.isBanned) {
+    return NextResponse.json({ message: "Account is suspended" }, { status: 403 });
   }
 
   let body: { amountCents?: number };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
@@ -17,6 +18,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsMessage, setStatsMessage] = useState<string | null>(null);
+  const [supabaseHealth, setSupabaseHealth] = useState<{
+    connected: boolean;
+    requiredTablesOk: boolean;
+    missingTables: string[];
+  } | null>(null);
 
   useEffect(() => {
     getAdminSessionAsync().then(setSession);
@@ -24,10 +30,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!session) return;
-    const headers = {
-      "X-Admin-Id": session.adminId,
-      ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-    };
+    const headers = buildAdminAuthHeaders(session);
     (async () => {
       await fetch("/api/admin/sync-users", {
         headers,
@@ -41,10 +44,7 @@ export default function Dashboard() {
     if (!session) return;
     setStatsError(null);
     setStatsMessage(null);
-    const headers = {
-      "X-Admin-Id": session.adminId,
-      ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-    };
+    const headers = buildAdminAuthHeaders(session);
     // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
     const dashboardRes = await fetch("/api/admin/dashboard", { headers });
     const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
@@ -56,6 +56,26 @@ export default function Dashboard() {
     // Other metrics and recent transactions from /api/admin/stats
     const statsRes = await fetch("/api/admin/stats", { headers });
     const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
+    const healthRes = await fetch("/api/health/supabase", { headers });
+    const healthData = healthRes.ok
+      ? await healthRes.json().catch(() => null)
+      : await healthRes.json().catch(() => null);
+    if (healthData && typeof healthData === "object") {
+      const hd = healthData as {
+        connected?: boolean;
+        requiredTablesOk?: boolean;
+        tables?: Array<{ name: string; ok: boolean }>;
+      };
+      setSupabaseHealth({
+        connected: !!hd.connected,
+        requiredTablesOk: !!hd.requiredTablesOk,
+        missingTables: Array.isArray(hd.tables)
+          ? hd.tables.filter((t) => !t.ok).map((t) => t.name)
+          : [],
+      });
+    } else {
+      setSupabaseHealth(null);
+    }
     if (!statsRes.ok && !dashboardRes.ok) {
       setStatsError((s) => s || statsData?.message || `Stats failed (${statsRes.status}).`);
     }
@@ -106,6 +126,21 @@ export default function Dashboard() {
         {statsMessage && !statsError && (
           <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-blue-200 text-sm">
             {statsMessage}
+          </div>
+        )}
+        {supabaseHealth && (
+          <div
+            className={`mb-6 rounded-lg px-4 py-3 text-sm border ${
+              supabaseHealth.connected && supabaseHealth.requiredTablesOk
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+            }`}
+          >
+            {supabaseHealth.connected && supabaseHealth.requiredTablesOk
+              ? "Supabase connected. Required tables verified: users, transactions, deposits, withdrawals, earnings, admin_logs."
+              : `Supabase table check needs attention. Missing/invalid: ${
+                  supabaseHealth.missingTables.join(", ") || "unknown"
+                }`}
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">

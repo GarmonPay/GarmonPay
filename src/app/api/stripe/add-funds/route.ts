@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getCheckoutBaseUrl } from "@/lib/stripe-server";
+import { getWalletSnapshot } from "@/lib/wallet-ledger";
 
 export async function GET() {
   return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
@@ -27,6 +28,13 @@ export async function POST(req: Request) {
   const userId = await getAuthUserId(req);
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized", url: null }, { status: 401 });
+  }
+  const wallet = await getWalletSnapshot(userId);
+  if (!wallet) {
+    return NextResponse.json({ error: "Wallet not found", url: null }, { status: 404 });
+  }
+  if (wallet.isBanned) {
+    return NextResponse.json({ error: "Account is suspended", url: null }, { status: 403 });
   }
 
   const supabase = createAdminClient();

@@ -13,24 +13,14 @@ export interface AdminSession {
   accessToken?: string;
 }
 
-function getAccessTokenFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/sb-access-token=([^;]+)/);
-  return match ? decodeURIComponent(match[1].trim()) : null;
-}
-
 export async function getAdminSessionAsync(): Promise<AdminSession | null> {
   if (typeof window === "undefined") return null;
 
   const supabase = createBrowserClient();
   if (!supabase) return null;
 
-  // Prefer cookie set by admin login so session survives full-page redirect
-  let token = getAccessTokenFromCookie();
-  if (!token) {
-    const { data: { session } } = await supabase.auth.getSession();
-    token = session?.access_token ?? null;
-  }
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token ?? null;
   if (!token) return null;
 
   try {
@@ -42,7 +32,9 @@ export async function getAdminSessionAsync(): Promise<AdminSession | null> {
     return {
       adminId: data.adminId ?? "",
       email: data.email ?? "",
-      expiresAt: data.expiresAt ?? "",
+      expiresAt: session?.expires_at
+        ? new Date(session.expires_at * 1000).toISOString()
+        : "",
       isSuperAdmin: !!data.isSuperAdmin,
       accessToken: token ?? undefined,
     };

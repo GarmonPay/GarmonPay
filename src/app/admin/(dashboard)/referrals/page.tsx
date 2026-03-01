@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -33,7 +34,7 @@ export default function AdminReferralsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/referral-commissions`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/referral-commissions`, { headers: buildAdminAuthHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -55,7 +56,7 @@ export default function AdminReferralsPage() {
   useEffect(() => {
     if (session) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.adminId]);
+  }, [session]);
 
   async function saveTier(tier: Tier, percentage: number) {
     if (!session) return;
@@ -65,7 +66,7 @@ export default function AdminReferralsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/referral-commissions`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: buildAdminAuthHeaders(session, { "Content-Type": "application/json" }),
         body: JSON.stringify({ tier, percentage }),
       });
       const data = await res.json().catch(() => ({}));

@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { createUserWithEmailPassword, findUserByEmail, generateReferralCode } from "@/lib/auth-store";
-import { createHash } from "crypto";
-
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -16,16 +11,61 @@ export async function POST(request: Request) {
     if (password.length < 8) {
       return NextResponse.json({ message: "Password must be at least 8 characters" }, { status: 400 });
     }
-    const existing = findUserByEmail(email);
-    if (existing) {
-      return NextResponse.json({ message: "Email already registered" }, { status: 409 });
+
+    const supabase = createServerClient();
+    if (!supabase) {
+      return NextResponse.json({ message: "Auth not configured" }, { status: 503 });
     }
-    const passwordHash = hashPassword(password);
-    const user = createUserWithEmailPassword(email, passwordHash, referralCode ?? null);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: referralCode ? { referred_by_code: referralCode.trim().toUpperCase() } : undefined,
+      },
+    });
+    if (error || !data.user) {
+      const message = error?.message ?? "Registration failed";
+      const status = message.toLowerCase().includes("already") ? 409 : 400;
+      return NextResponse.json({ message }, { status });
+    }
+
+    const admin = createAdminClient();
+    if (admin) {
+      const { error: upsertError } = await admin
+        .from("users")
+        .upsert(
+          {
+            id: data.user.id,
+            email: data.user.email ?? email.trim(),
+            role: "member",
+            balance: 0,
+            total_deposits: 0,
+            total_withdrawals: 0,
+            total_earnings: 0,
+            withdrawable_balance: 0,
+            pending_balance: 0,
+            referred_by_code: referralCode ? referralCode.trim().toUpperCase() : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+      if (upsertError) {
+        console.warn("Auth register users upsert warning:", upsertError.message);
+      }
+    }
+
+    const expiresAt = data.session?.expires_at
+      ? new Date(data.session.expires_at * 1000).toISOString()
+      : "";
+
     return NextResponse.json({
-      user: { id: user.id, email: user.email },
+      user: { id: data.user.id, email: data.user.email ?? email.trim() },
       expiresAt,
+      accessToken: data.session?.access_token ?? null,
+      refreshToken: data.session?.refresh_token ?? null,
+      needsConfirmation: !data.session,
     });
   } catch {
     return NextResponse.json({ message: "Registration failed" }, { status: 500 });

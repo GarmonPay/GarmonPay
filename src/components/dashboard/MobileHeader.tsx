@@ -24,11 +24,9 @@ export function MobileHeader({ onMenuClick, balanceCents }: MobileHeaderProps) {
       return;
     }
     getSessionAsync().then((s) => {
-      if (!s) return;
-      const tokenOrId = s.accessToken ?? s.userId;
-      const isToken = !!s.accessToken;
+      if (!s?.accessToken) return;
       fetch(`${API_BASE}/dashboard`, {
-        headers: isToken ? { Authorization: `Bearer ${tokenOrId}` } : { "X-User-Id": tokenOrId },
+        headers: { Authorization: `Bearer ${s.accessToken}` },
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => (d && typeof d.balanceCents === "number" ? setBalance(d.balanceCents) : null))

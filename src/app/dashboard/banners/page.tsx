@@ -45,15 +45,13 @@ export default function BannersPage() {
   const load = useCallback(() => {
     getSessionAsync()
       .then((session) => {
-        if (!session) {
+        if (!session?.accessToken) {
           router.replace("/login?next=/dashboard/banners");
           return;
         }
-        const tokenOrId = session.accessToken ?? session.userId;
-        const isToken = !!session.accessToken;
         Promise.all([
-          getBanners(tokenOrId, isToken),
-          getDashboard(tokenOrId, isToken).catch(() => null),
+          getBanners(session.accessToken, true),
+          getDashboard(session.accessToken, true).catch(() => null),
         ]).then(([bannersData, dash]) => {
           setBanners(bannersData.banners ?? []);
           if (dash?.referralCode) {
@@ -81,15 +79,18 @@ export default function BannersPage() {
       return;
     }
     const session = await getSessionAsync();
-    if (!session) return;
+    if (!session?.accessToken) {
+      setSubmitError("Session expired. Please log in again.");
+      return;
+    }
     setSubmitting(true);
     const formData = new FormData();
     formData.set("title", title.trim() || "Banner");
     formData.set("target_url", targetUrl.trim());
     formData.set("file", file);
-    const headers: Record<string, string> = {};
-    if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else headers["X-User-Id"] = session.userId;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${session.accessToken}`,
+    };
     try {
       const res = await fetch(`${API_BASE}/api/banners`, {
         method: "POST",
