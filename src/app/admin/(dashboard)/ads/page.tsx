@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -59,7 +60,7 @@ export default function AdminAdsPage() {
   function loadAds() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/ads`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/ads`, { headers: buildAdminAuthHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load ads");
         return res.json();
@@ -72,7 +73,7 @@ export default function AdminAdsPage() {
   useEffect(() => {
     if (session) loadAds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.adminId]);
+  }, [session]);
 
   async function handleUpload(field: "media_url") {
     const input = document.createElement("input");
@@ -87,7 +88,7 @@ export default function AdminAdsPage() {
         fd.set("file", file);
         const res = await fetch(`${API_BASE}/admin/ads/upload`, {
           method: "POST",
-          headers: { "X-Admin-Id": session.adminId },
+          headers: buildAdminAuthHeaders(session),
           body: fd,
         });
         const data = await res.json().catch(() => ({}));
@@ -121,10 +122,9 @@ export default function AdminAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/ads`, {
         method: "POST",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
@@ -156,10 +156,9 @@ export default function AdminAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/ads`, {
         method: "PATCH",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify({ id: ad.id, status: newStatus }),
       });
       if (!res.ok) {

@@ -4,10 +4,12 @@ import {
   requestWithdrawal,
   listWithdrawalsByUser,
   MIN_WITHDRAWAL_CENTS,
+  rejectWithdrawal,
   type WithdrawalMethod,
 } from "@/lib/withdrawals-db";
 import { recordActivity } from "@/lib/viral-db";
 import { createAdminClient } from "@/lib/supabase";
+import { applyWalletAdjustment, getWalletSnapshot } from "@/lib/wallet-ledger";
 
 /** GET /api/withdrawals — list current user's withdrawals. */
 export async function GET(request: Request) {
@@ -38,6 +40,13 @@ export async function POST(request: Request) {
   }
   if (!createAdminClient()) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const wallet = await getWalletSnapshot(userId);
+  if (!wallet) {
+    return NextResponse.json({ message: "User wallet not found" }, { status: 404 });
+  }
+  if (wallet.isBanned) {
+    return NextResponse.json({ message: "Account is suspended" }, { status: 403 });
   }
   let body: { amount?: number; method?: string; wallet_address?: string };
   try {
@@ -72,6 +81,39 @@ export async function POST(request: Request) {
   if (!result.success) {
     return NextResponse.json({ message: result.message }, { status: 400 });
   }
+
+  // Keep users.balance consistent with withdrawal requests (server-side only).
+  const walletResult = await applyWalletAdjustment({
+    userId,
+    amountCents,
+    direction: "debit",
+    track: "none",
+    affectWithdrawable: false,
+    allowNegative: false,
+  });
+  if (!walletResult.success) {
+    await rejectWithdrawal(result.withdrawal.id).catch(() => {});
+    return NextResponse.json(
+      { message: walletResult.message ?? "Could not reserve funds for withdrawal" },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createAdminClient();
+  if (supabase) {
+    const { error: txError } = await supabase.from("transactions").insert({
+      user_id: userId,
+      type: "withdrawal",
+      amount: amountCents,
+      status: "pending",
+      description: "Withdrawal requested",
+      reference_id: result.withdrawal.id,
+    });
+    if (txError) {
+      console.error("Withdrawal transaction insert error:", txError);
+    }
+  }
+
   recordActivity(userId, "withdrew", "Withdrawal requested", amountCents).catch(() => {});
   return NextResponse.json({
     withdrawal: result.withdrawal,

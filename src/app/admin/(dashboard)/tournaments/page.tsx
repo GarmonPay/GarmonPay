@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -41,7 +42,7 @@ export default function AdminTournamentsPage() {
   function loadTournaments() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/tournaments`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/tournaments`, { headers: buildAdminAuthHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load tournaments");
         return res.json();
@@ -54,7 +55,7 @@ export default function AdminTournamentsPage() {
   useEffect(() => {
     if (session) loadTournaments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.adminId]);
+  }, [session]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -75,10 +76,9 @@ export default function AdminTournamentsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/tournaments`, {
         method: "POST",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
@@ -105,10 +105,9 @@ export default function AdminTournamentsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/tournaments/end`, {
         method: "POST",
-        headers: {
+        headers: buildAdminAuthHeaders(session, {
           "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
+        }),
         body: JSON.stringify({ tournamentId }),
       });
       const data = await res.json().catch(() => ({}));

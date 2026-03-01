@@ -1,23 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
 import { createBrowserClient } from "@/lib/supabase";
-
-/** Set session cookie so middleware allows access to /admin. */
-function setSessionCookie(accessToken: string) {
-  if (typeof document === "undefined") return;
-  const maxAge = 60 * 60 * 24; // 24 hours
-  const secure = window.location?.protocol === "https:";
-  let cookie = `sb-access-token=${encodeURIComponent(accessToken)}; path=/; max-age=${maxAge}; SameSite=Lax`;
-  if (secure) cookie += "; Secure";
-  document.cookie = cookie;
-}
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    getAdminSessionAsync().then((session) => {
+      if (session) {
+        window.location.assign("/admin/dashboard");
+      }
+    });
+  }, []);
 
   async function login(e?: React.FormEvent) {
     e?.preventDefault();
@@ -63,12 +62,8 @@ export default function AdminLogin() {
       return;
     }
 
-    setSessionCookie(token);
-    localStorage.setItem("admin", "true");
-
     setLoading(false);
-    // Full page redirect so middleware sees the cookie and dashboard loads with session
-    window.location.href = "/admin/dashboard";
+    window.location.assign("/admin/dashboard");
   }
 
   return (

@@ -40,9 +40,10 @@ export async function logout() {
 }
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
-  return isToken
-    ? { Authorization: `Bearer ${accessTokenOrUserId}` }
-    : { "X-User-Id": accessTokenOrUserId };
+  if (!isToken) {
+    return {};
+  }
+  return { Authorization: `Bearer ${accessTokenOrUserId}` };
 }
 
 export async function getAds(accessTokenOrUserId: string, isToken = false) {

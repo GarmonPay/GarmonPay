@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { buildAdminAuthHeaders } from "@/lib/admin-request";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -44,7 +45,7 @@ export default function AdminBannersPage() {
     if (!session) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/admin/banners`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/admin/banners`, { headers: buildAdminAuthHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error(r.status === 403 ? "Access denied" : "Failed to load");
         return r.json();
@@ -60,7 +61,7 @@ export default function AdminBannersPage() {
   useEffect(() => {
     if (session) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.adminId]);
+  }, [session]);
 
   async function updateStatus(id: string, status: string) {
     if (!session) return;
@@ -69,7 +70,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/banners`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: buildAdminAuthHeaders(session, { "Content-Type": "application/json" }),
         body: JSON.stringify({ id, status }),
       });
       const data = await res.json().catch(() => ({}));
@@ -93,7 +94,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/banners`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: buildAdminAuthHeaders(session, { "Content-Type": "application/json" }),
         body: JSON.stringify({ id, action: "delete" }),
       });
       const data = await res.json().catch(() => ({}));

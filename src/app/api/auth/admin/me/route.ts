@@ -25,13 +25,16 @@ export async function GET(request: Request) {
   const profileClient = admin ?? supabase;
   const { data: profile, error: profileError } = await profileClient
     .from("users")
-    .select("role, is_super_admin")
+    .select("role, is_super_admin, is_banned")
     .eq("id", user.id)
     .maybeSingle();
   if (profileError || !profile) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
-  const row = profile as { role?: string; is_super_admin?: boolean };
+  const row = profile as { role?: string; is_super_admin?: boolean; is_banned?: boolean };
+  if (row.is_banned) {
+    return NextResponse.json({ ok: false }, { status: 403 });
+  }
   const isAdmin = (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
   if (!isAdmin) {
     return NextResponse.json({ ok: false }, { status: 403 });

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findUserById } from "@/lib/auth-store";
 import { getEarningsForUser, listAds } from "@/lib/ads-db";
 import { getTotalsForUser } from "@/lib/transactions-db";
 import { countUserReferrals, getUserReferralEarningsCents } from "@/lib/viral-db";
@@ -13,7 +12,6 @@ import { createServerClient } from "@/lib/supabase";
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const userIdHeader = request.headers.get("x-user-id");
 
   const safeDashboardPayload = {
     earningsTodayCents: 0,
@@ -48,7 +46,7 @@ export async function GET(request: Request) {
         }
         const { data: row, error: rowError } = await supabase
           .from("users")
-          .select("id, email, role, membership, balance, ad_credit_balance, withdrawable_balance, referral_code")
+          .select("id, email, role, membership, balance, ad_credit_balance, withdrawable_balance, referral_code, is_banned")
           .eq("id", authUser.id)
           .single();
 
@@ -102,7 +100,17 @@ export async function GET(request: Request) {
         // referral_commissions / subscriptions tables may be missing
       }
 
-      const userRow = row as { balance?: number; ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
+      const userRow = row as {
+        balance?: number;
+        ad_credit_balance?: number;
+        withdrawable_balance?: number;
+        membership?: string;
+        referral_code?: string;
+        is_banned?: boolean;
+      } | null;
+      if (userRow?.is_banned) {
+        return NextResponse.json({ message: "Account is suspended" }, { status: 403 });
+      }
       const balanceCents = Number(userRow?.balance ?? 0);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
       const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
@@ -131,26 +139,6 @@ export async function GET(request: Request) {
         return NextResponse.json(safeDashboardPayload, { status: 200 });
       }
     }
-  }
-
-  if (userIdHeader) {
-    const user = findUserById(userIdHeader);
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json({
-      earningsTodayCents: 0,
-      earningsWeekCents: 0,
-      earningsMonthCents: 0,
-      balanceCents: 0,
-      withdrawableCents: 0,
-      membershipTier: "starter",
-      referralCode: user.referralCode,
-      referralEarningsCents: 0,
-      totalReferrals: 0,
-      announcements: [],
-      availableAds: [],
-    });
   }
 
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

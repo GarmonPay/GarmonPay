@@ -13,14 +13,13 @@ function formatCents(cents: number) {
 }
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
-  return isToken
-    ? { Authorization: `Bearer ${accessTokenOrUserId}` }
-    : { "X-User-Id": accessTokenOrUserId };
+  if (!isToken) return {};
+  return { Authorization: `Bearer ${accessTokenOrUserId}` };
 }
 
 export default function FinancePage() {
   const router = useRouter();
-  const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
+  const [session, setSession] = useState<{ accessToken: string } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,16 +30,15 @@ export default function FinancePage() {
   useEffect(() => {
     getSessionAsync()
       .then((s) => {
-        if (!s) {
+        if (!s?.accessToken) {
           router.replace("/login?next=/dashboard/finance");
           return;
         }
-        const tokenOrId = s.accessToken ?? s.userId;
-        const isToken = !!s.accessToken;
-        setSession({ tokenOrId, isToken });
+        const accessToken = s.accessToken;
+        setSession({ accessToken });
         return Promise.all([
-          getDashboard(tokenOrId, isToken),
-          getWithdrawals(tokenOrId, isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 })),
+          getDashboard(accessToken, true),
+          getWithdrawals(accessToken, true).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 })),
         ]).then(([dash, w]) => {
           setBalanceCents(dash.balanceCents ?? 0);
           setWithdrawals(w?.withdrawals ?? []);
@@ -131,7 +129,10 @@ export default function FinancePage() {
                 try {
                   const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...authHeaders(session.accessToken, true),
+                    },
                     body: JSON.stringify({
                       productType: "subscription",
                       amountCents: 999,
@@ -161,7 +162,10 @@ export default function FinancePage() {
                 try {
                   const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...authHeaders(session.accessToken, true),
+                    },
                     body: JSON.stringify({
                       productType: "upgrade",
                       amountCents: 1999,
@@ -191,7 +195,7 @@ export default function FinancePage() {
                 try {
                   const res = await fetch(`${API_BASE || ""}/api/stripe-connect/onboard`, {
                     method: "POST",
-                    headers: authHeaders(session.tokenOrId, session.isToken),
+                    headers: authHeaders(session.accessToken, true),
                   });
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error((data as { message?: string }).message || "Onboarding failed");

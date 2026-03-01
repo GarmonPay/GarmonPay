@@ -4,7 +4,14 @@
 
 import { createAdminClient } from "@/lib/supabase";
 
-export type TransactionType = "earning" | "withdrawal" | "ad_credit" | "referral" | "referral_commission";
+export type TransactionType =
+  | "earning"
+  | "withdrawal"
+  | "ad_credit"
+  | "referral"
+  | "referral_commission"
+  | "deposit"
+  | "adjustment";
 export type TransactionStatus = "pending" | "completed" | "rejected" | "cancelled";
 
 export interface TransactionRow {
@@ -105,9 +112,21 @@ export async function getTotalsForUser(userId: string): Promise<{
 
 /** Mark withdrawal transaction as completed (when admin marks paid). */
 export async function markWithdrawalTransactionCompleted(withdrawalId: string): Promise<void> {
+  await markWithdrawalTransactionStatus(withdrawalId, "completed", "Withdrawal paid");
+}
+
+/** Update withdrawal transaction status by withdrawal reference_id. */
+export async function markWithdrawalTransactionStatus(
+  withdrawalId: string,
+  status: "pending" | "completed" | "rejected" | "cancelled",
+  description?: string
+): Promise<void> {
   await supabase()
     .from("transactions")
-    .update({ status: "completed", description: "Withdrawal paid" })
+    .update({
+      status,
+      ...(description ? { description } : {}),
+    })
     .eq("reference_id", withdrawalId)
     .eq("type", "withdrawal");
 }

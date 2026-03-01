@@ -230,9 +230,12 @@ export default function DashboardPage() {
 
   const upgrade = async (tier: string) => {
     const session = await getSessionAsync();
+    if (!session?.accessToken) {
+      setCheckoutError("Session expired. Please log in again.");
+      return;
+    }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else if (session?.userId) headers["X-User-Id"] = session.userId;
+    headers.Authorization = `Bearer ${session.accessToken}`;
     const res = await fetch("/api/stripe/create-membership-session", {
       method: "POST",
       headers,
@@ -245,9 +248,12 @@ export default function DashboardPage() {
 
   const addFunds = async (amount: number) => {
     const session = await getSessionAsync();
+    if (!session?.accessToken) {
+      setCheckoutError("Session expired. Please log in again.");
+      return;
+    }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else if (session?.userId) headers["X-User-Id"] = session.userId;
+    headers.Authorization = `Bearer ${session.accessToken}`;
     const res = await fetch("/api/stripe/add-funds", {
       method: "POST",
       headers,

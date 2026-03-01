@@ -25,10 +25,15 @@ const links = [
 export function AdminSidebar() {
   const pathname = usePathname();
 
-  function handleLogout() {
+  async function handleLogout() {
     const supabase = createBrowserClient();
-    if (supabase) supabase.auth.signOut();
-    window.location.href = "/admin/login";
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    // Backward compatibility with old custom cookie/session marker.
+    document.cookie = "sb-access-token=; path=/; max-age=0; SameSite=Lax";
+    localStorage.removeItem("admin");
+    window.location.assign("/admin/login");
   }
 
   return (

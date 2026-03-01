@@ -1,19 +1,27 @@
 import { NextResponse } from "next/server";
-import { findUserById, isSuperAdmin } from "@/lib/auth-store";
-import { createAdminClient } from "@/lib/supabase";
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { getGodModeStats, getOwnerFlags, getPlatformProfitCents } from "@/lib/god-mode-db";
 
 async function isSuperAdminRequest(request: Request): Promise<boolean> {
   const adminId = request.headers.get("x-admin-id");
-  if (!adminId) return false;
-  const user = findUserById(adminId);
-  if (user && isSuperAdmin(user)) return true;
-  const supabase = createAdminClient();
-  if (supabase) {
-    const { data } = await supabase.from("users").select("is_super_admin").eq("id", adminId).maybeSingle();
-    if ((data as { is_super_admin?: boolean } | null)?.is_super_admin) return true;
-  }
-  return false;
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!bearerToken) return false;
+  const userClient = createServerClient(bearerToken);
+  if (!userClient) return false;
+  const { data: { user }, error: authError } = await userClient.auth.getUser();
+  if (authError || !user) return false;
+  if (adminId && adminId !== user.id) return false;
+
+  const adminClient = createAdminClient();
+  const profileClient = adminClient ?? userClient;
+  const { data } = await profileClient
+    .from("users")
+    .select("is_super_admin, is_banned")
+    .eq("id", user.id)
+    .maybeSingle();
+  const row = data as { is_super_admin?: boolean; is_banned?: boolean } | null;
+  return !!row?.is_super_admin && !row?.is_banned;
 }
 
 /** GET /api/god-mode — platform stats + activity. Only super admin. */

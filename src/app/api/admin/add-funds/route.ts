@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
+import { applyWalletAdjustment } from "@/lib/wallet-ledger";
+import { logAdminAction } from "@/lib/admin-logs";
 
 /** POST /api/admin/add-funds — add balance to a user (admin only). */
 export async function POST(req: Request) {
@@ -40,21 +42,56 @@ export async function POST(req: Request) {
 
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id")
+    .select("id, is_super_admin")
     .eq("id", userId)
     .single();
 
   if (userError || !user) {
     return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
+  if ((user as { is_super_admin?: boolean }).is_super_admin) {
+    return NextResponse.json({ message: "Cannot modify super admin account" }, { status: 403 });
+  }
 
-  await supabase.from("transactions").insert({
+  const walletResult = await applyWalletAdjustment({
+    userId,
+    amountCents,
+    direction: "credit",
+    track: "none",
+    affectWithdrawable: true,
+  });
+  if (!walletResult.success) {
+    return NextResponse.json(
+      { message: walletResult.message ?? "Could not update wallet" },
+      { status: 400 }
+    );
+  }
+
+  const { error: txError } = await supabase.from("transactions").insert({
     user_id: userId,
-    type: "deposit",
+    type: "adjustment",
     amount: amountCents,
     status: "completed",
-    description: "Admin add funds",
+    description: "Admin manual credit",
   });
+  if (txError) {
+    console.error("Admin add-funds transaction insert error:", txError);
+  }
 
-  return NextResponse.json({ success: true, amountCents });
+  const adminId = req.headers.get("x-admin-id") ?? "";
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "wallet_manual_credit",
+      targetUserId: userId,
+      amountCents,
+      metadata: { endpoint: "/api/admin/add-funds" },
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    amountCents,
+    balanceCents: walletResult.balanceCents ?? null,
+  });
 }

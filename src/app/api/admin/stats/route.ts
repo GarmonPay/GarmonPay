@@ -4,6 +4,13 @@ import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 import { getPlatformTotals, listAllTransactions } from "@/lib/transactions-db";
 
+function normalizeAmountToCents(value: number | null | undefined): number {
+  const raw = Number(value ?? 0);
+  if (!Number.isFinite(raw)) return 0;
+  // Legacy deposits may be stored in dollars (decimal); current system stores cents.
+  return Number.isInteger(raw) ? raw : Math.round(raw * 100);
+}
+
 /** GET /api/admin/stats — real data from public.users, deposits, transactions. */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
@@ -56,8 +63,10 @@ export async function GET(request: Request) {
   let totalDepositsCents = 0;
   const { data: depositsRows, error: depositsError } = await supabase.from("deposits").select("amount");
   if (depositsError) console.error("Admin stats deposits error:", depositsError);
-  const totalDepositsDollars = (depositsRows ?? []).reduce((sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0), 0);
-  totalDepositsCents = Math.round(totalDepositsDollars * 100);
+  totalDepositsCents = (depositsRows ?? []).reduce(
+    (sum: number, d: { amount?: number | null }) => sum + normalizeAmountToCents(d?.amount),
+    0
+  );
 
   let totalWithdrawalsCents = 0;
   try {

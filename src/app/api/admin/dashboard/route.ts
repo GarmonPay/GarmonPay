@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin-auth";
 
+function normalizeAmountToCents(value: number | null | undefined): number {
+  const raw = Number(value ?? 0);
+  if (!Number.isFinite(raw)) return 0;
+  // Legacy rows may have dollars in decimal; current platform uses cents.
+  return Number.isInteger(raw) ? raw : Math.round(raw * 100);
+}
+
 /**
  * GET /api/admin/dashboard
  * Returns TOTAL USERS and TOTAL DEPOSITS from Supabase only.
@@ -48,11 +55,11 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-  const sumAmounts = (depositsData ?? []).reduce(
-    (sum: number, row: { amount?: number | null }) => sum + Number(row?.amount ?? 0),
+  const totalDeposits = (depositsData ?? []).reduce(
+    (sum: number, row: { amount?: number | null }) =>
+      sum + normalizeAmountToCents(row?.amount),
     0
   );
-  const totalDeposits = Math.round(sumAmounts * 100);
 
   return NextResponse.json({ totalUsers, totalDeposits });
 }
