@@ -1,23 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { adminBackendFetch } from "@/lib/admin-backend-api";
 
-type UserRow = {
+type AdminUserRow = {
   id: string;
-  email: string | null;
-  role?: string;
-  balance?: number;
-  created_at?: string;
+  email: string;
+  role: string;
+  isSuperAdmin: boolean;
+  createdAt: string;
+  wallet: {
+    balance: number;
+    rewardsEarned: number;
+    totalWithdrawn: number;
+    updatedAt: string;
+  };
 };
 
 export default function AdminUsersPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [addFundsUser, setAddFundsUser] = useState<UserRow | null>(null);
+  const [addFundsUser, setAddFundsUser] = useState<AdminUserRow | null>(null);
   const [addFundsAmount, setAddFundsAmount] = useState("");
+  const [addFundsReason, setAddFundsReason] = useState("Manual admin credit");
   const [addFundsSubmitting, setAddFundsSubmitting] = useState(false);
   const [addFundsError, setAddFundsError] = useState("");
   const [error, setError] = useState("");
@@ -26,34 +34,25 @@ export default function AdminUsersPage() {
     getAdminSessionAsync().then(setSession);
   }, []);
 
-  useEffect(() => {
-    if (!session) return;
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load depends on session, run once when session is set
-  }, [session]);
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/users", {
-        headers: { "X-Admin-Id": session!.adminId },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.message || "Failed to load users");
-        setUsers([]);
-        return;
-      }
-      setUsers((data.users ?? []) as UserRow[]);
+      const data = await adminBackendFetch<{ users: AdminUserRow[] }>("/admin/users?limit=300&offset=0");
+      setUsers(data.users ?? []);
     } catch (e) {
       console.error("Admin users load error:", e);
-      setError("Failed to load users");
+      setError(e instanceof Error ? e.message : "Failed to load users");
       setUsers([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    void load();
+  }, [session, load]);
 
   async function submitAddFunds() {
     if (!addFundsUser || !session) return;
@@ -65,19 +64,20 @@ export default function AdminUsersPage() {
     setAddFundsError("");
     setAddFundsSubmitting(true);
     try {
-      const res = await fetch("/api/admin/add-funds", {
+      await adminBackendFetch<{ ok: boolean }>("/admin/wallets/credit", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
-        body: JSON.stringify({ userId: addFundsUser.id, amount }),
+        body: JSON.stringify({
+          userId: addFundsUser.id,
+          amount: Math.round(amount * 100),
+          reason: addFundsReason.trim() || "Manual admin credit",
+        }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAddFundsError(data.message || "Failed to add funds");
-        return;
-      }
       setAddFundsUser(null);
       setAddFundsAmount("");
-      load();
+      setAddFundsReason("Manual admin credit");
+      void load();
+    } catch (e) {
+      setAddFundsError(e instanceof Error ? e.message : "Failed to add funds");
     } finally {
       setAddFundsSubmitting(false);
     }
@@ -133,6 +133,7 @@ export default function AdminUsersPage() {
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Email</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Role</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Balance</th>
+                  <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Rewards</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Joined</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Actions</th>
                 </tr>
@@ -140,18 +141,29 @@ export default function AdminUsersPage() {
               <tbody>
                 {filtered.map((u) => (
                   <tr key={u.id} className="border-b border-white/5">
-                    <td className="py-3 pr-4 text-white font-medium truncate max-w-[200px]">{u.email ?? "—"}</td>
-                    <td className="py-3 pr-4 text-[#9ca3af] capitalize">{u.role ?? "user"}</td>
+                    <td className="py-3 pr-4 text-white font-medium truncate max-w-[220px]">{u.email || "—"}</td>
+                    <td className="py-3 pr-4 text-[#9ca3af] capitalize">
+                      {u.role || "user"}
+                      {u.isSuperAdmin ? " (super)" : ""}
+                    </td>
                     <td className="py-3 pr-4 text-[#10b981]">
-                      ${typeof u.balance === "number" ? (u.balance / 100).toFixed(2) : "0.00"}
+                      ${((u.wallet?.balance ?? 0) / 100).toFixed(2)}
+                    </td>
+                    <td className="py-3 pr-4 text-white">
+                      ${((u.wallet?.rewardsEarned ?? 0) / 100).toFixed(2)}
                     </td>
                     <td className="py-3 pr-4 text-[#6b7280]">
-                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                     </td>
                     <td className="py-3 pr-4">
                       <button
                         type="button"
-                        onClick={() => { setAddFundsUser(u); setAddFundsAmount(""); setAddFundsError(""); }}
+                        onClick={() => {
+                          setAddFundsUser(u);
+                          setAddFundsAmount("");
+                          setAddFundsReason("Manual admin credit");
+                          setAddFundsError("");
+                        }}
                         className="text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white"
                       >
                         Add funds
@@ -174,7 +186,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => !addFundsSubmitting && setAddFundsUser(null)}>
           <div className="rounded-xl bg-[#111827] border border-white/10 p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-white mb-1">Add funds</h3>
-            <p className="text-sm text-[#9ca3af] mb-4 truncate">{addFundsUser.email ?? addFundsUser.id}</p>
+            <p className="text-sm text-[#9ca3af] mb-4 truncate">{addFundsUser.email || addFundsUser.id}</p>
             <label className="block text-sm text-[#9ca3af] mb-1">Amount (USD)</label>
             <input
               type="number"
@@ -184,6 +196,14 @@ export default function AdminUsersPage() {
               value={addFundsAmount}
               onChange={(e) => setAddFundsAmount(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] mb-4"
+            />
+            <label className="block text-sm text-[#9ca3af] mb-1">Reason</label>
+            <input
+              type="text"
+              value={addFundsReason}
+              onChange={(e) => setAddFundsReason(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] mb-4"
+              placeholder="Manual admin credit"
             />
             {addFundsError && <p className="text-sm text-red-400 mb-4">{addFundsError}</p>}
             <div className="flex gap-2">

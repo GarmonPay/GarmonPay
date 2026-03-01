@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   }
 
   const stripe = new Stripe(secret, {
-    apiVersion: "2026-01-28.clover",
+    apiVersion: "2026-02-25.clover",
   });
 
   const { tier } = await req.json();

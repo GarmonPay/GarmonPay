@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 function getStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key?.startsWith("sk_")) return null;
-  return new Stripe(key, { apiVersion: "2026-01-28.clover" });
+  return new Stripe(key, { apiVersion: "2026-02-25.clover" });
 }
 
 /** GET /api/webhooks/stripe — health check for Stripe webhook endpoint. */

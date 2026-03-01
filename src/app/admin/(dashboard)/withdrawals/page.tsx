@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { adminBackendFetch } from "@/lib/admin-backend-api";
 
 type WithdrawalRow = {
   id: string;
-  user_id: string;
+  userId: string;
+  userEmail: string;
   amount: number;
-  platform_fee?: number;
-  net_amount?: number;
   status: string;
-  method: string;
-  wallet_address: string;
-  created_at: string;
-  processed_at?: string | null;
-  user_email?: string;
+  paymentMethod: string;
+  adminNote?: string | null;
+  requestedAt: string;
+  processedAt?: string | null;
+  processedBy?: string | null;
 };
 
 function formatCents(cents: number) {
@@ -39,45 +37,39 @@ export default function AdminWithdrawalsPage() {
     getAdminSessionAsync().then(setSession);
   }, []);
 
-  function load() {
-    if (!session) return;
+  const load = useCallback(async () => {
     setLoading(true);
-    fetch(`${API_BASE}/admin/withdrawals`, { headers: { "X-Admin-Id": session.adminId } })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load");
-        return res.json();
-      })
-      .then((data) => setWithdrawals(data.withdrawals ?? []))
-      .catch(() => setError("Failed to load withdrawals"))
-      .finally(() => setLoading(false));
-  }
+    setError(null);
+    try {
+      const data = await adminBackendFetch<{ withdrawals: WithdrawalRow[] }>(
+        "/admin/withdrawals?limit=300&offset=0"
+      );
+      setWithdrawals(data.withdrawals ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load withdrawals");
+      setWithdrawals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.adminId]);
+    if (!session) return;
+    void load();
+  }, [session, load]);
 
   async function updateStatus(id: string, status: string) {
     if (!session) return;
     setActionError(null);
     setUpdatingId(id);
     try {
-      const res = await fetch(`${API_BASE}/admin/withdrawals`, {
+      await adminBackendFetch<{ ok: boolean }>(`/admin/withdrawals/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Admin-Id": session.adminId,
-        },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ status }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setActionError((data.message as string) || "Action failed");
-        return;
-      }
-      load();
-    } catch {
-      setActionError("Request failed");
+      await load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setUpdatingId(null);
     }
@@ -107,10 +99,8 @@ export default function AdminWithdrawalsPage() {
                 <tr className="border-b border-white/10">
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Amount</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Fee</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Net</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Method</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Wallet / details</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Admin note</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Date</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
@@ -119,13 +109,11 @@ export default function AdminWithdrawalsPage() {
               <tbody>
                 {withdrawals.map((w) => (
                   <tr key={w.id} className="border-b border-white/5">
-                    <td className="p-3 text-white">{w.user_email ?? w.user_id}</td>
+                    <td className="p-3 text-white">{w.userEmail || w.userId}</td>
                     <td className="p-3 text-white font-medium">{formatCents(w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af]">{formatCents(w.platform_fee ?? 0)}</td>
-                    <td className="p-3 text-white">{formatCents(w.net_amount ?? w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{w.method}</td>
-                    <td className="p-3 text-[#9ca3af] font-mono text-sm max-w-xs truncate" title={w.wallet_address}>
-                      {w.wallet_address}
+                    <td className="p-3 text-[#9ca3af] capitalize">{w.paymentMethod}</td>
+                    <td className="p-3 text-[#9ca3af] text-sm max-w-xs truncate" title={w.adminNote ?? ""}>
+                      {w.adminNote || "—"}
                     </td>
                     <td className="p-3">
                       <span
@@ -140,7 +128,7 @@ export default function AdminWithdrawalsPage() {
                         {w.status}
                       </span>
                     </td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{formatDate(w.created_at)}</td>
+                    <td className="p-3 text-[#9ca3af] text-sm">{formatDate(w.requestedAt)}</td>
                     <td className="p-3">
                       {w.status === "pending" && (
                         <div className="flex flex-wrap gap-1">
@@ -159,14 +147,6 @@ export default function AdminWithdrawalsPage() {
                             className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-500 disabled:opacity-50"
                           >
                             Reject
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStatus(w.id, "paid")}
-                            disabled={updatingId === w.id}
-                            className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
-                          >
-                            Mark paid
                           </button>
                         </div>
                       )}
