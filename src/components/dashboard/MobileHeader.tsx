@@ -28,7 +28,7 @@ export function MobileHeader({ onMenuClick, balanceCents }: MobileHeaderProps) {
       const tokenOrId = s.accessToken ?? s.userId;
       const isToken = !!s.accessToken;
       fetch(`${API_BASE}/dashboard`, {
-        headers: isToken ? { Authorization: `Bearer ${tokenOrId}` } : { "X-User-Id": tokenOrId },
+        headers: isToken ? { Authorization: `Bearer ${tokenOrId}` } : {},
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => (d && typeof d.balanceCents === "number" ? setBalance(d.balanceCents) : null))

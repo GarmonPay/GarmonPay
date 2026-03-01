@@ -7,8 +7,6 @@ import { getBanners, getDashboard } from "@/lib/api";
 import { getReferralLink } from "@/lib/site-url";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
 type BannerItem = {
   id: string;
   title: string;
@@ -89,9 +87,8 @@ export default function BannersPage() {
     formData.set("file", file);
     const headers: Record<string, string> = {};
     if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else headers["X-User-Id"] = session.userId;
     try {
-      const res = await fetch(`${API_BASE}/api/banners`, {
+      const res = await fetch("/api/banners", {
         method: "POST",
         headers,
         body: formData,

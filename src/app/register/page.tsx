@@ -50,16 +50,18 @@ export default function RegisterPage() {
       setError(err.message);
       return;
     }
-    if (data?.user) {
+    if (data?.user && data.session?.access_token) {
       const res = await fetch("/api/auth/sync-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.session.access_token}`,
+        },
         body: JSON.stringify({ id: data.user.id, email: data.user.email ?? trimmedEmail }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
-        setError(json.message || "Account created but could not sync to database. Please contact support.");
-        return;
+        console.warn("Register sync-user failed:", json?.message || res.status);
       }
     }
     setMessage("Check your email to confirm your account, or sign in if already confirmed.");

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminSessionAsync, type AdminSession } from "@/lib/admin-supabase";
+import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -37,7 +37,7 @@ type Flags = { pause_ads: boolean; pause_withdrawals: boolean; maintenance_mode:
 
 export default function GodModePage() {
   const router = useRouter();
-  const [session, setSession] = useState<AdminSession | null>(null);
+  const [session, setSession] = useState<AdminSession | null | undefined>(undefined);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [flags, setFlags] = useState<Flags | null>(null);
@@ -50,14 +50,20 @@ export default function GodModePage() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (session === undefined) return;
+    if (!session) {
+      router.replace("/admin/login");
+      setAllowed(false);
+      setLoading(false);
+      return;
+    }
     if (!session.isSuperAdmin) {
       router.replace("/dashboard");
       setAllowed(false);
       return;
     }
     setAllowed(true);
-    fetch(`${API_BASE}/god-mode`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/god-mode`, { headers: adminApiHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -77,7 +83,7 @@ export default function GodModePage() {
     try {
       const res = await fetch(`${API_BASE}/god-mode/controls`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: { "Content-Type": "application/json", ...adminApiHeaders(session) },
         body: JSON.stringify({ [key]: next }),
       });
       const data = await res.json().catch(() => ({}));

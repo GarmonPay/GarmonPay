@@ -1,23 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createBrowserClient } from "@/lib/supabase";
-
-/** Set session cookie so middleware allows access to /admin. */
-function setSessionCookie(accessToken: string) {
-  if (typeof document === "undefined") return;
-  const maxAge = 60 * 60 * 24; // 24 hours
-  const secure = window.location?.protocol === "https:";
-  let cookie = `sb-access-token=${encodeURIComponent(accessToken)}; path=/; max-age=${maxAge}; SameSite=Lax`;
-  if (secure) cookie += "; Secure";
-  document.cookie = cookie;
-}
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) return;
+      const meRes = await fetch("/api/auth/admin/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!meRes.ok) return;
+      const sessionRes = await fetch("/api/auth/admin/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!sessionRes.ok) return;
+      window.location.href = "/admin/dashboard";
+    }).catch(() => {});
+  }, []);
 
   async function login(e?: React.FormEvent) {
     e?.preventDefault();
@@ -67,11 +76,20 @@ export default function AdminLogin() {
       return;
     }
 
-    setSessionCookie(token);
-    localStorage.setItem("admin", "true");
+    const sessionRes = await fetch("/api/auth/admin/session", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const sessionData = await sessionRes.json().catch(() => ({}));
+    if (!sessionRes.ok || !sessionData?.ok) {
+      await supabase.auth.signOut();
+      setError(sessionData?.message || "Failed to establish admin session.");
+      setLoading(false);
+      return;
+    }
 
     setLoading(false);
-    // Full page redirect so middleware sees the cookie and dashboard loads with session
+    // Full page redirect so server-side admin layout reads HttpOnly admin session cookie.
     window.location.href = "/admin/dashboard";
   }
 

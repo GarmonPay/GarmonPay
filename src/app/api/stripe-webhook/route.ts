@@ -117,15 +117,30 @@ export async function POST(request: Request) {
           console.error("Stripe webhook: increment_user_balance error", rpcError);
           const { data: userRow, error: userFetchError } = await supabase
             .from("users")
-            .select("balance")
+            .select("balance, total_deposits")
             .eq("id", userId)
             .single();
           if (!userFetchError && userRow) {
             const currentBalance = Number((userRow as { balance?: number }).balance ?? 0);
-            const { error: updateError } = await supabase
+            const currentTotalDeposits = Number((userRow as { total_deposits?: number }).total_deposits ?? 0);
+            let { error: updateError } = await supabase
               .from("users")
-              .update({ balance: currentBalance + amountTotal, updated_at: new Date().toISOString() })
+              .update({
+                balance: currentBalance + amountTotal,
+                total_deposits: currentTotalDeposits + amountTotal,
+                updated_at: new Date().toISOString(),
+              })
               .eq("id", userId);
+            if (updateError && updateError.message?.toLowerCase().includes("total_deposits")) {
+              const retry = await supabase
+                .from("users")
+                .update({
+                  balance: currentBalance + amountTotal,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", userId);
+              updateError = retry.error;
+            }
             if (updateError) {
               console.error("Stripe webhook: fallback users.balance update error", updateError);
             }
@@ -134,16 +149,38 @@ export async function POST(request: Request) {
           }
         }
 
-        const { error: txError } = await supabase.from("transactions").insert({
+        const { data: existingTx, error: existingTxError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("type", "deposit")
+          .eq("reference_id", sessionId)
+          .maybeSingle();
+        if (existingTxError) {
+          console.error("Stripe webhook: lookup transactions deposit error", existingTxError);
+        }
+        if (!existingTx) {
+          const { error: txError } = await supabase.from("transactions").insert({
+            user_id: userId,
+            type: "deposit",
+            amount: amountTotal,
+            status: "completed",
+            description: `Stripe checkout ${sessionId}`,
+            reference_id: sessionId,
+          });
+          if (txError) {
+            console.error("Stripe webhook: insert transactions deposit error", txError);
+          }
+        }
+
+        const { error: depositError } = await supabase.from("deposits").insert({
           user_id: userId,
-          type: "deposit",
-          amount: amountTotal,
+          amount: amountTotal / 100,
           status: "completed",
-          description: `Stripe checkout ${sessionId}`,
-          reference_id: sessionId,
+          stripe_session: sessionId,
+          created_at: new Date().toISOString(),
         });
-        if (txError) {
-          console.error("Stripe webhook: insert transactions deposit error", txError);
+        if (depositError && (depositError as { code?: string }).code !== "23505") {
+          console.error("Stripe webhook: insert deposits error", depositError);
         }
       }
     }

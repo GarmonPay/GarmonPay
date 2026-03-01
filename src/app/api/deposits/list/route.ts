@@ -3,11 +3,10 @@ import { getAuthUserId } from "@/lib/auth-request";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
-/** GET /api/deposits/list — list deposits. User: own deposits. Admin (X-Admin-Id): all deposits. */
+/** GET /api/deposits/list — list deposits. User: own deposits. Admin: all deposits. */
 export async function GET(request: Request) {
-  const adminId = request.headers.get("x-admin-id");
-  const isAdminUser = !!(adminId && (await isAdmin(request)));
-  const userId = await getAuthUserId(request);
+  const isAdminUser = await isAdmin(request);
+  const userId = isAdminUser ? null : await getAuthUserId(request);
 
   if (!isAdminUser && !userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

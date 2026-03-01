@@ -15,6 +15,23 @@ type TxRow = {
   created_at: string;
 };
 
+const REWARD_TYPES = new Set([
+  "reward",
+  "earning",
+  "referral",
+  "referral_commission",
+  "spin_wheel",
+  "scratch_card",
+  "mystery_box",
+  "streak",
+  "mission",
+  "tournament_prize",
+  "team_prize",
+  "fight_prize",
+  "boxing_prize",
+  "boxing_bet_payout",
+]);
+
 export default function AdminRewardsPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [transactions, setTransactions] = useState<TxRow[]>([]);
@@ -35,7 +52,7 @@ export default function AdminRewardsPage() {
       })
       .then((data: TxRow[]) => {
         const list = Array.isArray(data) ? data : [];
-        setTransactions(list.filter((t) => t.type === "reward"));
+        setTransactions(list.filter((t) => REWARD_TYPES.has(t.type)));
       })
       .catch(() => setError("Failed to load reward activity"))
       .finally(() => setLoading(false));
@@ -69,7 +86,7 @@ export default function AdminRewardsPage() {
                 {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-white/5">
                     <td className="p-3 text-white font-mono text-sm">{t.user_id}</td>
-                    <td className="p-3 text-white">${Number(t.amount).toFixed(2)}</td>
+                    <td className="p-3 text-white">${(Number(t.amount) / 100).toFixed(2)}</td>
                     <td className="p-3 text-[#9ca3af]">{t.description ?? "—"}</td>
                     <td className="p-3 text-[#9ca3af]">{t.status}</td>
                     <td className="p-3 text-[#9ca3af] text-sm">{new Date(t.created_at).toLocaleString()}</td>

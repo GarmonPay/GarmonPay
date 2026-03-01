@@ -1,28 +1,37 @@
 /**
- * Get authenticated user id from request (Bearer token or x-user-id).
- * Used by API routes that require auth.
+ * Get authenticated user id from request using Supabase Auth token only.
+ * Accepts Authorization Bearer token or secure auth cookies.
  */
 
-import { findUserById } from "./auth-store";
 import { createServerClient } from "./supabase";
 
-export async function getAuthUserId(request: Request): Promise<string | null> {
+function parseCookieValue(cookieHeader: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+  return match ? decodeURIComponent(match[1].trim()) : null;
+}
+
+function getTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const userIdHeader = request.headers.get("x-user-id");
-
-  if (bearerToken) {
-    const supabase = createServerClient(bearerToken);
-    if (supabase) {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (!error && user) return user.id;
-    }
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
   }
 
-  if (userIdHeader) {
-    const user = findUserById(userIdHeader);
-    if (user) return user.id;
-  }
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  return (
+    parseCookieValue(cookieHeader, "sb-admin-token") ??
+    parseCookieValue(cookieHeader, "sb-access-token")
+  );
+}
 
-  return null;
+export async function getAuthUserId(request: Request): Promise<string | null> {
+  const token = getTokenFromRequest(request);
+  if (!token) return null;
+
+  const supabase = createServerClient(token);
+  if (!supabase) return null;
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user.id;
 }

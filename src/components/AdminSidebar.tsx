@@ -25,9 +25,12 @@ const links = [
 export function AdminSidebar() {
   const pathname = usePathname();
 
-  function handleLogout() {
+  async function handleLogout() {
     const supabase = createBrowserClient();
-    if (supabase) supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    await fetch("/api/auth/admin/session", { method: "DELETE" }).catch(() => {});
     window.location.href = "/admin/login";
   }
 

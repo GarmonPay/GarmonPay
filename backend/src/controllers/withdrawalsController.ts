@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { supabase } from '../services/supabase';
 
-const MIN_WITHDRAWAL_CENTS = 100;
+const MIN_WITHDRAWAL_CENTS = 1000;
 
 /** POST /api/withdrawals/request */
 export async function requestWithdrawal(req: Request, res: Response): Promise<void> {
@@ -32,14 +32,13 @@ export async function requestWithdrawal(req: Request, res: Response): Promise<vo
     return;
   }
 
-  const balanceDollars = Number((user as any).balance ?? 0);
-  const balanceCents = Math.round(balanceDollars * 100);
+  const balanceCents = Math.round(Number((user as any).balance ?? 0));
   if (amountCents > balanceCents) {
     res.status(400).json({ message: 'Insufficient balance' });
     return;
   }
 
-  const newBalance = balanceDollars - amountCents / 100;
+  const newBalance = balanceCents - amountCents;
   const { error: updateError } = await supabase
     .from('users')
     .update({ balance: newBalance })
@@ -54,7 +53,7 @@ export async function requestWithdrawal(req: Request, res: Response): Promise<vo
     .from('withdrawals')
     .insert({
       user_id: userId,
-      amount: amountCents / 100,
+      amount: amountCents,
       status: 'pending',
       method: method || 'crypto',
       wallet_address: walletAddress || null,

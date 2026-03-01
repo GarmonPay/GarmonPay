@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
-/** GET /api/admin/users — list all users from public.users. Requires X-Admin-Id. */
+/** GET /api/admin/users — list all users from public.users. */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });

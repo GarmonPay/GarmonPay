@@ -48,13 +48,50 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
 
-  await supabase.from("transactions").insert({
+  const { error: rpcError } = await supabase.rpc("increment_user_balance", {
+    p_user_id: userId,
+    p_amount_cents: amountCents,
+  });
+  if (rpcError) {
+    // Fallback for environments without RPC migration.
+    const { data: balanceRow, error: balanceError } = await supabase
+      .from("users")
+      .select("balance")
+      .eq("id", userId)
+      .single();
+    if (balanceError || !balanceRow) {
+      return NextResponse.json({ message: "Failed to load user balance" }, { status: 500 });
+    }
+    const nextBalance = Number((balanceRow as { balance?: number }).balance ?? 0) + amountCents;
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ balance: nextBalance, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+    if (updateError) {
+      return NextResponse.json({ message: updateError.message }, { status: 500 });
+    }
+  }
+
+  const { error: txError } = await supabase.from("transactions").insert({
     user_id: userId,
     type: "deposit",
     amount: amountCents,
     status: "completed",
     description: "Admin add funds",
   });
+  if (txError) {
+    return NextResponse.json({ message: txError.message }, { status: 500 });
+  }
 
-  return NextResponse.json({ success: true, amountCents });
+  const { data: updatedUser } = await supabase
+    .from("users")
+    .select("balance")
+    .eq("id", userId)
+    .single();
+
+  return NextResponse.json({
+    success: true,
+    amountCents,
+    balanceCents: Number((updatedUser as { balance?: number } | null)?.balance ?? 0),
+  });
 }
