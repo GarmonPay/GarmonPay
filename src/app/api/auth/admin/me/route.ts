@@ -4,7 +4,8 @@ import { createServerClient, createAdminClient } from "@/lib/supabase";
 /**
  * GET /api/auth/admin/me
  * Verifies current user (via Bearer token) has role = 'admin' or is_super_admin in public.users.
- * Uses service role so RLS cannot block. Allows admin dashboard access for role=admin users.
+ * Uses service role when available; falls back to token-scoped lookup for current user.
+ * Allows admin dashboard access for role=admin users.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -21,10 +22,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   const admin = createAdminClient();
-  if (!admin) {
-    return NextResponse.json({ ok: false }, { status: 503 });
-  }
-  const { data: profile, error: profileError } = await admin
+  const profileClient = admin ?? supabase;
+  const { data: profile, error: profileError } = await profileClient
     .from("users")
     .select("role, is_super_admin")
     .eq("id", user.id)

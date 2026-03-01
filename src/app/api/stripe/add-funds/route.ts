@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
+import { getCheckoutBaseUrl } from "@/lib/stripe-server";
 
 export async function GET() {
   return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
@@ -24,43 +25,56 @@ export async function POST(req: Request) {
   }
 
   const userId = await getAuthUserId(req);
-  let customer_email: string | undefined;
-  if (userId) {
-    const supabase = createAdminClient();
-    if (supabase) {
-      const { data: userRow } = await supabase.from("users").select("email").eq("id", userId).single();
-      customer_email = (userRow as { email?: string } | null)?.email;
-    }
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized", url: null }, { status: 401 });
   }
 
-  const stripe = new Stripe(secret, {
-    apiVersion: "2026-01-28.clover",
-  });
-  const domain = process.env.NEXT_PUBLIC_APP_URL || "https://garmonpay.com";
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    customer_email: customer_email,
-    metadata: {
-      user_id: userId ?? "",
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "GarmonPay Add Funds",
-          },
-          unit_amount: Math.round(amount * 100),
-        },
-        quantity: 1,
-      },
-    ],
-    success_url: `${domain}/dashboard`,
-    cancel_url: `${domain}/dashboard`,
-  });
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Database unavailable", url: null }, { status: 503 });
+  }
+  const { data: userRow } = await supabase.from("users").select("email").eq("id", userId).single();
+  const customer_email = (userRow as { email?: string } | null)?.email;
+  if (!customer_email) {
+    return NextResponse.json({ error: "User email not found", url: null }, { status: 400 });
+  }
 
-  return NextResponse.json({
-    url: session.url,
-  });
+  try {
+    const stripe = new Stripe(secret, {
+      apiVersion: "2026-01-28.clover",
+    });
+    const baseUrl = getCheckoutBaseUrl(req);
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_email,
+      client_reference_id: userId,
+      metadata: {
+        user_id: userId,
+        email: customer_email,
+        product_type: "wallet_fund",
+      },
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "GarmonPay Add Funds",
+            },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${baseUrl}/dashboard?funded=true`,
+      cancel_url: `${baseUrl}/dashboard`,
+    });
+
+    return NextResponse.json({
+      url: session.url,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to create checkout session";
+    return NextResponse.json({ error: message, url: null }, { status: 500 });
+  }
 }

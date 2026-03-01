@@ -35,6 +35,8 @@ export async function POST(request: Request) {
 
     if (session.mode === "subscription" && session.subscription) {
       const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+      const membershipTierRaw = String(session.metadata?.tier ?? "pro").toLowerCase();
+      const membershipTier = membershipTierRaw === "vip" || membershipTierRaw === "starter" ? membershipTierRaw : "pro";
       if (supabase && userId) {
         try {
           const stripe = getStripe();
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
             },
             { onConflict: "stripe_subscription_id" }
           );
-          await supabase.from("users").update({ membership: "pro", updated_at: new Date().toISOString() }).eq("id", userId);
+          await supabase.from("users").update({ membership: membershipTier, updated_at: new Date().toISOString() }).eq("id", userId);
         } catch (e) {
           console.error("Stripe webhook: subscription save error", e);
         }
@@ -68,27 +70,81 @@ export async function POST(request: Request) {
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
     const transactionId = paymentIntentId ?? sessionId;
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
+    // Backward compatibility: older add-funds sessions used product_type="payment".
+    const shouldCreditWallet = !!userId && amountTotal > 0 && (productType === "wallet_fund" || productType === "payment");
 
     if (supabase) {
-      const { error } = await supabase.from("stripe_payments").insert({
-        user_id: userId || null,
-        email: email || "unknown",
-        amount_cents: amountTotal,
-        currency,
-        transaction_id: transactionId,
-        stripe_session_id: sessionId,
-        stripe_payment_intent_id: paymentIntentId,
-        product_type: allowedTypes.includes(productType) ? productType : "payment",
-        status: "completed",
-      });
-      if (error) console.error("Stripe webhook: insert stripe_payments error", error);
+      let alreadyProcessed = false;
+      const { data: existingPayment, error: existingPaymentError } = await supabase
+        .from("stripe_payments")
+        .select("id")
+        .eq("stripe_session_id", sessionId)
+        .maybeSingle();
+      if (existingPaymentError) {
+        console.error("Stripe webhook: lookup stripe_payments error", existingPaymentError);
+      }
+      if (existingPayment) {
+        alreadyProcessed = true;
+      }
 
-      if (productType === "wallet_fund" && userId && amountTotal > 0) {
+      if (!alreadyProcessed) {
+        const { error } = await supabase.from("stripe_payments").insert({
+          user_id: userId || null,
+          email: email || "unknown",
+          amount_cents: amountTotal,
+          currency,
+          transaction_id: transactionId,
+          stripe_session_id: sessionId,
+          stripe_payment_intent_id: paymentIntentId,
+          product_type: allowedTypes.includes(productType) ? productType : "payment",
+          status: "completed",
+        });
+        if (error) {
+          const duplicate = (error as { code?: string }).code === "23505";
+          if (!duplicate) {
+            console.error("Stripe webhook: insert stripe_payments error", error);
+          }
+          alreadyProcessed = duplicate;
+        }
+      }
+
+      if (!alreadyProcessed && shouldCreditWallet) {
         const { error: rpcError } = await supabase.rpc("increment_user_balance", {
           p_user_id: userId,
           p_amount_cents: amountTotal,
         });
-        if (rpcError) console.error("Stripe webhook: increment_user_balance error", rpcError);
+        if (rpcError) {
+          console.error("Stripe webhook: increment_user_balance error", rpcError);
+          const { data: userRow, error: userFetchError } = await supabase
+            .from("users")
+            .select("balance")
+            .eq("id", userId)
+            .single();
+          if (!userFetchError && userRow) {
+            const currentBalance = Number((userRow as { balance?: number }).balance ?? 0);
+            const { error: updateError } = await supabase
+              .from("users")
+              .update({ balance: currentBalance + amountTotal, updated_at: new Date().toISOString() })
+              .eq("id", userId);
+            if (updateError) {
+              console.error("Stripe webhook: fallback users.balance update error", updateError);
+            }
+          } else if (userFetchError) {
+            console.error("Stripe webhook: fallback users.balance fetch error", userFetchError);
+          }
+        }
+
+        const { error: txError } = await supabase.from("transactions").insert({
+          user_id: userId,
+          type: "deposit",
+          amount: amountTotal,
+          status: "completed",
+          description: `Stripe checkout ${sessionId}`,
+          reference_id: sessionId,
+        });
+        if (txError) {
+          console.error("Stripe webhook: insert transactions deposit error", txError);
+        }
       }
     }
   }

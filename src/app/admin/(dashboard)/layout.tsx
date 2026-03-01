@@ -30,7 +30,18 @@ export default async function AdminDashboardLayout({
     redirect("/admin/login");
   }
 
-  const admin = await isAdmin(user.id);
+  let admin = await isAdmin(user.id);
+  if (!admin) {
+    // Fallback for environments missing service role key: try checking current user's own row via auth token client.
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role, is_super_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+    const row = profile as { role?: string; is_super_admin?: boolean } | null;
+    admin = (row?.role?.toLowerCase() === "admin") || !!row?.is_super_admin;
+  }
+
   if (!admin) {
     redirect("/dashboard");
   }

@@ -48,15 +48,15 @@ export default function DashboardPage() {
     const supabase = createBrowserClient();
     if (!supabase) return;
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email) return;
+    if (!user?.id) return;
     const { data } = await supabase
       .from("users")
       .select("balance")
-      .eq("email", user.email)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
     if (data != null && typeof (data as { balance?: unknown }).balance !== "undefined") {
       const balance = Number((data as { balance: number }).balance ?? 0);
-      setBalanceCentsFromSupabase(Math.round(balance * 100));
+      setBalanceCentsFromSupabase(Math.round(balance));
     }
   }
 
@@ -229,9 +229,13 @@ export default function DashboardPage() {
   }
 
   const upgrade = async (tier: string) => {
+    const session = await getSessionAsync();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+    else if (session?.userId) headers["X-User-Id"] = session.userId;
     const res = await fetch("/api/stripe/create-membership-session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ tier }),
     });
     const data = await res.json();

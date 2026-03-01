@@ -10,6 +10,7 @@ export interface AdminSession {
   email: string;
   expiresAt: string;
   isSuperAdmin?: boolean;
+  accessToken?: string;
 }
 
 function getAccessTokenFromCookie(): string | null {
@@ -43,6 +44,7 @@ export async function getAdminSessionAsync(): Promise<AdminSession | null> {
       email: data.email ?? "",
       expiresAt: data.expiresAt ?? "",
       isSuperAdmin: !!data.isSuperAdmin,
+      accessToken: token ?? undefined,
     };
   } catch {
     return null;
