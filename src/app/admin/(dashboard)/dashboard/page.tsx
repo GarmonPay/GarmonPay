@@ -1,22 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminSessionAsync, adminApiHeaders } from "@/lib/admin-supabase";
+import { getAdminSessionAsync } from "@/lib/admin-supabase";
+
+const defaultStats = {
+  totalUsers: 0,
+  totalDeposits: 0,
+  totalWithdrawals: 0,
+  totalBalance: 0,
+  totalProfit: 0,
+  totalRevenue: 0,
+  recentTransactions: [] as { id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[],
+};
 
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalDeposits: 0,
-    totalWithdrawals: 0,
-    totalBalance: 0,
-    totalProfit: 0,
-    totalRevenue: 0,
-    recentTransactions: [] as { id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[],
-  });
+  const [stats, setStats] = useState(defaultStats);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [statsMessage, setStatsMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getAdminSessionAsync().then(setSession);
@@ -24,46 +25,49 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!session) return;
-    const headers = adminApiHeaders(session);
-    (async () => {
-      await fetch("/api/admin/sync-users", {
-        headers,
-      });
-      load();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setStatsError(null);
+    fetch("/api/admin/stats", { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 503 ? "Server configuration error. Ensure SUPABASE_SERVICE_ROLE_KEY is set in Vercel." : `Stats failed (${res.status}).`);
+        return res.json();
+      })
+      .then((data) => {
+        setStats({
+          totalUsers: data.totalUsers ?? 0,
+          totalDeposits: data.totalDeposits ?? 0,
+          totalWithdrawals: data.totalWithdrawals ?? 0,
+          totalBalance: data.totalBalance ?? 0,
+          totalProfit: data.totalProfit ?? 0,
+          totalRevenue: data.totalRevenue ?? 0,
+          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+        });
+      })
+      .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
+      .finally(() => setLoading(false));
   }, [session]);
 
-  async function load() {
+  function load() {
     if (!session) return;
+    setLoading(true);
     setStatsError(null);
-    setStatsMessage(null);
-    const headers = adminApiHeaders(session);
-    // TOTAL USERS and TOTAL DEPOSITS from /api/admin/dashboard (real Supabase: public.users count, public.deposits sum)
-    const dashboardRes = await fetch("/api/admin/dashboard", { headers });
-    const dashboardData = dashboardRes.ok ? await dashboardRes.json() : await dashboardRes.json().catch(() => ({}));
-    const totalUsers = dashboardRes.ok ? (dashboardData.totalUsers ?? 0) : 0;
-    const totalDeposits = dashboardRes.ok ? (dashboardData.totalDeposits ?? 0) : 0;
-    if (!dashboardRes.ok) {
-      setStatsError(dashboardData?.message ?? `Dashboard metrics failed (${dashboardRes.status}). Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.`);
-    }
-    // Other metrics and recent transactions from /api/admin/stats
-    const statsRes = await fetch("/api/admin/stats", { headers });
-    const statsData = statsRes.ok ? await statsRes.json() : await statsRes.json().catch(() => ({}));
-    if (!statsRes.ok && !dashboardRes.ok) {
-      setStatsError((s) => s || statsData?.message || `Stats failed (${statsRes.status}).`);
-    }
-    if (statsRes.ok && statsData.message) setStatsMessage(statsData.message);
-    setStats({
-      totalUsers,
-      totalDeposits,
-      totalWithdrawals: statsRes.ok ? (statsData.totalWithdrawals ?? 0) : 0,
-      totalBalance: statsRes.ok ? (statsData.totalBalance ?? 0) : 0,
-      totalProfit: statsRes.ok ? (statsData.totalProfit ?? 0) : 0,
-      totalRevenue: statsRes.ok ? (statsData.totalRevenue ?? 0) : 0,
-      recentTransactions: statsRes.ok && Array.isArray(statsData.recentTransactions) ? statsData.recentTransactions : [],
-    });
-    setLoading(false);
+    fetch("/api/admin/stats", { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 503 ? "Server configuration error." : `Stats failed (${res.status}).`);
+        return res.json();
+      })
+      .then((data) => {
+        setStats({
+          totalUsers: data.totalUsers ?? 0,
+          totalDeposits: data.totalDeposits ?? 0,
+          totalWithdrawals: data.totalWithdrawals ?? 0,
+          totalBalance: data.totalBalance ?? 0,
+          totalProfit: data.totalProfit ?? 0,
+          totalRevenue: data.totalRevenue ?? 0,
+          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+        });
+      })
+      .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
+      .finally(() => setLoading(false));
   }
 
   if (!session) {
@@ -92,14 +96,9 @@ export default function Dashboard() {
         {statsError && (
           <div className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm flex items-center justify-between gap-4">
             <span>{statsError}</span>
-            <button type="button" onClick={() => { setLoading(true); load(); }} className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium">
+            <button type="button" onClick={load} className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium">
               Retry
             </button>
-          </div>
-        )}
-        {statsMessage && !statsError && (
-          <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-blue-200 text-sm">
-            {statsMessage}
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
