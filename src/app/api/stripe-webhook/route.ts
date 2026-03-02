@@ -70,8 +70,7 @@ export async function POST(request: Request) {
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
     const transactionId = paymentIntentId ?? sessionId;
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
-    // Backward compatibility: older add-funds sessions used product_type="payment".
-    const shouldCreditWallet = !!userId && amountTotal > 0 && (productType === "wallet_fund" || productType === "payment");
+    const shouldRecordDeposit = !!userId && amountTotal > 0;
 
     if (supabase) {
       let alreadyProcessed = false;
@@ -108,7 +107,32 @@ export async function POST(request: Request) {
         }
       }
 
-      if (!alreadyProcessed && shouldCreditWallet) {
+      if (!alreadyProcessed && shouldRecordDeposit) {
+        const depositCreatedAt = new Date().toISOString();
+        const depositAmount = amountTotal / 100;
+        const { data: existingDeposit, error: existingDepositError } = await supabase
+          .from("deposits")
+          .select("id")
+          .eq("stripe_session", sessionId)
+          .maybeSingle();
+        if (existingDepositError) {
+          console.error("Stripe webhook: lookup deposits error", existingDepositError);
+        }
+        if (!existingDeposit) {
+          const { error: depositInsertError } = await supabase.from("deposits").insert({
+            user_id: userId,
+            amount: depositAmount,
+            stripe_session: sessionId,
+            created_at: depositCreatedAt,
+          });
+          if (depositInsertError) {
+            const duplicate = (depositInsertError as { code?: string }).code === "23505";
+            if (!duplicate) {
+              console.error("Stripe webhook: insert deposits error", depositInsertError);
+            }
+          }
+        }
+
         const { error: rpcError } = await supabase.rpc("increment_user_balance", {
           p_user_id: userId,
           p_amount_cents: amountTotal,
