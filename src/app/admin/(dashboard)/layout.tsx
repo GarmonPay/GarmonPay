@@ -5,8 +5,9 @@ import { ADMIN_SESSION_COOKIE } from "@/lib/admin-cookie";
 import { AdminDashboardShell } from "./AdminDashboardShell";
 
 /**
- * Admin dashboard layout: verify admin via SERVICE ROLE only.
- * Token from httpOnly cookie → get user id from Auth → select role from public.users where id = user.id
+ * Admin dashboard layout. Server-side only.
+ * Verifies admin: token from httpOnly cookie → auth.uid() → public.users role.
+ * Uses SUPABASE_SERVICE_ROLE_KEY when set; else token-scoped read.
  */
 export default async function AdminDashboardLayout({
   children,
@@ -28,7 +29,6 @@ export default async function AdminDashboardLayout({
     redirect("/admin/login");
   }
 
-  // 1) Resolve auth.uid() from token
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
@@ -37,12 +37,10 @@ export default async function AdminDashboardLayout({
     redirect("/admin/login");
   }
 
-  // 2) Must use SERVICE ROLE to check public.users (RLS-safe)
-  if (!serviceKey) {
-    redirect("/admin/login");
-  }
-  const adminClient = createClient(url, serviceKey);
-  const { data: profile, error: profileError } = await adminClient
+  const roleClient = serviceKey
+    ? createClient(url, serviceKey)
+    : authClient;
+  const { data: profile, error: profileError } = await roleClient
     .from("users")
     .select("role, is_super_admin")
     .eq("id", user.id)

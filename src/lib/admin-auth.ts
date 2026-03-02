@@ -1,7 +1,7 @@
 /**
- * Admin auth: token from cookie or Bearer, then SERVICE ROLE only for public.users.
+ * Admin auth: token from cookie or Bearer, then public.users lookup.
+ * Uses SUPABASE_SERVICE_ROLE_KEY when set; else token-scoped read (RLS may allow own row).
  * Valid admin = role = 'admin' OR is_super_admin = true in public.users.
- * Query: select role from public.users where id = auth.uid()
  */
 
 import { cookies } from "next/headers";
@@ -13,15 +13,14 @@ function hasAdminRole(row: { role?: string; is_super_admin?: boolean } | null | 
   return (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
 }
 
-/** Returns true if request has valid admin: token from cookie or Bearer, then verify via SERVICE ROLE public.users lookup. */
+/** Returns true if request has valid admin. Server-side only. */
 export async function isAdmin(request: Request): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !anonKey || !serviceKey) return false;
+  if (!url || !anonKey) return false;
 
-  // Token: httpOnly cookie first, then Bearer
   let token: string | null = null;
   try {
     const cookieStore = await cookies();
@@ -35,16 +34,16 @@ export async function isAdmin(request: Request): Promise<boolean> {
   }
   if (!token) return false;
 
-  // 1) Resolve auth.uid() from token
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: { user }, error: authError } = await authClient.auth.getUser();
   if (authError || !user) return false;
 
-  // 2) select role from public.users where id = auth.uid() — SERVICE ROLE only
-  const adminClient = createClient(url, serviceKey);
-  const { data, error } = await adminClient
+  const roleClient = serviceKey
+    ? createClient(url, serviceKey)
+    : authClient;
+  const { data, error } = await roleClient
     .from("users")
     .select("role, is_super_admin")
     .eq("id", user.id)

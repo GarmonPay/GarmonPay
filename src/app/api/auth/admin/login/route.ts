@@ -6,24 +6,22 @@ const COOKIE_MAX_AGE = 60 * 60 * 24; // 24 hours
 
 /**
  * POST /api/auth/admin/login
- * Authenticates via Supabase Auth, then verifies role from public.users using SERVICE ROLE.
+ * Server-side only. Authenticates via Supabase Auth, then verifies role from public.users.
+ * Uses SUPABASE_SERVICE_ROLE_KEY (never NEXT_PUBLIC) when set; else token-scoped read.
  * Sets httpOnly secure cookie on success.
- * Query: select role from public.users where id = auth.uid()
  */
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  if (process.env.NODE_ENV !== "test") {
+    console.log("Admin login env: service role loaded =", !!serviceKey, "url =", !!url, "anon =", !!anonKey);
+  }
+
   if (!url || !anonKey) {
     return NextResponse.json(
       { ok: false, message: "Supabase URL and anon key required" },
-      { status: 503 }
-    );
-  }
-  if (!serviceKey) {
-    return NextResponse.json(
-      { ok: false, message: "SUPABASE_SERVICE_ROLE_KEY required for admin login" },
       { status: 503 }
     );
   }
@@ -65,9 +63,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2) Verify admin: select role from public.users where id = auth.uid() — SERVICE ROLE only
-  const adminClient = createClient(url, serviceKey);
-  const { data: profile, error: profileError } = await adminClient
+  // 2) Verify admin: select role from public.users where id = auth.uid()
+  // Prefer SERVICE ROLE; if not set, use signed-in user's token (RLS may allow own row)
+  const roleClient = serviceKey
+    ? createClient(url, serviceKey)
+    : createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${accessToken}` } } });
+  const { data: profile, error: profileError } = await roleClient
     .from("users")
     .select("role, is_super_admin")
     .eq("id", user.id)
@@ -76,8 +77,8 @@ export async function POST(request: Request) {
   if (profileError) {
     console.error("Admin login public.users lookup error:", profileError);
     return NextResponse.json(
-      { ok: false, message: "Could not verify admin role" },
-      { status: 500 }
+      { ok: false, message: "Could not verify admin role. Check that public.users has a row for this user with role = 'admin'." },
+      { status: 503 }
     );
   }
 

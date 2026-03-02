@@ -5,8 +5,8 @@ import { ADMIN_SESSION_COOKIE } from "@/lib/admin-cookie";
 
 /**
  * GET /api/auth/admin/me
- * Verifies admin via httpOnly cookie or Bearer token.
- * Always uses SERVICE ROLE to query: select role from public.users where id = auth.uid()
+ * Server-side only. Verifies admin via cookie or Bearer.
+ * Uses SUPABASE_SERVICE_ROLE_KEY when set; else token-scoped read of public.users.
  */
 export async function GET(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,11 +16,7 @@ export async function GET(request: Request) {
   if (!url || !anonKey) {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
-  if (!serviceKey) {
-    return NextResponse.json({ ok: false }, { status: 503 });
-  }
 
-  // Token: cookie first (httpOnly set by login), then Bearer
   let token: string | null = null;
   try {
     const cookieStore = await cookies();
@@ -36,7 +32,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  // 1) Resolve auth.uid() from token (anon client)
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
@@ -45,9 +40,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  // 2) select role from public.users where id = auth.uid() — SERVICE ROLE only
-  const adminClient = createClient(url, serviceKey);
-  const { data: profile, error: profileError } = await adminClient
+  const roleClient = serviceKey
+    ? createClient(url, serviceKey)
+    : authClient;
+  const { data: profile, error: profileError } = await roleClient
     .from("users")
     .select("role, is_super_admin")
     .eq("id", user.id)
