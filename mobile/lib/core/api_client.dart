@@ -8,7 +8,7 @@ import 'auth_service.dart';
 class ApiClient {
   static String? baseUrl;
 
-  String get _base => baseUrl ?? 'http://localhost:4000';
+  String get _base => baseUrl ?? 'https://garmonpay.com';
 
   Future<Map<String, String>> _headers(BuildContext context) async {
     final auth = context.read<AuthService>();
