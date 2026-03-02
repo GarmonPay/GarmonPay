@@ -39,12 +39,16 @@ export default function AdminRewardsPage() {
       })
       .catch(() => setError("Failed to load reward activity"))
       .finally(() => setLoading(false));
-  }, [session?.adminId]);
+  }, [session]);
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-white mb-2">Rewards</h1>
       <p className="text-[#9ca3af] mb-6">Reward credits (ad views, etc.) recorded as transactions.</p>
+      {!session ? (
+        <div className="text-[#9ca3af]">Redirecting to admin login…</div>
+      ) : (
+        <>
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
@@ -79,6 +83,8 @@ export default function AdminRewardsPage() {
             </table>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

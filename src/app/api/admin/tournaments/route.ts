@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { createAdminClient } from "@/lib/supabase";
 import {
   listAllTournaments,
   createTournament,
@@ -9,6 +10,9 @@ import {
 /** GET /api/admin/tournaments — list all tournaments. */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!createAdminClient()) {
+    return NextResponse.json({ tournaments: [], message: "Set SUPABASE_SERVICE_ROLE_KEY for tournaments." });
+  }
   try {
     const tournaments = await listAllTournaments();
     return NextResponse.json({ tournaments });

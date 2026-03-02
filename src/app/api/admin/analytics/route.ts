@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ events: [], message: "Set SUPABASE_SERVICE_ROLE_KEY for analytics." });
   }
 
   const limit = Math.min(500, Math.max(1, parseInt(new URL(request.url).searchParams.get("limit") ?? "100", 10) || 100));

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
   const client = createAdminClient();
   if (!client) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ banners: [], message: "Set SUPABASE_SERVICE_ROLE_KEY for banners." });
   }
   try {
     const banners = await listAllBanners();

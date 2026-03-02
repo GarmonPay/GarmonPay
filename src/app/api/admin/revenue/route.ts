@@ -47,10 +47,16 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient();
   if (!admin) {
-    return NextResponse.json(
-      { message: "Admin client not available" },
-      { status: 503 }
-    );
+    const now = new Date();
+    return NextResponse.json({
+      totalFightRevenueCents: 0,
+      dailyRevenueCents: 0,
+      monthlyRevenueCents: 0,
+      fightCount: 0,
+      chartData: buildEmptyChartData(now),
+      revenue: 0,
+      message: "Set SUPABASE_SERVICE_ROLE_KEY for revenue data.",
+    });
   }
 
   try {

@@ -79,6 +79,14 @@ export default function AdminRevenuePage() {
     );
   }
 
+  if (!session) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[40vh] text-[#9ca3af]">
+        Redirecting to admin login…
+      </div>
+    );
+  }
+
   if (!data) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[40vh] text-[#9ca3af]">

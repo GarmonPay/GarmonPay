@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabase";
 
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -25,9 +24,8 @@ const links = [
 export function AdminSidebar() {
   const pathname = usePathname();
 
-  function handleLogout() {
-    const supabase = createBrowserClient();
-    if (supabase) supabase.auth.signOut();
+  async function handleLogout() {
+    await fetch("/api/auth/admin/logout", { method: "POST", credentials: "include" });
     window.location.href = "/admin/login";
   }
 

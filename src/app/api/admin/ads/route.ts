@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Database not configured" }, { status: 503 });
+    return NextResponse.json({ ads: [], message: "Set SUPABASE_SERVICE_ROLE_KEY for ads." });
   }
   try {
     const rows = await listAllAds();

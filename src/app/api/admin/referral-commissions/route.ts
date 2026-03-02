@@ -15,7 +15,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
   if (!createAdminClient()) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({
+      config: [],
+      totalRecurringCommissionsPaidCents: 0,
+      activeReferralSubscriptions: 0,
+      message: "Set SUPABASE_SERVICE_ROLE_KEY for referral data.",
+    });
   }
   try {
     const [config, totalPaidCents, activeReferralSubs] = await Promise.all([

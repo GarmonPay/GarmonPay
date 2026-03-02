@@ -1,24 +1,26 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { ADMIN_SESSION_COOKIE } from "@/lib/admin-cookie";
 
 const PRODUCTION_ORIGIN = "https://garmonpay.com";
 
-/** Check if request has a Supabase auth cookie (session). */
-function hasAuthCookie(request: NextRequest): boolean {
-  const token = request.cookies.get("sb-access-token")?.value;
-  if (token) return true;
-  const all = request.cookies.getAll();
-  const hasSupabaseAuth = all.some(
-    (c) => c.name.startsWith("sb-") && c.name.includes("auth") && c.value
-  );
-  return !!hasSupabaseAuth;
+/** Admin routes: redirect to login if no admin session cookie (server-set httpOnly). Layout also verifies. */
+function hasAdminCookie(request: NextRequest): boolean {
+  return !!request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
 }
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Allow all /admin routes through; server layout handles auth and redirect to /admin/login
+  // Admin: protect dashboard routes; allow /admin and /admin/login without cookie
   if (pathname.startsWith("/admin")) {
+    if (pathname === "/admin" || pathname === "/admin/login") {
+      return NextResponse.next();
+    }
+    if (!hasAdminCookie(request)) {
+      const loginUrl = new URL("/admin/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
     return NextResponse.next();
   }
 

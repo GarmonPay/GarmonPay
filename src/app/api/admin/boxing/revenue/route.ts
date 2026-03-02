@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ revenue: 0, message: "Set SUPABASE_SERVICE_ROLE_KEY for boxing revenue." });
   }
 
   const { data, error } = await supabase.from("bets").select("amount");

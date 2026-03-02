@@ -30,23 +30,16 @@ export async function GET(request: Request) {
     .select("*", { count: "exact", head: true });
   if (countError) {
     console.error("Admin dashboard users count error:", countError);
-    return NextResponse.json(
-      { totalUsers: 0, totalDeposits: 0, message: countError.message },
-      { status: 500 }
-    );
   }
   const totalUsers = count ?? 0;
 
-  // TOTAL DEPOSITS: public.deposits sum of amount
+  // TOTAL DEPOSITS: public.deposits sum of amount (optional table)
   const { data: depositsData, error: depositsError } = await supabase
     .from("deposits")
     .select("amount");
   if (depositsError) {
     console.error("Admin dashboard deposits error:", depositsError);
-    return NextResponse.json(
-      { totalUsers, totalDeposits: 0, message: depositsError.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ totalUsers, totalDeposits: 0 });
   }
   const sumAmounts = (depositsData ?? []).reduce(
     (sum: number, row: { amount?: number | null }) => sum + Number(row?.amount ?? 0),

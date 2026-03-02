@@ -34,7 +34,7 @@ export default function AdminAnalyticsPage() {
       .then((data: { events?: EventRow[] }) => setEvents(data.events ?? []))
       .catch(() => setError("Failed to load analytics"))
       .finally(() => setLoading(false));
-  }, [session?.adminId]);
+  }, [session]);
 
   return (
     <div className="p-6">

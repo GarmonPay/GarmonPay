@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ users: [], message: "Set SUPABASE_SERVICE_ROLE_KEY for full user list." });
   }
 
   const { data: users, error } = await supabase
