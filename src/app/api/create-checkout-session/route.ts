@@ -1,10 +1,29 @@
 import { NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, type StripeProductType } from "@/lib/stripe-server";
-import { createAdminClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase";
 
 const DEFAULT_SUCCESS = "/payment-success";
 const DEFAULT_CANCEL = "/payment-cancel";
+
+function getBearerToken(request: Request): string | null {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  return token.length ? token : null;
+}
+
+function parseAmountCents(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.round(parsed);
+    }
+  }
+  return null;
+}
 
 function getBaseUrl(request: Request): string {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -21,14 +40,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Stripe is not configured" }, { status: 503 });
   }
 
-  const userId = await getAuthUserId(request);
-  if (!userId) {
+  const bearerToken = getBearerToken(request);
+  if (!bearerToken) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const authClient = createServerClient(bearerToken);
+  if (!authClient) {
+    return NextResponse.json({ message: "Authentication unavailable" }, { status: 503 });
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await authClient.auth.getUser();
+  if (userError || !user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = user.id;
+  const email = user.email ?? undefined;
+  if (!email) {
+    return NextResponse.json({ message: "User email not found" }, { status: 400 });
   }
 
   let body: {
     productType?: string;
-    amountCents?: number;
+    amountCents?: unknown;
     name?: string;
     successUrl?: string;
     cancelUrl?: string;
@@ -39,8 +77,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ message: "Invalid request body" }, { status: 400 });
+  }
+
   const productType = (body.productType ?? "payment") as StripeProductType;
-  const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : 999; // default $9.99
+  const amountCents = parseAmountCents(body.amountCents);
+  if (amountCents === null) {
+    return NextResponse.json({ message: "amountCents must be a valid number" }, { status: 400 });
+  }
   const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "GarmonPay payment";
   const base = getBaseUrl(request);
   const successUrl = body.successUrl ?? `${base}${DEFAULT_SUCCESS}?session_id={CHECKOUT_SESSION_ID}`;
@@ -50,21 +95,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Minimum amount is $0.50" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json({ message: "Database unavailable" }, { status: 503 });
-  }
-
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("email")
-    .eq("id", userId)
-    .single();
-
-  const email = (userRow as { email?: string } | null)?.email ?? undefined;
-  if (!email) {
-    return NextResponse.json({ message: "User email not found" }, { status: 400 });
-  }
+  console.log("Stripe checkout user.id:", userId);
+  console.log("Stripe checkout user.email:", email);
+  console.log("Stripe checkout amount:", amountCents);
 
   try {
     const stripe = getStripe();
@@ -76,6 +109,11 @@ export async function POST(request: Request) {
         user_id: userId,
         email,
         product_type: productType,
+      },
+      payment_intent_data: {
+        metadata: {
+          user_id: userId,
+        },
       },
       line_items: [
         {
