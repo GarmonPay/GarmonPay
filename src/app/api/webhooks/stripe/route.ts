@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     }
 
     if (!user_id) {
-      user_id = (session.metadata?.user_id ?? session.client_reference_id) as string | null;
+      user_id = (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
     }
 
     if (!user_id) {

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const userId = (session.metadata?.user_id ?? session.client_reference_id) as string | null;
+    let userId = (session.metadata?.user_id ?? session.client_reference_id) as string | null;
     const email = (session.customer_email ?? session.metadata?.email) as string;
     const productType = (session.metadata?.product_type as string) ?? "payment";
     const supabase = createAdminClient();
@@ -70,10 +70,24 @@ export async function POST(request: Request) {
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
     const transactionId = paymentIntentId ?? sessionId;
     const allowedTypes = ["subscription", "platform_access", "upgrade", "payment", "wallet_fund"];
-    // Backward compatibility: older add-funds sessions used product_type="payment".
-    const shouldCreditWallet = !!userId && amountTotal > 0 && (productType === "wallet_fund" || productType === "payment");
+    const shouldCreditWallet = !!amountTotal && (productType === "wallet_fund" || productType === "payment");
 
-    if (supabase) {
+    if (!supabase) {
+      if (shouldCreditWallet) {
+        console.error("Stripe webhook: SUPABASE_SERVICE_ROLE_KEY missing, cannot credit balance. Stripe will retry.");
+        return NextResponse.json({ message: "Database unavailable" }, { status: 500 });
+      }
+      return NextResponse.json({ received: true });
+    }
+
+    if (shouldCreditWallet && !userId && email) {
+      const { data: userByEmail } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+      if (userByEmail && typeof (userByEmail as { id?: string }).id === "string") {
+        userId = (userByEmail as { id: string }).id;
+      }
+    }
+
+    const effectiveShouldCredit = !!userId && amountTotal > 0 && (productType === "wallet_fund" || productType === "payment");
       let alreadyProcessed = false;
       const { data: existingPayment, error: existingPaymentError } = await supabase
         .from("stripe_payments")
@@ -108,7 +122,7 @@ export async function POST(request: Request) {
         }
       }
 
-      if (!alreadyProcessed && shouldCreditWallet) {
+      if (!alreadyProcessed && effectiveShouldCredit) {
         const { error: rpcError } = await supabase.rpc("increment_user_balance", {
           p_user_id: userId,
           p_amount_cents: amountTotal,
@@ -145,8 +159,22 @@ export async function POST(request: Request) {
         if (txError) {
           console.error("Stripe webhook: insert transactions deposit error", txError);
         }
+
+        const amountDollars = amountTotal / 100;
+        const { error: depError } = await supabase.from("deposits").insert({
+          user_id: userId,
+          amount: amountDollars,
+          status: "completed",
+          stripe_session: sessionId,
+        });
+        if (depError) {
+          console.error("Stripe webhook: insert deposits error", depError);
+        }
+
+        const { data: userForTotal } = await supabase.from("users").select("total_deposits").eq("id", userId).maybeSingle();
+        const prevTotal = Number((userForTotal as { total_deposits?: number } | null)?.total_deposits ?? 0);
+        await supabase.from("users").update({ total_deposits: prevTotal + amountTotal, updated_at: new Date().toISOString() }).eq("id", userId);
       }
-    }
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {

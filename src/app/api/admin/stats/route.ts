@@ -44,27 +44,36 @@ export async function GET(request: Request) {
     totalBalance += Number(r?.balance ?? 0);
   });
 
-  const { data: depositsRows } = await supabase.from("deposits").select("amount");
-  const totalDepositsDollars = (depositsRows ?? []).reduce(
-    (sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0),
-    0
-  );
-  let totalDepositsCents = Math.round(totalDepositsDollars * 100);
-
+  // Prefer transactions-based totals (what Stripe webhook writes); fallback to deposits/withdrawals tables
+  let totalDepositsCents = 0;
   let totalWithdrawalsCents = 0;
-  const { data: withdrawalAmountRows } = await supabase
-    .from("withdrawals")
-    .select("amount")
-    .in("status", ["approved", "completed", "paid"]);
-  (withdrawalAmountRows ?? []).forEach((r: { amount?: number | null }) => {
-    totalWithdrawalsCents += Number(r?.amount ?? 0);
-  });
+  try {
+    const totals = await getPlatformTotals();
+    totalDepositsCents = totals.totalDepositsCents;
+    totalWithdrawalsCents = totals.totalWithdrawalsCents;
+  } catch (e) {
+    console.error("Admin stats getPlatformTotals error:", e);
+  }
+  if (totalDepositsCents === 0) {
+    const { data: depositsRows } = await supabase.from("deposits").select("amount");
+    const totalDepositsDollars = (depositsRows ?? []).reduce(
+      (sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0),
+      0
+    );
+    totalDepositsCents = Math.round(totalDepositsDollars * 100);
+  }
+  if (totalWithdrawalsCents === 0) {
+    const { data: withdrawalAmountRows } = await supabase
+      .from("withdrawals")
+      .select("amount")
+      .in("status", ["approved", "completed", "paid"]);
+    (withdrawalAmountRows ?? []).forEach((r: { amount?: number | null }) => {
+      totalWithdrawalsCents += Number(r?.amount ?? 0);
+    });
+  }
 
   let recentTransactions: { id: string; user_id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[] = [];
   try {
-    const totals = await getPlatformTotals();
-    if (totalDepositsCents === 0) totalDepositsCents = totals.totalDepositsCents;
-    if (totalWithdrawalsCents === 0) totalWithdrawalsCents = totals.totalWithdrawalsCents;
     const all = await listAllTransactions();
     recentTransactions = all.slice(0, 50).map((r) => ({
       id: r.id,

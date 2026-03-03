@@ -26,22 +26,33 @@ export type LoginResult =
 export async function login(email: string, password: string): Promise<LoginResult> {
   const supabase = createBrowserClient();
   if (!supabase) {
-    return { ok: false, message: "Auth not configured" };
+    return { ok: false, message: "Auth not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local" };
   }
   const trimmedEmail = email.trim();
   if (!trimmedEmail) return { ok: false, message: "Email is required" };
   if (!password) return { ok: false, message: "Password is required" };
   const { data, error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
-  if (error) return { ok: false, message: error.message };
-  if (!data.session?.user) return { ok: false, message: "No session" };
+  if (error) {
+    const msg = error.message || "Invalid email or password";
+    return { ok: false, message: msg };
+  }
+  if (!data.session?.user) return { ok: false, message: "Login failed. No session." };
   const uid = data.user.id;
   let role = "member";
   let isSuperAdmin = false;
-  const { data: row } = await supabase.from("users").select("role, is_super_admin").eq("id", uid).maybeSingle();
-  if (row && (row as { role?: string }).role) role = (row as { role: string }).role;
-  if (row) isSuperAdmin = !!(row as { is_super_admin?: boolean }).is_super_admin;
+  try {
+    const { data: row } = await supabase.from("users").select("role, is_super_admin").eq("id", uid).maybeSingle();
+    if (row && (row as { role?: string }).role) role = (row as { role: string }).role;
+    if (row) isSuperAdmin = !!(row as { is_super_admin?: boolean }).is_super_admin;
+  } catch {
+    try {
+      const { data: row } = await supabase.from("users").select("role").eq("id", uid).maybeSingle();
+      if (row && (row as { role?: string }).role) role = (row as { role: string }).role;
+    } catch {
+      // keep defaults
+    }
+  }
   const user: AuthUser = { id: data.user.id, email: data.user.email ?? "", role, isSuperAdmin };
-  const isAdmin = role === "admin" || isSuperAdmin;
   setSession({
     userId: data.user.id,
     email: data.user.email ?? "",

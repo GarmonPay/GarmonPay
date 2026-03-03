@@ -106,3 +106,15 @@ BEGIN
   WHERE id = p_user_id;
 END;
 $$;
+
+-- increment_balance (amount in dollars) — for webhooks/callers that pass dollars
+CREATE OR REPLACE FUNCTION public.increment_balance(user_id uuid, amount numeric)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF user_id IS NULL OR amount IS NULL OR amount <= 0 THEN RETURN; END IF;
+  UPDATE public.users
+  SET balance = COALESCE(balance, 0) + (amount * 100)::bigint,
+      updated_at = now()
+  WHERE id = user_id;
+END;
+$$;

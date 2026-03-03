@@ -27,18 +27,18 @@ function WalletContent() {
       const session = await getSessionAsync();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-      else if (session?.userId) headers["X-User-Id"] = session.userId;
+      if (session?.userId) headers["X-User-Id"] = session.userId;
       const res = await fetch("/api/stripe/add-funds", {
         method: "POST",
         headers,
         body: JSON.stringify({ amount }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 503 || !data?.url) {
-        setDepositError(data?.error || "Deposit is unavailable. Check server configuration.");
+      if (data?.url) {
+        window.location.href = data.url;
         return;
       }
-      window.location.href = data.url;
+      setDepositError(data?.error || (res.status === 401 ? "Please sign in to deposit." : "Deposit unavailable. Try again."));
     } catch (e) {
       setDepositError("Network error. Please try again.");
     } finally {

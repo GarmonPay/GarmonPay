@@ -43,6 +43,15 @@ export default function DashboardPage() {
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [balanceCentsFromSupabase, setBalanceCentsFromSupabase] = useState<number | null>(null);
+  const [stripeStatusMessage, setStripeStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!depositModalOpen) return;
+    fetch("/api/stripe/status").then((r) => r.json()).then((d) => {
+      if (!d?.ok && d?.message) setStripeStatusMessage(d.message);
+      else setStripeStatusMessage(null);
+    }).catch(() => setStripeStatusMessage(null));
+  }, [depositModalOpen]);
 
   async function fetchBalance() {
     const supabase = createBrowserClient();
@@ -247,15 +256,22 @@ export default function DashboardPage() {
     const session = await getSessionAsync();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else if (session?.userId) headers["X-User-Id"] = session.userId;
-    const res = await fetch("/api/stripe/add-funds", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ amount }),
-    });
-    const data = await res.json();
-    if (data?.url) window.location.href = data.url;
-    else if (data?.error) setCheckoutError(data.error);
+    if (session?.userId) headers["X-User-Id"] = session.userId;
+    try {
+      const res = await fetch("/api/stripe/add-funds", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setCheckoutError(data?.error || (res.status === 401 ? "Please sign in to deposit." : "Deposit unavailable. Try again."));
+    } catch {
+      setCheckoutError("Network error. Please try again.");
+    }
   };
 
   const handleDeposit = async () => {
@@ -355,7 +371,21 @@ export default function DashboardPage() {
             <h3 className="text-lg font-bold text-white">Deposit</h3>
             <p className="mt-1 text-sm text-fintech-muted">Enter amount between $5 and $1,000.</p>
             {checkoutError && (
-              <p className="mt-2 text-sm text-red-400">{checkoutError}</p>
+              <p className="mt-2 text-sm text-red-400">
+                {checkoutError}
+                <button type="button" onClick={() => setCheckoutError(null)} className="ml-2 underline hover:no-underline">Retry</button>
+              </p>
+            )}
+            {stripeStatusMessage && (
+              <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+                <p className="font-medium">Stripe key issue</p>
+                <ol className="mt-2 list-decimal list-inside space-y-1 text-xs">
+                  <li>Stripe Dashboard → Developers → API keys → copy Secret key (sk_...)</li>
+                  <li>In .env.local set STRIPE_SECRET_KEY=sk_...</li>
+                  <li>Restart: run npm run dev</li>
+                </ol>
+                <button type="button" onClick={() => setStripeStatusMessage(null)} className="mt-2 underline">Dismiss</button>
+              </div>
             )}
             <input
               type="number"
