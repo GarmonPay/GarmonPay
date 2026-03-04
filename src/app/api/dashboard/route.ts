@@ -48,7 +48,7 @@ export async function GET(request: Request) {
         }
         const { data: row, error: rowError } = await supabase
           .from("users")
-          .select("id, email, role, membership, balance, ad_credit_balance, withdrawable_balance, referral_code")
+          .select("id, email, role, membership, ad_credit_balance, withdrawable_balance, referral_code")
           .eq("id", authUser.id)
           .single();
 
@@ -102,10 +102,22 @@ export async function GET(request: Request) {
         // referral_commissions / subscriptions tables may be missing
       }
 
-      const userRow = row as { balance?: number; ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
-      const balanceCents = Number(userRow?.balance ?? 0);
+      const { data: depositRows, error: depositRowsErr } = await supabase
+        .from("transactions")
+        .select("amount")
+        .eq("user_id", authUser.id)
+        .eq("type", "deposit");
+      if (depositRowsErr) {
+        console.error("Dashboard deposits fetch error:", depositRowsErr);
+      }
+
+      const availableBalanceDollars = ((depositRows ?? []) as Array<{ amount?: number | string | null }>)
+        .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0);
+
+      const userRow = row as { ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
+      const balanceCents = Math.round(availableBalanceDollars * 100);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
-      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
+      const withdrawableCents = Number(userRow?.withdrawable_balance ?? balanceCents);
 
         return NextResponse.json({
           earningsTodayCents,

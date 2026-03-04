@@ -4,7 +4,13 @@
 
 import { createAdminClient } from "@/lib/supabase";
 
-export type TransactionType = "earning" | "withdrawal" | "ad_credit" | "referral" | "referral_commission";
+export type TransactionType =
+  | "deposit"
+  | "earning"
+  | "withdrawal"
+  | "ad_credit"
+  | "referral"
+  | "referral_commission";
 export type TransactionStatus = "pending" | "completed" | "rejected" | "cancelled";
 
 export interface TransactionRow {
@@ -15,6 +21,7 @@ export interface TransactionRow {
   status: string;
   description: string | null;
   reference_id: string | null;
+  stripe_session_id?: string | null;
   created_at: string;
 }
 
@@ -91,7 +98,7 @@ export async function getTotalsForUser(userId: string): Promise<{
   for (const r of rows) {
     const amt = Number(r.amount);
     if (r.type === "deposit" && r.status === "completed") {
-      totalDepositsCents += amt;
+      totalDepositsCents += Math.round(amt * 100);
     } else if (earningTypes.includes(r.type)) {
       if (r.status === "completed") totalEarningsCents += amt;
     } else if (r.type === "withdrawal") {
@@ -149,7 +156,7 @@ export async function getPlatformTotals(): Promise<{
   for (const r of rows) {
     const amt = Number(r.amount);
     if (r.type === "deposit" && r.status === "completed") {
-      totalDepositsCents += amt;
+      totalDepositsCents += Math.round(amt * 100);
     } else if (r.type === "withdrawal" && r.status !== "rejected") {
       totalWithdrawalsCents += amt;
     } else if (earningTypes.includes(r.type) && r.status === "completed") {

@@ -51,9 +51,10 @@ export async function POST(req: Request) {
   await supabase.from("transactions").insert({
     user_id: userId,
     type: "deposit",
-    amount: amountCents,
+    amount: amountCents / 100,
     status: "completed",
     description: "Admin add funds",
+    created_at: new Date().toISOString(),
   });
 
   return NextResponse.json({ success: true, amountCents });

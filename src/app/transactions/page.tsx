@@ -136,9 +136,10 @@ export default function TransactionsPage() {
                 ) : (
                   transactions.map((tx) => {
                     const isCredit = ["earning", "referral", "deposit"].includes(tx.type);
+                    const txAmountCents = tx.type === "deposit" ? Math.round(Number(tx.amount ?? 0) * 100) : Number(tx.amount ?? 0);
                     const amountDisplay = isCredit
-                      ? `+${formatCents(tx.amount)}`
-                      : `-${formatCents(tx.amount)}`;
+                      ? `+${formatCents(txAmountCents)}`
+                      : `-${formatCents(txAmountCents)}`;
                     return (
                       <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
                         <td className="p-3 text-sm text-fintech-muted whitespace-nowrap">{formatDate(tx.created_at)}</td>
