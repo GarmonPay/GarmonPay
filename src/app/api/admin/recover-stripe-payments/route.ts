@@ -1,24 +1,178 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase";
-import { isAdmin } from "@/lib/admin-auth";
 import Stripe from "stripe";
+import { isAdmin } from "@/lib/admin-auth";
+import { createAdminClient } from "@/lib/supabase";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type SupabaseErrorLike = { code?: string; message?: string };
+type BalanceRow = { balance?: number | string | null };
+type UserBalanceRow = { balance?: number | string | null; total_deposits?: number | string | null };
+type SimpleUserRow = { id?: string | null };
+
+function normalizeStripeSecret(raw: string | undefined): string | null {
+  const secret = raw?.trim().replace(/^["']|["']$/g, "") ?? "";
+  return secret.startsWith("sk_") ? secret : null;
+}
+
+function isMissingRelation(error: SupabaseErrorLike | null | undefined): boolean {
+  return error?.code === "42P01";
+}
+
+function isMissingColumn(error: SupabaseErrorLike | null | undefined): boolean {
+  return error?.code === "42703";
+}
+
+function isMissingFunction(error: SupabaseErrorLike | null | undefined): boolean {
+  return error?.code === "42883";
+}
+
+function getStripeCustomerId(session: Stripe.Checkout.Session): string {
+  if (typeof session.customer === "string") {
+    return session.customer;
+  }
+  if (session.customer && typeof session.customer !== "string" && "id" in session.customer) {
+    return session.customer.id;
+  }
+  return "";
+}
+
+function getSessionEmail(session: Stripe.Checkout.Session): string {
+  if (session.customer_email) return session.customer_email;
+  if (session.metadata?.email) return session.metadata.email;
+  if (session.customer && typeof session.customer !== "string" && "email" in session.customer) {
+    return session.customer.email ?? "";
+  }
+  return "";
+}
+
+function getSessionUserIdHint(session: Stripe.Checkout.Session): string | null {
+  const metadata = session.metadata;
+  const candidate = metadata?.user_id ?? metadata?.userId ?? session.client_reference_id;
+  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate.trim() : null;
+}
+
+async function findUserIdByEmail(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const { data: usersRow } = await supabase
+    .from("users")
+    .select("id")
+    .ilike("email", normalized)
+    .limit(1)
+    .maybeSingle();
+  const usersId = (usersRow as SimpleUserRow | null)?.id;
+  if (typeof usersId === "string" && usersId) return usersId;
+
+  const { data: profilesRow } = await supabase
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalized)
+    .limit(1)
+    .maybeSingle();
+  const profilesId = (profilesRow as SimpleUserRow | null)?.id;
+  if (typeof profilesId === "string" && profilesId) return profilesId;
+
+  return null;
+}
+
+async function incrementBalance(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  amountCents: number,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  const { data: existingBalance, error: balanceQueryError } = await supabase
+    .from("balances")
+    .select("balance")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!balanceQueryError) {
+    const current = Number((existingBalance as BalanceRow | null)?.balance ?? 0);
+    if (existingBalance) {
+      const { error: updateBalanceError } = await supabase
+        .from("balances")
+        .update({ balance: current + amountCents })
+        .eq("user_id", userId);
+      if (updateBalanceError) throw updateBalanceError;
+      return;
+    }
+
+    const { error: insertBalanceError } = await supabase.from("balances").insert({
+      user_id: userId,
+      balance: amountCents,
+    });
+    if (insertBalanceError) throw insertBalanceError;
+    return;
+  }
+
+  // Compatibility fallback for deployments where "balances" table is not present.
+  if (
+    !isMissingRelation(balanceQueryError as SupabaseErrorLike)
+    && !isMissingColumn(balanceQueryError as SupabaseErrorLike)
+  ) {
+    throw balanceQueryError;
+  }
+
+  const { error: rpcError } = await supabase.rpc("increment_user_balance", {
+    p_user_id: userId,
+    p_amount_cents: amountCents,
+  });
+  if (!rpcError) return;
+
+  if (!isMissingFunction(rpcError as SupabaseErrorLike)) {
+    throw rpcError;
+  }
+
+  const { data: userRow, error: userReadError } = await supabase
+    .from("users")
+    .select("balance, total_deposits")
+    .eq("id", userId)
+    .limit(1)
+    .maybeSingle();
+  if (userReadError) throw userReadError;
+
+  const currentBalance = Number((userRow as UserBalanceRow | null)?.balance ?? 0);
+  const currentTotalDeposits = Number((userRow as UserBalanceRow | null)?.total_deposits ?? 0);
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      balance: currentBalance + amountCents,
+      total_deposits: currentTotalDeposits + amountCents,
+      updated_at: now,
+    })
+    .eq("id", userId);
+  if (userUpdateError) throw userUpdateError;
+}
 
 /**
  * POST /api/admin/recover-stripe-payments
  *
- * FULL PAYMENT RECOVERY: Fetches ALL paid Stripe checkout sessions (paginated),
- * inserts into stripe_payments (with metadata), transactions, updates user balance.
- * Uses ON CONFLICT (stripe_session_id) DO NOTHING to prevent duplicates.
- * Admin only. Production safe.
+ * Fetches all paid Stripe checkout sessions and recovers missing payment rows.
+ * - stripe_payments insert is deduplicated via ON CONFLICT (stripe_session_id) DO NOTHING.
+ * - creates missing deposit transaction rows.
+ * - increments balance once for newly inserted deposit transactions.
  */
 export async function POST(request: Request) {
   if (!(await isAdmin(request))) {
     return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
   }
 
-  const secret = process.env.STRIPE_SECRET_KEY?.trim().replace(/^["']|["']$/g, "");
-  if (!secret?.startsWith("sk_")) {
+  const stripeSecret = normalizeStripeSecret(process.env.STRIPE_SECRET_KEY);
+  if (!stripeSecret) {
     return NextResponse.json({ success: false, message: "Stripe not configured" }, { status: 503 });
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    return NextResponse.json({ success: false, message: "Supabase service role is not configured" }, { status: 503 });
   }
 
   const supabase = createAdminClient();
@@ -26,187 +180,148 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, message: "Supabase not configured" }, { status: 503 });
   }
 
-  const stripe = new Stripe(secret, { apiVersion: "2026-01-28.clover" });
-  const sessions: Stripe.Checkout.Session[] = [];
-  let hasMore = true;
+  const stripe = new Stripe(stripeSecret, { apiVersion: "2026-01-28.clover" });
+  let recovered = 0;
   let startingAfter: string | undefined;
 
   try {
-    while (hasMore) {
-      const list = await stripe.checkout.sessions.list({
+    while (true) {
+      const page = await stripe.checkout.sessions.list({
         limit: 100,
-        ...(startingAfter && { starting_after: startingAfter }),
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
         expand: ["data.customer", "data.payment_intent"],
       });
-      sessions.push(...list.data);
-      hasMore = list.has_more;
-      if (list.data.length > 0) {
-        startingAfter = list.data[list.data.length - 1].id;
-      } else {
-        hasMore = false;
-      }
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Stripe list sessions failed";
-    console.error("[recover-stripe-payments] Stripe error:", msg);
-    return NextResponse.json({ success: false, message: "Stripe error", error: msg }, { status: 502 });
-  }
 
-  const paid = sessions.filter((s) => s.payment_status === "paid");
-  let recovered = 0;
+      if (page.data.length === 0) break;
 
-  for (const session of paid) {
-    const sessionId = session.id;
-    const amountTotal = session.amount_total ?? 0;
-    if (amountTotal <= 0) continue;
+      for (const session of page.data) {
+        if (session.payment_status !== "paid") continue;
+        const amountTotal = session.amount_total ?? 0;
+        if (amountTotal <= 0) continue;
 
-    const { data: existingPayment } = await supabase
-      .from("stripe_payments")
-      .select("id")
-      .eq("stripe_session_id", sessionId)
-      .maybeSingle();
-    if (existingPayment) continue;
+        const sessionId = session.id;
+        const email = getSessionEmail(session).trim().toLowerCase();
+        const stripeCustomerId = getStripeCustomerId(session);
+        const userIdFromSession = getSessionUserIdHint(session);
+        const userId = userIdFromSession ?? (email ? await findUserIdByEmail(supabase, email) : null);
 
-    const customerEmail =
-      (session.customer_email as string) ??
-      (session.metadata?.email as string) ??
-      "";
-    const stripeCustomerId =
-      typeof session.customer === "string"
-        ? session.customer
-        : (session.customer as Stripe.Customer)?.id ?? null;
-
-    let userId: string | null =
-      (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
-
-    if (!userId && customerEmail) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", customerEmail)
-        .maybeSingle();
-      if (profile && typeof (profile as { id?: string }).id === "string") {
-        userId = (profile as { id: string }).id;
-      }
-      if (!userId) {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", customerEmail)
-          .maybeSingle();
-        if (user && typeof (user as { id?: string }).id === "string") {
-          userId = (user as { id: string }).id;
-        }
-      }
-    }
-
-    if (!userId) continue;
-
-    const amountDollars = amountTotal / 100;
-    const currency = (session.currency ?? "usd").toLowerCase();
-    const metadata = {
-      user_id: userId,
-      email: customerEmail || undefined,
-      stripe_customer_id: stripeCustomerId || undefined,
-    };
-
-    // 1) stripe_payments — insert (duplicate check already done above)
-    const stripePaymentRow = {
-      stripe_session_id: sessionId,
-      user_id: userId,
-      email: customerEmail || "unknown",
-      amount: amountDollars,
-      currency,
-      status: "completed",
-      metadata,
-      created_at: new Date().toISOString(),
-    };
-    const { error: spErr } = await supabase.from("stripe_payments").insert(stripePaymentRow);
-    if (spErr) {
-      const code = (spErr as { code?: string }).code;
-      if (code === "42703") {
-        const { error: spErr2 } = await supabase.from("stripe_payments").insert({
-          stripe_session_id: sessionId,
-          user_id: userId,
-          email: customerEmail || "unknown",
-          amount: amountDollars,
-          currency,
-          status: "completed",
-          created_at: new Date().toISOString(),
-        });
-        if (spErr2 && (spErr2 as { code?: string }).code !== "23505") {
-          console.error("[recover-stripe-payments] stripe_payments insert fallback error:", spErr2);
+        if (!userId) {
+          console.warn("[recover-stripe-payments] Skipping session without resolvable user_id:", sessionId);
           continue;
         }
-      } else if (code !== "23505") {
-        console.error("[recover-stripe-payments] stripe_payments insert error:", spErr);
-        continue;
+
+        const metadata = {
+          user_id: userId,
+          email,
+          stripe_customer_id: stripeCustomerId,
+        };
+
+        const createdAtIso = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+        const amount = amountTotal / 100;
+        const currency = (session.currency ?? "usd").toLowerCase();
+
+        const { data: insertedStripePayment, error: stripePaymentError } = await supabase
+          .from("stripe_payments")
+          .upsert(
+            {
+              stripe_session_id: sessionId,
+              user_id: userId,
+              email: email || "unknown",
+              amount,
+              currency,
+              status: "completed",
+              metadata,
+              created_at: createdAtIso,
+            },
+            {
+              onConflict: "stripe_session_id",
+              ignoreDuplicates: true,
+            },
+          )
+          .select("stripe_session_id");
+
+        if (stripePaymentError) {
+          console.error("[recover-stripe-payments] stripe_payments upsert failed:", stripePaymentError);
+          continue;
+        }
+
+        const wasStripePaymentInserted = Array.isArray(insertedStripePayment) && insertedStripePayment.length > 0;
+        if (!wasStripePaymentInserted) {
+          const { error: metadataRepairError } = await supabase
+            .from("stripe_payments")
+            .update({
+              user_id: userId,
+              email: email || "unknown",
+              amount,
+              currency,
+              status: "completed",
+              metadata,
+            })
+            .eq("stripe_session_id", sessionId);
+          if (metadataRepairError) {
+            console.error(
+              "[recover-stripe-payments] stripe_payments metadata repair failed:",
+              metadataRepairError,
+            );
+          }
+        }
+
+        let shouldIncrementBalance = false;
+        const { data: existingTx, error: existingTxError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("reference_id", sessionId)
+          .eq("type", "deposit")
+          .limit(1)
+          .maybeSingle();
+
+        if (existingTxError) {
+          console.error("[recover-stripe-payments] transactions lookup failed:", existingTxError);
+          continue;
+        }
+
+        if (!existingTx) {
+          const { error: txInsertError } = await supabase.from("transactions").insert({
+            user_id: userId,
+            type: "deposit",
+            amount: amountTotal,
+            status: "completed",
+            description: `Stripe recovery ${sessionId}`,
+            reference_id: sessionId,
+          });
+
+          if (txInsertError) {
+            console.error("[recover-stripe-payments] transactions insert failed:", txInsertError);
+            continue;
+          }
+
+          shouldIncrementBalance = true;
+        }
+
+        if (shouldIncrementBalance) {
+          try {
+            await incrementBalance(supabase, userId, amountTotal);
+          } catch (balanceError) {
+            console.error("[recover-stripe-payments] balance increment failed:", balanceError);
+            continue;
+          }
+        }
+
+        if (wasStripePaymentInserted || shouldIncrementBalance) {
+          recovered += 1;
+        }
       }
-    }
 
-    // 2) transactions — insert if not exists
-    const { data: existingTx } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("reference_id", sessionId)
-      .eq("type", "deposit")
-      .maybeSingle();
-    if (!existingTx) {
-      const { error: txErr } = await supabase.from("transactions").insert({
-        user_id: userId,
-        type: "deposit",
-        amount: amountTotal,
-        status: "completed",
-        description: `Stripe recovery ${sessionId}`,
-        reference_id: sessionId,
-      });
-      if (txErr && (txErr as { code?: string }).code !== "23505") {
-        console.error("[recover-stripe-payments] transactions insert error:", txErr);
-      }
-    }
+      if (!page.has_more) break;
 
-    // 3) deposits — insert if not exists
-    const { data: existingDep } = await supabase
-      .from("deposits")
-      .select("id")
-      .or(`stripe_session.eq.${sessionId},stripe_session_id.eq.${sessionId}`)
-      .maybeSingle();
-    if (!existingDep) {
-      await supabase.from("deposits").insert({
-        user_id: userId,
-        amount: amountDollars,
-        stripe_session: sessionId,
-        stripe_session_id: sessionId,
-        status: "completed",
-      });
+      const last = page.data[page.data.length - 1];
+      if (!last?.id) break;
+      startingAfter = last.id;
     }
-
-    // 4) Increase user balance
-    const { error: rpcErr } = await supabase.rpc("increment_user_balance", {
-      p_user_id: userId,
-      p_amount_cents: amountTotal,
-    });
-    if (rpcErr) {
-      const { data: u } = await supabase.from("users").select("balance, total_deposits").eq("id", userId).maybeSingle();
-      const cur = (u as { balance?: number; total_deposits?: number }) ?? {};
-      await supabase
-        .from("users")
-        .update({
-          balance: Number(cur.balance ?? 0) + amountTotal,
-          total_deposits: Number(cur.total_deposits ?? 0) + amountTotal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId);
-    } else {
-      const { data: u } = await supabase.from("users").select("total_deposits").eq("id", userId).maybeSingle();
-      const prev = Number((u as { total_deposits?: number })?.total_deposits ?? 0);
-      await supabase
-        .from("users")
-        .update({ total_deposits: prev + amountTotal, updated_at: new Date().toISOString() })
-        .eq("id", userId);
-    }
-
-    recovered += 1;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to recover Stripe sessions";
+    console.error("[recover-stripe-payments] fatal error:", message);
+    return NextResponse.json({ success: false, message: "Recovery failed", error: message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, recovered });
