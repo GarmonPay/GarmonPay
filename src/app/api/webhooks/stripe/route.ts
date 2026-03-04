@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import Stripe from "stripe";
-import { POST as handleStripeWebhookLegacy } from "@/app/api/stripe-webhook/route";
+import { POST as handleStripeWebhookLegacy } from "@/app/api/stripe/webhook/route";
 
 /** Use Node.js runtime for Stripe webhook (required by Stripe SDK). */
 export const runtime = "nodejs";

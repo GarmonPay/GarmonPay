@@ -187,6 +187,7 @@ export default function WithdrawPage() {
               className="w-full px-4 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted focus:border-fintech-accent outline-none"
               placeholder="Address or email"
               required
+              maxLength={500}
             />
           </div>
           <button

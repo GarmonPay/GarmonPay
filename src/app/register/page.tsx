@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const ref = searchParams.get("ref")?.trim();
@@ -39,6 +40,7 @@ export default function RegisterPage() {
       setError("Password must be at least 8 characters");
       return;
     }
+    setLoading(true);
     const { data, error: err } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
@@ -48,21 +50,28 @@ export default function RegisterPage() {
     });
     if (err) {
       setError(err.message);
+      setLoading(false);
       return;
     }
     if (data?.user) {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (data.session?.access_token) {
+        headers.Authorization = `Bearer ${data.session.access_token}`;
+      }
       const res = await fetch("/api/auth/sync-user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ id: data.user.id, email: data.user.email ?? trimmedEmail }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
         setError(json.message || "Account created but could not sync to database. Please contact support.");
+        setLoading(false);
         return;
       }
     }
     setMessage("Check your email to confirm your account, or sign in if already confirmed.");
+    setLoading(false);
   }
 
   return (
@@ -84,10 +93,18 @@ export default function RegisterPage() {
           placeholder="Password (min 8 characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+          minLength={8}
+          autoComplete="new-password"
         />
 
-        <button type="button" onClick={register} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full py-3 rounded-lg transition mb-3">
-          Register
+        <button
+          type="button"
+          disabled={loading}
+          onClick={register}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold w-full py-3 rounded-lg transition mb-3"
+        >
+          {loading ? "Creating account…" : "Register"}
         </button>
 
         {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth-request";
+import { getAuthUserIdStrict } from "@/lib/auth-request";
 import {
   requestWithdrawal,
   listWithdrawalsByUser,
@@ -8,10 +8,11 @@ import {
 } from "@/lib/withdrawals-db";
 import { recordActivity } from "@/lib/viral-db";
 import { createAdminClient } from "@/lib/supabase";
+import { sanitizeWalletAddress } from "@/lib/security";
 
 /** GET /api/withdrawals — list current user's withdrawals. */
 export async function GET(request: Request) {
-  const userId = await getAuthUserId(request);
+  const userId = await getAuthUserIdStrict(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
 
 /** POST /api/withdrawals — submit withdrawal (deducts balance, creates pending). */
 export async function POST(request: Request) {
-  const userId = await getAuthUserId(request);
+  const userId = await getAuthUserIdStrict(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   const method = ["crypto", "paypal", "bank"].includes(body.method ?? "")
     ? (body.method as WithdrawalMethod)
     : null;
-  const walletAddress = typeof body.wallet_address === "string" ? body.wallet_address : "";
+  const walletAddress = sanitizeWalletAddress(body.wallet_address);
 
   if (amountCents == null || amountCents < MIN_WITHDRAWAL_CENTS) {
     return NextResponse.json(

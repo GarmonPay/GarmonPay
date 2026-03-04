@@ -5,13 +5,25 @@ const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 
 /**
  * One-time setup: ensure an admin user exists in Supabase Auth and public.users.
- * Only allows the fixed admin email. Creates the user if missing and sets role=admin.
+ * Only in development, or in production when ADMIN_SETUP_SECRET is provided.
  */
 export async function POST(request: Request) {
+  const isProduction = process.env.NODE_ENV === "production";
+  const setupSecret = process.env.ADMIN_SETUP_SECRET;
+
+  if (isProduction && !setupSecret) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
+    const secret = typeof body.secret === "string" ? body.secret : request.headers.get("x-admin-setup-secret");
+
+    if (isProduction && secret !== setupSecret) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
 
     if (email !== ALLOWED_ADMIN_EMAIL) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });

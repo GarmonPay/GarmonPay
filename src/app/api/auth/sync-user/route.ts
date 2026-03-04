@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 
-/** Sync auth user into public.users (and optionally wallets). Called after signUp so admin dashboard shows real user count. REAL DB only. */
+const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
+const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
+
+/** Sync auth user into public.users. Requires either Bearer token (sub === id) or id must be a recently created auth user. */
 export async function POST(req: Request) {
   try {
     const supabase = createAdminClient();
@@ -16,6 +19,38 @@ export async function POST(req: Request) {
     }
 
     const emailVal = typeof email === "string" ? email : "";
+
+    // Security: allow only if (1) Bearer token subject matches id, or (2) id is a recently created auth user
+    const authHeader = req.headers.get("authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    let allowed = false;
+
+    if (bearerToken) {
+      const { createServerClient } = await import("@/lib/supabase");
+      const server = createServerClient(bearerToken);
+      if (server) {
+        const { data: { user } } = await server.auth.getUser();
+        if (user && user.id === id) allowed = true;
+      }
+    }
+
+    if (!allowed) {
+      const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(id);
+      if (authErr || !authUser?.user) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
+      const createdAt = authUser.user.created_at
+        ? new Date(authUser.user.created_at).getTime()
+        : 0;
+      if (Date.now() - createdAt > MAX_AGE_MS) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
+      allowed = true;
+    }
+
+    if (!allowed) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
 
     const { data: existing } = await supabase
       .from("users")
@@ -44,14 +79,12 @@ export async function POST(req: Request) {
         console.error("Sync-user insert error:", insertError);
         return NextResponse.json({ success: false, message: insertError.message }, { status: 500 });
       }
-      // If wallets table exists, create a row for this user (balance = 0)
       try {
         const { error: walletErr } = await supabase.from("wallets").insert({
           user_id: id,
           balance: 0,
         });
         if (walletErr) {
-          // Table may not exist or RLS; log but do not fail
           console.warn("Sync-user wallets insert (optional):", walletErr.message);
         }
       } catch {

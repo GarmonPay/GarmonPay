@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAuthUserId } from "@/lib/auth-request";
+import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { MAX_PAYMENT_CENTS } from "@/lib/security";
 
 /**
  * POST /api/wallet/fund
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Stripe is not configured" }, { status: 503 });
   }
 
-  const userId = await getAuthUserId(request);
+  const userId = await getAuthUserIdStrict(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -29,6 +30,12 @@ export async function POST(request: Request) {
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : 0;
   if (amountCents < 100) {
     return NextResponse.json({ message: "Minimum amount is $1.00 (100 cents)" }, { status: 400 });
+  }
+  if (amountCents > MAX_PAYMENT_CENTS) {
+    return NextResponse.json(
+      { message: `Maximum amount is $${(MAX_PAYMENT_CENTS / 100).toFixed(2)}` },
+      { status: 400 }
+    );
   }
 
   const supabase = createAdminClient();

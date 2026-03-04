@@ -2,6 +2,40 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  async headers() {
+    // Content-Security-Policy: allow self, Supabase, Stripe; block framing and restrict sources
+    const cspParts = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.stripe.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com",
+      "object-src 'none'",
+    ];
+    if (process.env.NODE_ENV === "production") {
+      cspParts.push("upgrade-insecure-requests");
+    }
+    const csp = cspParts.join("; ");
+
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Content-Security-Policy", value: csp },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
