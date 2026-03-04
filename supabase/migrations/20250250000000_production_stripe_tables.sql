@@ -1,7 +1,7 @@
 -- =============================================================================
 -- PRODUCTION: Ensure all tables and columns for Stripe deposits and balance.
 -- Idempotent. Run in Supabase SQL Editor or: supabase db push
--- Webhook URL: https://garmonpay.com/api/webhooks/stripe
+-- Webhook URL: https://garmonpay.com/api/stripe/webhook
 -- =============================================================================
 
 -- 1) public.users (id, email, balance)

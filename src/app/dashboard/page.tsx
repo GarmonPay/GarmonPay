@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
 import { generateReferralLink } from "@/lib/referrals";
@@ -22,6 +22,7 @@ function formatCents(cents: number) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<Awaited<ReturnType<typeof getDashboard>> | null>(null);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +73,23 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchBalance();
   }, []);
+
+  // After returning from payment-success, refetch balance after a short delay (webhook may still be processing)
+  const refetchParam = searchParams.get("refetch");
+  useEffect(() => {
+    if (refetchParam !== "1") return;
+    const t = setTimeout(() => {
+      getSessionAsync().then((session) => {
+        if (session) {
+          const tokenOrId = session.accessToken ?? session.userId;
+          const isToken = !!session.accessToken;
+          getDashboard(tokenOrId, isToken).then(setData);
+          fetchBalance();
+        }
+      });
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [refetchParam]);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([

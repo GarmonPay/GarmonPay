@@ -10,7 +10,7 @@
 
 ## Stripe webhook
 
-- **URL:** `https://garmonpay.com/api/webhooks/stripe`
+- **URL:** `https://garmonpay.com/api/stripe/webhook`
 - In Stripe Dashboard → Developers → Webhooks: add endpoint with this URL.
 - Events: `checkout.session.completed` (and any subscription/connect events you use).
 - Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
@@ -33,7 +33,7 @@ Balance is stored in **cents** in `users.balance`; the webhook credits it via `i
 ```bash
 npm run test:webhook
 # Or against production (use a test user and staging DB):
-TEST_USER_ID=<uuid> TEST_EMAIL=you@example.com node --env-file=.env.local scripts/simulate-stripe-webhook.mjs https://garmonpay.com/api/webhooks/stripe
+TEST_USER_ID=<uuid> TEST_EMAIL=you@example.com node --env-file=.env.local scripts/simulate-stripe-webhook.mjs https://garmonpay.com/api/stripe/webhook
 ```
 
 ## Build

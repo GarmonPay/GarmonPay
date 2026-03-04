@@ -4,7 +4,7 @@
  *
  * Usage:
  *   node --env-file=.env.local scripts/simulate-stripe-webhook.mjs
- *   node --env-file=.env.local scripts/simulate-stripe-webhook.mjs https://garmonpay.com/api/webhooks/stripe
+ *   node --env-file=.env.local scripts/simulate-stripe-webhook.mjs https://garmonpay.com/api/stripe/webhook
  *   TEST_USER_ID=uuid TEST_EMAIL=you@example.com node --env-file=.env.local scripts/simulate-stripe-webhook.mjs
  *
  * Requires: STRIPE_WEBHOOK_SECRET in env. Optional: TEST_USER_ID, TEST_EMAIL (must exist in public.users).
@@ -14,8 +14,8 @@
 import Stripe from "stripe";
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const baseUrl = process.argv[2] || process.env.WEBHOOK_URL || "https://garmonpay.com";
-const webhookUrl = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}/api/webhooks/stripe`;
+const baseUrl = process.argv[2] || process.env.WEBHOOK_URL || "https://garmonpay.com/api/stripe/webhook";
+const webhookUrl = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}/api/stripe/webhook`;
 const testUserId = process.env.TEST_USER_ID || null;
 const testEmail = process.env.TEST_EMAIL || "test-webhook@example.com";
 

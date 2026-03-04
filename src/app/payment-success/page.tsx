@@ -22,7 +22,7 @@ function PaymentSuccessContent() {
           )}
         </p>
         <Link
-          href="/dashboard"
+          href="/dashboard?refetch=1"
           className="inline-block w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold hover:opacity-90 transition-opacity"
         >
           Back to Dashboard

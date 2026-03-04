@@ -30,7 +30,7 @@
 
 ## Stripe
 
-- Existing Next.js webhook at `/api/webhooks/stripe` updates `users.balance` and `total_deposits`
+- Existing Next.js webhook at `/api/stripe/webhook` updates `users.balance` and `total_deposits`
 - Node backend reads the same `users` table; no duplicate Stripe logic in Node
 
 ## Deployment

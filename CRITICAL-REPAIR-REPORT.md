@@ -45,7 +45,7 @@ Stripe payment system has been inspected and repaired so that:
 
 ## 4. Webhook flow verified
 
-**Route:** `/api/webhooks/stripe` (POST)
+**Route:** `/api/stripe/webhook` (POST)
 
 1. Verify Stripe signature with `STRIPE_WEBHOOK_SECRET`.
 2. On `checkout.session.completed` and `payment_status === "paid"`:

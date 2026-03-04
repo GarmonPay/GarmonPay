@@ -59,8 +59,9 @@ git push -u origin main
 ## 4. Post-deploy
 
 - **Stripe webhooks:** In Stripe Dashboard → Webhooks, add endpoint  
-  `https://your-app.vercel.app/api/webhooks/stripe`  
-  and set `STRIPE_WEBHOOK_SECRET` in Vercel to the signing secret.
+  **`https://garmonpay.com/api/stripe/webhook`**  
+  (or `https://your-app.vercel.app/api/stripe/webhook` for other domains).  
+  Set `STRIPE_WEBHOOK_SECRET` in Vercel to the signing secret.
 - **Supabase:** Allow your Vercel domain in Supabase Auth URL settings if required.
 
 ## Branch
