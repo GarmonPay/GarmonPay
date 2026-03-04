@@ -148,14 +148,16 @@ export async function POST(request: Request) {
     const { data: existingTx } = await supabase
       .from("transactions")
       .select("id")
-      .eq("reference_id", sessionId)
       .eq("type", "deposit")
+      .eq("stripe_session_id", sessionId)
       .maybeSingle();
     if (!existingTx) {
       const { error: txErr } = await supabase.from("transactions").insert({
         user_id: userId,
         type: "deposit",
-        amount: amountTotal,
+        amount: amountDollars,
+        stripe_session_id: sessionId,
+        created_at: new Date().toISOString(),
         status: "completed",
         description: `Stripe recovery ${sessionId}`,
         reference_id: sessionId,

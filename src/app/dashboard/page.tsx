@@ -59,15 +59,15 @@ export default function DashboardPage() {
     if (!supabase) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.id) return;
-    const { data } = await supabase
-      .from("users")
-      .select("balance")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (data != null && typeof (data as { balance?: unknown }).balance !== "undefined") {
-      const balance = Number((data as { balance: number }).balance ?? 0);
-      setBalanceCentsFromSupabase(Math.round(balance));
-    }
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("type", "deposit");
+    if (error) return;
+    const totalDollars = ((data ?? []) as Array<{ amount?: number | string | null }>)
+      .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0);
+    setBalanceCentsFromSupabase(Math.round(totalDollars * 100));
   }
 
   useEffect(() => {

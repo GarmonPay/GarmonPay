@@ -45,14 +45,15 @@ export async function POST(req: Request) {
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
+  const session_id = session.id;
   const amount_total = session.amount_total ?? 0;
+  const amount_dollars = amount_total / 100;
+  const user_id = (session.metadata?.user_id as string | undefined)?.trim() || null;
 
   if (session.payment_status !== "paid" || amount_total <= 0) {
     return new Response("OK", { status: 200 });
   }
-
-  let user_id: string | null =
-    (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
+  console.log("[Stripe webhook] Payment received:", session_id);
 
   const supabase = createAdminClient();
   if (!supabase) {
@@ -61,39 +62,42 @@ export async function POST(req: Request) {
   }
 
   if (!user_id) {
-    const customer_email =
-      (session.customer_email as string) ??
-      (session.metadata?.email as string) ??
-      "";
-    if (customer_email) {
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
-      if (userRow && typeof (userRow as { id?: string }).id === "string") {
-        user_id = (userRow as { id: string }).id;
-      }
-    }
-    if (!user_id) {
-      const { data: profileRow } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
-      if (profileRow && typeof (profileRow as { id?: string }).id === "string") {
-        user_id = (profileRow as { id: string }).id;
-      }
-    }
-  }
-
-  if (!user_id) {
-    console.error("[Stripe webhook] No user_id for session:", session.id);
+    console.error("[Stripe webhook] Missing metadata.user_id for session:", session_id);
     return new Response("OK", { status: 200 });
   }
 
-  const session_id = session.id;
-  const amount_dollars = amount_total / 100;
+  const { data: existingDepositTx, error: existingDepositTxErr } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("type", "deposit")
+    .eq("stripe_session_id", session_id)
+    .maybeSingle();
+  if (existingDepositTxErr) {
+    console.error("[Stripe webhook] Duplicate check failed:", existingDepositTxErr);
+    return new Response("Database check failed", { status: 500 });
+  }
+  if (existingDepositTx) {
+    return new Response("OK", { status: 200 });
+  }
+
+  const createdAt = new Date().toISOString();
+
+  const { error: txInsertErr } = await supabase.from("transactions").insert({
+    user_id,
+    amount: amount_dollars,
+    type: "deposit",
+    stripe_session_id: session_id,
+    created_at: createdAt,
+    status: "completed",
+    description: `Stripe checkout ${session_id}`,
+    reference_id: session_id,
+  });
+  if (txInsertErr) {
+    console.error("[Stripe webhook] transactions insert failed:", txInsertErr);
+    return new Response("Transaction insert failed", { status: 500 });
+  }
+  console.log("[Stripe webhook] User credited:", user_id);
+  console.log("[Stripe webhook] Amount credited:", amount_dollars);
 
   const { data: userRow } = await supabase
     .from("users")
@@ -117,20 +121,7 @@ export async function POST(req: Request) {
 
   if (balanceErr) {
     console.error("[Stripe webhook] users.balance update failed:", balanceErr);
-    return new Response("Balance update failed", { status: 500 });
   }
-  console.log("[Stripe webhook] Balance credited — user_id:", user_id, "amount_cents:", amount_total);
-
-  await supabase.from("transactions").insert({
-    user_id,
-    type: "deposit",
-    amount: amount_total,
-    status: "completed",
-    description: `Stripe checkout ${session_id}`,
-    reference_id: session_id,
-  }).then(({ error }) => {
-    if (error) console.error("[Stripe webhook] transactions insert:", error.message);
-  });
 
   const { data: existingDeposit } = await supabase
     .from("deposits")
