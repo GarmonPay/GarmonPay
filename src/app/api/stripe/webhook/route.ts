@@ -1,182 +1,151 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
-import { createAdminClient } from "@/lib/supabase";
 import Stripe from "stripe";
 
-/** Canonical Stripe webhook: https://garmonpay.com/api/stripe/webhook */
+/** Stripe webhook endpoint: /api/stripe/webhook */
 export const runtime = "nodejs";
 
-// Use raw body for signature verification; strip quotes/newlines from env
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "") ?? "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
 
-/** GET — health check. */
+function createServiceRoleClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
 export async function GET() {
-  return NextResponse.json({ status: "live" });
+  return NextResponse.json({ ok: true, endpoint: "/api/stripe/webhook" });
 }
 
 export async function POST(req: Request) {
+  console.log("[Stripe webhook] Incoming request at /api/stripe/webhook");
+
   if (!WEBHOOK_SECRET) {
-    console.error("[Stripe webhook] STRIPE_WEBHOOK_SECRET is not set");
-    return new Response("Webhook secret missing", { status: 503 });
+    console.error("[Stripe webhook] STRIPE_WEBHOOK_SECRET is not configured");
+    return new Response("Webhook secret missing", { status: 500 });
+  }
+  if (!isStripeConfigured()) {
+    console.error("[Stripe webhook] STRIPE_SECRET_KEY is not configured");
+    return new Response("Stripe secret key missing", { status: 500 });
   }
 
-  const sig = req.headers.get("stripe-signature");
-  if (!sig) {
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) {
     console.error("[Stripe webhook] Missing stripe-signature header");
-    return new Response("Missing stripe-signature", { status: 400 });
+    return new Response("Missing stripe-signature header", { status: 400 });
   }
 
-  // Preserve exact raw body (no parsing/re-encoding) so Stripe signature matches
-  const arrayBuffer = await req.arrayBuffer();
-  const body = Buffer.from(arrayBuffer);
+  // IMPORTANT: read raw body for signature verification (do not JSON.parse first).
+  const rawBody = await req.text();
 
   let event: Stripe.Event;
   try {
-    if (!isStripeConfigured()) {
-      console.error("[Stripe webhook] STRIPE_SECRET_KEY is not set");
-      return new Response("Stripe not configured", { status: 503 });
-    }
     const stripe = getStripe();
-    event = stripe.webhooks.constructEvent(body, sig, WEBHOOK_SECRET);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid signature";
-    console.error("[Stripe webhook] Signature verification error:", message);
-    return new Response(message, { status: 400 });
+    event = stripe.webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown signature verification error";
+    console.error("[Stripe webhook] Signature verification failed:", message);
+    return new Response(`Webhook Error: ${message}`, { status: 400 });
   }
 
   if (event.type !== "checkout.session.completed") {
+    console.log(`[Stripe webhook] Ignored event type: ${event.type}`);
     return new Response("OK", { status: 200 });
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
-  const amount_total = session.amount_total ?? 0;
+  const sessionId = session.id;
+  const userId = session.metadata?.user_id;
+  const amountCents = session.amount_total ?? 0;
 
-  if (session.payment_status !== "paid" || amount_total <= 0) {
+  if (!sessionId) {
+    console.error("[Stripe webhook] Missing checkout session id");
+    return new Response("Invalid session payload", { status: 400 });
+  }
+  if (!userId) {
+    console.error("[Stripe webhook] Missing metadata.user_id for session:", sessionId);
+    return new Response("Missing metadata.user_id", { status: 400 });
+  }
+  if (session.payment_status !== "paid") {
+    console.log("[Stripe webhook] Session is not paid yet, session:", sessionId, "status:", session.payment_status);
     return new Response("OK", { status: 200 });
   }
+  if (amountCents <= 0) {
+    console.error("[Stripe webhook] Invalid amount_total for session:", sessionId, "amount:", amountCents);
+    return new Response("Invalid payment amount", { status: 400 });
+  }
 
-  let user_id: string | null =
-    (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
-
-  const supabase = createAdminClient();
+  const supabase = createServiceRoleClient();
   if (!supabase) {
-    console.error("[Stripe webhook] Supabase admin client unavailable");
-    return new Response("Database unavailable", { status: 500 });
+    console.error("[Stripe webhook] Supabase service role client is not configured");
+    return new Response("Supabase service role not configured", { status: 500 });
   }
 
-  if (!user_id) {
-    const customer_email =
-      (session.customer_email as string) ??
-      (session.metadata?.email as string) ??
-      "";
-    if (customer_email) {
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
-      if (userRow && typeof (userRow as { id?: string }).id === "string") {
-        user_id = (userRow as { id: string }).id;
-      }
-    }
-    if (!user_id) {
-      const { data: profileRow } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
-      if (profileRow && typeof (profileRow as { id?: string }).id === "string") {
-        user_id = (profileRow as { id: string }).id;
-      }
-    }
+  const { data: existingTx, error: existingTxError } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("type", "deposit")
+    .eq("stripe_session", sessionId)
+    .maybeSingle();
+
+  if (existingTxError) {
+    console.error("[Stripe webhook] Failed checking existing transaction:", existingTxError);
+    return new Response("Failed to check existing transaction", { status: 500 });
   }
 
-  if (!user_id) {
-    console.error("[Stripe webhook] No user_id for session:", session.id);
+  if (existingTx) {
+    console.log("[Stripe webhook] Duplicate webhook ignored for session:", sessionId);
     return new Response("OK", { status: 200 });
   }
 
-  const session_id = session.id;
-  const amount_dollars = amount_total / 100;
-
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("balance, total_deposits")
-    .eq("id", user_id)
-    .maybeSingle();
-
-  const currentBalance = Number((userRow as { balance?: number } | null)?.balance ?? 0);
-  const currentTotalDeposits = Number((userRow as { total_deposits?: number } | null)?.total_deposits ?? 0);
-  const newBalance = currentBalance + amount_total;
-  const newTotalDeposits = currentTotalDeposits + amount_total;
-
-  const { error: balanceErr } = await supabase
-    .from("users")
-    .update({
-      balance: newBalance,
-      total_deposits: newTotalDeposits,
-      updated_at: new Date().toISOString(),
+  const { data: insertedTx, error: txInsertError } = await supabase
+    .from("transactions")
+    .insert({
+      user_id: userId,
+      amount: amountCents,
+      type: "deposit",
+      stripe_session: sessionId,
     })
-    .eq("id", user_id);
-
-  if (balanceErr) {
-    console.error("[Stripe webhook] users.balance update failed:", balanceErr);
-    return new Response("Balance update failed", { status: 500 });
-  }
-  console.log("[Stripe webhook] Balance credited — user_id:", user_id, "amount_cents:", amount_total);
-
-  await supabase.from("transactions").insert({
-    user_id,
-    type: "deposit",
-    amount: amount_total,
-    status: "completed",
-    description: `Stripe checkout ${session_id}`,
-    reference_id: session_id,
-  }).then(({ error }) => {
-    if (error) console.error("[Stripe webhook] transactions insert:", error.message);
-  });
-
-  const { data: existingDeposit } = await supabase
-    .from("deposits")
     .select("id")
-    .or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`)
-    .maybeSingle();
+    .single();
 
-  if (!existingDeposit) {
-    await supabase.from("deposits").insert({
-      user_id,
-      amount: amount_dollars,
-      stripe_session: session_id,
-      stripe_session_id: session_id,
-      status: "completed",
-    }).then(({ error }) => {
-      if (error) console.error("[Stripe webhook] deposits insert:", error.message);
-    });
+  if (txInsertError) {
+    console.error("[Stripe webhook] Failed to insert transaction:", txInsertError);
+    return new Response("Failed to insert transaction", { status: 500 });
   }
 
-  const payment_intent_id =
-    typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
-  const customer_email =
-    (session.customer_email as string) ?? (session.metadata?.email as string) ?? "";
-
-  await supabase.from("stripe_payments").insert({
-    user_id,
-    email: customer_email || "unknown",
-    amount: amount_dollars,
-    currency: (session.currency ?? "usd").toLowerCase(),
-    product_type: (session.metadata?.product_type as string) || "payment",
-    stripe_session_id: session_id,
-    session_id: session_id,
-    status: "completed",
-    ...(payment_intent_id && {
-      stripe_payment_intent: payment_intent_id,
-      stripe_payment_intent_id: payment_intent_id,
-    }),
-  }).then(({ error }) => {
-    if (error) console.error("[Stripe webhook] stripe_payments insert:", error.message);
+  const { error: balanceError } = await supabase.rpc("increment_user_balance", {
+    p_user_id: userId,
+    p_amount_cents: amountCents,
   });
+
+  if (balanceError) {
+    console.error("[Stripe webhook] Failed to increment user balance:", balanceError);
+    if (insertedTx?.id) {
+      const { error: rollbackError } = await supabase.from("transactions").delete().eq("id", insertedTx.id);
+      if (rollbackError) {
+        console.error("[Stripe webhook] Failed to rollback inserted transaction:", rollbackError);
+      }
+    }
+    return new Response("Failed to increment user balance", { status: 500 });
+  }
+
+  console.log(
+    "[Stripe webhook] Payment processed successfully",
+    JSON.stringify({
+      eventId: event.id,
+      sessionId,
+      userId,
+      amountCents,
+    }),
+  );
 
   return new Response("OK", { status: 200 });
 }
