@@ -6,10 +6,17 @@ import Stripe from "stripe";
 /**
  * POST /api/admin/recover-stripe-payments
  *
- * FULL PAYMENT RECOVERY: Fetches ALL paid Stripe checkout sessions (paginated),
- * inserts into stripe_payments (with metadata), transactions, updates user balance.
- * Uses ON CONFLICT (stripe_session_id) DO NOTHING to prevent duplicates.
- * Admin only. Production safe.
+ * RECOVER ALL STRIPE PAYMENTS AND CREDIT USER BALANCES
+ *
+ * 1. Uses Stripe secret key
+ * 2. Fetches all checkout sessions where payment_status = paid
+ * 3. For each: customer_email, amount_total
+ * 4. Find matching user in Supabase by email
+ * 5. Add amount to users.balance and users.total_deposits
+ * 6. Save in transactions (type=deposit, source=stripe_recovery)
+ * 7. Prevent duplicates: check stripe_session_id / reference_id before inserting
+ * 8. Return: recovered count, total amount
+ * Admin only.
  */
 export async function POST(request: Request) {
   if (!(await isAdmin(request))) {
@@ -54,11 +61,21 @@ export async function POST(request: Request) {
 
   const paid = sessions.filter((s) => s.payment_status === "paid");
   let recovered = 0;
+  let totalAmountCents = 0;
 
   for (const session of paid) {
     const sessionId = session.id;
     const amountTotal = session.amount_total ?? 0;
     if (amountTotal <= 0) continue;
+
+    // 7) Prevent duplicates: check by stripe_session_id (stripe_payments or transactions)
+    const { data: existingByRef } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("reference_id", sessionId)
+      .eq("type", "deposit")
+      .maybeSingle();
+    if (existingByRef) continue;
 
     const { data: existingPayment } = await supabase
       .from("stripe_payments")
@@ -76,6 +93,7 @@ export async function POST(request: Request) {
         ? session.customer
         : (session.customer as Stripe.Customer)?.id ?? null;
 
+    // 4) Find matching user by email (or metadata/client_reference_id)
     let userId: string | null =
       (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
 
@@ -110,7 +128,7 @@ export async function POST(request: Request) {
       stripe_customer_id: stripeCustomerId || undefined,
     };
 
-    // 1) stripe_payments — insert (duplicate check already done above)
+    // stripe_payments
     const stripePaymentRow = {
       stripe_session_id: sessionId,
       user_id: userId,
@@ -125,7 +143,7 @@ export async function POST(request: Request) {
     if (spErr) {
       const code = (spErr as { code?: string }).code;
       if (code === "42703") {
-        const { error: spErr2 } = await supabase.from("stripe_payments").insert({
+        await supabase.from("stripe_payments").insert({
           stripe_session_id: sessionId,
           user_id: userId,
           email: customerEmail || "unknown",
@@ -133,39 +151,48 @@ export async function POST(request: Request) {
           currency,
           status: "completed",
           created_at: new Date().toISOString(),
+        }).then(({ error: e }) => {
+          if (e && (e as { code?: string }).code !== "23505") console.error("[recover-stripe-payments] stripe_payments:", e.message);
         });
-        if (spErr2 && (spErr2 as { code?: string }).code !== "23505") {
-          console.error("[recover-stripe-payments] stripe_payments insert fallback error:", spErr2);
-          continue;
-        }
       } else if (code !== "23505") {
         console.error("[recover-stripe-payments] stripe_payments insert error:", spErr);
         continue;
       }
     }
 
-    // 2) transactions — insert if not exists
-    const { data: existingTx } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("reference_id", sessionId)
-      .eq("type", "deposit")
-      .maybeSingle();
-    if (!existingTx) {
-      const { error: txErr } = await supabase.from("transactions").insert({
-        user_id: userId,
-        type: "deposit",
-        amount: amountTotal,
-        status: "completed",
-        description: `Stripe recovery ${sessionId}`,
-        reference_id: sessionId,
-      });
-      if (txErr && (txErr as { code?: string }).code !== "23505") {
+    // 6) transactions: type=deposit, source=stripe_recovery
+    const txRow: Record<string, unknown> = {
+      user_id: userId,
+      type: "deposit",
+      amount: amountTotal,
+      status: "completed",
+      description: `Stripe recovery ${sessionId}`,
+      reference_id: sessionId,
+      source: "stripe_recovery",
+    };
+    const { error: txErr } = await supabase.from("transactions").insert(txRow);
+    if (txErr) {
+      const code = (txErr as { code?: string }).code;
+      if (code === "42703") {
+        const { error: txErr2 } = await supabase.from("transactions").insert({
+          user_id: userId,
+          type: "deposit",
+          amount: amountTotal,
+          status: "completed",
+          description: `Stripe recovery ${sessionId}`,
+          reference_id: sessionId,
+        });
+        if (txErr2 && (txErr2 as { code?: string }).code !== "23505") {
+          console.error("[recover-stripe-payments] transactions insert error:", txErr2);
+          continue;
+        }
+      } else if (code !== "23505") {
         console.error("[recover-stripe-payments] transactions insert error:", txErr);
+        continue;
       }
     }
 
-    // 3) deposits — insert if not exists
+    // deposits
     const { data: existingDep } = await supabase
       .from("deposits")
       .select("id")
@@ -178,36 +205,31 @@ export async function POST(request: Request) {
         stripe_session: sessionId,
         stripe_session_id: sessionId,
         status: "completed",
+      }).then(({ error: e }) => {
+        if (e) console.error("[recover-stripe-payments] deposits insert:", e.message);
       });
     }
 
-    // 4) Increase user balance
-    const { error: rpcErr } = await supabase.rpc("increment_user_balance", {
-      p_user_id: userId,
-      p_amount_cents: amountTotal,
-    });
-    if (rpcErr) {
-      const { data: u } = await supabase.from("users").select("balance, total_deposits").eq("id", userId).maybeSingle();
-      const cur = (u as { balance?: number; total_deposits?: number }) ?? {};
-      await supabase
-        .from("users")
-        .update({
-          balance: Number(cur.balance ?? 0) + amountTotal,
-          total_deposits: Number(cur.total_deposits ?? 0) + amountTotal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId);
-    } else {
-      const { data: u } = await supabase.from("users").select("total_deposits").eq("id", userId).maybeSingle();
-      const prev = Number((u as { total_deposits?: number })?.total_deposits ?? 0);
-      await supabase
-        .from("users")
-        .update({ total_deposits: prev + amountTotal, updated_at: new Date().toISOString() })
-        .eq("id", userId);
-    }
+    // 5) users.balance and users.total_deposits
+    const { data: u } = await supabase.from("users").select("balance, total_deposits").eq("id", userId).maybeSingle();
+    const cur = (u as { balance?: number; total_deposits?: number }) ?? {};
+    await supabase
+      .from("users")
+      .update({
+        balance: Number(cur.balance ?? 0) + amountTotal,
+        total_deposits: Number(cur.total_deposits ?? 0) + amountTotal,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
 
     recovered += 1;
+    totalAmountCents += amountTotal;
   }
 
-  return NextResponse.json({ success: true, recovered });
+  return NextResponse.json({
+    success: true,
+    recovered,
+    totalAmountCents,
+    totalAmountDollars: totalAmountCents / 100,
+  });
 }

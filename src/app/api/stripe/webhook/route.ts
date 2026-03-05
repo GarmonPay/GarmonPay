@@ -6,7 +6,8 @@ import Stripe from "stripe";
 /** Canonical Stripe webhook: https://garmonpay.com/api/stripe/webhook */
 export const runtime = "nodejs";
 
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+// Use raw body for signature verification; strip quotes/newlines from env
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
 
 /** GET — health check. */
 export async function GET() {
@@ -19,12 +20,15 @@ export async function POST(req: Request) {
     return new Response("Webhook secret missing", { status: 503 });
   }
 
-  const body = await req.text();
   const sig = req.headers.get("stripe-signature");
   if (!sig) {
     console.error("[Stripe webhook] Missing stripe-signature header");
     return new Response("Missing stripe-signature", { status: 400 });
   }
+
+  // Preserve exact raw body (no parsing/re-encoding) so Stripe signature matches
+  const arrayBuffer = await req.arrayBuffer();
+  const body = Buffer.from(arrayBuffer);
 
   let event: Stripe.Event;
   try {
