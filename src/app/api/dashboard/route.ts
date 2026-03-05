@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     withdrawableCents: 0,
     totalEarningsCents: 0,
     totalWithdrawnCents: 0,
+    totalDepositsCents: 0,
     membershipTier: "starter",
     referralCode: "",
     referralEarningsCents: 0,
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
       let earningsMonthCents = 0;
       let totalEarningsCents = 0;
       let totalWithdrawnCents = 0;
+      let totalDepositsCents = 0;
       let totalReferrals = 0;
       let referralEarningsCents = 0;
       let availableAds: { id: string; title: string; rewardCents: number }[] = [];
@@ -75,6 +77,7 @@ export async function GET(request: Request) {
         earningsMonthCents = earnings.monthCents;
         totalEarningsCents = totals.totalEarningsCents;
         totalWithdrawnCents = totals.totalWithdrawnCents;
+        totalDepositsCents = totals.totalDepositsCents;
         availableAds = ads.map((a) => ({
           id: a.id,
           title: a.title,
@@ -116,6 +119,7 @@ export async function GET(request: Request) {
           withdrawableCents,
           totalEarningsCents,
           totalWithdrawnCents,
+          totalDepositsCents,
           membershipTier: userRow?.membership ?? "starter",
           referralCode: userRow?.referral_code ?? "",
           referralEarningsCents,
@@ -144,6 +148,7 @@ export async function GET(request: Request) {
       earningsMonthCents: 0,
       balanceCents: 0,
       withdrawableCents: 0,
+      totalDepositsCents: 0,
       membershipTier: "starter",
       referralCode: user.referralCode,
       referralEarningsCents: 0,

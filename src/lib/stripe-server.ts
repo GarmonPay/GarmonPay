@@ -4,17 +4,18 @@
 
 import Stripe from "stripe";
 
-const secret = process.env.STRIPE_SECRET_KEY;
+const raw = process.env.STRIPE_SECRET_KEY;
+const secret = raw?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
 let stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
-  if (!secret) throw new Error("STRIPE_SECRET_KEY is not set");
+  if (!secret || !secret.startsWith("sk_")) throw new Error("STRIPE_SECRET_KEY is not set");
   if (!stripe) stripe = new Stripe(secret);
   return stripe;
 }
 
 export function isStripeConfigured(): boolean {
-  return !!process.env.STRIPE_SECRET_KEY;
+  return !!(raw?.trim() && raw.trim().startsWith("sk_"));
 }
 
 export type StripeProductType = "subscription" | "platform_access" | "upgrade" | "payment" | "wallet_fund";

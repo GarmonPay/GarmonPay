@@ -11,6 +11,7 @@ const defaultStats = {
   totalProfit: 0,
   totalRevenue: 0,
   recentTransactions: [] as { id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[],
+  recentPayments: [] as { id: string; user_id: string; email: string; amount: number; currency: string; status: string; stripe_session_id: string | null; created_at: string }[],
 };
 
 export default function Dashboard() {
@@ -40,10 +41,19 @@ export default function Dashboard() {
           totalProfit: data.totalProfit ?? 0,
           totalRevenue: data.totalRevenue ?? 0,
           recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+          recentPayments: Array.isArray(data.recentPayments) ? data.recentPayments : [],
         });
       })
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetch("/api/admin/stripe-payments", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : { payments: [] }))
+      .then((data) => setStats((prev) => ({ ...prev, recentPayments: data.payments ?? [] })))
+      .catch(() => {});
   }, [session]);
 
   function load() {
@@ -56,7 +66,8 @@ export default function Dashboard() {
         return res.json();
       })
       .then((data) => {
-        setStats({
+        setStats((prev) => ({
+          ...prev,
           totalUsers: data.totalUsers ?? 0,
           totalDeposits: data.totalDeposits ?? 0,
           totalWithdrawals: data.totalWithdrawals ?? 0,
@@ -64,7 +75,7 @@ export default function Dashboard() {
           totalProfit: data.totalProfit ?? 0,
           totalRevenue: data.totalRevenue ?? 0,
           recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-        });
+        }));
       })
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
@@ -165,6 +176,39 @@ export default function Dashboard() {
                       <td className="py-3 pr-4 text-[#9ca3af] capitalize">{tx.status}</td>
                       <td className="py-3 pr-4 text-right font-medium text-white">
                         ${(Number(tx.amount) / 100).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+        <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg mt-6">
+          <h2 className="text-sm font-medium text-[#9ca3af] uppercase tracking-wider mb-4">Stripe payment logs</h2>
+          {stats.recentPayments.length === 0 ? (
+            <p className="text-[#6b7280] text-sm">No Stripe payments yet.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-[#9ca3af]">
+                    <th className="pb-3 pr-4 font-medium">Date</th>
+                    <th className="pb-3 pr-4 font-medium">Email</th>
+                    <th className="pb-3 pr-4 font-medium">Status</th>
+                    <th className="pb-3 pr-4 text-right font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentPayments.slice(0, 20).map((p) => (
+                    <tr key={p.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="py-3 pr-4 text-[#9ca3af]">
+                        {p.created_at ? new Date(p.created_at).toLocaleString() : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-white truncate max-w-[200px]">{p.email ?? "—"}</td>
+                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{p.status}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-white">
+                        ${Number(p.amount).toFixed(2)} {p.currency?.toUpperCase() ?? ""}
                       </td>
                     </tr>
                   ))}

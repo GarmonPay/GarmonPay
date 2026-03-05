@@ -113,6 +113,7 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     withdrawableCents: number;
     totalEarningsCents: number;
     totalWithdrawnCents: number;
+    totalDepositsCents?: number;
     membershipTier: string;
     referralCode: string;
     referralEarningsCents: number;

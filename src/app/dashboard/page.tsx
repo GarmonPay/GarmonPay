@@ -546,6 +546,10 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Summary</h2>
           <div className="mt-4 space-y-4">
             <div>
+              <p className="text-xs text-fintech-muted">Total deposits</p>
+              <p className="text-lg font-semibold text-white">{formatCents((data as { totalDepositsCents?: number }).totalDepositsCents ?? 0)}</p>
+            </div>
+            <div>
               <p className="text-xs text-fintech-muted">Total earned</p>
               <p className="text-lg font-semibold text-fintech-success">{formatCents(totalEarningsCents)}</p>
             </div>

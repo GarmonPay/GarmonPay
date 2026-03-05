@@ -3,13 +3,15 @@ import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import Stripe from "stripe";
 
-/** Canonical Stripe webhook: https://garmonpay.com/api/stripe/webhook */
+/**
+ * Stripe webhook — use this URL in Stripe Dashboard (Developers → Webhooks):
+ *   https://garmonpay.com/api/stripe/webhook
+ * Do not use the file path (e.g. .../src/app/api/stripe/webhook/route.ts).
+ */
 export const runtime = "nodejs";
 
-// Use raw body for signature verification; strip quotes/newlines from env
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
 
-/** GET — health check. */
 export async function GET() {
   return NextResponse.json({ status: "live" });
 }
@@ -26,7 +28,6 @@ export async function POST(req: Request) {
     return new Response("Missing stripe-signature", { status: 400 });
   }
 
-  // Preserve exact raw body (no parsing/re-encoding) so Stripe signature matches
   const arrayBuffer = await req.arrayBuffer();
   const body = Buffer.from(arrayBuffer);
 
@@ -44,7 +45,61 @@ export async function POST(req: Request) {
     return new Response(message, { status: 400 });
   }
 
-  if (event.type !== "checkout.session.completed") {
+  const eventId = event.id;
+  const eventType = event.type;
+
+  if (eventType === "payment_intent.payment_failed") {
+    const pi = event.data.object as Stripe.PaymentIntent;
+    console.warn("[Stripe webhook] payment_intent.payment_failed", {
+      eventId,
+      paymentIntentId: pi.id,
+      amount: pi.amount,
+      lastError: pi.last_payment_error?.message,
+    });
+    return new Response("OK", { status: 200 });
+  }
+
+  if (eventType === "payment_intent.succeeded") {
+    const pi = event.data.object as Stripe.PaymentIntent;
+    const supabasePi = createAdminClient();
+    if (!supabasePi) return new Response("OK", { status: 200 });
+    const { data: existingTx } = await supabasePi.from("transactions").select("id").eq("reference_id", pi.id).eq("type", "deposit").maybeSingle();
+    if (existingTx) return new Response("OK", { status: 200 });
+    const { data: existingSp } = await supabasePi.from("stripe_payments").select("id").eq("stripe_payment_intent_id", pi.id).maybeSingle();
+    if (existingSp) return new Response("OK", { status: 200 });
+    const amountTotal = pi.amount ?? 0;
+    if (amountTotal <= 0) return new Response("OK", { status: 200 });
+    const metadata = (pi.metadata ?? {}) as Record<string, string>;
+    let user_id_pi: string | null = metadata?.user_id ?? metadata?.userId ?? null;
+    const customerEmail = (metadata?.email as string) ?? "";
+    if (!user_id_pi && customerEmail) {
+      const { data: u } = await supabasePi.from("users").select("id").eq("email", customerEmail).maybeSingle();
+      if (u && (u as { id?: string }).id) user_id_pi = (u as { id: string }).id;
+      if (!user_id_pi) {
+        const { data: p } = await supabasePi.from("profiles").select("id").eq("email", customerEmail).maybeSingle();
+        if (p && (p as { id?: string }).id) user_id_pi = (p as { id: string }).id;
+      }
+    }
+    if (!user_id_pi) {
+      console.warn("[Stripe webhook] payment_intent.succeeded no user", { eventId, paymentIntentId: pi.id });
+      return new Response("OK", { status: 200 });
+    }
+    const { data: userRowPi } = await supabasePi.from("users").select("balance, total_deposits").eq("id", user_id_pi).maybeSingle();
+    const cur = (userRowPi as { balance?: number; total_deposits?: number }) ?? {};
+    const newBalance = Number(cur.balance ?? 0) + amountTotal;
+    const newTotalDeposits = Number(cur.total_deposits ?? 0) + amountTotal;
+    const { error: upErr } = await supabasePi.from("users").update({ balance: newBalance, total_deposits: newTotalDeposits, updated_at: new Date().toISOString() }).eq("id", user_id_pi);
+    if (upErr) {
+      console.error("[Stripe webhook] payment_intent.succeeded balance update failed:", upErr);
+      return new Response("OK", { status: 200 });
+    }
+    await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
+    await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
+    console.log("[Stripe webhook] payment_intent.succeeded credited", { eventId, user_id: user_id_pi, amountTotal });
+    return new Response("OK", { status: 200 });
+  }
+
+  if (eventType !== "checkout.session.completed") {
     return new Response("OK", { status: 200 });
   }
 
@@ -55,14 +110,22 @@ export async function POST(req: Request) {
     return new Response("OK", { status: 200 });
   }
 
-  let user_id: string | null =
-    (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
-
   const supabase = createAdminClient();
   if (!supabase) {
     console.error("[Stripe webhook] Supabase admin client unavailable");
     return new Response("Database unavailable", { status: 500 });
   }
+
+  const { data: existingPayment } = await supabase.from("stripe_payments").select("id").eq("stripe_session_id", session.id).maybeSingle();
+  if (existingPayment) {
+    return new Response("OK", { status: 200 });
+  }
+
+  let user_id: string | null =
+    (session.metadata?.user_id ?? session.metadata?.userId ?? session.client_reference_id) as string | null;
+
+  const customer_email =
+    (session.customer_email as string) ?? (session.metadata?.email as string) ?? "";
 
   if (!user_id) {
     const customer_email =
@@ -70,21 +133,13 @@ export async function POST(req: Request) {
       (session.metadata?.email as string) ??
       "";
     if (customer_email) {
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
+      const { data: userRow } = await supabase.from("users").select("id").eq("email", customer_email).maybeSingle();
       if (userRow && typeof (userRow as { id?: string }).id === "string") {
         user_id = (userRow as { id: string }).id;
       }
     }
     if (!user_id) {
-      const { data: profileRow } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", customer_email)
-        .maybeSingle();
+      const { data: profileRow } = await supabase.from("profiles").select("id").eq("email", customer_email).maybeSingle();
       if (profileRow && typeof (profileRow as { id?: string }).id === "string") {
         user_id = (profileRow as { id: string }).id;
       }
@@ -99,11 +154,7 @@ export async function POST(req: Request) {
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
 
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("balance, total_deposits")
-    .eq("id", user_id)
-    .maybeSingle();
+  const { data: userRow } = await supabase.from("users").select("balance, total_deposits").eq("id", user_id).maybeSingle();
 
   const currentBalance = Number((userRow as { balance?: number } | null)?.balance ?? 0);
   const currentTotalDeposits = Number((userRow as { total_deposits?: number } | null)?.total_deposits ?? 0);
@@ -123,7 +174,7 @@ export async function POST(req: Request) {
     console.error("[Stripe webhook] users.balance update failed:", balanceErr);
     return new Response("Balance update failed", { status: 500 });
   }
-  console.log("[Stripe webhook] Balance credited — user_id:", user_id, "amount_cents:", amount_total);
+  console.log("[Stripe webhook] Balance credited — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
 
   await supabase.from("transactions").insert({
     user_id,
@@ -136,11 +187,7 @@ export async function POST(req: Request) {
     if (error) console.error("[Stripe webhook] transactions insert:", error.message);
   });
 
-  const { data: existingDeposit } = await supabase
-    .from("deposits")
-    .select("id")
-    .or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`)
-    .maybeSingle();
+  const { data: existingDeposit } = await supabase.from("deposits").select("id").or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`).maybeSingle();
 
   if (!existingDeposit) {
     await supabase.from("deposits").insert({
@@ -158,8 +205,6 @@ export async function POST(req: Request) {
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
-  const customer_email =
-    (session.customer_email as string) ?? (session.metadata?.email as string) ?? "";
 
   await supabase.from("stripe_payments").insert({
     user_id,
