@@ -70,7 +70,8 @@ export async function PATCH(request: Request) {
     await setCommissionPercentage(tier, percentage);
     return NextResponse.json({ success: true });
   } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to update";
     console.error("Admin set commission error:", e);
-    return NextResponse.json({ message: "Failed to update" }, { status: 500 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

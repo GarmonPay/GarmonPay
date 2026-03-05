@@ -66,6 +66,7 @@ export default function AdminReferralsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/referral-commissions`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ tier, percentage }),
       });
