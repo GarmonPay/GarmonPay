@@ -78,9 +78,9 @@ export default function GamificationPage() {
     <div className="p-8">
       <h1 className="text-2xl font-bold text-white mb-4">Gamification Config</h1>
       {config === null ? (
-        <p className="text-amber-400">
-          No config found. Run the SQL in <code className="bg-white/10 px-1 rounded">supabase/gamification.sql</code> in
-          your Supabase SQL Editor to create the table and seed row.
+        <p className="text-amber-400 max-w-2xl">
+          No config found. Run the SQL in <code className="bg-white/10 px-1 rounded break-all">supabase/gamification.sql</code> in your
+          Supabase SQL Editor to create the table and seed row. Or run migrations: <code className="bg-white/10 px-1 rounded break-all">supabase/migrations/20250231100000_gamification_config.sql</code>.
         </p>
       ) : (
         <>

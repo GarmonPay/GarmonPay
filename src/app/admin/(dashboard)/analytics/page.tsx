@@ -26,7 +26,8 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/analytics?limit=200`, { headers: adminApiHeaders(session) })
+    setError(null);
+    fetch(`${API_BASE}/admin/analytics?limit=200`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();

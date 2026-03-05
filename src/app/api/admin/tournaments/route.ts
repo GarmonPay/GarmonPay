@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ tournaments });
   } catch (e) {
     console.error("Admin tournaments list error:", e);
-    return NextResponse.json({ message: "Failed to load" }, { status: 500 });
+    return NextResponse.json({ tournaments: [], message: "Tournaments table may not exist. Run migrations." });
   }
 }
 

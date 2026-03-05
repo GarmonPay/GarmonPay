@@ -35,7 +35,12 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     console.error("Admin referral commissions error:", e);
-    return NextResponse.json({ message: "Failed to load" }, { status: 500 });
+    return NextResponse.json({
+      config: [],
+      totalRecurringCommissionsPaidCents: 0,
+      activeReferralSubscriptions: 0,
+      message: "Referral tables may not exist. Run migrations.",
+    });
   }
 }
 

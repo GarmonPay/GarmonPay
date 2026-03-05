@@ -41,7 +41,8 @@ export default function AdminTournamentsPage() {
   function loadTournaments() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/tournaments`, { headers: adminApiHeaders(session) })
+    setError(null);
+    fetch(`${API_BASE}/admin/tournaments`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load tournaments");
         return res.json();

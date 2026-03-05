@@ -22,7 +22,8 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    console.error("[admin/analytics]", error);
+    return NextResponse.json({ events: [], message: error.message });
   }
 
   return NextResponse.json({ events: data ?? [] });

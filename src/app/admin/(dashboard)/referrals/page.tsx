@@ -33,7 +33,8 @@ export default function AdminReferralsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/referral-commissions`, { headers: adminApiHeaders(session) })
+    setError(null);
+    fetch(`${API_BASE}/admin/referral-commissions`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
