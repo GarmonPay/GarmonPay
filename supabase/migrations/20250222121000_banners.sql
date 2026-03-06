@@ -24,20 +24,22 @@ comment on table public.banners is 'Banner ads: rotator display, impressions/cli
 
 alter table public.banners enable row level security;
 
+drop policy if exists "Users can read own banners" on public.banners;
 create policy "Users can read own banners"
   on public.banners for select
   using (auth.uid() = owner_user_id);
 
+drop policy if exists "Users can insert own banners" on public.banners;
 create policy "Users can insert own banners"
   on public.banners for insert
   with check (auth.uid() = owner_user_id);
 
+drop policy if exists "Users can update own banners (limited fields)" on public.banners;
 create policy "Users can update own banners (limited fields)"
   on public.banners for update
   using (auth.uid() = owner_user_id);
 
+drop policy if exists "Service role full access banners" on public.banners;
 create policy "Service role full access banners"
   on public.banners for all
   using (auth.jwt() ->> 'role' = 'service_role');
-
--- Allow anonymous/authenticated read for active banners only (rotator) via service role in API

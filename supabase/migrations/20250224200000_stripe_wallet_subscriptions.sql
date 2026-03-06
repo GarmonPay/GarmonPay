@@ -30,25 +30,4 @@ create policy "Service role full access stripe_subscriptions"
   on public.stripe_subscriptions for all
   using (auth.jwt() ->> 'role' = 'service_role');
 
--- 3) Safe wallet funding: increment balance and withdrawable_balance (called from webhook)
-create or replace function public.increment_user_balance(
-  p_user_id uuid,
-  p_amount_cents bigint
-)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if p_amount_cents is null or p_amount_cents <= 0 then
-    return;
-  end if;
-  update public.users
-  set
-    balance = coalesce(balance, 0) + p_amount_cents,
-    withdrawable_balance = coalesce(withdrawable_balance, 0) + p_amount_cents,
-    updated_at = now()
-  where id = p_user_id;
-end;
-$$;
+-- 3) increment_user_balance is now defined in 001_initial_schema.sql.
