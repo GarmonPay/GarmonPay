@@ -1,7 +1,8 @@
 /**
- * GarmonPay Fight Server – Full multiplayer arena
- * Matchmaking, multiple rooms, spectators, leaderboard, server-authoritative damage.
- * CORS: https://garmonpay.com | Optimized for Render (process.env.PORT).
+ * GarmonPay Fight Server – Full multiplayer arena + real-money betting
+ * Matchmaking, rooms, spectators, leaderboard, server-authoritative damage.
+ * Wallet: entry fee deducted when fight starts; winner paid when fight ends. 10% platform fee.
+ * CORS: https://garmonpay.com | Render: process.env.PORT
  */
 
 const express = require("express");
@@ -10,10 +11,94 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const PORT = process.env.PORT || 4000;
-const CORS_ORIGIN = "https://garmonpay.com";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://garmonpay.com";
 const MAX_HEALTH = 100;
 const JAB_DAMAGE = 8;
 const HEAVY_DAMAGE = 18;
+const PLATFORM_FEE_PERCENT = 10;
+
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  try {
+    supabase = require("@supabase/supabase-js").createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  } catch (e) {
+    console.warn("Supabase not available, running without wallet:", e.message);
+  }
+}
+
+async function getBalanceCents(userId) {
+  if (!supabase) return null;
+  const { data: w } = await supabase.from("wallet_balances").select("balance").eq("user_id", userId).maybeSingle();
+  if (w != null && w.balance != null) return Number(w.balance) || 0;
+  const { data: u } = await supabase.from("users").select("balance").eq("id", userId).maybeSingle();
+  return u != null ? Number(u.balance) || 0 : 0;
+}
+
+async function deductEntry(userId, amountCents, reference) {
+  if (!supabase) return { success: false, message: "Wallet not configured" };
+  const ref = reference || `fight_arena_entry_${userId}_${Date.now()}`;
+  const { data, error } = await supabase.rpc("wallet_ledger_entry", {
+    p_user_id: userId,
+    p_type: "game_play",
+    p_amount_cents: -amountCents,
+    p_reference: ref,
+  });
+  if (error) return { success: false, message: error.message };
+  const r = data && typeof data === "object" ? data : {};
+  if (r.success) {
+    await supabase.from("transactions").insert({
+      user_id: userId,
+      type: "fight_entry",
+      amount: amountCents,
+      status: "completed",
+      description: "Boxing arena fight entry",
+      reference_id: ref,
+    }).then(({ error: e }) => { if (e) console.error("[fight-server] transaction fight_entry:", e.message); });
+    return { success: true };
+  }
+  return { success: false, message: r.message || "Deduction failed" };
+}
+
+async function payWinner(userId, amountCents, reference) {
+  if (!supabase) return;
+  const ref = reference || `fight_arena_win_${userId}_${Date.now()}`;
+  await supabase.rpc("wallet_ledger_entry", {
+    p_user_id: userId,
+    p_type: "game_win",
+    p_amount_cents: amountCents,
+    p_reference: ref,
+  });
+  await supabase.from("transactions").insert({
+    user_id: userId,
+    type: "fight_prize",
+    amount: amountCents,
+    status: "completed",
+    description: "Boxing arena fight win",
+    reference_id: ref,
+  }).then(({ error: e }) => { if (e) console.error("[fight-server] transaction fight_prize:", e.message); });
+}
+
+async function recordFightHistory(player1Id, player2Id, winnerId, betAmountCents, platformFeeCents) {
+  if (!supabase) return;
+  await supabase.from("fight_history").insert({
+    player1: player1Id,
+    player2: player2Id,
+    winner: winnerId,
+    bet_amount_cents: betAmountCents,
+    platform_fee_cents: platformFeeCents,
+  }).then(({ error: e }) => { if (e) console.error("[fight-server] fight_history insert:", e.message); });
+}
+
+async function recordPlatformFee(amountCents, source = "boxing_arena") {
+  if (!supabase) return;
+  await supabase.from("platform_revenue").insert({
+    amount: amountCents,
+    source,
+  }).then(({ error: e }) => { if (e) console.error("[fight-server] platform_revenue insert:", e.message); });
+}
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
@@ -27,9 +112,9 @@ const io = new Server(httpServer, {
   pingInterval: 25000,
 });
 
-// Matchmaking queue: { socketId, playerId }
+// Matchmaking queue: { socketId, playerId, betAmountCents }
 const queue = [];
-// Rooms: roomId -> { player1, player2, punches[], spectators: Set(socketId) }
+// Rooms: roomId -> { player1, player2, punches[], spectators, betAmountCents }
 const rooms = new Map();
 // socketId -> { roomId, role: "player1" | "player2" | "spectator" }
 const socketToRoom = new Map();
@@ -85,6 +170,17 @@ function emitFightEnd(roomId, winnerSocketId, loserSocketId, room) {
   const loserId = loser?.playerId;
   updateLeaderboard(winnerId, loserId);
 
+  const betCents = room.betAmountCents || 0;
+  if (betCents > 0 && winnerId) {
+    const pot = betCents * 2;
+    const platformFeeCents = Math.round(pot * (PLATFORM_FEE_PERCENT / 100));
+    const winnerPayoutCents = pot - platformFeeCents;
+    payWinner(winnerId, winnerPayoutCents, roomId).then(() => {
+      recordFightHistory(room.player1?.playerId, room.player2?.playerId, winnerId, betCents, platformFeeCents);
+      recordPlatformFee(platformFeeCents);
+    });
+  }
+
   io.to(roomId).emit("fight_end", {
     room_id: roomId,
     winner_socket_id: winnerSocketId,
@@ -93,6 +189,7 @@ function emitFightEnd(roomId, winnerSocketId, loserSocketId, room) {
     loser_id: loserId,
     player1_health: room.player1?.health ?? 0,
     player2_health: room.player2?.health ?? 0,
+    bet_amount_cents: betCents,
   });
 
   if (room.player1?.socketId) socketToRoom.delete(room.player1.socketId);
@@ -101,7 +198,7 @@ function emitFightEnd(roomId, winnerSocketId, loserSocketId, room) {
   rooms.delete(roomId);
 }
 
-function createRoom(player1Entry, player2Entry) {
+function createRoom(player1Entry, player2Entry, betAmountCents = 0) {
   const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const room = {
     player1: {
@@ -116,6 +213,7 @@ function createRoom(player1Entry, player2Entry) {
     },
     punches: [],
     spectators: new Set(),
+    betAmountCents: betAmountCents || 0,
   };
   rooms.set(roomId, room);
   socketToRoom.set(player1Entry.socketId, { roomId, role: "player1" });
@@ -127,14 +225,31 @@ io.on("connection", (socket) => {
   socket.emit("connected", { socket_id: socket.id });
 
   // —— Matchmaking ——
-  function onMatchmakingJoin(payload) {
+  async function onMatchmakingJoin(payload) {
     leaveQueue(socket.id);
     const playerId = (payload && payload.player_id) ? String(payload.player_id).trim() : socket.id;
-    const entry = { socketId: socket.id, playerId };
+    const betAmountCents = Math.max(0, parseInt(payload?.bet_amount_cents, 10) || 0);
+
+    if (betAmountCents > 0 && supabase) {
+      const balance = await getBalanceCents(playerId);
+      if (balance < betAmountCents) {
+        socket.emit("matchmaking_join", {
+          success: false,
+          error: "insufficient_balance",
+          balance_cents: balance,
+          required_cents: betAmountCents,
+        });
+        return;
+      }
+    }
+
+    const entry = { socketId: socket.id, playerId, betAmountCents };
     queue.push(entry);
     socket.emit("matchmaking_join", {
+      success: true,
       socket_id: socket.id,
       player_id: playerId,
+      bet_amount_cents: betAmountCents,
       position: queue.length,
       queue_length: queue.length,
     });
@@ -142,7 +257,30 @@ io.on("connection", (socket) => {
     if (queue.length >= 2) {
       const a = queue.shift();
       const b = queue.shift();
-      const roomId = createRoom(a, b);
+      const betCents = Math.min(a.betAmountCents, b.betAmountCents);
+
+      if (betCents > 0 && supabase) {
+        const fightRef = `arena_${Date.now()}`;
+        const r1 = await deductEntry(a.playerId, betCents, `${fightRef}_p1`);
+        if (!r1.success) {
+          io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
+          io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
+          queue.unshift(b);
+          queue.unshift(a);
+          return;
+        }
+        const r2 = await deductEntry(b.playerId, betCents, `${fightRef}_p2`);
+        if (!r2.success) {
+          await payWinner(a.playerId, betCents, `${fightRef}_refund_p1`);
+          io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
+          io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
+          queue.unshift(b);
+          queue.unshift(a);
+          return;
+        }
+      }
+
+      const roomId = createRoom(a, b, betCents);
       const room = rooms.get(roomId);
 
       io.sockets.sockets.get(a.socketId)?.join(roomId);
@@ -150,6 +288,7 @@ io.on("connection", (socket) => {
 
       io.to(roomId).emit("fight_start", {
         room_id: roomId,
+        bet_amount_cents: betCents,
         player1: {
           socket_id: room.player1.socketId,
           player_id: room.player1.playerId,
@@ -283,13 +422,18 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, queue_length: queue.length, rooms: rooms.size });
 });
 
-app.get("/leaderboard", (_req, res) => {
+app.get("/fights", (_req, res) => {
   const list = [];
-  leaderboard.forEach((stats, playerId) => {
-    list.push({ player_id: playerId, wins: stats.wins, losses: stats.losses });
+  rooms.forEach((room, roomId) => {
+    list.push({
+      room_id: roomId,
+      bet_amount_cents: room.betAmountCents || 0,
+      player1: room.player1 ? { player_id: room.player1.playerId, health: room.player1.health } : null,
+      player2: room.player2 ? { player_id: room.player2.playerId, health: room.player2.health } : null,
+      spectator_count: room.spectators ? room.spectators.size : 0,
+    });
   });
-  list.sort((a, b) => b.wins - a.wins);
-  res.json({ leaderboard: list });
+  res.json({ fights: list });
 });
 
 app.get("/rooms", (_req, res) => {
@@ -297,12 +441,44 @@ app.get("/rooms", (_req, res) => {
   rooms.forEach((room, roomId) => {
     list.push({
       room_id: roomId,
+      bet_amount_cents: room.betAmountCents || 0,
       player1: room.player1 ? { player_id: room.player1.playerId, health: room.player1.health } : null,
       player2: room.player2 ? { player_id: room.player2.playerId, health: room.player2.health } : null,
-      spectator_count: room.spectators.size,
+      spectator_count: room.spectators ? room.spectators.size : 0,
     });
   });
   res.json({ rooms: list });
+});
+
+app.get("/fight-history", async (_req, res) => {
+  if (!supabase) return res.json({ fight_history: [] });
+  const { data, error } = await supabase
+    .from("fight_history")
+    .select("id, player1, player2, winner, bet_amount_cents, platform_fee_cents, created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ fight_history: data || [] });
+});
+
+app.post("/join-fight", express.json(), async (req, res) => {
+  const playerId = req.body && req.body.player_id ? String(req.body.player_id).trim() : null;
+  const betAmountCents = Math.max(0, parseInt(req.body?.bet_amount_cents, 10) || 0);
+  if (!playerId) return res.status(400).json({ error: "player_id required" });
+  if (betAmountCents === 0) return res.json({ ok: true, eligible: true, balance_cents: null });
+  if (!supabase) return res.json({ ok: true, eligible: true, balance_cents: null });
+  const balance = await getBalanceCents(playerId);
+  const eligible = balance >= betAmountCents;
+  res.json({ ok: true, eligible, balance_cents: balance, required_cents: betAmountCents });
+});
+
+app.get("/leaderboard", (_req, res) => {
+  const list = [];
+  leaderboard.forEach((stats, playerId) => {
+    list.push({ player_id: playerId, wins: stats.wins, losses: stats.losses });
+  });
+  list.sort((a, b) => b.wins - a.wins);
+  res.json({ leaderboard: list });
 });
 
 httpServer.listen(PORT, () => {
