@@ -17,6 +17,8 @@ const links = [
   { href: "/admin/gamification", label: "Gamification" },
   { href: "/admin/tournaments", label: "Tournaments" },
   { href: "/admin/referrals", label: "Referrals" },
+  { href: "/admin/platform", label: "Platform" },
+  { href: "/admin/wallet-monitor", label: "Wallet" },
   { href: "/admin/boxing", label: "Boxing" },
   { href: "/admin/settings", label: "Settings" },
 ];

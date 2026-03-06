@@ -24,6 +24,7 @@ function formatDate(iso: string) {
 export default function ReferralsPage() {
   const router = useRouter();
   const [data, setData] = useState<Awaited<ReturnType<typeof getReferralDashboard>> | null>(null);
+  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -38,7 +39,10 @@ export default function ReferralsPage() {
         }
         const tokenOrId = session.accessToken ?? session.userId;
         const isToken = !!session.accessToken;
-        return getReferralDashboard(tokenOrId, isToken).then(setData);
+        return Promise.all([
+          getReferralDashboard(tokenOrId, isToken).then(setData),
+          fetch("/api/referrals/leaderboard?limit=10").then((r) => (r.ok ? r.json() : { leaderboard: [] })).then((d) => setLeaderboard(d.leaderboard ?? [])),
+        ]);
       })
       .catch(() => setError("Failed to load"))
       .finally(() => setLoading(false));
@@ -137,6 +141,33 @@ export default function ReferralsPage() {
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
+        <p className="text-fintech-muted text-sm mt-3 mb-2">Share to:</p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent("Join GarmonPay and earn through games and referrals. Use my link and get a signup bonus. " + (referralLink || ""))}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1da1f2] text-white text-sm font-medium hover:opacity-90"
+          >
+            Twitter
+          </a>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent("Join GarmonPay and earn through games and referrals. Use my link and get a signup bonus. " + (referralLink || ""))}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#25d366] text-white text-sm font-medium hover:opacity-90"
+          >
+            WhatsApp
+          </a>
+          <a
+            href={`https://t.me/share/url?url=${encodeURIComponent(referralLink || "")}&text=${encodeURIComponent("Join GarmonPay and earn through games and referrals. Use my link and get a signup bonus.")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] text-white text-sm font-medium hover:opacity-90"
+          >
+            Telegram
+          </a>
+        </div>
       </section>
 
       {/* Your Referral Banners */}
@@ -173,6 +204,39 @@ export default function ReferralsPage() {
               </button>
             </div>
           </>
+        )}
+      </section>
+
+      {/* Referred users table */}
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6 overflow-hidden">
+        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
+          Referral leaderboard
+        </h2>
+        {leaderboard.length === 0 ? (
+          <p className="text-fintech-muted italic">No leaderboard data yet.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-6 sm:mx-0">
+            <table className="w-full text-left min-w-[320px]">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Rank</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">User</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Referrals</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Earnings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map((row) => (
+                  <tr key={row.rank} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-3 text-white font-medium">#{row.rank}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{row.email}</td>
+                    <td className="p-3 text-white">{row.totalReferrals}</td>
+                    <td className="p-3 text-fintech-money">{formatCents(row.totalEarningsCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

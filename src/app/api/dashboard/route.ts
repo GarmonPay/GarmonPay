@@ -8,7 +8,8 @@ import {
   getMonthlyReferralCommissionCents,
   getLifetimeReferralCommissionCents,
 } from "@/lib/referral-commissions-db";
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient, createAdminClient } from "@/lib/supabase";
+import { getWalletBalanceCents } from "@/lib/wallet-ledger";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -106,9 +107,10 @@ export async function GET(request: Request) {
       }
 
       const userRow = row as { balance?: number; ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
-      const balanceCents = Number(userRow?.balance ?? 0);
+      const walletBalance = await getWalletBalanceCents(authUser.id);
+      const balanceCents = walletBalance !== null ? walletBalance : Number(userRow?.balance ?? 0);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
-      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
+      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? balanceCents);
 
         return NextResponse.json({
           earningsTodayCents,

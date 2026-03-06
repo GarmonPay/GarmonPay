@@ -9,6 +9,7 @@ import {
   consumeGlobalBudget,
   type RewardSource,
 } from "@/lib/reward-budget";
+import { canAffordPayout, recordPayout } from "@/lib/platform-balance";
 
 function supabase() {
   const client = createAdminClient();
@@ -27,6 +28,9 @@ async function grantReward(
   if (amountCents <= 0) return null;
   const allowed = await canGrantFromGlobalBudget(amountCents);
   if (!allowed.allowed) return allowed.message ?? "Budget limit reached";
+
+  const platformOk = await canAffordPayout(amountCents);
+  if (!platformOk.allowed) return platformOk.message ?? "Platform payout limit reached";
 
   const { data: user, error: userErr } = await supabase()
     .from("users")
@@ -54,6 +58,7 @@ async function grantReward(
     description,
   });
   await consumeGlobalBudget(source, amountCents, userId);
+  await recordPayout(amountCents, source);
   return null;
 }
 
@@ -68,6 +73,9 @@ async function grantAdCreditReward(
   if (amountCents <= 0) return null;
   const allowed = await canGrantFromGlobalBudget(amountCents);
   if (!allowed.allowed) return allowed.message ?? "Budget limit reached";
+
+  const platformOk = await canAffordPayout(amountCents);
+  if (!platformOk.allowed) return platformOk.message ?? "Platform payout limit reached";
 
   const { data: user, error: userErr } = await supabase()
     .from("users")
@@ -94,6 +102,7 @@ async function grantAdCreditReward(
     description,
   });
   await consumeGlobalBudget(source, amountCents, userId);
+  await recordPayout(amountCents, source);
   return null;
 }
 

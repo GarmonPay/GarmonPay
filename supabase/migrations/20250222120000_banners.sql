@@ -15,6 +15,11 @@ create table if not exists public.banners (
   updated_at timestamptz not null default now()
 );
 
+-- If table was created elsewhere (e.g. 20250234) with minimal schema, ensure required columns exist before index/policies.
+alter table public.banners add column if not exists owner_user_id uuid references public.users (id) on delete cascade;
+alter table public.banners add column if not exists status text default 'pending';
+alter table public.banners add column if not exists type text default 'advertiser';
+
 create index if not exists banners_owner_user_id on public.banners (owner_user_id);
 create index if not exists banners_status on public.banners (status) where status = 'active';
 create index if not exists banners_type on public.banners (type);

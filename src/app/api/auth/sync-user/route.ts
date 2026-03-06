@@ -13,12 +13,15 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { id, email } = body?.user ?? body;
+    const userPayload = body?.user ?? body;
+    const { id, email } = userPayload;
+    const referralCode = body?.referralCode ?? userPayload?.referralCode ?? "";
     if (!id || typeof id !== "string") {
       return NextResponse.json({ message: "id required" }, { status: 400 });
     }
 
     const emailVal = typeof email === "string" ? email : "";
+    const refCode = typeof referralCode === "string" ? referralCode.trim() : "";
 
     // Security: allow only if (1) Bearer token subject matches id, or (2) id is a recently created auth user
     const authHeader = req.headers.get("authorization");
@@ -89,6 +92,30 @@ export async function POST(req: Request) {
         }
       } catch {
         // ignore
+      }
+    }
+
+    if (refCode) {
+      try {
+        const { data: referrer } = await supabase.from("users").select("id").eq("referral_code", refCode).maybeSingle();
+        const referrerId = (referrer as { id?: string } | null)?.id;
+        if (referrerId && referrerId !== id) {
+          await supabase.from("users").update({
+            referred_by_code: refCode,
+            referred_by: referrerId,
+            updated_at: new Date().toISOString(),
+          }).eq("id", id);
+          const { createReferral } = await import("@/lib/viral-referral-db");
+          await createReferral({
+            referrerUserId: referrerId,
+            referredUserId: id,
+            referralCode: refCode,
+            grantSignupBonus: true,
+            referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
+          });
+        }
+      } catch (refErr) {
+        console.warn("Sync-user referral apply (optional):", refErr);
       }
     }
 

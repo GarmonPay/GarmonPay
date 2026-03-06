@@ -22,7 +22,21 @@ export default function RegisterPage() {
     if (ref && typeof localStorage !== "undefined") {
       localStorage.setItem(REF_STORAGE_KEY, ref);
     }
+    if (ref && typeof document !== "undefined") {
+      document.cookie = `garmonpay_ref=${encodeURIComponent(ref)}; path=/; max-age=${14 * 24 * 60 * 60}; SameSite=Lax`;
+    }
   }, [searchParams]);
+
+  function getStoredReferralCode(): string {
+    const fromUrl = searchParams.get("ref")?.trim();
+    if (fromUrl) return fromUrl;
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(/garmonpay_ref=([^;]+)/);
+      if (match?.[1]) return decodeURIComponent(match[1]).trim();
+    }
+    if (typeof localStorage !== "undefined") return (localStorage.getItem(REF_STORAGE_KEY) ?? "").trim();
+    return "";
+  }
 
   async function register() {
     setError("");
@@ -41,11 +55,13 @@ export default function RegisterPage() {
       return;
     }
     setLoading(true);
+    const refCode = getStoredReferralCode();
     const { data, error: err } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
         emailRedirectTo: getRegisterUrl(),
+        data: refCode ? { referred_by_code: refCode } : undefined,
       },
     });
     if (err) {
@@ -61,7 +77,11 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/sync-user", {
         method: "POST",
         headers,
-        body: JSON.stringify({ id: data.user.id, email: data.user.email ?? trimmedEmail }),
+        body: JSON.stringify({
+          id: data.user.id,
+          email: data.user.email ?? trimmedEmail,
+          referralCode: getStoredReferralCode() || undefined,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {

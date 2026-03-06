@@ -20,6 +20,10 @@ export default function AdminReferralsPage() {
   const [config, setConfig] = useState<Array<{ tier: string; percentage: number }>>([]);
   const [totalPaidCents, setTotalPaidCents] = useState(0);
   const [activeReferralSubs, setActiveReferralSubs] = useState(0);
+  const [totalReferrals, setTotalReferrals] = useState(0);
+  const [totalCommissionsPaidCents, setTotalCommissionsPaidCents] = useState(0);
+  const [activeReferrals, setActiveReferrals] = useState(0);
+  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -34,17 +38,20 @@ export default function AdminReferralsPage() {
     if (!session) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/admin/referral-commissions`, { credentials: "include", headers: adminApiHeaders(session) })
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load");
-        return r.json();
-      })
-      .then((data) => {
-        setConfig(data.config ?? []);
-        setTotalPaidCents(data.totalRecurringCommissionsPaidCents ?? 0);
-        setActiveReferralSubs(data.activeReferralSubscriptions ?? 0);
+    Promise.all([
+      fetch(`${API_BASE}/admin/referral-commissions`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed")))),
+      fetch(`${API_BASE}/admin/referrals-stats`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => (r.ok ? r.json() : { totalReferrals: 0, totalCommissionsPaidCents: 0, activeReferrals: 0, leaderboard: [] })),
+    ])
+      .then(([commData, statsData]) => {
+        setConfig(commData.config ?? []);
+        setTotalPaidCents(commData.totalRecurringCommissionsPaidCents ?? 0);
+        setActiveReferralSubs(commData.activeReferralSubscriptions ?? 0);
+        setTotalReferrals(statsData.totalReferrals ?? 0);
+        setTotalCommissionsPaidCents(statsData.totalCommissionsPaidCents ?? 0);
+        setActiveReferrals(statsData.activeReferrals ?? 0);
+        setLeaderboard(statsData.leaderboard ?? []);
         const next: Record<string, string> = {};
-        (data.config ?? []).forEach((c: { tier: string; percentage: number }) => {
+        (commData.config ?? []).forEach((c: { tier: string; percentage: number }) => {
           next[c.tier] = String(c.percentage);
         });
         setEditPct(next);
@@ -115,15 +122,51 @@ export default function AdminReferralsPage() {
       )}
 
       {/* Admin tracking */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Total recurring commissions paid</p>
+          <p className="text-[#9ca3af] text-sm">Total referrals</p>
+          <p className="text-2xl font-bold text-white">{totalReferrals}</p>
+        </div>
+        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+          <p className="text-[#9ca3af] text-sm">Total commissions paid</p>
+          <p className="text-2xl font-bold text-white">{formatCents(totalCommissionsPaidCents)}</p>
+        </div>
+        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+          <p className="text-[#9ca3af] text-sm">Active referrals</p>
+          <p className="text-2xl font-bold text-white">{activeReferrals}</p>
+        </div>
+        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+          <p className="text-[#9ca3af] text-sm">Recurring commissions paid</p>
           <p className="text-2xl font-bold text-white">{formatCents(totalPaidCents)}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Active referral subscriptions</p>
-          <p className="text-2xl font-bold text-white">{activeReferralSubs}</p>
-        </div>
+      </div>
+
+      {/* Top referrers leaderboard */}
+      <h2 className="text-lg font-bold text-white mb-3">Top referrers leaderboard</h2>
+      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden mb-8">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-white/10">
+              <th className="p-3 text-sm font-medium text-[#9ca3af]">Rank</th>
+              <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
+              <th className="p-3 text-sm font-medium text-[#9ca3af]">Total referrals</th>
+              <th className="p-3 text-sm font-medium text-[#9ca3af]">Total earnings</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leaderboard.map((row) => (
+              <tr key={row.userId} className="border-b border-white/5">
+                <td className="p-3 text-white font-medium">{row.rank}</td>
+                <td className="p-3 text-white font-mono text-sm">{row.email}</td>
+                <td className="p-3 text-white">{row.totalReferrals}</td>
+                <td className="p-3 text-[#10b981]">{formatCents(row.totalEarningsCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {leaderboard.length === 0 && (
+          <p className="p-4 text-[#9ca3af] text-sm">No referrers yet.</p>
+        )}
       </div>
 
       {/* Commission % per tier */}

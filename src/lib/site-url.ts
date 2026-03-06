@@ -15,6 +15,11 @@ export function getReferralLink(referralCodeOrUserId: string): string {
   return `${getSiteUrl()}/register?ref=${referralCodeOrUserId || ""}`;
 }
 
+/** Short referral link: {siteUrl}/r/CODE (sets cookie and redirects to register). */
+export function getReferralLinkR(referralCode: string): string {
+  return `${getSiteUrl()}/r/${encodeURIComponent((referralCode || "").trim())}`;
+}
+
 /** Base URL for auth redirects: {siteUrl}/dashboard etc. */
 export function getDashboardUrl(): string {
   return `${getSiteUrl()}/dashboard`;

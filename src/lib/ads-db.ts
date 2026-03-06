@@ -166,9 +166,32 @@ export async function getSessionById(sessionId: string): Promise<AdSessionRow | 
 
 /**
  * Complete session and issue reward. Uses DB function so balance + earnings + session update are atomic.
+ * Prefer complete_ad_session_with_platform_protection when available (uses platform_settings.ad_reward_percent and platform_balance).
  * Returns { success, rewardCents } or { success, message }.
  */
 export async function completeAdSessionAndIssueReward(
+  userId: string,
+  sessionId: string
+): Promise<{ success: true; rewardCents: number } | { success: false; message: string }> {
+  const { data, error } = await supabase().rpc("complete_ad_session_with_platform_protection", {
+    p_user_id: userId,
+    p_session_id: sessionId,
+  });
+  if (error) {
+    if (error.code === "42883" || error.message?.includes("does not exist")) {
+      return completeAdSessionAndIssueRewardLegacy(userId, sessionId);
+    }
+    return { success: false, message: error.message };
+  }
+  const result = data as { success: boolean; message?: string; rewardCents?: number };
+  if (result.success && typeof result.rewardCents === "number") {
+    return { success: true, rewardCents: result.rewardCents };
+  }
+  return { success: false, message: (result as { message?: string }).message ?? "Failed" };
+}
+
+/** Legacy path when platform protection migration is not applied. */
+async function completeAdSessionAndIssueRewardLegacy(
   userId: string,
   sessionId: string
 ): Promise<{ success: true; rewardCents: number } | { success: false; message: string }> {

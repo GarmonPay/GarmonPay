@@ -58,6 +58,29 @@ create table if not exists public.referral_commissions (
   unique(referrer_user_id, referred_user_id, subscription_id)
 );
 
+-- Repair: if table already existed with referrer_id (e.g. from another migration), ensure referrer_user_id exists before index/policy.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'referrer_id'
+  )
+  and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'referrer_user_id'
+  ) then
+    alter table public.referral_commissions add column referrer_user_id uuid references public.users (id) on delete cascade;
+    update public.referral_commissions set referrer_user_id = referrer_id where referrer_id is not null;
+    alter table public.referral_commissions alter column referrer_user_id set not null;
+    alter table public.referral_commissions drop column referrer_id;
+    if not exists (select 1 from pg_constraint where conrelid = 'public.referral_commissions'::regclass and conname = 'referral_commissions_referrer_referred_sub_key')
+       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'subscription_id') then
+      alter table public.referral_commissions add constraint referral_commissions_referrer_referred_sub_key unique (referrer_user_id, referred_user_id, subscription_id);
+    end if;
+  end if;
+end;
+$$;
+
 create index if not exists referral_commissions_referrer on public.referral_commissions (referrer_user_id);
 create index if not exists referral_commissions_subscription on public.referral_commissions (subscription_id);
 

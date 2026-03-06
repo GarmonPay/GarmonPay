@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { recordRevenue } from "@/lib/platform-balance";
+import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { grantDepositBonus } from "@/lib/viral-referral-db";
 import Stripe from "stripe";
 
 /**
@@ -84,18 +87,39 @@ export async function POST(req: Request) {
       console.warn("[Stripe webhook] payment_intent.succeeded no user", { eventId, paymentIntentId: pi.id });
       return new Response("OK", { status: 200 });
     }
-    const { data: userRowPi } = await supabasePi.from("users").select("balance, total_deposits").eq("id", user_id_pi).maybeSingle();
-    const cur = (userRowPi as { balance?: number; total_deposits?: number }) ?? {};
-    const newBalance = Number(cur.balance ?? 0) + amountTotal;
-    const newTotalDeposits = Number(cur.total_deposits ?? 0) + amountTotal;
-    const { error: upErr } = await supabasePi.from("users").update({ balance: newBalance, total_deposits: newTotalDeposits, updated_at: new Date().toISOString() }).eq("id", user_id_pi);
-    if (upErr) {
-      console.error("[Stripe webhook] payment_intent.succeeded balance update failed:", upErr);
+    const ledgerResult = await walletLedgerEntry(user_id_pi, "deposit", amountTotal, `stripe_pi_${pi.id}`);
+    if (ledgerResult.success) {
+      const { data: uRow } = await supabasePi.from("users").select("total_deposits").eq("id", user_id_pi).single();
+      const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
+      await supabasePi.from("users").update({ total_deposits: prevTotal + amountTotal, updated_at: new Date().toISOString() }).eq("id", user_id_pi);
+      await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id, stripe_session: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
+      await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id, session_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
+      recordRevenue(amountTotal, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+      grantDepositBonus(user_id_pi).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id_pi); });
+      console.log("[Stripe webhook] payment_intent.succeeded credited via ledger", { eventId, user_id: user_id_pi, amountTotal });
       return new Response("OK", { status: 200 });
     }
-    await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
-    await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
-    console.log("[Stripe webhook] payment_intent.succeeded credited", { eventId, user_id: user_id_pi, amountTotal });
+    const { data: newBalance } = await supabasePi.rpc("increment_user_balance", { uid: user_id_pi, amount: amountTotal });
+    if (newBalance != null) {
+      const { data: uRow } = await supabasePi.from("users").select("total_deposits").eq("id", user_id_pi).single();
+      const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
+      await supabasePi.from("users").update({ total_deposits: prevTotal + amountTotal, updated_at: new Date().toISOString() }).eq("id", user_id_pi);
+      await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id, stripe_session: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
+      await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id, session_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
+      recordRevenue(amountTotal, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+      grantDepositBonus(user_id_pi).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id_pi); });
+      console.log("[Stripe webhook] payment_intent.succeeded credited via increment_user_balance", { eventId, user_id: user_id_pi, amountTotal });
+      return new Response("OK", { status: 200 });
+    }
+    const { data: userRowPi } = await supabasePi.from("users").select("balance, total_deposits").eq("id", user_id_pi).maybeSingle();
+    const cur = (userRowPi as { balance?: number; total_deposits?: number } | null) ?? {};
+    const newBal = Number(cur.balance ?? 0) + amountTotal;
+    const newTotalDeposits = Number(cur.total_deposits ?? 0) + amountTotal;
+    await supabasePi.from("users").update({ balance: newBal, total_deposits: newTotalDeposits, updated_at: new Date().toISOString() }).eq("id", user_id_pi);
+    await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id, stripe_session: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
+    await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id, session_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
+    recordRevenue(amountTotal, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+    console.log("[Stripe webhook] payment_intent.succeeded credited (fallback)", { eventId, user_id: user_id_pi, amountTotal });
     return new Response("OK", { status: 200 });
   }
 
@@ -154,27 +178,36 @@ export async function POST(req: Request) {
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
 
-  const { data: userRow } = await supabase.from("users").select("balance, total_deposits").eq("id", user_id).maybeSingle();
-
-  const currentBalance = Number((userRow as { balance?: number } | null)?.balance ?? 0);
-  const currentTotalDeposits = Number((userRow as { total_deposits?: number } | null)?.total_deposits ?? 0);
-  const newBalance = currentBalance + amount_total;
-  const newTotalDeposits = currentTotalDeposits + amount_total;
-
-  const { error: balanceErr } = await supabase
-    .from("users")
-    .update({
-      balance: newBalance,
-      total_deposits: newTotalDeposits,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", user_id);
-
-  if (balanceErr) {
-    console.error("[Stripe webhook] users.balance update failed:", balanceErr);
-    return new Response("Balance update failed", { status: 500 });
+  const ledgerResult = await walletLedgerEntry(user_id, "deposit", amount_total, `stripe_session_${session_id}`);
+  if (ledgerResult.success) {
+    const { data: uRow } = await supabase.from("users").select("total_deposits").eq("id", user_id).single();
+    const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
+    await supabase.from("users").update({ total_deposits: prevTotal + amount_total, updated_at: new Date().toISOString() }).eq("id", user_id);
+    console.log("[Stripe webhook] Balance credited via ledger — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
+  } else {
+    const { data: newBalance } = await supabase.rpc("increment_user_balance", { uid: user_id, amount: amount_total });
+    if (newBalance != null) {
+      const { data: uRow } = await supabase.from("users").select("total_deposits").eq("id", user_id).single();
+      const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
+      await supabase.from("users").update({ total_deposits: prevTotal + amount_total, updated_at: new Date().toISOString() }).eq("id", user_id);
+      console.log("[Stripe webhook] Balance credited via increment_user_balance — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
+    } else {
+      const { data: userRow } = await supabase.from("users").select("balance, total_deposits").eq("id", user_id).maybeSingle();
+      const currentBalance = Number((userRow as { balance?: number } | null)?.balance ?? 0);
+      const currentTotalDeposits = Number((userRow as { total_deposits?: number } | null)?.total_deposits ?? 0);
+      const newBalance = currentBalance + amount_total;
+      const newTotalDeposits = currentTotalDeposits + amount_total;
+      const { error: balanceErr } = await supabase
+        .from("users")
+        .update({ balance: newBalance, total_deposits: newTotalDeposits, updated_at: new Date().toISOString() })
+        .eq("id", user_id);
+      if (balanceErr) {
+        console.error("[Stripe webhook] users.balance update failed:", balanceErr);
+        return new Response("Balance update failed", { status: 500 });
+      }
+      console.log("[Stripe webhook] Balance credited (fallback) — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
+    }
   }
-  console.log("[Stripe webhook] Balance credited — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
 
   await supabase.from("transactions").insert({
     user_id,
@@ -183,9 +216,13 @@ export async function POST(req: Request) {
     status: "completed",
     description: `Stripe checkout ${session_id}`,
     reference_id: session_id,
+    stripe_session: session_id,
   }).then(({ error }) => {
     if (error) console.error("[Stripe webhook] transactions insert:", error.message);
   });
+
+  recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+  grantDepositBonus(user_id).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id); });
 
   const { data: existingDeposit } = await supabase.from("deposits").select("id").or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`).maybeSingle();
 
