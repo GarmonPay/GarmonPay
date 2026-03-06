@@ -16,7 +16,8 @@
     "db:push": "supabase db push",
     "test:commissions": "node scripts/test-referral-commissions.mjs",
     "test:webhook": "node --env-file=.env.local scripts/simulate-stripe-webhook.mjs",
-    "sync-users": "npx tsx --env-file=.env.local src/scripts/sync-all-users.ts"
+    "sync-users": "npx tsx --env-file=.env.local src/scripts/sync-all-users.ts",
+    "fight-server": "cd server && npm install && node fight-server.js"
   },
   "dependencies": {
     "@babylonjs/core": "^8.54.1",

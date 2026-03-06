@@ -1,0 +1,18 @@
+{
+  "name": "garmonpay-fight-server",
+  "version": "1.0.0",
+  "description": "GarmonPay fight matchmaking and real-time fight server",
+  "main": "fight-server.js",
+  "scripts": {
+    "start": "node fight-server.js",
+    "dev": "node fight-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.7.5"
+  }
+}
