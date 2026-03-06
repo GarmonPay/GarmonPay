@@ -91,6 +91,83 @@ alter table public.referrals add column if not exists earnings numeric default 0
 create index if not exists referrals_user_id on public.referrals (user_id);
 create index if not exists referrals_referred_user_id on public.referrals (referred_user_id);
 
+-- ========== FIGHT ARENA (fights, fight_escrow, fight_bets) ==========
+create table if not exists public.fights (
+  id uuid primary key default gen_random_uuid(),
+  host_user_id uuid not null references public.users (id) on delete cascade,
+  opponent_user_id uuid references public.users (id) on delete set null,
+  entry_fee bigint not null check (entry_fee > 0),
+  platform_fee bigint not null default 0 check (platform_fee >= 0),
+  total_pot bigint not null default 0,
+  status text not null default 'open' check (status in ('open', 'active', 'completed', 'cancelled')),
+  winner_user_id uuid references public.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists fights_host_user_id on public.fights (host_user_id);
+create index if not exists fights_opponent_user_id on public.fights (opponent_user_id);
+create index if not exists fights_status on public.fights (status);
+create index if not exists fights_created_at on public.fights (created_at desc);
+
+create table if not exists public.fight_escrow (
+  id uuid primary key default gen_random_uuid(),
+  fight_id uuid not null references public.fights (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  amount bigint not null check (amount > 0),
+  status text not null default 'held' check (status in ('held', 'released', 'refunded')),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists fight_escrow_fight_user on public.fight_escrow (fight_id, user_id);
+create index if not exists fight_escrow_fight_id on public.fight_escrow (fight_id);
+
+create table if not exists public.fight_bets (
+  id uuid primary key default gen_random_uuid(),
+  fight_id uuid not null references public.fights (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  amount bigint not null check (amount > 0),
+  choice text not null check (choice in ('host', 'opponent')),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists fight_bets_fight_user on public.fight_bets (fight_id, user_id);
+create index if not exists fight_bets_fight_id on public.fight_bets (fight_id);
+
+create table if not exists public.platform_revenue (
+  id uuid primary key default gen_random_uuid(),
+  amount numeric not null default 0,
+  source text,
+  fight_id uuid references public.fights (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists platform_revenue_fight_id on public.platform_revenue (fight_id);
+create index if not exists platform_revenue_created_at on public.platform_revenue (created_at desc);
+
+alter table public.fights enable row level security;
+alter table public.fight_escrow enable row level security;
+alter table public.fight_bets enable row level security;
+alter table public.platform_revenue enable row level security;
+
+drop policy if exists "Authenticated can read fights" on public.fights;
+create policy "Authenticated can read fights" on public.fights for select to authenticated using (true);
+drop policy if exists "Service role full access fights" on public.fights;
+create policy "Service role full access fights" on public.fights for all using (auth.jwt() ->> 'role' = 'service_role');
+
+drop policy if exists "Authenticated can read fight_escrow" on public.fight_escrow;
+create policy "Authenticated can read fight_escrow" on public.fight_escrow for select to authenticated using (true);
+drop policy if exists "Service role full access fight_escrow" on public.fight_escrow;
+create policy "Service role full access fight_escrow" on public.fight_escrow for all using (auth.jwt() ->> 'role' = 'service_role');
+
+drop policy if exists "Authenticated can read fight_bets" on public.fight_bets;
+create policy "Authenticated can read fight_bets" on public.fight_bets for select to authenticated using (true);
+drop policy if exists "Service role full access fight_bets" on public.fight_bets;
+create policy "Service role full access fight_bets" on public.fight_bets for all using (auth.jwt() ->> 'role' = 'service_role');
+
+drop policy if exists "Service role full access platform_revenue" on public.platform_revenue;
+create policy "Service role full access platform_revenue" on public.platform_revenue for all using (auth.jwt() ->> 'role' = 'service_role');
+
 -- ========== PROFIT ==========
 create table if not exists public.profit (
   id uuid primary key default gen_random_uuid(),
