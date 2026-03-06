@@ -1,9 +1,10 @@
 /**
  * Fight Arena — create fight, join, escrow, end match, platform revenue.
- * All balance changes server-side with createAdminClient.
+ * Uses same balance source as dashboard: getCanonicalBalanceCents + wallet_ledger_entry.
  */
 
 import { createAdminClient } from "@/lib/supabase";
+import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger";
 
 export type FightStatus = "open" | "active" | "completed" | "cancelled";
 export type FightEscrowStatus = "held" | "released" | "refunded";
@@ -38,18 +39,14 @@ function sb() {
 
 const PLATFORM_FEE_PERCENT = 10; // 10% of total pot when fight ends
 
-/** Get user balance (cents). */
+/** Get user balance (cents). Same source as dashboard and wallet. */
 async function getUserBalance(userId: string): Promise<number> {
-  const { data, error } = await sb()
-    .from("users")
-    .select("balance")
-    .eq("id", userId)
-    .single();
-  if (error || !data) return 0;
-  return Number((data as { balance?: number }).balance ?? 0);
+  const balance = await getCanonicalBalanceCents(userId);
+  console.log("[Fight Arena] getUserBalance", { userId, balanceCents: balance });
+  return balance;
 }
 
-/** Deduct balance and record transaction. Returns false if insufficient. */
+/** Deduct balance via wallet ledger (game_play debit). Falls back to users+transactions if RPC missing. */
 async function deductBalance(
   userId: string,
   amountCents: number,
@@ -57,6 +54,9 @@ async function deductBalance(
   referenceId: string,
   type: "fight_entry" | "fight_prize"
 ): Promise<boolean> {
+  const ref = `fight_arena_${type}_${referenceId}_${userId}`;
+  const ledgerResult = await walletLedgerEntry(userId, "game_play", -amountCents, ref);
+  if (ledgerResult.success) return true;
   const { data: row } = await sb().from("users").select("balance").eq("id", userId).single();
   if (!row) return false;
   const balance = Number((row as { balance?: number }).balance ?? 0);
@@ -69,26 +69,30 @@ async function deductBalance(
     })
     .eq("id", userId);
   if (upErr) return false;
+  await sb().from("transactions").insert({
+    user_id: userId,
+    type,
+    amount: amountCents,
+    status: "completed",
+    description,
+    reference_id: referenceId,
+  });
   await sb()
-    .from("transactions")
-    .insert({
-      user_id: userId,
-      type,
-      amount: amountCents,
-      status: "completed",
-      description,
-      reference_id: referenceId,
-    });
+    .from("wallet_balances")
+    .upsert({ user_id: userId, balance: balance - amountCents, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   return true;
 }
 
-/** Credit balance and record transaction. */
+/** Credit balance via wallet ledger (game_win). Falls back to users+transactions if RPC missing. */
 async function creditBalance(
   userId: string,
   amountCents: number,
   description: string,
   referenceId: string
 ): Promise<void> {
+  const ref = `fight_arena_prize_${referenceId}_${userId}`;
+  const ledgerResult = await walletLedgerEntry(userId, "game_win", amountCents, ref);
+  if (ledgerResult.success) return;
   const { data: row } = await sb().from("users").select("balance").eq("id", userId).single();
   const balance = row ? Number((row as { balance?: number }).balance ?? 0) : 0;
   await sb()
@@ -108,6 +112,9 @@ async function creditBalance(
       description,
       reference_id: referenceId,
     });
+  await sb()
+    .from("wallet_balances")
+    .upsert({ user_id: userId, balance: balance + amountCents, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
 }
 
 /** Create a new fight (host puts entry_fee in escrow and records bet on host). */

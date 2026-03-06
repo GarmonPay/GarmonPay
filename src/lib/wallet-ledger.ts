@@ -64,6 +64,27 @@ export async function getWalletBalanceCents(userId: string): Promise<number | nu
   return Number((data as { balance?: number }).balance ?? 0);
 }
 
+/**
+ * Canonical user balance for dashboard, wallet, and betting (Fight Arena, etc.).
+ * Reads wallet_balances first (same source as ledger); falls back to users.balance.
+ * Use this everywhere so Stripe deposits and betting share one balance.
+ */
+export async function getCanonicalBalanceCents(userId: string): Promise<number> {
+  const walletBalance = await getWalletBalanceCents(userId);
+  if (walletBalance !== null) {
+    console.log("[balance] getCanonicalBalanceCents", { userId, source: "wallet_balances", balanceCents: walletBalance });
+    return walletBalance;
+  }
+  const { data, error } = await supabase()
+    .from("users")
+    .select("balance")
+    .eq("id", userId)
+    .maybeSingle();
+  const userBalance = error || !data ? 0 : Number((data as { balance?: number }).balance ?? 0);
+  console.log("[balance] getCanonicalBalanceCents", { userId, source: "users", balanceCents: userBalance });
+  return userBalance;
+}
+
 export interface WalletLedgerRow {
   id: string;
   user_id: string;

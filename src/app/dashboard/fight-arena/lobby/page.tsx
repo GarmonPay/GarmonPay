@@ -42,7 +42,11 @@ export default function FightArenaLobbyPage() {
       const isToken = !!s.accessToken;
       setSession({ tokenOrId, isToken });
       Promise.all([
-        getDashboard(tokenOrId, isToken).then((d) => setBalanceCents(d.balanceCents ?? 0)),
+        getDashboard(tokenOrId, isToken).then((d) => {
+          const cents = d.balanceCents ?? 0;
+          console.log("[Fight Arena lobby] balance loaded", { balanceCents: cents });
+          setBalanceCents(cents);
+        }),
         getFightArenaFights(tokenOrId, isToken, "open").then((r) => setFights(r.fights ?? [])),
       ]).catch(() => setError("Failed to load")).finally(() => setLoading(false));
     });
@@ -82,6 +86,8 @@ export default function FightArenaLobbyPage() {
       setCreating(true);
       try {
         const res = await createFightArenaFight(session.tokenOrId, session.isToken, entryFeeCents);
+        const dash = await getDashboard(session.tokenOrId, session.isToken);
+        setBalanceCents(dash.balanceCents ?? 0);
         router.push(`/dashboard/fight-arena/match/${res.fight.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to create fight");
@@ -92,6 +98,8 @@ export default function FightArenaLobbyPage() {
       setJoiningId(fightId);
       try {
         const res = await joinFightArenaFight(session.tokenOrId, session.isToken, fightId);
+        const dash = await getDashboard(session.tokenOrId, session.isToken);
+        setBalanceCents(dash.balanceCents ?? 0);
         router.push(`/dashboard/fight-arena/match/${res.fight.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to join");
