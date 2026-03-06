@@ -80,12 +80,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, message: insertError.message }, { status: 500 });
       }
       try {
-        const { error: walletErr } = await supabase.from("wallets").insert({
+        const { error: walletErr } = await supabase.from("wallet").upsert({
           user_id: id,
           balance: 0,
-        });
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
         if (walletErr) {
-          console.warn("Sync-user wallets insert (optional):", walletErr.message);
+          console.warn("Sync-user wallet upsert (optional):", walletErr.message);
         }
       } catch {
         // ignore
