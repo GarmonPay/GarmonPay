@@ -12,6 +12,7 @@ const cors = require("cors");
 
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://garmonpay.com";
+const CORS_ALLOW_ANY = CORS_ORIGIN === "*" || CORS_ORIGIN === "any";
 const MAX_HEALTH = 100;
 const JAB_DAMAGE = 8;
 const HEAVY_DAMAGE = 18;
@@ -101,13 +102,13 @@ async function recordPlatformFee(amountCents, source = "boxing_arena") {
 }
 
 const app = express();
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors(CORS_ALLOW_ANY ? { origin: true } : { origin: CORS_ORIGIN }));
 app.use(express.json());
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
-  cors: { origin: CORS_ORIGIN },
+  cors: CORS_ALLOW_ANY ? { origin: true } : { origin: CORS_ORIGIN },
   pingTimeout: 60000,
   pingInterval: 25000,
 });
@@ -221,30 +222,96 @@ function createRoom(player1Entry, player2Entry, betAmountCents = 0) {
   return roomId;
 }
 
-io.on("connection", (socket) => {
-  socket.emit("connected", { socket_id: socket.id });
+async function tryMatch() {
+  while (queue.length >= 2) {
+    const a = queue.shift();
+    const b = queue.shift();
+    const betCents = Math.min(a.betAmountCents, b.betAmountCents);
 
-  // —— Matchmaking ——
-  async function onMatchmakingJoin(payload) {
-    leaveQueue(socket.id);
-    const playerId = (payload && payload.player_id) ? String(payload.player_id).trim() : socket.id;
-    const betAmountCents = Math.max(0, parseInt(payload?.bet_amount_cents, 10) || 0);
-
-    if (betAmountCents > 0 && supabase) {
-      const balance = await getBalanceCents(playerId);
-      if (balance < betAmountCents) {
-        socket.emit("matchmaking_join", {
-          success: false,
-          error: "insufficient_balance",
-          balance_cents: balance,
-          required_cents: betAmountCents,
-        });
+    if (betCents > 0 && supabase) {
+      const fightRef = `arena_${Date.now()}`;
+      const r1 = await deductEntry(a.playerId, betCents, `${fightRef}_p1`);
+      if (!r1.success) {
+        io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
+        io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
+        queue.unshift(b);
+        queue.unshift(a);
+        return;
+      }
+      const r2 = await deductEntry(b.playerId, betCents, `${fightRef}_p2`);
+      if (!r2.success) {
+        await payWinner(a.playerId, betCents, `${fightRef}_refund_p1`);
+        io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
+        io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
+        queue.unshift(b);
+        queue.unshift(a);
         return;
       }
     }
 
+    const roomId = createRoom(a, b, betCents);
+    const room = rooms.get(roomId);
+
+    io.sockets.sockets.get(a.socketId)?.join(roomId);
+    io.sockets.sockets.get(b.socketId)?.join(roomId);
+
+    io.to(roomId).emit("fight_start", {
+      room_id: roomId,
+      bet_amount_cents: betCents,
+      player1: {
+        socket_id: room.player1.socketId,
+        player_id: room.player1.playerId,
+        health: room.player1.health,
+      },
+      player2: {
+        socket_id: room.player2.socketId,
+        player_id: room.player2.playerId,
+        health: room.player2.health,
+      },
+    });
+    console.log("[matchmaking] Matched", a.socketId, "vs", b.socketId, "room:", roomId);
+  }
+}
+
+io.on("connection", (socket) => {
+  socket.emit("connected", { socket_id: socket.id });
+
+  // —— Matchmaking ——
+  socket.on("matchmaking_join", (payload) => {
+    leaveQueue(socket.id);
+    const playerId = (payload && payload.player_id) ? String(payload.player_id).trim() : socket.id;
+    const betAmountCents = Math.max(0, parseInt(payload?.bet_amount_cents, 10) || 0);
+
     const entry = { socketId: socket.id, playerId, betAmountCents };
+
+    if (betAmountCents > 0 && supabase) {
+      getBalanceCents(playerId).then((balance) => {
+        if (balance < betAmountCents) {
+          socket.emit("matchmaking_join", {
+            success: false,
+            error: "insufficient_balance",
+            balance_cents: balance,
+            required_cents: betAmountCents,
+          });
+          return;
+        }
+        queue.push(entry);
+        console.log("Queue:", queue.length);
+        socket.emit("matchmaking_join", {
+          success: true,
+          socket_id: socket.id,
+          player_id: playerId,
+          bet_amount_cents: betAmountCents,
+          position: queue.length,
+          queue_length: queue.length,
+        });
+        tryMatch();
+      });
+      return;
+    }
+
     queue.push(entry);
+    console.log("Queue:", queue.length);
     socket.emit("matchmaking_join", {
       success: true,
       socket_id: socket.id,
@@ -253,57 +320,25 @@ io.on("connection", (socket) => {
       position: queue.length,
       queue_length: queue.length,
     });
-
-    if (queue.length >= 2) {
-      const a = queue.shift();
-      const b = queue.shift();
-      const betCents = Math.min(a.betAmountCents, b.betAmountCents);
-
-      if (betCents > 0 && supabase) {
-        const fightRef = `arena_${Date.now()}`;
-        const r1 = await deductEntry(a.playerId, betCents, `${fightRef}_p1`);
-        if (!r1.success) {
-          io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
-          io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r1.message });
-          queue.unshift(b);
-          queue.unshift(a);
-          return;
-        }
-        const r2 = await deductEntry(b.playerId, betCents, `${fightRef}_p2`);
-        if (!r2.success) {
-          await payWinner(a.playerId, betCents, `${fightRef}_refund_p1`);
-          io.to(a.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
-          io.to(b.socketId).emit("fight_start_failed", { reason: "deduction_failed", message: r2.message });
-          queue.unshift(b);
-          queue.unshift(a);
-          return;
-        }
-      }
-
-      const roomId = createRoom(a, b, betCents);
-      const room = rooms.get(roomId);
-
-      io.sockets.sockets.get(a.socketId)?.join(roomId);
-      io.sockets.sockets.get(b.socketId)?.join(roomId);
-
-      io.to(roomId).emit("fight_start", {
-        room_id: roomId,
-        bet_amount_cents: betCents,
-        player1: {
-          socket_id: room.player1.socketId,
-          player_id: room.player1.playerId,
-          health: room.player1.health,
-        },
-        player2: {
-          socket_id: room.player2.socketId,
-          player_id: room.player2.playerId,
-          health: room.player2.health,
-        },
-      });
-    }
-  }
-  socket.on("matchmaking_join", onMatchmakingJoin);
-  socket.on("join_queue", onMatchmakingJoin);
+    tryMatch();
+  });
+  socket.on("join_queue", (payload) => {
+    leaveQueue(socket.id);
+    const playerId = (payload && payload.player_id) ? String(payload.player_id).trim() : socket.id;
+    const betAmountCents = Math.max(0, parseInt(payload?.bet_amount_cents, 10) || 0);
+    const entry = { socketId: socket.id, playerId, betAmountCents };
+    queue.push(entry);
+    console.log("Queue:", queue.length);
+    socket.emit("matchmaking_join", {
+      success: true,
+      socket_id: socket.id,
+      player_id: playerId,
+      bet_amount_cents: betAmountCents,
+      position: queue.length,
+      queue_length: queue.length,
+    });
+    tryMatch();
+  });
 
   socket.on("leave_queue", () => {
     leaveQueue(socket.id);
@@ -481,6 +516,6 @@ app.get("/leaderboard", (_req, res) => {
   res.json({ leaderboard: list });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`GarmonPay fight server listening on port ${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`GarmonPay fight server listening on port ${PORT} (0.0.0.0)`);
 });

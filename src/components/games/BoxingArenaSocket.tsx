@@ -36,6 +36,7 @@ export function BoxingArenaSocket({
   const p2AnimRef = useRef<"idle" | "jab" | "punch">("idle");
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
+  const [socketConnected, setSocketConnected] = useState(false);
   const [matchmakingError, setMatchmakingError] = useState<string | null>(null);
   const [queuePosition, setQueuePosition] = useState(0);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -145,13 +146,21 @@ export function BoxingArenaSocket({
     const socket = io(wsUrl, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
 
+    const emitJoin = () => {
+      socket.emit("matchmaking_join", {
+        player_id: playerId,
+        bet_amount_cents: betInput ? parseInt(betInput, 10) || 0 : 0,
+      });
+    };
+
+    socket.on("connect", () => {
+      setSocketConnected(true);
+      if (phase === "matchmaking") emitJoin();
+    });
+    socket.on("disconnect", () => setSocketConnected(false));
+
     socket.on("connected", () => {
-      if (phase === "matchmaking") {
-        socket.emit("matchmaking_join", {
-          player_id: playerId,
-          bet_amount_cents: betInput ? parseInt(betInput, 10) || 0 : 0,
-        });
-      }
+      if (phase === "matchmaking") emitJoin();
     });
 
     socket.on("matchmaking_join", (data: {
@@ -230,12 +239,7 @@ export function BoxingArenaSocket({
       onMatchEnd?.(data.winner_id === playerId, data.winner_id ?? "", data.loser_id ?? "");
     });
 
-    if (phase === "matchmaking") {
-      socket.emit("matchmaking_join", {
-        player_id: playerId,
-        bet_amount_cents: betInput ? parseInt(betInput, 10) || 0 : 0,
-      });
-    }
+    if (socket.connected && phase === "matchmaking") emitJoin();
 
     return () => {
       socket.removeAllListeners();
@@ -274,7 +278,7 @@ export function BoxingArenaSocket({
             onClick={joinMatchmaking}
             className="w-full py-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-black font-semibold transition-colors"
           >
-            Join matchmaking
+            Find Opponent
           </button>
         </div>
       </div>
@@ -284,8 +288,17 @@ export function BoxingArenaSocket({
   if (phase === "matchmaking") {
     return (
       <div className="rounded-xl bg-[#0a0a14] border border-white/10 p-8 max-w-sm mx-auto text-center">
-        <p className="text-white font-medium">Finding opponent...</p>
-        <p className="text-white/60 text-sm mt-2">Queue position: {queuePosition}</p>
+        <p className="text-white font-medium">
+          {socketConnected ? "Finding opponent…" : "Connecting…"}
+        </p>
+        <p className="text-white/60 text-sm mt-2">
+          {socketConnected ? `Queue position: ${queuePosition}` : "Waiting for fight server"}
+        </p>
+        {!socketConnected && (
+          <p className="text-amber-400/90 text-xs mt-2">
+            Ensure NEXT_PUBLIC_BOXING_WS_URL points to one server and CORS allows this origin.
+          </p>
+        )}
         <div className="mt-4 h-2 w-full bg-white/10 rounded-full overflow-hidden">
           <div className="h-full bg-amber-500 animate-pulse rounded-full" style={{ width: "40%" }} />
         </div>
