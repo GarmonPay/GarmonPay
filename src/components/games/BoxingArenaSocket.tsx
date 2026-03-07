@@ -34,13 +34,13 @@ export function BoxingArenaSocket({
   const myRoleRef = useRef<"player1" | "player2" | null>(null);
   const p1AnimRef = useRef<"idle" | "jab" | "punch">("idle");
   const p2AnimRef = useRef<"idle" | "jab" | "punch">("idle");
-  myRoleRef.current = myRole;
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
   const [matchmakingError, setMatchmakingError] = useState<string | null>(null);
   const [queuePosition, setQueuePosition] = useState(0);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [myRole, setMyRole] = useState<"player1" | "player2" | null>(null);
+  myRoleRef.current = myRole;
   const [player1Health, setPlayer1Health] = useState(MAX_HEALTH);
   const [player2Health, setPlayer2Health] = useState(MAX_HEALTH);
   const [player1Id, setPlayer1Id] = useState<string | null>(null);

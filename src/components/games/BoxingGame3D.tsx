@@ -44,7 +44,8 @@ export function BoxingGame3D({
   onMatchEnd,
   wsUrl = null,
 }: BoxingGameProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [canvasReady, setCanvasReady] = useState(false);
   const [gameState, setGameState] = useState<
     "playing" | "round_break" | "ended" | "loading"
   >("loading");
@@ -98,112 +99,135 @@ export function BoxingGame3D({
     [accessToken, betAmountCents, onMatchEnd]
   );
 
+  const setCanvasRef = useCallback((el: HTMLCanvasElement | null) => {
+    canvasRef.current = el;
+    setCanvasReady(!!el);
+  }, []);
+
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const engine = new Engine(canvasRef.current, true, {
-      preserveDrawingBuffer: true,
-      stencil: true,
-    });
-    const scene = new Scene(engine);
-    scene.clearColor.set(0.05, 0.05, 0.1, 1);
+    if (!canvasReady || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    let engine: Engine | null = null;
+    let scene: Scene | null = null;
+    try {
+      engine = new Engine(canvas, true, {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      });
+      scene = new Scene(engine);
+      scene.clearColor.set(0.05, 0.05, 0.1, 1);
 
-    const camera = new ArcRotateCamera(
-      "cam",
-      -Math.PI / 2,
-      Math.PI / 2.5,
-      25,
-      Vector3.Zero(),
-      scene
-    );
-    camera.attachControl(canvasRef.current, true);
-    camera.lowerRadiusLimit = 12;
-    camera.upperRadiusLimit = 35;
-
-    new HemisphericLight(
-      "light1",
-      new Vector3(0, 1, 0),
-      scene
-    ).intensity = 1;
-    new HemisphericLight(
-      "light2",
-      new Vector3(0, -1, 0),
-      scene
-    ).intensity = 0.3;
-
-    const ring = MeshBuilder.CreateBox(
-      "ring",
-      { width: 12, height: 0.3, depth: 12 },
-      scene
-    );
-    ring.position.y = -0.15;
-    const ringMat = new StandardMaterial("ringMat", scene);
-    ringMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
-    ring.material = ringMat;
-
-    for (let i = 0; i < 4; i++) {
-      const side = MeshBuilder.CreateBox(
-        `rope_${i}`,
-        { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
+      // --- Basic Babylon test scene: confirm engine renders ---
+      const camera = new ArcRotateCamera(
+        "cam",
+        -Math.PI / 2,
+        Math.PI / 2.5,
+        25,
+        Vector3.Zero(),
         scene
       );
-      side.position.y = 1.2 + i * 0.2;
-      const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
-      const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
-      side.position.x = x;
-      side.position.z = z;
-      const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
-      ropeMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
-      side.material = ropeMat;
+      camera.attachControl(canvas, true);
+      camera.lowerRadiusLimit = 12;
+      camera.upperRadiusLimit = 35;
+
+      const light = new HemisphericLight(
+        "light1",
+        new Vector3(0, 1, 0),
+        scene
+      );
+      light.intensity = 1;
+      new HemisphericLight("light2", new Vector3(0, -1, 0), scene).intensity = 0.3;
+
+      const ring = MeshBuilder.CreateBox(
+        "ring",
+        { width: 12, height: 0.3, depth: 12 },
+        scene
+      );
+      ring.position.y = -0.15;
+      const ringMat = new StandardMaterial("ringMat", scene);
+      ringMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
+      ring.material = ringMat;
+
+      engine.runRenderLoop(() => scene!.render());
+      setGameState("playing");
+
+      // --- Optional: ropes and fighters (fallback if this fails) ---
+      try {
+        for (let i = 0; i < 4; i++) {
+          const side = MeshBuilder.CreateBox(
+            `rope_${i}`,
+            { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
+            scene
+          );
+          side.position.y = 1.2 + i * 0.2;
+          const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
+          const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
+          side.position.x = x;
+          side.position.z = z;
+          const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
+          ropeMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
+          side.material = ropeMat;
+        }
+
+        const p1Body = MeshBuilder.CreateCylinder(
+          "p1Body",
+          { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
+          scene
+        );
+        p1Body.position.set(-3, 0.9, 0);
+        p1Body.rotation.z = Math.PI / 2;
+        const p1Mat = new StandardMaterial("p1Mat", scene);
+        p1Mat.diffuseColor = new Color3(0.9, 0.2, 0.2);
+        p1Body.material = p1Mat;
+        const p1Head = MeshBuilder.CreateSphere("p1Head", { diameter: 0.6, segments: 12 }, scene);
+        p1Head.position.set(0, 0.9, 0);
+        p1Head.setParent(p1Body);
+        scene.onBeforeRenderObservable.add(() => {
+          const mesh = p1Body as AbstractMesh;
+          const pos = boxerPositionRef.current.p1;
+          const animX = p1AnimRef.current === "jab" ? -0.2 : p1AnimRef.current === "punch" ? -0.4 : 0;
+          mesh.position.set(-3 + pos.x + animX, 0.9, pos.z);
+        });
+
+        const p2Body = MeshBuilder.CreateCylinder(
+          "p2Body",
+          { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
+          scene
+        );
+        p2Body.position.set(3, 0.9, 0);
+        p2Body.rotation.z = -Math.PI / 2;
+        const p2Mat = new StandardMaterial("p2Mat", scene);
+        p2Mat.diffuseColor = new Color3(0.2, 0.3, 0.9);
+        p2Body.material = p2Mat;
+        const p2Head = MeshBuilder.CreateSphere("p2Head", { diameter: 0.6, segments: 12 }, scene);
+        p2Head.position.set(0, 0.9, 0);
+        p2Head.setParent(p2Body);
+        scene.onBeforeRenderObservable.add(() => {
+          const mesh = p2Body as AbstractMesh;
+          const pos = boxerPositionRef.current.p2;
+          const animX = p2AnimRef.current === "jab" ? 0.2 : p2AnimRef.current === "punch" ? 0.4 : 0;
+          mesh.position.set(3 + pos.x + animX, 0.9, pos.z);
+        });
+      } catch (err) {
+        console.warn("BoxingGame3D: fighters/ropes failed, showing fallback scene", err);
+      }
+    } catch (err) {
+      console.error("BoxingGame3D: scene init failed", err);
+      if (engine && scene) {
+        try {
+          engine.runRenderLoop(() => scene.render());
+        } catch {
+          // ignore
+        }
+      }
+      setGameState("playing");
     }
 
-    const p1Body = MeshBuilder.CreateCylinder(
-      "p1Body",
-      { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-      scene
-    );
-    p1Body.position.set(-3, 0.9, 0);
-    p1Body.rotation.z = Math.PI / 2;
-    const p1Mat = new StandardMaterial("p1Mat", scene);
-    p1Mat.diffuseColor = new Color3(0.9, 0.2, 0.2);
-    p1Body.material = p1Mat;
-    const p1Head = MeshBuilder.CreateSphere("p1Head", { diameter: 0.6, segments: 12 }, scene);
-    p1Head.position.set(0, 0.9, 0);
-    p1Head.setParent(p1Body);
-    scene.onBeforeRenderObservable.add(() => {
-      const mesh = p1Body as AbstractMesh;
-      const pos = boxerPositionRef.current.p1;
-      const animX = p1AnimRef.current === "jab" ? -0.2 : p1AnimRef.current === "punch" ? -0.4 : 0;
-      mesh.position.set(-3 + pos.x + animX, 0.9, pos.z);
-    });
-
-    const p2Body = MeshBuilder.CreateCylinder(
-      "p2Body",
-      { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-      scene
-    );
-    p2Body.position.set(3, 0.9, 0);
-    p2Body.rotation.z = -Math.PI / 2;
-    const p2Mat = new StandardMaterial("p2Mat", scene);
-    p2Mat.diffuseColor = new Color3(0.2, 0.3, 0.9);
-    p2Body.material = p2Mat;
-    const p2Head = MeshBuilder.CreateSphere("p2Head", { diameter: 0.6, segments: 12 }, scene);
-    p2Head.position.set(0, 0.9, 0);
-    p2Head.setParent(p2Body);
-    scene.onBeforeRenderObservable.add(() => {
-      const mesh = p2Body as AbstractMesh;
-      const pos = boxerPositionRef.current.p2;
-      const animX = p2AnimRef.current === "jab" ? 0.2 : p2AnimRef.current === "punch" ? 0.4 : 0;
-      mesh.position.set(3 + pos.x + animX, 0.9, pos.z);
-    });
-
-    engine.runRenderLoop(() => scene.render());
-    setGameState("playing");
-
     return () => {
-      scene.dispose();
-      engine.dispose();
+      if (scene) scene.dispose();
+      if (engine) engine.dispose();
     };
-  }, []);
+  }, [canvasReady]);
 
   useEffect(() => {
     if (gameState !== "playing" || round > TOTAL_ROUNDS) return;
@@ -409,21 +433,18 @@ export function BoxingGame3D({
     }
   }, [wsUrl, player1Id, player2Id]);
 
-  if (gameState === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-[400px] bg-black/40 rounded-xl">
-        <p className="text-white">Loading 3D scene…</p>
-      </div>
-    );
-  }
-
   return (
     <div className="relative w-full h-[600px] rounded-xl overflow-hidden bg-[#0a0a12]">
       <canvas
-        ref={canvasRef}
+        ref={setCanvasRef}
         className="w-full h-full block touch-none"
-        style={{ width: "100%", height: "100%" }}
+        style={{ width: "100%", height: "100%", opacity: gameState === "loading" ? 0 : 1 }}
       />
+      {gameState === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a12] rounded-xl">
+          <p className="text-white">Loading 3D scene…</p>
+        </div>
+      )}
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4">
         <div className="flex justify-between items-start">
           <div className="bg-black/60 rounded-lg p-3 min-w-[140px]">
