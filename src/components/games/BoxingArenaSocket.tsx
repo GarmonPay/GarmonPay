@@ -37,6 +37,7 @@ export function BoxingArenaSocket({
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
   const [socketConnected, setSocketConnected] = useState(false);
+  const [connectionFailed, setConnectionFailed] = useState(false);
   const [matchmakingError, setMatchmakingError] = useState<string | null>(null);
   const [queuePosition, setQueuePosition] = useState(0);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export function BoxingArenaSocket({
 
   useEffect(() => {
     if (!wsUrl || phase === "lobby") return;
+    setConnectionFailed(false);
     const socket = io(wsUrl, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
 
@@ -155,9 +157,15 @@ export function BoxingArenaSocket({
 
     socket.on("connect", () => {
       setSocketConnected(true);
+      setConnectionFailed(false);
       if (phase === "matchmaking") emitJoin();
     });
     socket.on("disconnect", () => setSocketConnected(false));
+    socket.on("connect_error", () => setConnectionFailed(true));
+
+    const timeout = setTimeout(() => {
+      if (!socket.connected) setConnectionFailed(true);
+    }, 8000);
 
     socket.on("connected", () => {
       if (phase === "matchmaking") emitJoin();
@@ -242,9 +250,11 @@ export function BoxingArenaSocket({
     if (socket.connected && phase === "matchmaking") emitJoin();
 
     return () => {
+      clearTimeout(timeout);
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
+      setSocketConnected(false);
     };
   }, [wsUrl, playerId, phase, onMatchEnd, betInput]);
 
@@ -286,22 +296,50 @@ export function BoxingArenaSocket({
   }
 
   if (phase === "matchmaking") {
+    const showConnectionHelp = !socketConnected && connectionFailed;
     return (
-      <div className="rounded-xl bg-[#0a0a14] border border-white/10 p-8 max-w-sm mx-auto text-center">
+      <div className="rounded-xl bg-[#0a0a14] border border-white/10 p-8 max-w-md mx-auto text-center">
         <p className="text-white font-medium">
           {socketConnected ? "Finding opponent…" : "Connecting…"}
         </p>
         <p className="text-white/60 text-sm mt-2">
           {socketConnected ? `Queue position: ${queuePosition}` : "Waiting for fight server"}
         </p>
-        {!socketConnected && (
+        {!socketConnected && !showConnectionHelp && (
           <p className="text-amber-400/90 text-xs mt-2">
             Ensure NEXT_PUBLIC_BOXING_WS_URL points to one server and CORS allows this origin.
           </p>
         )}
-        <div className="mt-4 h-2 w-full bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-amber-500 animate-pulse rounded-full" style={{ width: "40%" }} />
-        </div>
+        {showConnectionHelp && (
+          <div className="mt-4 p-4 rounded-lg bg-black/30 text-left text-sm space-y-2">
+            <p className="text-amber-400 font-medium">Could not connect to fight server</p>
+            <p className="text-white/80">URL: <code className="bg-white/10 px-1 rounded break-all">{wsUrl}</code></p>
+            <p className="text-white/70">1. Start the server: <code className="bg-white/10 px-1 rounded">cd server && CORS_ORIGIN=* node fight-server.js</code></p>
+            <p className="text-white/70">2. In .env.local set <code className="bg-white/10 px-1 rounded">NEXT_PUBLIC_BOXING_WS_URL=http://localhost:4000</code> (or your server IP)</p>
+            <p className="text-white/70">3. Restart the Next.js app and try again.</p>
+            <div className="flex gap-2 justify-center mt-4">
+              <button
+                type="button"
+                onClick={() => { setPhase("lobby"); setConnectionFailed(false); }}
+                className="px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm"
+              >
+                Back to lobby
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConnectionFailed(false); setPhase("lobby"); setTimeout(() => setPhase("matchmaking"), 50); }}
+                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-black text-sm font-medium"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+        {!showConnectionHelp && (
+          <div className="mt-4 h-2 w-full bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full bg-amber-500 animate-pulse rounded-full" style={{ width: "40%" }} />
+          </div>
+        )}
       </div>
     );
   }
