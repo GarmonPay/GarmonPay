@@ -148,7 +148,11 @@ export function BoxingGame3D({
       ringMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
       ring.material = ringMat;
 
-      engine.runRenderLoop(() => scene!.render());
+      engine.runRenderLoop(() => {
+        if (scene) {
+          scene.render();
+        }
+      });
       setGameState("playing");
 
       // --- Optional: ropes and fighters (fallback if this fails) ---
@@ -215,7 +219,11 @@ export function BoxingGame3D({
       console.error("BoxingGame3D: scene init failed", err);
       if (engine && scene) {
         try {
-          engine.runRenderLoop(() => scene.render());
+          engine.runRenderLoop(() => {
+            if (scene) {
+              scene.render();
+            }
+          });
         } catch {
           // ignore
         }
