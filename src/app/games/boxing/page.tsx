@@ -7,7 +7,12 @@ import { BoxingGame3D } from "@/components/games/BoxingGame3D";
 import Link from "next/link";
 
 const raw = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_BOXING_WS_URL : undefined;
-const WS_URL = raw ? String(raw).trim().replace(/^["']|["']$/g, "") : undefined;
+const WS_URL = raw
+  ? String(raw)
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/^wss:\/\//i, "https://")
+  : undefined;
 
 export default function BoxingGamePage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);

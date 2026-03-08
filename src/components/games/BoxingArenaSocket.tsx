@@ -145,7 +145,13 @@ export function BoxingArenaSocket({
   useEffect(() => {
     if (!wsUrl || phase === "lobby") return;
     setConnectionFailed(false);
-    const socket = io(wsUrl, { transports: ["websocket", "polling"] });
+    const socket = io(wsUrl, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      timeout: 30000,
+    });
     socketRef.current = socket;
 
     const emitJoin = () => {
@@ -165,7 +171,7 @@ export function BoxingArenaSocket({
 
     const timeout = setTimeout(() => {
       if (!socket.connected) setConnectionFailed(true);
-    }, 8000);
+    }, 30000);
 
     socket.on("connected", () => {
       if (phase === "matchmaking") emitJoin();
