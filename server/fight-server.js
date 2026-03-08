@@ -2,7 +2,7 @@
  * GarmonPay Fight Server – Full multiplayer arena + real-money betting
  * Matchmaking, rooms, spectators, leaderboard, server-authoritative damage.
  * Wallet: entry fee deducted when fight starts; winner paid when fight ends. 10% platform fee.
- * CORS: https://garmonpay.com | Render: process.env.PORT
+ * CORS: * (any origin) by default; set CORS_ORIGIN for a specific origin. Render: process.env.PORT
  */
 
 const express = require("express");
@@ -11,7 +11,7 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const PORT = process.env.PORT || 4000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://garmonpay.com";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const CORS_ALLOW_ANY = CORS_ORIGIN === "*" || CORS_ORIGIN === "any";
 const MAX_HEALTH = 100;
 const JAB_DAMAGE = 8;

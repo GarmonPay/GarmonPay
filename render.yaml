@@ -1,0 +1,23 @@
+# Render Blueprint: GarmonPay Fight Server (Boxing Arena WebSocket server)
+# Deploy: connect this repo in Render Dashboard → New → Blueprint → select this file.
+# Service will be available at https://garmonpay-fight-server.onrender.com (or your custom subdomain).
+# CORS is set to * so WebSocket connections from any origin (e.g. garmonpay.com, localhost) are allowed.
+
+services:
+  - type: web
+    runtime: node
+    name: garmonpay-fight-server
+    buildCommand: npm install
+    startCommand: node server/fight-server.js
+    envVars:
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: NODE_VERSION
+        value: "20"
+      # Add these in Render Dashboard (Environment) for wallet / Supabase:
+      # SUPABASE_URL=https://your-project.supabase.co
+      # SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
