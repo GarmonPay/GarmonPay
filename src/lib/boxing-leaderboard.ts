@@ -73,7 +73,8 @@ export async function getBoxingLeaderboard(limit = 10): Promise<FighterLeaderboa
     }
   }
 
-  const sorted = [...stats.entries()]
+  const sorted: [string, { wins: number; losses: number; knockouts: number; total_earnings_cents: number }][] =
+    Array.from(stats.entries())
     .filter(([, s]) => s.wins > 0 || s.losses > 0)
     .sort((a, b) => {
       const [, sA] = a;
