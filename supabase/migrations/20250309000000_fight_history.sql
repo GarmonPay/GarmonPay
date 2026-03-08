@@ -16,8 +16,10 @@ create index if not exists fight_history_created_at on public.fight_history (cre
 
 alter table public.fight_history enable row level security;
 
+drop policy if exists "Authenticated can read fight_history" on public.fight_history;
 create policy "Authenticated can read fight_history"
   on public.fight_history for select to authenticated using (true);
+drop policy if exists "Service role full access fight_history" on public.fight_history;
 create policy "Service role full access fight_history"
   on public.fight_history for all using (auth.jwt() ->> 'role' = 'service_role');
 

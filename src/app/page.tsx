@@ -1,6 +1,8 @@
+import { TopFightersLeaderboard } from "@/components/TopFightersLeaderboard";
+
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1727] to-[#020617] text-white flex flex-col items-center justify-center">
+    <main className="min-h-screen bg-gradient-to-b from-[#0b1727] to-[#020617] text-white flex flex-col items-center justify-center py-12">
 
       <h1 className="text-5xl font-bold mb-4">
         GarmonPay
@@ -35,6 +37,7 @@ export default function HomePage() {
         Go to Wallet
       </a>
 
+      <TopFightersLeaderboard />
     </main>
   )
 }

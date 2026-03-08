@@ -82,7 +82,7 @@ async function payWinner(userId, amountCents, reference) {
   }).then(({ error: e }) => { if (e) console.error("[fight-server] transaction fight_prize:", e.message); });
 }
 
-async function recordFightHistory(player1Id, player2Id, winnerId, betAmountCents, platformFeeCents) {
+async function recordFightHistory(player1Id, player2Id, winnerId, betAmountCents, platformFeeCents, knockout = true) {
   if (!supabase) return;
   await supabase.from("fight_history").insert({
     player1: player1Id,
@@ -90,6 +90,7 @@ async function recordFightHistory(player1Id, player2Id, winnerId, betAmountCents
     winner: winnerId,
     bet_amount_cents: betAmountCents,
     platform_fee_cents: platformFeeCents,
+    knockout: !!knockout,
   }).then(({ error: e }) => { if (e) console.error("[fight-server] fight_history insert:", e.message); });
 }
 
@@ -99,6 +100,44 @@ async function recordPlatformFee(amountCents, source = "boxing_arena") {
     amount: amountCents,
     source,
   }).then(({ error: e }) => { if (e) console.error("[fight-server] platform_revenue insert:", e.message); });
+}
+
+async function ensureBoxerProfile(userId) {
+  if (!supabase || !userId) return null;
+  const { data: row } = await supabase.from("boxing_profiles").select("wins, losses, knockouts").eq("user_id", userId).maybeSingle();
+  if (row) return row;
+  await supabase.from("boxing_profiles").insert({
+    user_id: userId,
+    level: 1,
+    wins: 0,
+    losses: 0,
+    knockouts: 0,
+    earnings: 0,
+    updated_at: new Date().toISOString(),
+  }).then(({ error: e }) => { if (e) console.error("[fight-server] boxing_profiles insert:", e.message); });
+  const { data: created } = await supabase.from("boxing_profiles").select("wins, losses, knockouts").eq("user_id", userId).single();
+  return created;
+}
+
+async function updateBoxerProfilesAfterFight(winnerId, loserId, knockout) {
+  if (!supabase || !winnerId || !loserId) return;
+  const [w, l] = await Promise.all([
+    ensureBoxerProfile(winnerId),
+    ensureBoxerProfile(loserId),
+  ]);
+  if (!w || !l) return;
+  const now = new Date().toISOString();
+  await Promise.all([
+    supabase.from("boxing_profiles").update({
+      wins: (w.wins ?? 0) + 1,
+      knockouts: (w.knockouts ?? 0) + (knockout ? 1 : 0),
+      updated_at: now,
+    }).eq("user_id", winnerId),
+    supabase.from("boxing_profiles").update({
+      losses: (l.losses ?? 0) + 1,
+      updated_at: now,
+    }).eq("user_id", loserId),
+  ]).catch((e) => console.error("[fight-server] updateBoxerProfilesAfterFight:", e.message));
 }
 
 const app = express();
@@ -179,7 +218,11 @@ function emitFightEnd(roomId, winnerSocketId, loserSocketId, room) {
     payWinner(winnerId, winnerPayoutCents, roomId).then(() => {
       recordFightHistory(room.player1?.playerId, room.player2?.playerId, winnerId, betCents, platformFeeCents);
       recordPlatformFee(platformFeeCents);
+      updateBoxerProfilesAfterFight(winnerId, loserId, true);
     });
+  } else if (winnerId && loserId) {
+    recordFightHistory(room.player1?.playerId, room.player2?.playerId, winnerId, 0, 0);
+    updateBoxerProfilesAfterFight(winnerId, loserId, true);
   }
 
   io.to(roomId).emit("fight_end", {

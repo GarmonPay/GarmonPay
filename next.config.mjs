@@ -32,6 +32,7 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin" },
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Cache-Control", value: "no-store, max-age=0" },
         ],
       },
     ];

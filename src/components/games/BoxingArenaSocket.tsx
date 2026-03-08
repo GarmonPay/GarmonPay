@@ -15,6 +15,40 @@ import {
 import { io, type Socket } from "socket.io-client";
 
 const MAX_HEALTH = 100;
+const MAX_STAMINA = 100;
+const JAB_COST = 8;
+const HEAVY_COST = 18;
+const BLOCK_COST = 5;
+const JAB_DAMAGE = 8;
+const HEAVY_DAMAGE = 18;
+const BLOCK_REDUCTION = 0.7;
+const STAMINA_REGEN_PER_SEC = 4;
+
+const AI_DIFFICULTY = {
+  rookie: {
+    intervalMs: 1600,
+    jabChance: 0.5,
+    heavyChance: 0.25,
+    blockChance: 0.25,
+    blockWhenHitChance: 0.2,
+  },
+  pro: {
+    intervalMs: 950,
+    jabChance: 0.5,
+    heavyChance: 0.35,
+    blockChance: 0.15,
+    blockWhenHitChance: 0.45,
+  },
+  champion: {
+    intervalMs: 650,
+    jabChance: 0.45,
+    heavyChance: 0.4,
+    blockChance: 0.15,
+    blockWhenHitChance: 0.6,
+  },
+} as const;
+
+export type AIDifficulty = keyof typeof AI_DIFFICULTY;
 
 export type BoxingArenaSocketProps = {
   wsUrl: string;
@@ -50,11 +84,78 @@ export function BoxingArenaSocket({
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [loserId, setLoserId] = useState<string | null>(null);
   const [betInput, setBetInput] = useState(betAmountCents > 0 ? String(betAmountCents) : "");
+  const [aiOpponent, setAiOpponent] = useState(false);
+  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>("rookie");
+  const [player1Stamina, setPlayer1Stamina] = useState(MAX_STAMINA);
+  const [player2Stamina, setPlayer2Stamina] = useState(MAX_STAMINA);
+  const [playerBlockingUntil, setPlayerBlockingUntil] = useState(0);
+  const [aiBlockingUntil, setAiBlockingUntil] = useState(0);
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [currentBetCents, setCurrentBetCents] = useState(0);
+  const [betError, setBetError] = useState<string | null>(null);
+  const [boxerProfile, setBoxerProfile] = useState<{
+    name: string | null;
+    wins: number;
+    losses: number;
+    knockouts: number;
+    power: number;
+    speed: number;
+    stamina: number;
+    defense: number;
+    chin: number;
+  } | null>(null);
+
+  const p1HealthRef = useRef(MAX_HEALTH);
+  const p2HealthRef = useRef(MAX_HEALTH);
+  const p1StaminaRef = useRef(MAX_STAMINA);
+  const p2StaminaRef = useRef(MAX_STAMINA);
+  const playerBlockingRef = useRef(0);
+  const aiBlockingRef = useRef(0);
+  const aiResultSentRef = useRef(false);
+  p1HealthRef.current = player1Health;
+  p2HealthRef.current = player2Health;
+  p1StaminaRef.current = player1Stamina;
+  p2StaminaRef.current = player2Stamina;
+  playerBlockingRef.current = playerBlockingUntil;
+  aiBlockingRef.current = aiBlockingUntil;
 
   const sendPunch = useCallback((type: "jab" | "heavy") => {
     const s = socketRef.current;
+    if (aiOpponent) {
+      const cost = type === "jab" ? JAB_COST : HEAVY_COST;
+      if (p1StaminaRef.current < cost) return;
+      const damage = type === "jab" ? JAB_DAMAGE : HEAVY_DAMAGE;
+      const blocked = aiBlockingRef.current > Date.now();
+      const actual = blocked ? Math.round(damage * (1 - BLOCK_REDUCTION)) : damage;
+      const newP2 = Math.max(0, p2HealthRef.current - actual);
+      setPlayer2Health(newP2);
+      setPlayer2Stamina((prev) => Math.max(0, prev - cost));
+      p2HealthRef.current = newP2;
+      p2StaminaRef.current = Math.max(0, p2StaminaRef.current - cost);
+      p1StaminaRef.current = Math.max(0, p1StaminaRef.current - cost);
+      setPlayer1Stamina(p1StaminaRef.current);
+      p2AnimRef.current = type === "heavy" ? "punch" : "jab";
+      setTimeout(() => (p2AnimRef.current = "idle"), 280);
+      if (newP2 <= 0) {
+        setWinnerId(playerId);
+        setLoserId("ai");
+        setPhase("ended");
+        onMatchEnd?.(true, playerId, "ai");
+      }
+      return;
+    }
     if (s?.connected) s.emit("punch", { type });
-  }, []);
+  }, [aiOpponent, playerId, onMatchEnd]);
+
+  const sendBlock = useCallback(() => {
+    if (!aiOpponent) return;
+    if (p1StaminaRef.current < BLOCK_COST) return;
+    const until = Date.now() + 500;
+    setPlayerBlockingUntil(until);
+    playerBlockingRef.current = until;
+    setPlayer1Stamina((prev) => Math.max(0, prev - BLOCK_COST));
+    p1StaminaRef.current = Math.max(0, p1StaminaRef.current - BLOCK_COST);
+  }, [aiOpponent]);
 
   useEffect(() => {
     if (phase !== "fighting" || !canvasRef.current) return;
@@ -143,7 +244,123 @@ export function BoxingArenaSocket({
   }, [phase]);
 
   useEffect(() => {
-    if (!wsUrl || phase === "lobby") return;
+    if (phase !== "fighting" || !aiOpponent) return;
+    const cfg = AI_DIFFICULTY[aiDifficulty];
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (p1HealthRef.current <= 0 || p2HealthRef.current <= 0) return;
+      const r = Math.random();
+      if (r < cfg.blockChance && aiBlockingRef.current <= now) {
+        setAiBlockingUntil(now + 400);
+        aiBlockingRef.current = now + 400;
+        return;
+      }
+      if (r < cfg.blockChance + cfg.jabChance && p2StaminaRef.current >= JAB_COST) {
+        const blocked = playerBlockingRef.current > now;
+        const dmg = blocked ? Math.round(JAB_DAMAGE * (1 - BLOCK_REDUCTION)) : JAB_DAMAGE;
+        const newP1 = Math.max(0, p1HealthRef.current - dmg);
+        p1HealthRef.current = newP1;
+        setPlayer1Health(newP1);
+        setPlayer2Stamina((prev) => Math.max(0, prev - JAB_COST));
+        p2StaminaRef.current = Math.max(0, p2StaminaRef.current - JAB_COST);
+        p2AnimRef.current = "jab";
+        setTimeout(() => (p2AnimRef.current = "idle"), 280);
+        if (newP1 <= 0) {
+          setWinnerId("ai");
+          setLoserId(playerId);
+          setPhase("ended");
+          onMatchEnd?.(false, "ai", playerId);
+        }
+        return;
+      }
+      if (p2StaminaRef.current >= HEAVY_COST) {
+        const blocked = playerBlockingRef.current > now;
+        const dmg = blocked ? Math.round(HEAVY_DAMAGE * (1 - BLOCK_REDUCTION)) : HEAVY_DAMAGE;
+        const newP1 = Math.max(0, p1HealthRef.current - dmg);
+        p1HealthRef.current = newP1;
+        setPlayer1Health(newP1);
+        setPlayer2Stamina((prev) => Math.max(0, prev - HEAVY_COST));
+        p2StaminaRef.current = Math.max(0, p2StaminaRef.current - HEAVY_COST);
+        p2AnimRef.current = "punch";
+        setTimeout(() => (p2AnimRef.current = "idle"), 280);
+        if (newP1 <= 0) {
+          setWinnerId("ai");
+          setLoserId(playerId);
+          setPhase("ended");
+          onMatchEnd?.(false, "ai", playerId);
+        }
+      }
+    }, cfg.intervalMs);
+    return () => clearInterval(id);
+  }, [phase, aiOpponent, aiDifficulty, onMatchEnd]);
+
+  useEffect(() => {
+    if (phase !== "fighting" || !aiOpponent) return;
+    const id = setInterval(() => {
+      if (p1HealthRef.current <= 0 || p2HealthRef.current <= 0) return;
+      setPlayer1Stamina((prev) => Math.min(MAX_STAMINA, prev + STAMINA_REGEN_PER_SEC));
+      setPlayer2Stamina((prev) => Math.min(MAX_STAMINA, prev + STAMINA_REGEN_PER_SEC));
+      p1StaminaRef.current = Math.min(MAX_STAMINA, p1StaminaRef.current + STAMINA_REGEN_PER_SEC);
+      p2StaminaRef.current = Math.min(MAX_STAMINA, p2StaminaRef.current + STAMINA_REGEN_PER_SEC);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase, aiOpponent]);
+
+  useEffect(() => {
+    if (phase !== "lobby") return;
+    fetch("/api/wallet")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { balance_cents?: number } | null) => {
+        if (data && typeof data.balance_cents === "number") setBalanceCents(data.balance_cents);
+      })
+      .catch(() => {});
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "lobby" || !playerId) return;
+    fetch("/api/boxing/profile")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: {
+        name?: string | null;
+        wins?: number;
+        losses?: number;
+        knockouts?: number;
+        power?: number;
+        speed?: number;
+        stamina?: number;
+        defense?: number;
+        chin?: number;
+      } | null) => {
+        if (data) {
+          setBoxerProfile({
+            name: data.name ?? null,
+            wins: typeof data.wins === "number" ? data.wins : 0,
+            losses: typeof data.losses === "number" ? data.losses : 0,
+            knockouts: typeof data.knockouts === "number" ? data.knockouts : 0,
+            power: typeof data.power === "number" ? data.power : 50,
+            speed: typeof data.speed === "number" ? data.speed : 50,
+            stamina: typeof data.stamina === "number" ? data.stamina : 50,
+            defense: typeof data.defense === "number" ? data.defense : 50,
+            chin: typeof data.chin === "number" ? data.chin : 50,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [phase, playerId]);
+
+  useEffect(() => {
+    if (phase !== "ended" || !aiOpponent || currentBetCents <= 0 || aiResultSentRef.current) return;
+    aiResultSentRef.current = true;
+    const won = winnerId === playerId;
+    fetch("/api/games/boxing/ai-result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ won, bet_amount_cents: currentBetCents }),
+    }).then(() => setCurrentBetCents(0));
+  }, [phase, aiOpponent, currentBetCents, winnerId, playerId]);
+
+  useEffect(() => {
+    if (!wsUrl || phase === "lobby" || aiOpponent) return;
     setConnectionFailed(false);
     const socket = io(wsUrl, {
       transports: ["websocket", "polling"],
@@ -204,6 +421,7 @@ export function BoxingArenaSocket({
       player2: { socket_id: string; player_id: string; health: number };
     }) => {
       setRoomId(data.room_id);
+      setCurrentBetCents(data.bet_amount_cents ?? 0);
       setPlayer1Health(data.player1.health ?? MAX_HEALTH);
       setPlayer2Health(data.player2.health ?? MAX_HEALTH);
       setPlayer1Id(data.player1.player_id ?? null);
@@ -262,7 +480,7 @@ export function BoxingArenaSocket({
       socketRef.current = null;
       setSocketConnected(false);
     };
-  }, [wsUrl, playerId, phase, onMatchEnd, betInput]);
+  }, [wsUrl, playerId, phase, onMatchEnd, betInput, aiOpponent]);
 
   const joinMatchmaking = () => {
     setMatchmakingError(null);
@@ -270,32 +488,125 @@ export function BoxingArenaSocket({
   };
 
   if (phase === "lobby") {
+    const betNum = betInput ? parseInt(betInput, 10) || 0 : 0;
+    const insufficientBalance = balanceCents !== null && betNum > balanceCents;
     return (
       <div className="rounded-xl bg-[#0a0a14] border border-white/10 p-6 max-w-md mx-auto">
         <h2 className="text-xl font-bold text-white mb-2">Boxing Arena</h2>
         <p className="text-white/70 text-sm mb-4">
-          Join matchmaking to fight another player. Set an optional bet (cents).
+          Join matchmaking to fight another player. Set an optional bet (cents). Winner takes pot minus 10% platform fee.
         </p>
+        {boxerProfile && (
+          <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+            <p className="text-amber-400 font-semibold text-sm">
+              {boxerProfile.name?.trim() || "Unnamed Fighter"}
+            </p>
+            <p className="text-white/70 text-xs mt-1">
+              Record: {boxerProfile.wins}-{boxerProfile.losses} ({boxerProfile.knockouts} KO)
+            </p>
+            <div className="grid grid-cols-5 gap-1 mt-2">
+              {(["power", "speed", "stamina", "defense", "chin"] as const).map((stat) => (
+                <div key={stat} className="text-center">
+                  <p className="text-[10px] text-white/50 uppercase">{stat.slice(0, 2)}</p>
+                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden mt-0.5">
+                    <div
+                      className="h-full bg-amber-500/80 rounded-full"
+                      style={{ width: `${boxerProfile[stat]}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {balanceCents !== null && (
+          <p className="text-white/80 text-sm mb-2">Balance: <span className="font-semibold text-amber-400">{balanceCents}¢</span></p>
+        )}
         <div className="space-y-3">
           <label className="block text-sm text-white/80">Bet amount (cents, 0 = free)</label>
           <input
             type="number"
             min={0}
             value={betInput}
-            onChange={(e) => setBetInput(e.target.value)}
+            onChange={(e) => { setBetInput(e.target.value); setBetError(null); }}
             className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 focus:ring-2 focus:ring-amber-500"
             placeholder="0"
           />
+          {betNum > 0 && (
+            <p className="text-white/60 text-xs">Pot: {betNum * 2}¢ (10% platform fee)</p>
+          )}
+          {insufficientBalance && (
+            <p className="text-amber-400 text-sm">Insufficient balance. Reduce bet or add funds.</p>
+          )}
           {matchmakingError && (
             <p className="text-red-400 text-sm">{matchmakingError}</p>
+          )}
+          {betError && (
+            <p className="text-red-400 text-sm">{betError}</p>
           )}
           <button
             type="button"
             onClick={joinMatchmaking}
-            className="w-full py-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-black font-semibold transition-colors"
+            disabled={insufficientBalance}
+            className="w-full py-3 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold transition-colors"
           >
             Find Opponent
           </button>
+          <div className="pt-3 border-t border-white/20">
+            <p className="text-white/70 text-xs mb-2">Or play offline vs AI</p>
+            <select
+              value={aiDifficulty}
+              onChange={(e) => setAiDifficulty(e.target.value as AIDifficulty)}
+              className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
+            >
+              <option value="rookie">Rookie</option>
+              <option value="pro">Pro</option>
+              <option value="champion">Champion</option>
+            </select>
+            <button
+              type="button"
+              onClick={async () => {
+                const betCents = betInput ? parseInt(betInput, 10) || 0 : 0;
+                if (betCents > 0) {
+                  setBetError(null);
+                  const res = await fetch("/api/games/boxing/place-bet", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount_cents: betCents }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    setBetError(data.error || "Bet failed");
+                    return;
+                  }
+                  if (typeof data.balance_cents === "number") setBalanceCents(data.balance_cents);
+                  setCurrentBetCents(betCents);
+                } else {
+                  setCurrentBetCents(0);
+                }
+                aiResultSentRef.current = false;
+                setAiOpponent(true);
+                setMyRole("player1");
+                setPlayer1Health(MAX_HEALTH);
+                setPlayer2Health(MAX_HEALTH);
+                setPlayer1Stamina(MAX_STAMINA);
+                setPlayer2Stamina(MAX_STAMINA);
+                setPlayerBlockingUntil(0);
+                setAiBlockingUntil(0);
+                p1HealthRef.current = MAX_HEALTH;
+                p2HealthRef.current = MAX_HEALTH;
+                p1StaminaRef.current = MAX_STAMINA;
+                p2StaminaRef.current = MAX_STAMINA;
+                playerBlockingRef.current = 0;
+                aiBlockingRef.current = 0;
+                setPhase("fighting");
+              }}
+              disabled={insufficientBalance}
+              className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm"
+            >
+              Play vs AI
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -339,6 +650,61 @@ export function BoxingArenaSocket({
                 Retry
               </button>
             </div>
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <p className="text-white font-medium mb-2">Or play vs AI</p>
+              <select
+                value={aiDifficulty}
+                onChange={(e) => setAiDifficulty(e.target.value as AIDifficulty)}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
+              >
+                <option value="rookie">Rookie</option>
+                <option value="pro">Pro</option>
+                <option value="champion">Champion</option>
+              </select>
+              <button
+                type="button"
+                onClick={async () => {
+                  const betCents = betInput ? parseInt(betInput, 10) || 0 : 0;
+                  if (betCents > 0) {
+                    setBetError(null);
+                    const res = await fetch("/api/games/boxing/place-bet", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ amount_cents: betCents }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      setBetError(data.error || "Bet failed");
+                      return;
+                    }
+                    if (typeof data.balance_cents === "number") setBalanceCents(data.balance_cents);
+                    setCurrentBetCents(betCents);
+                  } else {
+                    setCurrentBetCents(0);
+                  }
+                  setConnectionFailed(false);
+                  aiResultSentRef.current = false;
+                  setAiOpponent(true);
+                  setMyRole("player1");
+                  setPlayer1Health(MAX_HEALTH);
+                  setPlayer2Health(MAX_HEALTH);
+                  setPlayer1Stamina(MAX_STAMINA);
+                  setPlayer2Stamina(MAX_STAMINA);
+                  setPlayerBlockingUntil(0);
+                  setAiBlockingUntil(0);
+                  p1HealthRef.current = MAX_HEALTH;
+                  p2HealthRef.current = MAX_HEALTH;
+                  p1StaminaRef.current = MAX_STAMINA;
+                  p2StaminaRef.current = MAX_STAMINA;
+                  playerBlockingRef.current = 0;
+                  aiBlockingRef.current = 0;
+                  setPhase("fighting");
+                }}
+                className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium"
+              >
+                Play vs AI
+              </button>
+            </div>
           </div>
         )}
         {!showConnectionHelp && (
@@ -352,13 +718,14 @@ export function BoxingArenaSocket({
 
   if (phase === "ended") {
     const won = winnerId === playerId;
+    const vsAi = loserId === "ai" || winnerId === "ai";
     return (
       <div className="rounded-xl bg-[#0a0a14] border border-white/10 p-8 max-w-md mx-auto text-center">
         <p className={`text-3xl font-bold ${won ? "text-amber-400" : "text-white/80"}`}>
           {won ? "You win!" : "You lose"}
         </p>
         <p className="text-white/60 mt-2">
-          {won ? "Prize has been credited to your wallet." : "Better luck next time."}
+          {vsAi ? (won ? "AI defeated." : "AI wins this round.") : won ? "Prize has been credited to your wallet." : "Better luck next time."}
         </p>
         <button
           type="button"
@@ -370,6 +737,10 @@ export function BoxingArenaSocket({
             setMyRole(null);
             setPlayer1Health(MAX_HEALTH);
             setPlayer2Health(MAX_HEALTH);
+            setPlayer1Stamina(MAX_STAMINA);
+            setPlayer2Stamina(MAX_STAMINA);
+            setAiOpponent(false);
+            setCurrentBetCents(0);
           }}
           className="mt-6 px-6 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors"
         >
@@ -387,6 +758,13 @@ export function BoxingArenaSocket({
         style={{ width: "100%", height: "480px" }}
       />
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4">
+        {currentBetCents > 0 && (
+          <div className="flex justify-center">
+            <div className="bg-black/60 rounded-lg px-3 py-1.5 text-xs text-white/90">
+              Bet: {currentBetCents}¢ | Pot: {currentBetCents * 2}¢ (10% fee)
+            </div>
+          </div>
+        )}
         <div className="flex justify-between items-start">
           <div className="bg-black/60 rounded-lg p-3 min-w-[120px]">
             <p className="text-red-400 font-bold text-xs">You</p>
@@ -396,35 +774,69 @@ export function BoxingArenaSocket({
                 style={{ width: `${myRole === "player1" ? player1Health : player2Health}%` }}
               />
             </div>
+            {aiOpponent && (
+              <div className="mt-1">
+                <p className="text-white/60 text-[10px]">Stamina</p>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden w-24">
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-200"
+                    style={{ width: `${player1Stamina}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="bg-black/60 rounded-lg px-3 py-1.5">
             <p className="text-white/80 text-xs">VS</p>
           </div>
           <div className="bg-black/60 rounded-lg p-3 min-w-[120px] text-right">
-            <p className="text-blue-400 font-bold text-xs">Opponent</p>
+            <p className="text-blue-400 font-bold text-xs">{aiOpponent ? "AI" : "Opponent"}</p>
             <div className="h-2 bg-gray-700 rounded-full overflow-hidden mt-1 w-24 ml-auto">
               <div
                 className="h-full bg-blue-500 transition-all duration-200"
                 style={{ width: `${myRole === "player1" ? player2Health : player1Health}%` }}
               />
             </div>
+            {aiOpponent && (
+              <div className="mt-1">
+                <p className="text-white/60 text-[10px]">Stamina</p>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden w-24 ml-auto">
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-200"
+                    style={{ width: `${player2Stamina}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
-        <div className="pointer-events-auto flex justify-center gap-3">
+        <div className="pointer-events-auto flex justify-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => sendPunch("jab")}
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm transition-colors"
+            disabled={aiOpponent && player1Stamina < JAB_COST}
+            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
           >
             Jab
           </button>
           <button
             type="button"
             onClick={() => sendPunch("heavy")}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-sm transition-colors"
+            disabled={aiOpponent && player1Stamina < HEAVY_COST}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
           >
             Power punch
           </button>
+          {aiOpponent && (
+            <button
+              type="button"
+              onClick={sendBlock}
+              disabled={player1Stamina < BLOCK_COST}
+              className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+            >
+              Block
+            </button>
+          )}
         </div>
       </div>
     </div>

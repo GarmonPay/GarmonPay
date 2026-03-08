@@ -1,4 +1,5 @@
 {
+  "buildCommand": "rm -rf .next && next build",
   "headers": [
     {
       "source": "/api/(.*)",
