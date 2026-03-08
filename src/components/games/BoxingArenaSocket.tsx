@@ -10,8 +10,17 @@ import {
   MeshBuilder,
   StandardMaterial,
   Color3,
+  Color4,
   type AbstractMesh,
+  type TransformNode,
+  type InstantiatedEntries,
+  LoadAssetContainerAsync,
+  SpotLight,
+  PBRMaterial,
+  ParticleSystem,
+  RawTexture,
 } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF/2.0";
 import { io, type Socket } from "socket.io-client";
 
 const MAX_HEALTH = 100;
@@ -66,8 +75,9 @@ export function BoxingArenaSocket({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const myRoleRef = useRef<"player1" | "player2" | null>(null);
-  const p1AnimRef = useRef<"idle" | "jab" | "punch">("idle");
-  const p2AnimRef = useRef<"idle" | "jab" | "punch">("idle");
+  const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
+  const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
+  const hitEffectRef = useRef<{ x: number; y: number; z: number; isHeavy: boolean } | null>(null);
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -142,6 +152,7 @@ export function BoxingArenaSocket({
         setPhase("ended");
         onMatchEnd?.(true, playerId, "ai");
       }
+      hitEffectRef.current = { x: 3, y: 1.2, z: 0, isHeavy: type === "heavy" };
       return;
     }
     if (s?.connected) s.emit("punch", { type });
@@ -155,6 +166,10 @@ export function BoxingArenaSocket({
     playerBlockingRef.current = until;
     setPlayer1Stamina((prev) => Math.max(0, prev - BLOCK_COST));
     p1StaminaRef.current = Math.max(0, p1StaminaRef.current - BLOCK_COST);
+    p1AnimRef.current = "block";
+    setTimeout(() => {
+      p1AnimRef.current = "idle";
+    }, 500);
   }, [aiOpponent]);
 
   useEffect(() => {
@@ -175,30 +190,186 @@ export function BoxingArenaSocket({
     camera.lowerRadiusLimit = 12;
     camera.upperRadiusLimit = 32;
 
-    new HemisphericLight("light1", new Vector3(0, 1, 0), scene).intensity = 1;
-    new HemisphericLight("light2", new Vector3(0, -1, 0), scene).intensity = 0.3;
+    // Ambient fill (dim) for lighting realism
+    const ambient = new HemisphericLight(
+      "ambient",
+      new Vector3(0, 1, 0),
+      scene
+    );
+    ambient.intensity = 0.25;
+    ambient.groundColor = new Color3(0.08, 0.06, 0.1);
 
-    const ring = MeshBuilder.CreateBox("ring", { width: 12, height: 0.3, depth: 12 }, scene);
-    ring.position.y = -0.15;
-    const ringMat = new StandardMaterial("ringMat", scene);
-    ringMat.diffuseColor = new Color3(0.18, 0.15, 0.22);
-    ring.material = ringMat;
+    // Dramatic overhead arena spotlights above the ring (PBR responds to these)
+    const spotY = 10;
+    const spotDist = 5;
+    const spotPositions = [
+      new Vector3(spotDist, spotY, spotDist),
+      new Vector3(spotDist, spotY, -spotDist),
+      new Vector3(-spotDist, spotY, spotDist),
+      new Vector3(-spotDist, spotY, -spotDist),
+    ];
+    spotPositions.forEach((pos, i) => {
+      const spot = new SpotLight(
+        `arenaSpot_${i}`,
+        pos,
+        new Vector3(0, -1, 0),
+        Math.PI / 4,
+        2,
+        scene
+      );
+      spot.intensity = 4;
+      spot.diffuse = new Color3(1, 0.98, 0.95);
+      spot.specular = new Color3(0.4, 0.38, 0.35);
+    });
 
+    // ---- Boxing ring: base, canvas, ropes, corner pads (PBR for lighting realism) ----
+
+    // Ring base (platform)
+    const ringBase = MeshBuilder.CreateBox(
+      "ringBase",
+      { width: 12.5, height: 0.4, depth: 12.5 },
+      scene
+    );
+    ringBase.position.y = -0.2;
+    const baseMat = new PBRMaterial("ringBaseMat", scene);
+    baseMat.albedoColor = new Color3(0.12, 0.1, 0.08);
+    baseMat.metallic = 0.1;
+    baseMat.roughness = 0.85;
+    ringBase.material = baseMat;
+
+    // Canvas (ring deck) – flat surface with canvas-like look
+    const canvas = MeshBuilder.CreateBox(
+      "canvas",
+      { width: 11.8, height: 0.06, depth: 11.8 },
+      scene
+    );
+    canvas.position.y = 0.03;
+    const canvasMat = new PBRMaterial("canvasMat", scene);
+    canvasMat.albedoColor = new Color3(0.92, 0.89, 0.82);
+    canvasMat.metallic = 0;
+    canvasMat.roughness = 0.92;
+    canvas.material = canvasMat;
+
+    // Ring ropes (four sides)
     for (let i = 0; i < 4; i++) {
       const side = MeshBuilder.CreateBox(
         `rope_${i}`,
-        { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
+        {
+          width: i % 2 === 0 ? 12.6 : 0.35,
+          height: 0.06,
+          depth: i % 2 === 0 ? 0.35 : 12.6,
+        },
         scene
       );
-      side.position.y = 1.2 + i * 0.2;
-      const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
-      const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
+      side.position.y = 1.15 + i * 0.18;
+      const x = i === 0 ? 0 : i === 1 ? 6.3 : i === 2 ? 0 : -6.3;
+      const z = i === 0 ? 6.3 : i === 1 ? 0 : i === 2 ? -6.3 : 0;
       side.position.set(x, side.position.y, z);
-      const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
-      ropeMat.diffuseColor = new Color3(0.85, 0.12, 0.12);
+      const ropeMat = new PBRMaterial(`ropeMat_${i}`, scene);
+      ropeMat.albedoColor = new Color3(0.78, 0.08, 0.08);
+      ropeMat.metallic = 0.05;
+      ropeMat.roughness = 0.75;
       side.material = ropeMat;
     }
 
+    // Corner pads (four corners)
+    const cornerPositions: [number, number][] = [
+      [-6.2, -6.2],
+      [6.2, -6.2],
+      [6.2, 6.2],
+      [-6.2, 6.2],
+    ];
+    const cornerPadMat = new PBRMaterial("cornerPadMat", scene);
+    cornerPadMat.albedoColor = new Color3(0.7, 0.08, 0.08);
+    cornerPadMat.metallic = 0;
+    cornerPadMat.roughness = 0.9;
+    cornerPositions.forEach(([x, z], i) => {
+      const pad = MeshBuilder.CreateCylinder(
+        `cornerPad_${i}`,
+        { height: 1.5, diameterTop: 0.5, diameterBottom: 0.55, tessellation: 16 },
+        scene
+      );
+      pad.position.set(x, 0.75, z);
+      pad.material = cornerPadMat;
+    });
+
+    // ---- Combat effects: hit sparks, screen shake, punch sound ----
+    const hitParticleTexture = RawTexture.CreateRGBATexture(
+      new Uint8Array([255, 255, 255, 255]),
+      1,
+      1,
+      scene
+    );
+    const hitParticles = new ParticleSystem("hitSparks", 40, scene);
+    hitParticles.particleTexture = hitParticleTexture;
+    hitParticles.emitter = new Vector3(0, 0, 0);
+    hitParticles.createPointEmitter(
+      new Vector3(-0.5, 0.2, -0.5),
+      new Vector3(0.5, 1, 0.5)
+    );
+    hitParticles.minLifeTime = 0.05;
+    hitParticles.maxLifeTime = 0.25;
+    hitParticles.minSize = 0.08;
+    hitParticles.maxSize = 0.2;
+    hitParticles.minEmitPower = 2;
+    hitParticles.maxEmitPower = 6;
+    hitParticles.emitRate = 200;
+    hitParticles.targetStopDuration = 0.15;
+    hitParticles.blendMode = ParticleSystem.BLENDMODE_ADD;
+    hitParticles.addColorGradient(0, new Color4(1, 0.95, 0.7, 1));
+    hitParticles.addColorGradient(1, new Color4(0.9, 0.5, 0.1, 0));
+    hitParticles.disposeOnStop = false;
+
+    let shakeEndTime = 0;
+    const baseRadius = 22;
+    const baseAlpha = -Math.PI / 2;
+    const baseBeta = Math.PI / 2.5;
+
+    function playPunchSound(isHeavy: boolean) {
+      try {
+        const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = isHeavy ? 60 : 100;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+      } catch {
+        // ignore
+      }
+    }
+
+    // ---- Health bars above fighters ----
+    const barWidth = 1.2;
+    const barHeight = 0.12;
+    const barY = 2.4;
+    const bgMat = new StandardMaterial("healthBgMat", scene);
+    bgMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
+    bgMat.emissiveColor = new Color3(0.05, 0.05, 0.08);
+    const p1BarBg = MeshBuilder.CreatePlane("p1HealthBg", { size: barWidth, sideOrientation: 1 }, scene);
+    p1BarBg.position.set(-3, barY, 0);
+    p1BarBg.material = bgMat;
+    const p2BarBg = MeshBuilder.CreatePlane("p2HealthBg", { size: barWidth, sideOrientation: 1 }, scene);
+    p2BarBg.position.set(3, barY, 0);
+    p2BarBg.material = bgMat;
+    const p1BarFill = MeshBuilder.CreatePlane("p1HealthFill", { size: barWidth - 0.04, sideOrientation: 1 }, scene);
+    p1BarFill.position.set(-3, barY, 0.01);
+    p1BarFill.scaling.x = 1;
+    const p1FillMat = new StandardMaterial("p1FillMat", scene);
+    p1FillMat.diffuseColor = new Color3(0.9, 0.2, 0.2);
+    p1BarFill.material = p1FillMat;
+    const p2BarFill = MeshBuilder.CreatePlane("p2HealthFill", { size: barWidth - 0.04, sideOrientation: 1 }, scene);
+    p2BarFill.position.set(3, barY, 0.01);
+    p2BarFill.scaling.x = 1;
+    const p2FillMat = new StandardMaterial("p2FillMat", scene);
+    p2FillMat.diffuseColor = new Color3(0.2, 0.35, 0.95);
+    p2BarFill.material = p2FillMat;
+
+    // Placeholder fighters – hidden when GLTF boxer.glb loads successfully
     const p1Body = MeshBuilder.CreateCylinder(
       "p1Body",
       { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
@@ -227,17 +398,143 @@ export function BoxingArenaSocket({
     p2Head.position.set(0, 0.9, 0);
     p2Head.setParent(p2Body);
 
+    let playerEntries: InstantiatedEntries | null = null;
+    let enemyEntries: InstantiatedEntries | null = null;
+    let lastP1: "idle" | "jab" | "punch" | "block" = "idle";
+    let lastP2: "idle" | "jab" | "punch" | "block" = "idle";
+
+    function animNameFromRef(ref: "idle" | "jab" | "punch" | "block"): string {
+      if (ref === "punch") return "powerPunch";
+      return ref;
+    }
+
+    function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block") {
+      // Map ref to GLTF animation names: idle, jab, powerPunch, block (punch -> powerPunch)
+      const name = animNameFromRef(ref);
+      for (const g of entries.animationGroups) g.stop();
+      const group = entries.animationGroups.find(
+        (g) => g.name.toLowerCase() === name.toLowerCase()
+      );
+      if (group) group.start(ref === "idle");
+    }
+
+    function tintMeshColor(node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) {
+      const mat = "material" in node ? node.material : undefined;
+      if (mat && typeof mat === "object") {
+        const m = mat as Record<string, unknown>;
+        if (m.diffuseColor && typeof (m.diffuseColor as { set: (a: number, b: number, c: number) => void }).set === "function") {
+          (m.diffuseColor as { set: (a: number, b: number, c: number) => void }).set(r, g, b);
+        }
+        if (m.albedoColor && typeof (m.albedoColor as { set: (a: number, b: number, c: number) => void }).set === "function") {
+          (m.albedoColor as { set: (a: number, b: number, c: number) => void }).set(r, g, b);
+        }
+      }
+      if (typeof node.getChildMeshes === "function") {
+        for (const child of node.getChildMeshes()) {
+          if (child.material) tintMeshColor(child, r, g, b);
+        }
+      }
+    }
+
+    LoadAssetContainerAsync("boxer.glb", scene, { rootUrl: "/models/" })
+      .then((container) => {
+        // Two animated fighters from boxer.glb: Red Corner, Blue Corner. Animations: idle, jab, powerPunch, block.
+        const redCornerInst = container.instantiateModelsToScene(
+          (name) => "RedCornerFighter_" + name,
+          true
+        );
+        const blueCornerInst = container.instantiateModelsToScene(
+          (name) => "BlueCornerFighter_" + name,
+          true
+        );
+
+        const scale = 1.2;
+        for (const node of redCornerInst.rootNodes) {
+          const tn = node as TransformNode;
+          tn.position.set(-3, 0, 0);
+          tn.scaling.setAll(scale);
+          tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.9, 0.25, 0.25);
+        }
+        for (const node of blueCornerInst.rootNodes) {
+          const tn = node as TransformNode;
+          tn.position.set(3, 0, 0);
+          tn.scaling.setAll(scale);
+          tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.25, 0.35, 0.95);
+        }
+
+        playerEntries = redCornerInst;
+        enemyEntries = blueCornerInst;
+        p1Body.setEnabled(false);
+        p1Head.setEnabled(false);
+        p2Body.setEnabled(false);
+        p2Head.setEnabled(false);
+      })
+      .catch(() => {
+        // Keep placeholder fighters visible; animations handled in onBeforeRenderObservable
+      });
+
     scene.onBeforeRenderObservable.add(() => {
-      const p1 = p1Body as AbstractMesh;
-      const ax1 = p1AnimRef.current === "jab" ? -0.25 : p1AnimRef.current === "punch" ? -0.45 : 0;
-      p1.position.set(-3 + ax1, 0.9, 0);
-      const p2 = p2Body as AbstractMesh;
-      const ax2 = p2AnimRef.current === "jab" ? 0.25 : p2AnimRef.current === "punch" ? 0.45 : 0;
-      p2.position.set(3 + ax2, 0.9, 0);
+      const now = Date.now();
+
+      // Combat effects when a punch lands
+      const hit = hitEffectRef.current;
+      if (hit) {
+        hitEffectRef.current = null;
+        shakeEndTime = now + 120;
+        hitParticles.emitter = new Vector3(hit.x, hit.y, hit.z);
+        hitParticles.stop();
+        hitParticles.start();
+        playPunchSound(hit.isHeavy);
+      }
+
+      // Screen shake
+      if (now < shakeEndTime) {
+        const t = (shakeEndTime - now) / 120;
+        camera.radius = baseRadius + (Math.random() - 0.5) * 0.35 * t;
+        camera.alpha = baseAlpha + (Math.random() - 0.5) * 0.025 * t;
+        camera.beta = baseBeta + (Math.random() - 0.5) * 0.025 * t;
+      } else {
+        camera.radius = baseRadius;
+        camera.alpha = baseAlpha;
+        camera.beta = baseBeta;
+      }
+
+      // Health bars: scale fill and billboard to camera
+      const p1H = p1HealthRef.current / 100;
+      const p2H = p2HealthRef.current / 100;
+      p1BarFill.scaling.x = Math.max(0.01, p1H);
+      p2BarFill.scaling.x = Math.max(0.01, p2H);
+      const hw = (barWidth - 0.04) / 2;
+      p1BarFill.position.x = -3 + hw * (1 - p1H);
+      p2BarFill.position.x = 3 - hw * (1 - p2H);
+      p1BarBg.lookAt(camera.position);
+      p2BarBg.lookAt(camera.position);
+      p1BarFill.lookAt(camera.position);
+      p2BarFill.lookAt(camera.position);
+
+      if (playerEntries && enemyEntries) {
+        if (p1AnimRef.current !== lastP1) {
+          playFighterAnim(playerEntries, p1AnimRef.current);
+          lastP1 = p1AnimRef.current;
+        }
+        if (p2AnimRef.current !== lastP2) {
+          playFighterAnim(enemyEntries, p2AnimRef.current);
+          lastP2 = p2AnimRef.current;
+        }
+      } else {
+        const p1 = p1Body as AbstractMesh;
+        const ax1 = p1AnimRef.current === "jab" ? -0.25 : p1AnimRef.current === "punch" ? -0.45 : p1AnimRef.current === "block" ? 0.15 : 0;
+        p1.position.set(-3 + ax1, 0.9, 0);
+        const p2 = p2Body as AbstractMesh;
+        const ax2 = p2AnimRef.current === "jab" ? 0.25 : p2AnimRef.current === "punch" ? 0.45 : p2AnimRef.current === "block" ? -0.15 : 0;
+        p2.position.set(3 + ax2, 0.9, 0);
+      }
     });
 
     engine.runRenderLoop(() => scene.render());
     return () => {
+      playerEntries?.dispose();
+      enemyEntries?.dispose();
       scene.dispose();
       engine.dispose();
     };
@@ -253,6 +550,10 @@ export function BoxingArenaSocket({
       if (r < cfg.blockChance && aiBlockingRef.current <= now) {
         setAiBlockingUntil(now + 400);
         aiBlockingRef.current = now + 400;
+        p2AnimRef.current = "block";
+        setTimeout(() => {
+          p2AnimRef.current = "idle";
+        }, 400);
         return;
       }
       if (r < cfg.blockChance + cfg.jabChance && p2StaminaRef.current >= JAB_COST) {
@@ -271,6 +572,7 @@ export function BoxingArenaSocket({
           setPhase("ended");
           onMatchEnd?.(false, "ai", playerId);
         }
+        hitEffectRef.current = { x: -3, y: 1.2, z: 0, isHeavy: false };
         return;
       }
       if (p2StaminaRef.current >= HEAVY_COST) {
@@ -289,6 +591,7 @@ export function BoxingArenaSocket({
           setPhase("ended");
           onMatchEnd?.(false, "ai", playerId);
         }
+        hitEffectRef.current = { x: -3, y: 1.2, z: 0, isHeavy: true };
       }
     }, cfg.intervalMs);
     return () => clearInterval(id);
@@ -453,6 +756,8 @@ export function BoxingArenaSocket({
       if (data.to_socket_id === socket.id && typeof data.to_health_after === "number") {
         if (role === "player1") setPlayer1Health(data.to_health_after);
         else setPlayer2Health(data.to_health_after);
+        const hitX = role === "player1" ? -3 : 3;
+        hitEffectRef.current = { x: hitX, y: 1.2, z: 0, isHeavy: data.type === "heavy" };
       }
     });
 
@@ -810,33 +1115,69 @@ export function BoxingArenaSocket({
             )}
           </div>
         </div>
-        <div className="pointer-events-auto flex justify-center gap-3 flex-wrap">
-          <button
-            type="button"
-            onClick={() => sendPunch("jab")}
-            disabled={aiOpponent && player1Stamina < JAB_COST}
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-          >
-            Jab
-          </button>
-          <button
-            type="button"
-            onClick={() => sendPunch("heavy")}
-            disabled={aiOpponent && player1Stamina < HEAVY_COST}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-          >
-            Power punch
-          </button>
-          {aiOpponent && (
+        <div className="pointer-events-auto flex flex-col gap-2">
+          {/* Desktop: small button row */}
+          <div className="hidden md:flex justify-center gap-3 flex-wrap">
             <button
               type="button"
-              onClick={sendBlock}
-              disabled={player1Stamina < BLOCK_COST}
-              className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+              onClick={() => sendPunch("jab")}
+              disabled={aiOpponent && player1Stamina < JAB_COST}
+              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
-              Block
+              Jab
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => sendPunch("heavy")}
+              disabled={aiOpponent && player1Stamina < HEAVY_COST}
+              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+            >
+              Power punch
+            </button>
+            {aiOpponent && (
+              <button
+                type="button"
+                onClick={sendBlock}
+                disabled={player1Stamina < BLOCK_COST}
+                className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+              >
+                Block
+              </button>
+            )}
+          </div>
+          {/* Mobile: large touch control pad */}
+          <div className="flex md:hidden gap-3 w-full px-2 pb-3 pt-1">
+            <button
+              type="button"
+              onClick={() => sendPunch("jab")}
+              disabled={aiOpponent && player1Stamina < JAB_COST}
+              className="flex-1 min-h-[56px] touch-manipulation rounded-xl bg-amber-600 active:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-[0.98] select-none"
+            >
+              Jab
+            </button>
+            <button
+              type="button"
+              onClick={() => sendPunch("heavy")}
+              disabled={aiOpponent && player1Stamina < HEAVY_COST}
+              className="flex-1 min-h-[56px] touch-manipulation rounded-xl bg-red-600 active:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-[0.98] select-none"
+            >
+              Power Punch
+            </button>
+            {aiOpponent ? (
+              <button
+                type="button"
+                onClick={sendBlock}
+                disabled={player1Stamina < BLOCK_COST}
+                className="flex-1 min-h-[56px] touch-manipulation rounded-xl bg-slate-600 active:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base transition-colors active:scale-[0.98] select-none"
+              >
+                Block
+              </button>
+            ) : (
+              <span className="flex-1 min-h-[56px] rounded-xl bg-slate-700/50 pointer-events-none flex items-center justify-center text-white/50 text-sm" aria-hidden>
+                —
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

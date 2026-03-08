@@ -2,6 +2,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
+import { PwaRegistration } from "@/components/PwaRegistration";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,7 +16,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#020617",
+  themeColor: "#ff0000",
 };
 
 export const metadata = {
@@ -29,10 +30,10 @@ export const metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/icon-192.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/icon-192.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -44,18 +45,19 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        <meta name="theme-color" content="#020617" />
+        <meta name="theme-color" content="#ff0000" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="GarmonPay" />
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="font-sans antialiased flex min-h-screen flex-col">
         <AuthStateProvider>
           {children}
         </AuthStateProvider>
+        <PwaRegistration />
         <Footer />
       </body>
     </html>
