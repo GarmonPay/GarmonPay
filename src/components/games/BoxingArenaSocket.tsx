@@ -315,7 +315,7 @@ export function BoxingArenaSocket({
             <p className="text-amber-400 font-medium">Could not connect to fight server</p>
             <p className="text-white/80">URL: <code className="bg-white/10 px-1 rounded break-all">{wsUrl}</code></p>
             <p className="text-white/70">1. Start the server: <code className="bg-white/10 px-1 rounded">cd server && CORS_ORIGIN=* node fight-server.js</code></p>
-            <p className="text-white/70">2. In .env.local set <code className="bg-white/10 px-1 rounded">NEXT_PUBLIC_BOXING_WS_URL=http://localhost:4000</code> (or your server IP)</p>
+            <p className="text-white/70">2. Set <code className="bg-white/10 px-1 rounded">NEXT_PUBLIC_BOXING_WS_URL=wss://garmonpay-fight-server.onrender.com</code> in .env.local or Vercel env</p>
             <p className="text-white/70">3. Restart the Next.js app and try again.</p>
             <div className="flex gap-2 justify-center mt-4">
               <button
