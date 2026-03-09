@@ -17,11 +17,11 @@ export async function GET(request: Request) {
   }
 }
 
-/** POST /api/fight-arena/fights — create fight (body: { entryFeeCents }) */
+/** POST /api/fight-arena/fights — create fight (body: { entryFeeCents, fighterId? }) */
 export async function POST(request: Request) {
   const userId = await getAuthUserId(request);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  let body: { entryFeeCents?: number };
+  let body: { entryFeeCents?: number; fighterId?: string };
   try {
     body = await request.json();
   } catch {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "entryFeeCents required" }, { status: 400 });
   }
   try {
-    const result = await createFight(userId, entryFeeCents);
+    const result = await createFight(userId, entryFeeCents, body.fighterId ?? undefined);
     if (!result.success) {
       return NextResponse.json({ message: result.message }, { status: 400 });
     }

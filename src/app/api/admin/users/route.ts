@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data: users, error } = await supabase
     .from("users")
-    .select("id, email, role, balance, created_at")
+    .select("id, email, role, balance, banned, banned_reason, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {

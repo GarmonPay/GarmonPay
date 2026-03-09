@@ -13,6 +13,9 @@ export interface FightRow {
   id: string;
   host_user_id: string;
   opponent_user_id: string | null;
+  fighter1_id: string | null;
+  fighter2_id: string | null;
+  winner_id: string | null;
   entry_fee: number;
   platform_fee: number;
   total_pot: number;
@@ -117,14 +120,19 @@ async function creditBalance(
     .upsert({ user_id: userId, balance: balance + amountCents, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
 }
 
-/** Create a new fight (host puts entry_fee in escrow and records bet on host). */
+/** Create a new fight (host puts entry_fee in escrow and records bet on host). Optional hostFighterId links fight to host's fighter. */
 export async function createFight(
   hostUserId: string,
-  entryFeeCents: number
+  entryFeeCents: number,
+  hostFighterId?: string | null
 ): Promise<{ success: true; fight: FightRow } | { success: false; message: string }> {
   if (entryFeeCents < 100) return { success: false, message: "Minimum entry is $1.00" };
   const balance = await getUserBalance(hostUserId);
   if (balance < entryFeeCents) return { success: false, message: "Insufficient balance" };
+  if (hostFighterId) {
+    const { data: fighter } = await sb().from("fighters").select("id").eq("id", hostFighterId).eq("user_id", hostUserId).maybeSingle();
+    if (!fighter) return { success: false, message: "Fighter not found or not yours" };
+  }
   const totalPotWhenFull = entryFeeCents * 2;
   const platformFeeWhenFull = Math.round(totalPotWhenFull * (PLATFORM_FEE_PERCENT / 100));
   const { data: fight, error: fightErr } = await sb()
@@ -132,6 +140,9 @@ export async function createFight(
     .insert({
       host_user_id: hostUserId,
       opponent_user_id: null,
+      fighter1_id: hostFighterId ?? null,
+      fighter2_id: null,
+      winner_id: null,
       entry_fee: entryFeeCents,
       platform_fee: platformFeeWhenFull,
       total_pot: entryFeeCents,
@@ -168,10 +179,11 @@ export async function createFight(
   return { success: true, fight: fight as FightRow };
 }
 
-/** Join an open fight (opponent puts entry_fee in escrow). */
+/** Join an open fight (opponent puts entry_fee in escrow). Optional opponentFighterId links fight to opponent's fighter. */
 export async function joinFight(
   fightId: string,
-  opponentUserId: string
+  opponentUserId: string,
+  opponentFighterId?: string | null
 ): Promise<{ success: true; fight: FightRow } | { success: false; message: string }> {
   const { data: fight, error: fightErr } = await sb()
     .from("fights")
@@ -182,6 +194,10 @@ export async function joinFight(
   const f = fight as FightRow;
   if (f.status !== "open") return { success: false, message: "Fight is not open" };
   if (f.host_user_id === opponentUserId) return { success: false, message: "Cannot join your own fight" };
+  if (opponentFighterId) {
+    const { data: fighter } = await sb().from("fighters").select("id").eq("id", opponentFighterId).eq("user_id", opponentUserId).maybeSingle();
+    if (!fighter) return { success: false, message: "Fighter not found or not yours" };
+  }
   const { data: existing } = await sb().from("fight_escrow").select("id").eq("fight_id", fightId).eq("user_id", opponentUserId).maybeSingle();
   if (existing) return { success: false, message: "Already joined" };
   const balance = await getUserBalance(opponentUserId);
@@ -196,16 +212,15 @@ export async function joinFight(
   });
   const totalPot = f.entry_fee * 2;
   const platformFeeFull = Math.round(totalPot * (PLATFORM_FEE_PERCENT / 100));
-  const { error: upErr } = await sb()
-    .from("fights")
-    .update({
-      opponent_user_id: opponentUserId,
-      total_pot: totalPot,
-      platform_fee: platformFeeFull,
-      status: "active",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", fightId);
+  const updatePayload: Record<string, unknown> = {
+    opponent_user_id: opponentUserId,
+    total_pot: totalPot,
+    platform_fee: platformFeeFull,
+    status: "active",
+    updated_at: new Date().toISOString(),
+  };
+  if (opponentFighterId) updatePayload.fighter2_id = opponentFighterId;
+  const { error: upErr } = await sb().from("fights").update(updatePayload).eq("id", fightId);
   if (upErr) return { success: false, message: "Failed to update fight" };
   await sb().from("fight_bets").insert({
     fight_id: fightId,
@@ -217,10 +232,11 @@ export async function joinFight(
   return { success: true, fight: updated as FightRow };
 }
 
-/** End fight and pay winner (total_pot - platform_fee to winner, platform_fee to platform_revenue). */
+/** End fight and pay winner (total_pot - platform_fee to winner, platform_fee to platform_revenue). Updates fighter wins/losses/earnings and pays out spectator bets. */
 export async function endFight(
   fightId: string,
-  winnerUserId: string
+  winnerUserId: string,
+  winnerFighterId?: string | null
 ): Promise<{ success: true; fight: FightRow } | { success: false; message: string }> {
   const { data: fight, error: fightErr } = await sb()
     .from("fights")
@@ -236,33 +252,94 @@ export async function endFight(
   const platformFee = Math.round(f.total_pot * (PLATFORM_FEE_PERCENT / 100));
   const winnerPayout = f.total_pot - platformFee;
   await creditBalance(winnerUserId, winnerPayout, "Fight Arena prize", fightId);
+
+  const winnerIdToSet = winnerFighterId ?? (winnerUserId === f.host_user_id ? f.fighter1_id : f.fighter2_id);
+  const loserFighterId = winnerUserId === f.host_user_id ? f.fighter2_id : f.fighter1_id;
+
   await sb()
-    .from("fight_escrow")
-    .update({ status: "released" })
-    .eq("fight_id", fightId)
-    .eq("user_id", winnerUserId);
-  await sb()
-    .from("fight_escrow")
-    .update({ status: "refunded" })
-    .eq("fight_id", fightId)
-    .neq("user_id", winnerUserId);
+    .from("fights")
+    .update({
+      status: "completed",
+      winner_user_id: winnerUserId,
+      winner_id: winnerIdToSet,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", fightId);
+
+  if (winnerIdToSet) {
+    const { data: winnerFighter } = await sb().from("fighters").select("wins, earnings").eq("id", winnerIdToSet).single();
+    if (winnerFighter) {
+      const w = winnerFighter as { wins: number; earnings: number };
+      await sb().from("fighters").update({ wins: w.wins + 1, earnings: (w.earnings ?? 0) + winnerPayout, updated_at: new Date().toISOString() }).eq("id", winnerIdToSet);
+    }
+  }
+  if (loserFighterId) {
+    const { data: loserFighter } = await sb().from("fighters").select("losses").eq("id", loserFighterId).single();
+    if (loserFighter) {
+      const l = loserFighter as { losses: number };
+      await sb().from("fighters").update({ losses: l.losses + 1, updated_at: new Date().toISOString() }).eq("id", loserFighterId);
+    }
+  }
+
+  await sb().from("fight_escrow").update({ status: "released" }).eq("fight_id", fightId).eq("user_id", winnerUserId);
+  await sb().from("fight_escrow").update({ status: "refunded" }).eq("fight_id", fightId).neq("user_id", winnerUserId);
   await sb().from("platform_revenue").insert({
     amount: platformFee,
     source: "fight",
     fight_id: fightId,
     created_at: new Date().toISOString(),
   });
-  const { error: upErr } = await sb()
-    .from("fights")
-    .update({
-      status: "completed",
-      winner_user_id: winnerUserId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", fightId);
-  if (upErr) return { success: false, message: "Failed to complete fight" };
+
+  const winnerChoice = winnerUserId === f.host_user_id ? "host" : "opponent";
+  await sb().from("fight_bets").update({ status: "won" }).eq("fight_id", fightId).eq("choice", winnerChoice);
+  await sb().from("fight_bets").update({ status: "lost" }).eq("fight_id", fightId).neq("choice", winnerChoice);
+
+  const { data: spectatorBets } = await sb().from("bets").select("id, user_id, amount, prediction").eq("fight_id", fightId).eq("status", "pending");
+  for (const bet of spectatorBets ?? []) {
+    const b = bet as { id: string; user_id: string; amount: number; prediction: string };
+    if (b.prediction === winnerChoice) {
+      const payout = b.amount * 2;
+      await creditBalance(b.user_id, payout, "Fight bet won", `bet_${b.id}`);
+      await sb().from("bets").update({ status: "won" }).eq("id", b.id);
+    } else {
+      await sb().from("bets").update({ status: "lost" }).eq("id", b.id);
+    }
+  }
+
   const { data: updated } = await sb().from("fights").select("*").eq("id", fightId).single();
   return { success: true, fight: updated as FightRow };
+}
+
+/** Resolve fight by stats (speed + power + defense). Winner is fighter with higher total; tie = random. Then ends fight and pays out. */
+export async function runFight(fightId: string): Promise<{ success: true; fight: FightRow } | { success: false; message: string }> {
+  const { data: fight, error: fightErr } = await sb().from("fights").select("*").eq("id", fightId).single();
+  if (fightErr || !fight) return { success: false, message: "Fight not found" };
+  const f = fight as FightRow;
+  if (f.status !== "active") return { success: false, message: "Fight is not active" };
+  const fighter1Id = f.fighter1_id ?? null;
+  const fighter2Id = f.fighter2_id ?? null;
+  let winnerUserId: string;
+  let winnerFighterId: string | null = null;
+  if (fighter1Id && fighter2Id) {
+    const { data: f1 } = await sb().from("fighters").select("user_id, speed, power, defense").eq("id", fighter1Id).single();
+    const { data: f2 } = await sb().from("fighters").select("user_id, speed, power, defense").eq("id", fighter2Id).single();
+    if (!f1 || !f2) return { success: false, message: "Fighters not found" };
+    const total1 = (f1 as { speed: number; power: number; defense: number }).speed + (f1 as { speed: number; power: number; defense: number }).power + (f1 as { speed: number; power: number; defense: number }).defense;
+    const total2 = (f2 as { speed: number; power: number; defense: number }).speed + (f2 as { speed: number; power: number; defense: number }).power + (f2 as { speed: number; power: number; defense: number }).defense;
+    if (total1 > total2) {
+      winnerUserId = (f1 as { user_id: string }).user_id;
+      winnerFighterId = fighter1Id;
+    } else if (total2 > total1) {
+      winnerUserId = (f2 as { user_id: string }).user_id;
+      winnerFighterId = fighter2Id;
+    } else {
+      winnerUserId = Math.random() < 0.5 ? (f1 as { user_id: string }).user_id : (f2 as { user_id: string }).user_id;
+      winnerFighterId = winnerUserId === (f1 as { user_id: string }).user_id ? fighter1Id : fighter2Id;
+    }
+  } else {
+    winnerUserId = f.host_user_id;
+  }
+  return endFight(fightId, winnerUserId, winnerFighterId);
 }
 
 /** List fights (open, active, or all). */

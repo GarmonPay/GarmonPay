@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { PwaRegistration } from "@/components/PwaRegistration";
+import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,6 +59,7 @@ export default function RootLayout({
           {children}
         </AuthStateProvider>
         <PwaRegistration />
+        <PwaInstallPrompt />
         <Footer />
       </body>
     </html>

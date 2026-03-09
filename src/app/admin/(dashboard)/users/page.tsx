@@ -8,6 +8,8 @@ type UserRow = {
   email: string | null;
   role?: string;
   balance?: number;
+  banned?: boolean;
+  banned_reason?: string | null;
   created_at?: string;
 };
 
@@ -20,6 +22,7 @@ export default function AdminUsersPage() {
   const [addFundsAmount, setAddFundsAmount] = useState("");
   const [addFundsSubmitting, setAddFundsSubmitting] = useState(false);
   const [addFundsError, setAddFundsError] = useState("");
+  const [banSubmitting, setBanSubmitting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -83,6 +86,26 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function submitBan(u: UserRow, banned: boolean) {
+    if (!session) return;
+    setBanSubmitting(u.id);
+    try {
+      const res = await fetch("/api/admin/ban", {
+        method: "POST",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: u.id, banned, reason: banned ? "Banned from admin" : null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.message || "Failed to update ban");
+        return;
+      }
+      load();
+    } finally {
+      setBanSubmitting(null);
+    }
+  }
+
   const filtered = search.trim()
     ? users.filter(
         (u) =>
@@ -133,6 +156,7 @@ export default function AdminUsersPage() {
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Email</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Role</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Balance</th>
+                  <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Status</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Joined</th>
                   <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Actions</th>
                 </tr>
@@ -145,10 +169,13 @@ export default function AdminUsersPage() {
                     <td className="py-3 pr-4 text-[#10b981]">
                       ${typeof u.balance === "number" ? (u.balance / 100).toFixed(2) : "0.00"}
                     </td>
+                    <td className="py-3 pr-4">
+                      {u.banned ? <span className="text-red-400 font-medium">Banned</span> : <span className="text-[#10b981]">Active</span>}
+                    </td>
                     <td className="py-3 pr-4 text-[#6b7280]">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 flex flex-wrap gap-1">
                       <button
                         type="button"
                         onClick={() => { setAddFundsUser(u); setAddFundsAmount(""); setAddFundsError(""); }}
@@ -156,6 +183,25 @@ export default function AdminUsersPage() {
                       >
                         Add funds
                       </button>
+                      {u.banned ? (
+                        <button
+                          type="button"
+                          onClick={() => submitBan(u, false)}
+                          disabled={banSubmitting === u.id}
+                          className="text-xs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+                        >
+                          {banSubmitting === u.id ? "…" : "Unban"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => submitBan(u, true)}
+                          disabled={banSubmitting === u.id}
+                          className="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white disabled:opacity-50"
+                        >
+                          {banSubmitting === u.id ? "…" : "Ban"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

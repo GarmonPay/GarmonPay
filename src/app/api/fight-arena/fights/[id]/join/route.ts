@@ -2,15 +2,21 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { joinFight } from "@/lib/fight-arena-db";
 
-/** POST /api/fight-arena/fights/[id]/join — join an open fight */
+/** POST /api/fight-arena/fights/[id]/join — join an open fight (body: { fighterId? }) */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
-  const userId = await getAuthUserId(_request);
+  const userId = await getAuthUserId(request);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  let body: { fighterId?: string } = {};
   try {
-    const result = await joinFight(params.id, userId);
+    body = await request.json();
+  } catch {
+    // optional body
+  }
+  try {
+    const result = await joinFight(params.id, userId, body.fighterId);
     if (!result.success) {
       return NextResponse.json({ message: result.message }, { status: 400 });
     }
