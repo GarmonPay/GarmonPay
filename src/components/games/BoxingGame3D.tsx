@@ -10,8 +10,11 @@ import {
   MeshBuilder,
   StandardMaterial,
   Color3,
-  type AbstractMesh,
+  type TransformNode,
+  type InstantiatedEntries,
+  LoadAssetContainerAsync,
 } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF/2.0";
 
 const ROUND_DURATION_SEC = 60;
 const TOTAL_ROUNDS = 3;
@@ -57,8 +60,8 @@ export function BoxingGame3D({
   const [p2Stamina, setP2Stamina] = useState(MAX_STAMINA);
   const [winner, setWinner] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
-  const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
+  const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
+  const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
   const boxerPositionRef = useRef({ p1: { x: 0, z: 0 }, p2: { x: 0, z: 0 } });
   const lastHitRef = useRef<{ at: number; by: "p1" | "p2" } | null>(null);
   const roundTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -148,81 +151,120 @@ export function BoxingGame3D({
       ringMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
       ring.material = ringMat;
 
-      engine.runRenderLoop(() => {
-        if (scene) {
-          scene.render();
+      for (let i = 0; i < 4; i++) {
+        const side = MeshBuilder.CreateBox(
+          `rope_${i}`,
+          { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
+          scene
+        );
+        side.position.y = 1.2 + i * 0.2;
+        const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
+        const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
+        side.position.x = x;
+        side.position.z = z;
+        const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
+        ropeMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
+        side.material = ropeMat;
+      }
+
+      let player1Entries: InstantiatedEntries | null = null;
+      let player2Entries: InstantiatedEntries | null = null;
+      let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
+      let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
+
+      function animNameFromRef(ref: "idle" | "jab" | "punch" | "block" | "knockout"): string {
+        if (ref === "punch") return "powerPunch";
+        if (ref === "knockout") return "knockout";
+        return ref;
+      }
+
+      function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") {
+        const name = animNameFromRef(ref);
+        for (const g of entries.animationGroups) g.stop();
+        const group = entries.animationGroups.find(
+          (g) => g.name.toLowerCase() === name.toLowerCase()
+        );
+        if (group) group.start(ref === "idle" || ref === "knockout");
+      }
+
+      function tintMeshColor(node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) {
+        const mat = "material" in node ? node.material : undefined;
+        if (mat && typeof mat === "object") {
+          const m = mat as Record<string, unknown>;
+          if (m.diffuseColor && typeof (m.diffuseColor as { set: (a: number, b: number, c: number) => void }).set === "function") {
+            (m.diffuseColor as { set: (a: number, b: number, c: number) => void }).set(r, g, b);
+          }
+          if (m.albedoColor && typeof (m.albedoColor as { set: (a: number, b: number, c: number) => void }).set === "function") {
+            (m.albedoColor as { set: (a: number, b: number, c: number) => void }).set(r, g, b);
+          }
+        }
+        if (typeof node.getChildMeshes === "function") {
+          for (const child of node.getChildMeshes()) {
+            if (child.material) tintMeshColor(child, r, g, b);
+          }
+        }
+      }
+
+      LoadAssetContainerAsync("boxer.glb", scene, { rootUrl: "/models/" })
+        .then((container) => {
+          const redCorner = container.instantiateModelsToScene(
+            (name) => "P1Fighter_" + name,
+            true
+          );
+          const blueCorner = container.instantiateModelsToScene(
+            (name) => "P2Fighter_" + name,
+            true
+          );
+          const scale = 1.2;
+          for (const node of redCorner.rootNodes) {
+            const tn = node as TransformNode;
+            tn.position.set(-3, 0, 0);
+            tn.scaling.setAll(scale);
+            tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.9, 0.25, 0.25);
+          }
+          for (const node of blueCorner.rootNodes) {
+            const tn = node as TransformNode;
+            tn.position.set(3, 0, 0);
+            tn.scaling.setAll(scale);
+            tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.25, 0.35, 0.95);
+          }
+          player1Entries = redCorner;
+          player2Entries = blueCorner;
+        })
+        .catch(() => {});
+
+      scene.onBeforeRenderObservable.add(() => {
+        const pos = boxerPositionRef.current;
+        if (player1Entries && player2Entries) {
+          if (p1AnimRef.current !== lastP1) {
+            playFighterAnim(player1Entries, p1AnimRef.current);
+            lastP1 = p1AnimRef.current;
+          }
+          if (p2AnimRef.current !== lastP2) {
+            playFighterAnim(player2Entries, p2AnimRef.current);
+            lastP2 = p2AnimRef.current;
+          }
+          for (const node of player1Entries.rootNodes) {
+            const tn = node as TransformNode;
+            tn.position.set(-3 + pos.p1.x, 0, pos.p1.z);
+          }
+          for (const node of player2Entries.rootNodes) {
+            const tn = node as TransformNode;
+            tn.position.set(3 + pos.p2.x, 0, pos.p2.z);
+          }
         }
       });
+
+      engine.runRenderLoop(() => {
+        if (scene) scene.render();
+      });
       setGameState("playing");
-
-      // --- Optional: ropes and fighters (fallback if this fails) ---
-      try {
-        for (let i = 0; i < 4; i++) {
-          const side = MeshBuilder.CreateBox(
-            `rope_${i}`,
-            { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
-            scene
-          );
-          side.position.y = 1.2 + i * 0.2;
-          const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
-          const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
-          side.position.x = x;
-          side.position.z = z;
-          const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
-          ropeMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
-          side.material = ropeMat;
-        }
-
-        const p1Body = MeshBuilder.CreateCylinder(
-          "p1Body",
-          { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-          scene
-        );
-        p1Body.position.set(-3, 0.9, 0);
-        p1Body.rotation.z = Math.PI / 2;
-        const p1Mat = new StandardMaterial("p1Mat", scene);
-        p1Mat.diffuseColor = new Color3(0.9, 0.2, 0.2);
-        p1Body.material = p1Mat;
-        const p1Head = MeshBuilder.CreateSphere("p1Head", { diameter: 0.6, segments: 12 }, scene);
-        p1Head.position.set(0, 0.9, 0);
-        p1Head.setParent(p1Body);
-        scene.onBeforeRenderObservable.add(() => {
-          const mesh = p1Body as AbstractMesh;
-          const pos = boxerPositionRef.current.p1;
-          const animX = p1AnimRef.current === "jab" ? -0.2 : p1AnimRef.current === "punch" ? -0.4 : 0;
-          mesh.position.set(-3 + pos.x + animX, 0.9, pos.z);
-        });
-
-        const p2Body = MeshBuilder.CreateCylinder(
-          "p2Body",
-          { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-          scene
-        );
-        p2Body.position.set(3, 0.9, 0);
-        p2Body.rotation.z = -Math.PI / 2;
-        const p2Mat = new StandardMaterial("p2Mat", scene);
-        p2Mat.diffuseColor = new Color3(0.2, 0.3, 0.9);
-        p2Body.material = p2Mat;
-        const p2Head = MeshBuilder.CreateSphere("p2Head", { diameter: 0.6, segments: 12 }, scene);
-        p2Head.position.set(0, 0.9, 0);
-        p2Head.setParent(p2Body);
-        scene.onBeforeRenderObservable.add(() => {
-          const mesh = p2Body as AbstractMesh;
-          const pos = boxerPositionRef.current.p2;
-          const animX = p2AnimRef.current === "jab" ? 0.2 : p2AnimRef.current === "punch" ? 0.4 : 0;
-          mesh.position.set(3 + pos.x + animX, 0.9, pos.z);
-        });
-      } catch (err) {
-        console.warn("BoxingGame3D: fighters/ropes failed, showing fallback scene", err);
-      }
     } catch (err) {
       console.error("BoxingGame3D: scene init failed", err);
       if (engine && scene) {
         try {
           engine.runRenderLoop(() => {
-            if (scene) {
-              scene.render();
-            }
+            if (scene) scene.render();
           });
         } catch {
           // ignore
@@ -232,6 +274,8 @@ export function BoxingGame3D({
     }
 
     return () => {
+      player1Entries?.dispose();
+      player2Entries?.dispose();
       if (scene) scene.dispose();
       if (engine) engine.dispose();
     };
@@ -321,14 +365,19 @@ export function BoxingGame3D({
         case "KeyJ":
           e.preventDefault();
           if (p1Stamina >= STAMINA_JAB) {
+            const wasBlocking = p2AnimRef.current === "block";
             p1AnimRef.current = "jab";
+            setP2Health((h) => {
+              const newH = Math.max(0, h - (wasBlocking ? 0 : JAB_DAMAGE));
+              if (newH <= 0) p2AnimRef.current = "knockout";
+              return newH;
+            });
+            if (!wasBlocking) {
+              lastHitRef.current = { at: now, by: "p1" };
+              setP2Stamina((s) => Math.max(0, s - 2));
+            }
             setTimeout(() => {
-              if (p2AnimRef.current !== "block") {
-                lastHitRef.current = { at: now, by: "p1" };
-                setP2Health((h) => Math.max(0, h - JAB_DAMAGE));
-                setP2Stamina((s) => Math.max(0, s - 2));
-              }
-              p1AnimRef.current = "idle";
+              if (p2AnimRef.current !== "knockout") p1AnimRef.current = "idle";
             }, 200);
             setP1Stamina((s) => Math.max(0, s - STAMINA_JAB));
           }
@@ -336,14 +385,19 @@ export function BoxingGame3D({
         case "KeyK":
           e.preventDefault();
           if (p1Stamina >= STAMINA_PUNCH) {
+            const wasBlocking = p2AnimRef.current === "block";
             p1AnimRef.current = "punch";
+            setP2Health((h) => {
+              const newH = Math.max(0, h - (wasBlocking ? 0 : PUNCH_DAMAGE));
+              if (newH <= 0) p2AnimRef.current = "knockout";
+              return newH;
+            });
+            if (!wasBlocking) {
+              lastHitRef.current = { at: now, by: "p1" };
+              setP2Stamina((s) => Math.max(0, s - 5));
+            }
             setTimeout(() => {
-              if (p2AnimRef.current !== "block") {
-                lastHitRef.current = { at: now, by: "p1" };
-                setP2Health((h) => Math.max(0, h - PUNCH_DAMAGE));
-                setP2Stamina((s) => Math.max(0, s - 5));
-              }
-              p1AnimRef.current = "idle";
+              if (p2AnimRef.current !== "knockout") p1AnimRef.current = "idle";
             }, 300);
             setP1Stamina((s) => Math.max(0, s - STAMINA_PUNCH));
           }
@@ -359,14 +413,19 @@ export function BoxingGame3D({
           if ((e.target as HTMLElement)?.tagName === "INPUT") break;
           e.preventDefault();
           if (p2Stamina >= STAMINA_JAB) {
+            const wasBlocking = p1AnimRef.current === "block";
             p2AnimRef.current = "jab";
+            setP1Health((h) => {
+              const newH = Math.max(0, h - (wasBlocking ? 0 : JAB_DAMAGE));
+              if (newH <= 0) p1AnimRef.current = "knockout";
+              return newH;
+            });
+            if (!wasBlocking) {
+              lastHitRef.current = { at: now, by: "p2" };
+              setP1Stamina((s) => Math.max(0, s - 2));
+            }
             setTimeout(() => {
-              if (p1AnimRef.current !== "block") {
-                lastHitRef.current = { at: now, by: "p2" };
-                setP1Health((h) => Math.max(0, h - JAB_DAMAGE));
-                setP1Stamina((s) => Math.max(0, s - 2));
-              }
-              p2AnimRef.current = "idle";
+              if (p1AnimRef.current !== "knockout") p2AnimRef.current = "idle";
             }, 200);
             setP2Stamina((s) => Math.max(0, s - STAMINA_JAB));
           }
@@ -376,14 +435,19 @@ export function BoxingGame3D({
           if ((e.target as HTMLElement)?.tagName === "INPUT") break;
           e.preventDefault();
           if (p2Stamina >= STAMINA_PUNCH) {
+            const wasBlocking = p1AnimRef.current === "block";
             p2AnimRef.current = "punch";
+            setP1Health((h) => {
+              const newH = Math.max(0, h - (wasBlocking ? 0 : PUNCH_DAMAGE));
+              if (newH <= 0) p1AnimRef.current = "knockout";
+              return newH;
+            });
+            if (!wasBlocking) {
+              lastHitRef.current = { at: now, by: "p2" };
+              setP1Stamina((s) => Math.max(0, s - 5));
+            }
             setTimeout(() => {
-              if (p1AnimRef.current !== "block") {
-                lastHitRef.current = { at: now, by: "p2" };
-                setP1Health((h) => Math.max(0, h - PUNCH_DAMAGE));
-                setP1Stamina((s) => Math.max(0, s - 5));
-              }
-              p2AnimRef.current = "idle";
+              if (p1AnimRef.current !== "knockout") p2AnimRef.current = "idle";
             }, 300);
             setP2Stamina((s) => Math.max(0, s - STAMINA_PUNCH));
           }

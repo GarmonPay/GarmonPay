@@ -11,7 +11,6 @@ import {
   StandardMaterial,
   Color3,
   Color4,
-  type AbstractMesh,
   type TransformNode,
   type InstantiatedEntries,
   LoadAssetContainerAsync,
@@ -75,8 +74,8 @@ export function BoxingArenaSocket({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const myRoleRef = useRef<"player1" | "player2" | null>(null);
-  const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
-  const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block">("idle");
+  const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
+  const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
   const hitEffectRef = useRef<{ x: number; y: number; z: number; isHeavy: boolean } | null>(null);
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
@@ -145,7 +144,10 @@ export function BoxingArenaSocket({
       p1StaminaRef.current = Math.max(0, p1StaminaRef.current - cost);
       setPlayer1Stamina(p1StaminaRef.current);
       p2AnimRef.current = type === "heavy" ? "punch" : "jab";
-      setTimeout(() => (p2AnimRef.current = "idle"), 280);
+      setTimeout(() => {
+        if (newP2 <= 0) p2AnimRef.current = "knockout";
+        else p2AnimRef.current = "idle";
+      }, 280);
       if (newP2 <= 0) {
         setWinnerId(playerId);
         setLoserId("ai");
@@ -369,53 +371,24 @@ export function BoxingArenaSocket({
     p2FillMat.diffuseColor = new Color3(0.2, 0.35, 0.95);
     p2BarFill.material = p2FillMat;
 
-    // Placeholder fighters – hidden when GLTF boxer.glb loads successfully
-    const p1Body = MeshBuilder.CreateCylinder(
-      "p1Body",
-      { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-      scene
-    );
-    p1Body.position.set(-3, 0.9, 0);
-    p1Body.rotation.z = Math.PI / 2;
-    const p1Mat = new StandardMaterial("p1Mat", scene);
-    p1Mat.diffuseColor = new Color3(0.9, 0.25, 0.25);
-    p1Body.material = p1Mat;
-    const p1Head = MeshBuilder.CreateSphere("p1Head", { diameter: 0.6, segments: 12 }, scene);
-    p1Head.position.set(0, 0.9, 0);
-    p1Head.setParent(p1Body);
-
-    const p2Body = MeshBuilder.CreateCylinder(
-      "p2Body",
-      { height: 1.4, diameterTop: 0.5, diameterBottom: 0.6, tessellation: 12 },
-      scene
-    );
-    p2Body.position.set(3, 0.9, 0);
-    p2Body.rotation.z = -Math.PI / 2;
-    const p2Mat = new StandardMaterial("p2Mat", scene);
-    p2Mat.diffuseColor = new Color3(0.25, 0.35, 0.95);
-    p2Body.material = p2Mat;
-    const p2Head = MeshBuilder.CreateSphere("p2Head", { diameter: 0.6, segments: 12 }, scene);
-    p2Head.position.set(0, 0.9, 0);
-    p2Head.setParent(p2Body);
-
     let playerEntries: InstantiatedEntries | null = null;
     let enemyEntries: InstantiatedEntries | null = null;
-    let lastP1: "idle" | "jab" | "punch" | "block" = "idle";
-    let lastP2: "idle" | "jab" | "punch" | "block" = "idle";
+    let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
+    let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
 
-    function animNameFromRef(ref: "idle" | "jab" | "punch" | "block"): string {
+    function animNameFromRef(ref: "idle" | "jab" | "punch" | "block" | "knockout"): string {
       if (ref === "punch") return "powerPunch";
+      if (ref === "knockout") return "knockout";
       return ref;
     }
 
-    function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block") {
-      // Map ref to GLTF animation names: idle, jab, powerPunch, block (punch -> powerPunch)
+    function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") {
       const name = animNameFromRef(ref);
       for (const g of entries.animationGroups) g.stop();
       const group = entries.animationGroups.find(
         (g) => g.name.toLowerCase() === name.toLowerCase()
       );
-      if (group) group.start(ref === "idle");
+      if (group) group.start(ref === "idle" || ref === "knockout");
     }
 
     function tintMeshColor(node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) {
@@ -438,7 +411,6 @@ export function BoxingArenaSocket({
 
     LoadAssetContainerAsync("boxer.glb", scene, { rootUrl: "/models/" })
       .then((container) => {
-        // Two animated fighters from boxer.glb: Red Corner, Blue Corner. Animations: idle, jab, powerPunch, block.
         const redCornerInst = container.instantiateModelsToScene(
           (name) => "RedCornerFighter_" + name,
           true
@@ -464,13 +436,9 @@ export function BoxingArenaSocket({
 
         playerEntries = redCornerInst;
         enemyEntries = blueCornerInst;
-        p1Body.setEnabled(false);
-        p1Head.setEnabled(false);
-        p2Body.setEnabled(false);
-        p2Head.setEnabled(false);
       })
       .catch(() => {
-        // Keep placeholder fighters visible; animations handled in onBeforeRenderObservable
+        // No placeholder geometry; fighters load from /public/models/boxer.glb only
       });
 
     scene.onBeforeRenderObservable.add(() => {
@@ -521,13 +489,6 @@ export function BoxingArenaSocket({
           playFighterAnim(enemyEntries, p2AnimRef.current);
           lastP2 = p2AnimRef.current;
         }
-      } else {
-        const p1 = p1Body as AbstractMesh;
-        const ax1 = p1AnimRef.current === "jab" ? -0.25 : p1AnimRef.current === "punch" ? -0.45 : p1AnimRef.current === "block" ? 0.15 : 0;
-        p1.position.set(-3 + ax1, 0.9, 0);
-        const p2 = p2Body as AbstractMesh;
-        const ax2 = p2AnimRef.current === "jab" ? 0.25 : p2AnimRef.current === "punch" ? 0.45 : p2AnimRef.current === "block" ? -0.15 : 0;
-        p2.position.set(3 + ax2, 0.9, 0);
       }
     });
 
@@ -565,7 +526,10 @@ export function BoxingArenaSocket({
         setPlayer2Stamina((prev) => Math.max(0, prev - JAB_COST));
         p2StaminaRef.current = Math.max(0, p2StaminaRef.current - JAB_COST);
         p2AnimRef.current = "jab";
-        setTimeout(() => (p2AnimRef.current = "idle"), 280);
+        setTimeout(() => {
+          if (newP1 <= 0) p1AnimRef.current = "knockout";
+          else p2AnimRef.current = "idle";
+        }, 280);
         if (newP1 <= 0) {
           setWinnerId("ai");
           setLoserId(playerId);
@@ -584,7 +548,10 @@ export function BoxingArenaSocket({
         setPlayer2Stamina((prev) => Math.max(0, prev - HEAVY_COST));
         p2StaminaRef.current = Math.max(0, p2StaminaRef.current - HEAVY_COST);
         p2AnimRef.current = "punch";
-        setTimeout(() => (p2AnimRef.current = "idle"), 280);
+        setTimeout(() => {
+          if (newP1 <= 0) p1AnimRef.current = "knockout";
+          else p2AnimRef.current = "idle";
+        }, 280);
         if (newP1 <= 0) {
           setWinnerId("ai");
           setLoserId(playerId);
@@ -770,6 +737,14 @@ export function BoxingArenaSocket({
       winner_id?: string;
       loser_id?: string;
     }) => {
+      const role = myRoleRef.current;
+      if (data.loser_id === playerId) {
+        if (role === "player1") p1AnimRef.current = "knockout";
+        else if (role === "player2") p2AnimRef.current = "knockout";
+      } else {
+        if (role === "player1") p2AnimRef.current = "knockout";
+        else if (role === "player2") p1AnimRef.current = "knockout";
+      }
       setWinnerId(data.winner_id ?? null);
       setLoserId(data.loser_id ?? null);
       setPhase("ended");

@@ -14,11 +14,12 @@ The GLB should include **animation groups** (or clips) with these names (case-in
 | Name         | Use              | Loop |
 |-------------|------------------|------|
 | `idle`      | Standing still   | Yes  |
-| `jab`       | Jab button       | No   |
+| `jab`      | Jab button       | No   |
 | `powerPunch`| Power punch      | No   |
 | `block`     | Blocking         | No   |
+| `knockout`  | When health = 0  | No   |
 
-If the file is missing or fails to load, the arena falls back to the built-in placeholder fighters (red/blue cylinders).
+If the file is missing or fails to load, no fighter geometry is shown (add `boxer.glb` to this folder).
 
 ## Tips
 
