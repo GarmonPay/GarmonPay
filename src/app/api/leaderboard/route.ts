@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 
-/** GET /api/leaderboard — top fighters by wins, level, earnings. Public. */
+/** GET /api/leaderboard — top fighters by wins, level, earnings, or experience. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
-  const sort = searchParams.get("sort") ?? "wins"; // wins | level | earnings
+  const sort = searchParams.get("sort") ?? "wins"; // wins | level | earnings | experience
 
   const supabase = createAdminClient();
   if (!supabase) {
@@ -20,11 +20,14 @@ export async function GET(request: Request) {
   } else if (sort === "earnings") {
     orderBy = "earnings";
     ascending = false;
+  } else if (sort === "experience") {
+    orderBy = "experience";
+    ascending = false;
   }
 
   const { data: fighters, error } = await supabase
     .from("fighters")
-    .select("id, user_id, name, speed, power, defense, wins, losses, level, earnings")
+    .select("id, user_id, name, speed, power, defense, stamina, experience, wins, losses, level, earnings")
     .order(orderBy, { ascending })
     .limit(limit);
 
@@ -49,6 +52,8 @@ export async function GET(request: Request) {
     speed: f.speed,
     power: f.power,
     defense: f.defense,
+    stamina: f.stamina,
+    experience: f.experience,
     wins: f.wins,
     losses: f.losses,
     level: f.level,

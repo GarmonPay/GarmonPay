@@ -310,7 +310,7 @@ export async function endFight(
   return { success: true, fight: updated as FightRow };
 }
 
-/** Resolve fight by stats (speed + power + defense). Winner is fighter with higher total; tie = random. Then ends fight and pays out. */
+/** Resolve fight by stats (speed + power + defense + stamina + experience/20). */
 export async function runFight(fightId: string): Promise<{ success: true; fight: FightRow } | { success: false; message: string }> {
   const { data: fight, error: fightErr } = await sb().from("fights").select("*").eq("id", fightId).single();
   if (fightErr || !fight) return { success: false, message: "Fight not found" };
@@ -321,20 +321,22 @@ export async function runFight(fightId: string): Promise<{ success: true; fight:
   let winnerUserId: string;
   let winnerFighterId: string | null = null;
   if (fighter1Id && fighter2Id) {
-    const { data: f1 } = await sb().from("fighters").select("user_id, speed, power, defense").eq("id", fighter1Id).single();
-    const { data: f2 } = await sb().from("fighters").select("user_id, speed, power, defense").eq("id", fighter2Id).single();
+    const { data: f1 } = await sb().from("fighters").select("user_id, speed, power, defense, stamina, experience").eq("id", fighter1Id).single();
+    const { data: f2 } = await sb().from("fighters").select("user_id, speed, power, defense, stamina, experience").eq("id", fighter2Id).single();
     if (!f1 || !f2) return { success: false, message: "Fighters not found" };
-    const total1 = (f1 as { speed: number; power: number; defense: number }).speed + (f1 as { speed: number; power: number; defense: number }).power + (f1 as { speed: number; power: number; defense: number }).defense;
-    const total2 = (f2 as { speed: number; power: number; defense: number }).speed + (f2 as { speed: number; power: number; defense: number }).power + (f2 as { speed: number; power: number; defense: number }).defense;
+    const p1 = f1 as { speed: number; power: number; defense: number; stamina?: number; experience?: number; user_id: string };
+    const p2 = f2 as { speed: number; power: number; defense: number; stamina?: number; experience?: number; user_id: string };
+    const total1 = p1.speed + p1.power + p1.defense + (p1.stamina ?? 0) + Math.floor((p1.experience ?? 0) / 20);
+    const total2 = p2.speed + p2.power + p2.defense + (p2.stamina ?? 0) + Math.floor((p2.experience ?? 0) / 20);
     if (total1 > total2) {
-      winnerUserId = (f1 as { user_id: string }).user_id;
+      winnerUserId = p1.user_id;
       winnerFighterId = fighter1Id;
     } else if (total2 > total1) {
-      winnerUserId = (f2 as { user_id: string }).user_id;
+      winnerUserId = p2.user_id;
       winnerFighterId = fighter2Id;
     } else {
-      winnerUserId = Math.random() < 0.5 ? (f1 as { user_id: string }).user_id : (f2 as { user_id: string }).user_id;
-      winnerFighterId = winnerUserId === (f1 as { user_id: string }).user_id ? fighter1Id : fighter2Id;
+      winnerUserId = Math.random() < 0.5 ? p1.user_id : p2.user_id;
+      winnerFighterId = winnerUserId === p1.user_id ? fighter1Id : fighter2Id;
     }
   } else {
     winnerUserId = f.host_user_id;
