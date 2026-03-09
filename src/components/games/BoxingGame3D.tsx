@@ -112,6 +112,8 @@ export function BoxingGame3D({
     const canvas = canvasRef.current;
     let engine: Engine | null = null;
     let scene: Scene | null = null;
+    let player1Entries: InstantiatedEntries | null = null;
+    let player2Entries: InstantiatedEntries | null = null;
     try {
       engine = new Engine(canvas, true, {
         preserveDrawingBuffer: true,
@@ -141,53 +143,31 @@ export function BoxingGame3D({
       light.intensity = 1;
       new HemisphericLight("light2", new Vector3(0, -1, 0), scene).intensity = 0.3;
 
-      const ring = MeshBuilder.CreateBox(
-        "ring",
-        { width: 12, height: 0.3, depth: 12 },
-        scene
-      );
-      ring.position.y = -0.15;
-      const ringMat = new StandardMaterial("ringMat", scene);
-      ringMat.diffuseColor = new Color3(0.15, 0.15, 0.2);
-      ring.material = ringMat;
+      const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
+      ground.position.y = 0;
+      const groundMat = new StandardMaterial("groundMat", scene);
+      groundMat.diffuseColor = new Color3(0.08, 0.08, 0.1);
+      ground.material = groundMat;
 
-      for (let i = 0; i < 4; i++) {
-        const side = MeshBuilder.CreateBox(
-          `rope_${i}`,
-          { width: i % 2 === 0 ? 12.4 : 0.4, height: 0.08, depth: i % 2 === 0 ? 0.4 : 12.4 },
-          scene
-        );
-        side.position.y = 1.2 + i * 0.2;
-        const x = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 0 : -6;
-        const z = i === 0 ? 6 : i === 1 ? 0 : i === 2 ? -6 : 0;
-        side.position.x = x;
-        side.position.z = z;
-        const ropeMat = new StandardMaterial(`ropeMat_${i}`, scene);
-        ropeMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
-        side.material = ropeMat;
-      }
-
-      let player1Entries: InstantiatedEntries | null = null;
-      let player2Entries: InstantiatedEntries | null = null;
       let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
       let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
 
-      function animNameFromRef(ref: "idle" | "jab" | "punch" | "block" | "knockout"): string {
+      const animNameFromRef = (ref: "idle" | "jab" | "punch" | "block" | "knockout"): string => {
         if (ref === "punch") return "powerPunch";
         if (ref === "knockout") return "knockout";
         return ref;
-      }
+      };
 
-      function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") {
+      const playFighterAnim = (entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") => {
         const name = animNameFromRef(ref);
         for (const g of entries.animationGroups) g.stop();
         const group = entries.animationGroups.find(
           (g) => g.name.toLowerCase() === name.toLowerCase()
         );
         if (group) group.start(ref === "idle" || ref === "knockout");
-      }
+      };
 
-      function tintMeshColor(node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) {
+      const tintMeshColor = (node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) => {
         const mat = "material" in node ? node.material : undefined;
         if (mat && typeof mat === "object") {
           const m = mat as Record<string, unknown>;
@@ -203,7 +183,7 @@ export function BoxingGame3D({
             if (child.material) tintMeshColor(child, r, g, b);
           }
         }
-      }
+      };
 
       LoadAssetContainerAsync("boxer.glb", scene, { rootUrl: "/models/" })
         .then((container) => {

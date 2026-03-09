@@ -224,76 +224,13 @@ export function BoxingArenaSocket({
       spot.specular = new Color3(0.4, 0.38, 0.35);
     });
 
-    // ---- Boxing ring: base, canvas, ropes, corner pads (PBR for lighting realism) ----
-
-    // Ring base (platform)
-    const ringBase = MeshBuilder.CreateBox(
-      "ringBase",
-      { width: 12.5, height: 0.4, depth: 12.5 },
-      scene
-    );
-    ringBase.position.y = -0.2;
-    const baseMat = new PBRMaterial("ringBaseMat", scene);
-    baseMat.albedoColor = new Color3(0.12, 0.1, 0.08);
-    baseMat.metallic = 0.1;
-    baseMat.roughness = 0.85;
-    ringBase.material = baseMat;
-
-    // Canvas (ring deck) – flat surface with canvas-like look
-    const canvas = MeshBuilder.CreateBox(
-      "canvas",
-      { width: 11.8, height: 0.06, depth: 11.8 },
-      scene
-    );
-    canvas.position.y = 0.03;
-    const canvasMat = new PBRMaterial("canvasMat", scene);
-    canvasMat.albedoColor = new Color3(0.92, 0.89, 0.82);
-    canvasMat.metallic = 0;
-    canvasMat.roughness = 0.92;
-    canvas.material = canvasMat;
-
-    // Ring ropes (four sides)
-    for (let i = 0; i < 4; i++) {
-      const side = MeshBuilder.CreateBox(
-        `rope_${i}`,
-        {
-          width: i % 2 === 0 ? 12.6 : 0.35,
-          height: 0.06,
-          depth: i % 2 === 0 ? 0.35 : 12.6,
-        },
-        scene
-      );
-      side.position.y = 1.15 + i * 0.18;
-      const x = i === 0 ? 0 : i === 1 ? 6.3 : i === 2 ? 0 : -6.3;
-      const z = i === 0 ? 6.3 : i === 1 ? 0 : i === 2 ? -6.3 : 0;
-      side.position.set(x, side.position.y, z);
-      const ropeMat = new PBRMaterial(`ropeMat_${i}`, scene);
-      ropeMat.albedoColor = new Color3(0.78, 0.08, 0.08);
-      ropeMat.metallic = 0.05;
-      ropeMat.roughness = 0.75;
-      side.material = ropeMat;
-    }
-
-    // Corner pads (four corners)
-    const cornerPositions: [number, number][] = [
-      [-6.2, -6.2],
-      [6.2, -6.2],
-      [6.2, 6.2],
-      [-6.2, 6.2],
-    ];
-    const cornerPadMat = new PBRMaterial("cornerPadMat", scene);
-    cornerPadMat.albedoColor = new Color3(0.7, 0.08, 0.08);
-    cornerPadMat.metallic = 0;
-    cornerPadMat.roughness = 0.9;
-    cornerPositions.forEach(([x, z], i) => {
-      const pad = MeshBuilder.CreateCylinder(
-        `cornerPad_${i}`,
-        { height: 1.5, diameterTop: 0.5, diameterBottom: 0.55, tessellation: 16 },
-        scene
-      );
-      pad.position.set(x, 0.75, z);
-      pad.material = cornerPadMat;
-    });
+    // ---- Minimal fight scene: no placeholder cubes/cylinders; fighters from GLB only ----
+    const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
+    const groundMat = new PBRMaterial("groundMat", scene);
+    groundMat.albedoColor = new Color3(0.1, 0.1, 0.12);
+    groundMat.metallic = 0;
+    groundMat.roughness = 0.95;
+    ground.material = groundMat;
 
     // ---- Combat effects: hit sparks, screen shake, punch sound ----
     const hitParticleTexture = RawTexture.CreateRGBATexture(
@@ -327,7 +264,7 @@ export function BoxingArenaSocket({
     const baseAlpha = -Math.PI / 2;
     const baseBeta = Math.PI / 2.5;
 
-    function playPunchSound(isHeavy: boolean) {
+    const playPunchSound = (isHeavy: boolean) => {
       try {
         const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
         const osc = ctx.createOscillator();
@@ -343,7 +280,7 @@ export function BoxingArenaSocket({
       } catch {
         // ignore
       }
-    }
+    };
 
     // ---- Health bars above fighters ----
     const barWidth = 1.2;
@@ -376,22 +313,22 @@ export function BoxingArenaSocket({
     let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
     let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
 
-    function animNameFromRef(ref: "idle" | "jab" | "punch" | "block" | "knockout"): string {
+    const animNameFromRef = (ref: "idle" | "jab" | "punch" | "block" | "knockout"): string => {
       if (ref === "punch") return "powerPunch";
       if (ref === "knockout") return "knockout";
       return ref;
-    }
+    };
 
-    function playFighterAnim(entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") {
+    const playFighterAnim = (entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") => {
       const name = animNameFromRef(ref);
       for (const g of entries.animationGroups) g.stop();
       const group = entries.animationGroups.find(
         (g) => g.name.toLowerCase() === name.toLowerCase()
       );
       if (group) group.start(ref === "idle" || ref === "knockout");
-    }
+    };
 
-    function tintMeshColor(node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) {
+    const tintMeshColor = (node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) => {
       const mat = "material" in node ? node.material : undefined;
       if (mat && typeof mat === "object") {
         const m = mat as Record<string, unknown>;
@@ -402,12 +339,12 @@ export function BoxingArenaSocket({
           (m.albedoColor as { set: (a: number, b: number, c: number) => void }).set(r, g, b);
         }
       }
-      if (typeof node.getChildMeshes === "function") {
-        for (const child of node.getChildMeshes()) {
-          if (child.material) tintMeshColor(child, r, g, b);
+        if (typeof node.getChildMeshes === "function") {
+          for (const child of node.getChildMeshes()) {
+            if (child.material) tintMeshColor(child, r, g, b);
+          }
         }
-      }
-    }
+      };
 
     LoadAssetContainerAsync("boxer.glb", scene, { rootUrl: "/models/" })
       .then((container) => {
