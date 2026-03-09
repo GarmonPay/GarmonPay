@@ -10,6 +10,8 @@ const nav = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
   { href: "/dashboard/fight-arena", label: "Fight Arena" },
+  { href: "/dashboard/training-gym", label: "Training Gym" },
+  { href: "/dashboard/my-fighter", label: "My Fighter" },
   { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/rewards", label: "Rewards" },
   { href: "/dashboard/earnings", label: "Earnings" },

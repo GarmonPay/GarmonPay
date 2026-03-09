@@ -1,28 +1,36 @@
-# Boxer GLB for Fight Arena
+# 3D boxing models
 
-Place a boxer character model here to replace the placeholder fighters in the 3D fight arena.
+Place production GLB models in this folder for the upgraded React Three Fiber boxing arena.
 
-## File
+## Required files
 
-- **Path:** `boxer.glb` (or `boxer.gltf`) in this folder (`public/models/`).
-- The app loads: `/models/boxer.glb`.
+- `/public/models/male-boxer.glb`
+- `/public/models/female-boxer.glb`
+- `/public/models/referee.glb` (optional but recommended)
 
-## Animation names
+The game will gracefully fall back to procedural avatars if any file is missing.
 
-The GLB should include **animation groups** (or clips) with these names (case-insensitive):
+## Required animation clip names
 
-| Name         | Use              | Loop |
-|-------------|------------------|------|
-| `idle`      | Standing still   | Yes  |
-| `jab`      | Jab button       | No   |
-| `powerPunch`| Power punch      | No   |
-| `block`     | Blocking         | No   |
-| `knockout`  | When health = 0  | No   |
+Use these names (case-insensitive). Synonyms are supported, but exact names are best:
 
-If the file is missing or fails to load, no fighter geometry is shown (add `boxer.glb` to this folder).
+| Name       | Purpose                 |
+|------------|-------------------------|
+| `idle`     | Neutral stance          |
+| `jab`      | Quick lead punch        |
+| `cross`    | Rear straight punch     |
+| `hook`     | Hook punch              |
+| `uppercut` | Uppercut punch          |
+| `block`    | Guard defense           |
+| `dodge`    | Slip / evade            |
+| `knockout` | KO reaction             |
+| `victory`  | Post-fight celebration  |
 
-## Tips
+## Material naming tips
 
-- Use a single skinned character; the scene instantiates it twice (Red Corner Fighter, Blue Corner Fighter).
-- Scale is applied automatically (~1.2). Position: red corner at (-3, 0, 0), blue at (3, 0, 0).
-- Materials are tinted red (player) and blue (enemy) when they support `diffuseColor` or `albedoColor`.
+If mesh names include keywords below, the game auto-applies fighter customization colors:
+
+- `glove`
+- `short`
+- `shoe`
+- `skin`, `body`, or `face`

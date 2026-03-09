@@ -18,14 +18,20 @@ export default function FightArenaPage() {
       <div className="mx-auto max-w-xl text-center">
         <h1 className="text-3xl font-bold tracking-tight text-white tablet:text-4xl">Fight Arena</h1>
         <p className="mt-2 text-fintech-muted">
-          Create or join fights. Entry fee from your wallet. Winner takes the pot.
+          Enter the professional 3D boxing arena or join wallet-backed PvP lobby matches.
         </p>
-        <div className="mt-8">
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/dashboard/games/boxing?section=arena"
+            className="min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-6 py-3 font-semibold text-white hover:opacity-90"
+          >
+            Launch 3D Arena
+          </Link>
           <Link
             href="/dashboard/fight-arena/lobby"
             className="min-h-touch inline-flex items-center justify-center rounded-xl bg-amber-500/90 px-6 py-3 font-semibold text-black hover:bg-amber-400 arena-glow"
           >
-            Enter Lobby
+            PvP Lobby
           </Link>
         </div>
         <div className="arena-border mt-10 rounded-xl border p-4 text-left">
