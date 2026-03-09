@@ -1,18 +1,33 @@
-import Link from "next/link";
+import { ProBoxingExperience } from "@/components/games/boxing/ProBoxingExperience";
 
-export default function Boxing() {
+type Section = "arena" | "training" | "fighter" | "leaderboard" | "tournaments";
+
+export default function Boxing({
+  searchParams,
+}: {
+  searchParams?: { section?: string; tab?: string };
+}) {
+  const requested = (searchParams?.section ?? searchParams?.tab ?? "arena").toLowerCase();
+  const section: Section =
+    requested === "training"
+      ? "training"
+      : requested === "fighter"
+      ? "fighter"
+      : requested === "leaderboard"
+      ? "leaderboard"
+      : requested === "tournaments"
+      ? "tournaments"
+      : "arena";
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">🥊 Boxing Arena</h1>
-      <p className="text-fintech-muted text-sm">
-        Join or create a fight. Winner takes the prize.
-      </p>
-      <Link
-        href="/dashboard/games/boxing/live"
-        className="inline-block w-full max-w-xs py-3 rounded-lg bg-fintech-accent text-white font-semibold text-center hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-fintech-accent focus:ring-offset-2 focus:ring-offset-[#0f172a]"
-      >
-        Enter Arena
-      </Link>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Professional Boxing Arena</h1>
+        <p className="mt-1 text-sm text-fintech-muted">
+          Real-time 3D ring action, AI styles, training gym progression, fighter customization, and wallet-powered tournaments.
+        </p>
+      </div>
+      <ProBoxingExperience defaultSection={section} />
     </div>
   );
 }

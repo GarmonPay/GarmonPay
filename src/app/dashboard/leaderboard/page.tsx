@@ -21,6 +21,9 @@ export default function LeaderboardPage() {
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [topReferrers, setTopReferrers] = useState<Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
   const [topEarners, setTopEarners] = useState<Array<{ userId: string; email: string; totalEarningsCents: number }>>([]);
+  const [topBoxers, setTopBoxers] = useState<
+    Array<{ rank: number; email: string; wins: number; losses: number; knockouts: number; total_earnings_cents: number }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +41,12 @@ export default function LeaderboardPage() {
         })
         .catch(() => setError("Failed to load leaderboard"))
         .finally(() => setLoading(false));
+      fetch("/api/boxing/leaderboard?limit=10")
+        .then((r) => (r.ok ? r.json() : { leaderboard: [] }))
+        .then((d: { leaderboard?: Array<{ rank: number; email: string; wins: number; losses: number; knockouts: number; total_earnings_cents: number }> }) =>
+          setTopBoxers(d.leaderboard ?? [])
+        )
+        .catch(() => setTopBoxers([]));
     });
   }, [router]);
 
@@ -138,6 +147,47 @@ export default function LeaderboardPage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
+        <div className="bg-gradient-to-r from-amber-500/20 to-transparent border-b border-white/10 px-6 py-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <span className="text-amber-400">🥊</span> Top Boxers
+          </h2>
+          <p className="text-xs text-fintech-muted mt-1">Ranked by wins and arena earnings</p>
+        </div>
+        <div className="overflow-x-auto">
+          {topBoxers.length === 0 ? (
+            <p className="p-6 text-fintech-muted">No boxing results yet.</p>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-fintech-muted uppercase">
+                  <th className="p-3">#</th>
+                  <th className="p-3">Fighter</th>
+                  <th className="p-3 text-right">W</th>
+                  <th className="p-3 text-right">L</th>
+                  <th className="p-3 text-right">KO</th>
+                  <th className="p-3 text-right">Earnings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topBoxers.map((b) => (
+                  <tr key={`${b.rank}-${b.email}`} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-3 font-medium text-fintech-highlight">{b.rank}</td>
+                    <td className="p-3 text-white">{maskEmail(b.email)}</td>
+                    <td className="p-3 text-right text-green-300">{b.wins}</td>
+                    <td className="p-3 text-right text-red-300">{b.losses}</td>
+                    <td className="p-3 text-right text-white">{b.knockouts}</td>
+                    <td className="p-3 text-right text-fintech-money font-bold">
+                      {formatCents(b.total_earnings_cents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

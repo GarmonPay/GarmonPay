@@ -52,7 +52,7 @@ export function TopFightersLeaderboard() {
         <h2 className="text-xl font-bold text-white mb-4">Top Fighters</h2>
         <p className="text-white/60 text-sm">No fights yet. Be the first to climb the ranks.</p>
         <Link
-          href="/dashboard/games/boxing"
+          href="/dashboard/games/boxing?section=arena"
           className="inline-block mt-3 text-blue-400 hover:underline text-sm"
         >
           Enter the Arena →
@@ -99,7 +99,7 @@ export function TopFightersLeaderboard() {
         </table>
       </div>
       <Link
-        href="/dashboard/games/boxing"
+        href="/dashboard/games/boxing?section=arena"
         className="inline-block mt-3 text-blue-400 hover:underline text-sm"
       >
         Enter the Arena →

@@ -576,19 +576,19 @@ export default function DashboardPage() {
             href="/dashboard/games"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
-            Play Games
+            Fight Arena
           </Link>
           <Link
-            href="/dashboard/rewards"
+            href="/dashboard/training-gym"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
-            Spin Wheel
+            Training Gym
           </Link>
           <Link
-            href="/dashboard/rewards"
+            href="/dashboard/my-fighter"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
-            Daily Bonus
+            My Fighter
           </Link>
         </div>
       </section>
