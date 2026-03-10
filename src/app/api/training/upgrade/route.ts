@@ -6,6 +6,7 @@ import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger
 const COST_SPEED_CENTS = 100;
 const COST_POWER_CENTS = 200;
 const COST_DEFENSE_CENTS = 200;
+const COST_STAMINA_CENTS = 200;
 
 /** POST /api/training/upgrade — upgrade one stat by 1. Deducts from wallet, updates fighter. */
 export async function POST(req: Request) {
@@ -26,8 +27,6 @@ export async function POST(req: Request) {
   if (!fighterId || !stat) {
     return NextResponse.json({ error: "fighter_id and stat required" }, { status: 400 });
   }
-const COST_STAMINA_CENTS = 200;
-
   if (!["speed", "power", "defense", "stamina"].includes(stat)) {
     return NextResponse.json({ error: "stat must be speed, power, defense, or stamina" }, { status: 400 });
   }
@@ -54,7 +53,7 @@ const COST_STAMINA_CENTS = 200;
     return NextResponse.json({ error: "Fighter not found" }, { status: 404 });
   }
 
-  const row = fighter as { speed: number; power: number; defense: number; stamina?: number };
+  const row = fighter as { speed: number; power: number; defense: number; stamina?: number; experience?: number };
   if (stat === "speed" && row.speed >= 100) {
     return NextResponse.json({ error: "Speed already at maximum" }, { status: 400 });
   }
@@ -79,7 +78,6 @@ const COST_STAMINA_CENTS = 200;
     return NextResponse.json({ error: ledgerResult.message }, { status: 400 });
   }
 
-  const row = fighter as { speed: number; power: number; defense: number; stamina?: number; experience?: number };
   const currentStat = (row as Record<string, number>)[stat] ?? (stat === "stamina" ? 50 : 0);
   const newExperience = (row.experience ?? 0) + 1;
 

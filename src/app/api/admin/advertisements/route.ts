@@ -13,7 +13,7 @@ const PLACEMENTS: AdPlacement[] = ["homepage", "dashboard", "fight_arena"];
 const AD_TYPES: AdTypeDb[] = ["banner", "video"];
 
 /** Allowed target URL: https or http, basic sanity. */
-function sanitizeTargetUrl(url: string | null | undefined): string | null {
+function sanitizeTargetUrl(url: unknown): string | null {
   if (url == null || typeof url !== "string") return null;
   const trimmed = url.trim();
   if (!trimmed) return null;

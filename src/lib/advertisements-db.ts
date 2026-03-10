@@ -147,7 +147,3 @@ export async function deleteAdvertisement(id: string): Promise<void> {
   const { error } = await supabase().from("advertisements").delete().eq("id", id);
   if (error) throw error;
 }
-</think>
-Using a simple SQL increment instead of RPC:
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace

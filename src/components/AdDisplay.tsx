@@ -118,19 +118,19 @@ export function AdDisplay({ placement, className, style }: AdDisplayProps) {
       data-ad-id={ad.id}
     >
       {ad.ad_type === "banner" && hasFile && (
-        <a
-          href={ad.target_url ?? "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => {
-            recordClick();
-            if (!ad.target_url) e.preventDefault();
-          }}
-          className="block w-full overflow-hidden rounded-lg border border-white/10 bg-black/20"
-        >
+          <a
+            href={ad.target_url ?? "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              recordClick();
+              if (!ad.target_url) e.preventDefault();
+            }}
+            className="block w-full overflow-hidden rounded-lg border border-white/10 bg-black/20"
+          >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={ad.file_url}
+            src={ad.file_url ?? undefined}
             alt={ad.title}
             loading="lazy"
             decoding="async"
@@ -143,7 +143,7 @@ export function AdDisplay({ placement, className, style }: AdDisplayProps) {
         <div className="relative w-full overflow-hidden rounded-lg border border-white/10 bg-black">
           <video
             ref={videoRef}
-            src={ad.file_url}
+            src={ad.file_url ?? undefined}
             autoPlay
             muted
             playsInline
