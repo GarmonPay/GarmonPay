@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getLeaderboard as getReferralLeaderboard } from "@/lib/viral-referral-db";
 
-/** GET /api/leaderboard — top fighters by wins, level, earnings. Public. */
+/** GET /api/leaderboard — topReferrers, topEarners (for dashboard), and fighters leaderboard. Public. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
@@ -9,18 +10,35 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ leaderboard: [] });
+    return NextResponse.json({
+      topReferrers: [],
+      topEarners: [],
+      leaderboard: [],
+    });
+  }
+
+  let topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }> = [];
+  let topEarners: Array<{ userId: string; email: string; totalEarningsCents: number }> = [];
+  try {
+    const refLeaderboard = await getReferralLeaderboard(30);
+    topReferrers = refLeaderboard.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      totalReferrals: r.totalReferrals,
+      totalEarningsCents: r.totalEarningsCents,
+    }));
+    topEarners = [...refLeaderboard]
+      .sort((a, b) => b.totalEarningsCents - a.totalEarningsCents)
+      .slice(0, 20)
+      .map((r) => ({ userId: r.userId, email: r.email, totalEarningsCents: r.totalEarningsCents }));
+  } catch {
+    // viral tables may be missing
   }
 
   let orderBy = "wins";
-  let ascending = false;
-  if (sort === "level") {
-    orderBy = "level";
-    ascending = false;
-  } else if (sort === "earnings") {
-    orderBy = "earnings";
-    ascending = false;
-  }
+  const ascending = false;
+  if (sort === "level") orderBy = "level";
+  else if (sort === "earnings") orderBy = "earnings";
 
   const { data: fighters, error } = await supabase
     .from("fighters")
@@ -29,7 +47,11 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json({ leaderboard: [] });
+    return NextResponse.json({
+      topReferrers,
+      topEarners,
+      leaderboard: [],
+    });
   }
 
   const userIds = Array.from(new Set((fighters ?? []).map((f: { user_id: string }) => f.user_id)));
@@ -55,5 +77,9 @@ export async function GET(request: Request) {
     earnings_cents: f.earnings,
   }));
 
-  return NextResponse.json({ leaderboard });
+  return NextResponse.json({
+    topReferrers,
+    topEarners,
+    leaderboard,
+  });
 }

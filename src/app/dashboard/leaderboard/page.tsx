@@ -21,6 +21,7 @@ export default function LeaderboardPage() {
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [topReferrers, setTopReferrers] = useState<Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
   const [topEarners, setTopEarners] = useState<Array<{ userId: string; email: string; totalEarningsCents: number }>>([]);
+  const [fightersLeaderboard, setFightersLeaderboard] = useState<Array<{ rank: number; fighter_id: string; name: string; wins: number; losses: number; level: number; earnings_cents?: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +36,7 @@ export default function LeaderboardPage() {
         .then((data) => {
           setTopReferrers(data.topReferrers ?? []);
           setTopEarners(data.topEarners ?? []);
+          setFightersLeaderboard(data.leaderboard ?? []);
         })
         .catch(() => setError("Failed to load leaderboard"))
         .finally(() => setLoading(false));
@@ -138,6 +140,45 @@ export default function LeaderboardPage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
+        <div className="bg-gradient-to-r from-amber-500/20 to-transparent border-b border-white/10 px-6 py-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <span className="text-amber-400">🥊</span> Top Fighters
+          </h2>
+          <p className="text-xs text-fintech-muted mt-1">By wins (Fight Arena)</p>
+        </div>
+        <div className="overflow-x-auto">
+          {fightersLeaderboard.length === 0 ? (
+            <p className="p-6 text-fintech-muted">No fighters yet.</p>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-fintech-muted uppercase">
+                  <th className="p-3">#</th>
+                  <th className="p-3">Fighter</th>
+                  <th className="p-3 text-right">W-L</th>
+                  <th className="p-3 text-right">Level</th>
+                  <th className="p-3 text-right">Earnings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fightersLeaderboard.map((f) => (
+                  <tr key={f.fighter_id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-3 font-medium text-fintech-highlight">{f.rank}</td>
+                    <td className="p-3 text-white font-medium">{f.name}</td>
+                    <td className="p-3 text-right text-white">{f.wins}-{f.losses}</td>
+                    <td className="p-3 text-right text-white">{f.level}</td>
+                    <td className="p-3 text-right text-fintech-money font-medium">
+                      {typeof f.earnings_cents === "number" ? formatCents(f.earnings_cents) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

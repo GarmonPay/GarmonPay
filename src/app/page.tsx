@@ -1,4 +1,7 @@
 import { TopFightersLeaderboard } from "@/components/TopFightersLeaderboard";
+import dynamic from "next/dynamic";
+
+const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
 export default function HomePage() {
   return (
@@ -38,6 +41,10 @@ export default function HomePage() {
       </a>
 
       <TopFightersLeaderboard />
+
+      <div className="mt-10 w-full max-w-md">
+        <AdDisplay placement="homepage" />
+      </div>
     </main>
   )
 }

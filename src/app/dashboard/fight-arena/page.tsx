@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
+
+const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
 export default function FightArenaPage() {
   const router = useRouter();
@@ -37,6 +40,9 @@ export default function FightArenaPage() {
             <li>Winner receives the pot minus a small platform fee.</li>
           </ul>
         </div>
+      </div>
+      <div className="mt-8 max-w-md mx-auto">
+        <AdDisplay placement="fight_arena" />
       </div>
     </div>
   );

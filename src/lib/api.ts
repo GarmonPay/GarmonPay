@@ -207,6 +207,7 @@ export async function getLeaderboard(accessTokenOrUserId: string, isToken: boole
   return api<{
     topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>;
     topEarners: Array<{ userId: string; email: string; totalEarningsCents: number }>;
+    leaderboard?: Array<{ rank: number; fighter_id: string; name: string; wins: number; losses: number; level: number; earnings_cents?: number }>;
   }>("/leaderboard", { headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 

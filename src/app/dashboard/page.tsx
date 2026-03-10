@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { getSessionAsync, type ClientSession } from "@/lib/session";
 import { generateReferralLink } from "@/lib/referrals";
 import {
@@ -14,6 +15,8 @@ import {
   ensureReferralBonus,
   convertToAdCredit,
 } from "@/lib/api";
+
+const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -666,6 +669,11 @@ export default function DashboardPage() {
           </ul>
         </section>
       )}
+
+      {/* ——— Display ad (placement: dashboard) ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6 max-w-lg">
+        <AdDisplay placement="dashboard" />
+      </section>
     </div>
   );
 }

@@ -33,14 +33,14 @@ const BLOCK_REDUCTION = 0.7;
 const STAMINA_REGEN_PER_SEC = 4;
 
 const AI_DIFFICULTY = {
-  rookie: {
+  beginner: {
     intervalMs: 1600,
     jabChance: 0.5,
     heavyChance: 0.25,
     blockChance: 0.25,
     blockWhenHitChance: 0.2,
   },
-  pro: {
+  intermediate: {
     intervalMs: 950,
     jabChance: 0.5,
     heavyChance: 0.35,
@@ -56,7 +56,15 @@ const AI_DIFFICULTY = {
   },
 } as const;
 
+/** Behavior modulates attack/defense weights on top of difficulty. */
+const AI_BEHAVIOR = {
+  aggressive: { jabDelta: 0.05, heavyDelta: 0.2, blockDelta: -0.2, blockWhenHitDelta: -0.15 },
+  balanced: { jabDelta: 0, heavyDelta: 0, blockDelta: 0, blockWhenHitDelta: 0 },
+  defensive: { jabDelta: -0.1, heavyDelta: -0.15, blockDelta: 0.25, blockWhenHitDelta: 0.2 },
+} as const;
+
 export type AIDifficulty = keyof typeof AI_DIFFICULTY;
+export type AIBehavior = keyof typeof AI_BEHAVIOR;
 
 export type BoxingArenaSocketProps = {
   wsUrl: string;
@@ -77,6 +85,10 @@ export function BoxingArenaSocket({
   const p1AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
   const p2AnimRef = useRef<"idle" | "jab" | "punch" | "block" | "knockout">("idle");
   const hitEffectRef = useRef<{ x: number; y: number; z: number; isHeavy: boolean } | null>(null);
+  const cameraPresetRef = useRef<"default" | "ringside" | "over_shoulder">("default");
+  const knockoutCamActiveRef = useRef(false);
+  const knockoutCamEndRef = useRef(0);
+  const knockoutCamTriggeredRef = useRef(false);
 
   const [phase, setPhase] = useState<"lobby" | "matchmaking" | "fighting" | "ended">("lobby");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -94,7 +106,8 @@ export function BoxingArenaSocket({
   const [loserId, setLoserId] = useState<string | null>(null);
   const [betInput, setBetInput] = useState(betAmountCents > 0 ? String(betAmountCents) : "");
   const [aiOpponent, setAiOpponent] = useState(false);
-  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>("rookie");
+  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>("beginner");
+  const [aiBehavior, setAiBehavior] = useState<AIBehavior>("balanced");
   const [player1Stamina, setPlayer1Stamina] = useState(MAX_STAMINA);
   const [player2Stamina, setPlayer2Stamina] = useState(MAX_STAMINA);
   const [playerBlockingUntil, setPlayerBlockingUntil] = useState(0);
@@ -176,6 +189,8 @@ export function BoxingArenaSocket({
 
   useEffect(() => {
     if (phase !== "fighting" || !canvasRef.current) return;
+    knockoutCamTriggeredRef.current = false;
+    knockoutCamActiveRef.current = false;
     const engine = new Engine(canvasRef.current, true, { preserveDrawingBuffer: true, stencil: true });
     const scene = new Scene(engine);
     scene.clearColor.set(0.05, 0.05, 0.12, 1);
@@ -263,6 +278,11 @@ export function BoxingArenaSocket({
     const baseRadius = 22;
     const baseAlpha = -Math.PI / 2;
     const baseBeta = Math.PI / 2.5;
+    const cameraPresets = {
+      default: { radius: 22, alpha: -Math.PI / 2, beta: Math.PI / 2.5 },
+      ringside: { radius: 16, alpha: -Math.PI / 2 - 0.15, beta: Math.PI / 2.3 },
+      over_shoulder: { radius: 14, alpha: -Math.PI / 2 - 0.4, beta: Math.PI / 2.1 },
+    };
 
     const playPunchSound = (isHeavy: boolean) => {
       try {
@@ -313,19 +333,35 @@ export function BoxingArenaSocket({
     let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
     let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
 
-    const animNameFromRef = (ref: "idle" | "jab" | "punch" | "block" | "knockout"): string => {
-      if (ref === "punch") return "powerPunch";
-      if (ref === "knockout") return "knockout";
-      return ref;
+    const animNameFromRef = (ref: string): string => {
+      const map: Record<string, string> = {
+        punch: "powerPunch",
+        knockout: "knockout",
+        cross: "cross",
+        hook: "hook",
+        uppercut: "uppercut",
+        dodge: "dodge",
+        victory: "victory",
+      };
+      return map[ref] ?? ref;
     };
 
-    const playFighterAnim = (entries: InstantiatedEntries, ref: "idle" | "jab" | "punch" | "block" | "knockout") => {
+    const playFighterAnim = (entries: InstantiatedEntries, ref: string) => {
       const name = animNameFromRef(ref);
       for (const g of entries.animationGroups) g.stop();
-      const group = entries.animationGroups.find(
+      let group = entries.animationGroups.find(
         (g) => g.name.toLowerCase() === name.toLowerCase()
       );
-      if (group) group.start(ref === "idle" || ref === "knockout");
+      if (!group) {
+        const fallbacks: Record<string, string> = {
+          cross: "jab", hook: "powerPunch", uppercut: "powerPunch", dodge: "block", victory: "idle",
+        };
+        const fallback = fallbacks[ref] ?? "idle";
+        group = entries.animationGroups.find(
+          (g) => g.name.toLowerCase() === (animNameFromRef(fallback) || fallback).toLowerCase()
+        );
+      }
+      if (group) group.start(ref === "idle" || ref === "knockout" || ref === "victory");
     };
 
     const tintMeshColor = (node: { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, r: number, g: number, b: number) => {
@@ -399,14 +435,34 @@ export function BoxingArenaSocket({
         camera.alpha = baseAlpha + (Math.random() - 0.5) * 0.025 * t;
         camera.beta = baseBeta + (Math.random() - 0.5) * 0.025 * t;
       } else {
-        camera.radius = baseRadius;
-        camera.alpha = baseAlpha;
-        camera.beta = baseBeta;
+        const preset = cameraPresetRef.current;
+        const knockoutCam = knockoutCamActiveRef.current && now < knockoutCamEndRef.current;
+        if (knockoutCam) {
+          const p = cameraPresets.ringside;
+          camera.radius = p.radius;
+          camera.alpha = p.alpha;
+          camera.beta = p.beta;
+        } else {
+          const p = cameraPresets[preset];
+          camera.radius = p.radius;
+          camera.alpha = p.alpha;
+          camera.beta = p.beta;
+        }
+      }
+
+      // Knockout slow-mo: when either health hits 0, trigger ringside cam for 3s
+      const p1H = p1HealthRef.current / 100;
+      const p2H = p2HealthRef.current / 100;
+      if ((p1H <= 0 || p2H <= 0) && !knockoutCamTriggeredRef.current) {
+        knockoutCamTriggeredRef.current = true;
+        knockoutCamActiveRef.current = true;
+        knockoutCamEndRef.current = now + 3000;
+      }
+      if (now >= knockoutCamEndRef.current) {
+        knockoutCamActiveRef.current = false;
       }
 
       // Health bars: scale fill and billboard to camera
-      const p1H = p1HealthRef.current / 100;
-      const p2H = p2HealthRef.current / 100;
       p1BarFill.scaling.x = Math.max(0.01, p1H);
       p2BarFill.scaling.x = Math.max(0.01, p2H);
       const hw = (barWidth - 0.04) / 2;
@@ -440,7 +496,21 @@ export function BoxingArenaSocket({
 
   useEffect(() => {
     if (phase !== "fighting" || !aiOpponent) return;
-    const cfg = AI_DIFFICULTY[aiDifficulty];
+    const base = AI_DIFFICULTY[aiDifficulty];
+    const behavior = AI_BEHAVIOR[aiBehavior];
+    const jabChance = Math.max(0.1, Math.min(0.7, base.jabChance + behavior.jabDelta));
+    const heavyChance = Math.max(0.05, Math.min(0.6, base.heavyChance + behavior.heavyDelta));
+    const blockChance = Math.max(0.05, Math.min(0.6, base.blockChance + behavior.blockDelta));
+    const blockWhenHitChance = Math.max(0, Math.min(0.9, base.blockWhenHitChance + behavior.blockWhenHitDelta));
+    const total = jabChance + heavyChance + blockChance;
+    const scale = 1 / total;
+    const cfg = {
+      intervalMs: base.intervalMs,
+      jabChance: jabChance * scale,
+      heavyChance: heavyChance * scale,
+      blockChance: blockChance * scale,
+      blockWhenHitChance,
+    };
     const id = setInterval(() => {
       const now = Date.now();
       if (p1HealthRef.current <= 0 || p2HealthRef.current <= 0) return;
@@ -499,7 +569,7 @@ export function BoxingArenaSocket({
       }
     }, cfg.intervalMs);
     return () => clearInterval(id);
-  }, [phase, aiOpponent, aiDifficulty, onMatchEnd]);
+  }, [phase, aiOpponent, aiDifficulty, aiBehavior, onMatchEnd]);
 
   useEffect(() => {
     if (phase !== "fighting" || !aiOpponent) return;
@@ -776,9 +846,19 @@ export function BoxingArenaSocket({
               onChange={(e) => setAiDifficulty(e.target.value as AIDifficulty)}
               className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
             >
-              <option value="rookie">Rookie</option>
-              <option value="pro">Pro</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
               <option value="champion">Champion</option>
+            </select>
+            <label className="block text-white/70 text-xs mb-1">AI behavior</label>
+            <select
+              value={aiBehavior}
+              onChange={(e) => setAiBehavior(e.target.value as AIBehavior)}
+              className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
+            >
+              <option value="aggressive">Aggressive</option>
+              <option value="balanced">Balanced</option>
+              <option value="defensive">Defensive</option>
             </select>
             <button
               type="button"
@@ -874,9 +954,19 @@ export function BoxingArenaSocket({
                 onChange={(e) => setAiDifficulty(e.target.value as AIDifficulty)}
                 className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
               >
-                <option value="rookie">Rookie</option>
-                <option value="pro">Pro</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
                 <option value="champion">Champion</option>
+              </select>
+              <label className="block text-white/70 text-xs mb-1">AI behavior</label>
+              <select
+                value={aiBehavior}
+                onChange={(e) => setAiBehavior(e.target.value as AIBehavior)}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 text-white border border-white/20 text-sm mb-2"
+              >
+                <option value="aggressive">Aggressive</option>
+                <option value="balanced">Balanced</option>
+                <option value="defensive">Defensive</option>
               </select>
               <button
                 type="button"
@@ -1028,6 +1118,19 @@ export function BoxingArenaSocket({
           </div>
         </div>
         <div className="pointer-events-auto flex flex-col gap-2">
+          {/* Camera preset (desktop) */}
+          <div className="hidden md:flex justify-center gap-2">
+            {(["default", "ringside", "over_shoulder"] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => { cameraPresetRef.current = preset; }}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-xs capitalize"
+              >
+                {preset.replace("_", " ")}
+              </button>
+            ))}
+          </div>
           {/* Desktop: small button row */}
           <div className="hidden md:flex justify-center gap-3 flex-wrap">
             <button

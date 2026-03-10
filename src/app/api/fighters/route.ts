@@ -48,6 +48,8 @@ export async function POST(req: Request) {
       speed: 5,
       power: 5,
       defense: 5,
+      stamina: 50,
+      experience: 0,
       wins: 0,
       losses: 0,
       level: 1,
