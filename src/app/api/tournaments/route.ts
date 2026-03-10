@@ -4,6 +4,8 @@ import { listTournaments } from "@/lib/tournament-db";
 import { getTournaments } from "@/lib/tournaments";
 
 /** GET /api/tournaments — list active and upcoming tournaments. */
+export const dynamic = "force-dynamic";
+
 export async function GET(_request: Request) {
   if (!createAdminClient()) {
     return NextResponse.json({ tournaments: [] });

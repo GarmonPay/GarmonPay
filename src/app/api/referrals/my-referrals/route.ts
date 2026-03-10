@@ -6,6 +6,8 @@ import { getMyReferrals } from "@/lib/viral-referral-db";
  * GET /api/referrals/my-referrals
  * Returns current user's referred users (from viral_referrals).
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const userId = await getAuthUserId(request);

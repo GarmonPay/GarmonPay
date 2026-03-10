@@ -3,6 +3,8 @@ import { listActiveBanners } from "@/lib/banners-db";
 import { createAdminClient } from "@/lib/supabase";
 
 /** GET /api/banners/rotator — list active banners for rotator (public). */
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     if (!createAdminClient()) {

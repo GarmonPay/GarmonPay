@@ -231,6 +231,16 @@ export default function DashboardGamesPage() {
           <p className="text-sm text-fintech-muted mb-4">See how you rank by referrals and activity.</p>
           <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View Leaderboard →</span>
         </Link>
+
+        {/* GarmonPay Pinball */}
+        <Link href="/games/pinball" className={`${cardBase} block no-underline text-inherit`}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(0,240,255,0.5))" }}>🎮</span>
+            <h2 className="text-lg font-semibold text-white">GarmonPay Pinball</h2>
+          </div>
+          <p className="text-sm text-fintech-muted mb-4">Neon pinball. Pay 10¢ per game, compete on the leaderboard.</p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">Play Pinball →</span>
+        </Link>
       </div>
 
       <div className="rounded-xl bg-black/20 border border-white/10 p-6">
