@@ -10,6 +10,12 @@ function supabase() {
   return c;
 }
 
+/** Daily key YYYY-MM-DD for daily leaderboard. */
+export function getDailyKey(): string {
+  const now = new Date();
+  return now.toISOString().slice(0, 10);
+}
+
 /** Current week key YYYY-Www for weekly leaderboard. */
 export function getWeeklyKey(): string {
   const now = new Date();
@@ -57,9 +63,10 @@ export async function insertPinballScore(
   score: number
 ): Promise<void> {
   const weeklyKey = getWeeklyKey();
+  const dailyKey = getDailyKey();
   const { error } = await supabase()
     .from("pinball_scores")
-    .insert({ user_id: userId, session_id: sessionId, score, weekly_key: weeklyKey });
+    .insert({ user_id: userId, session_id: sessionId, score, weekly_key: weeklyKey, daily_key: dailyKey });
   if (error) throw error;
 }
 
@@ -101,6 +108,39 @@ export async function getPinballLeaderboardWeekly(limit = 10): Promise<
     .from("pinball_scores")
     .select("user_id, score")
     .eq("weekly_key", weeklyKey)
+    .order("score", { ascending: false })
+    .limit(limit * 3);
+  if (error) return [];
+  const byUser = new Map<string, number>();
+  for (const row of scores ?? []) {
+    const r = row as { user_id: string; score: number };
+    const best = byUser.get(r.user_id);
+    if (best == null || r.score > best) byUser.set(r.user_id, r.score);
+  }
+  const sorted = Array.from(byUser.entries())
+    .map(([user_id, score]) => ({ user_id, score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  const userIds = sorted.map((s) => s.user_id);
+  const { data: users } = await supabase().from("users").select("id, email").in("id", userIds);
+  const emailMap = new Map((users ?? []).map((u: { id: string; email?: string }) => [u.id, u.email]));
+  return sorted.map((s, i) => ({
+    rank: i + 1,
+    user_id: s.user_id,
+    score: s.score,
+    email: emailMap.get(s.user_id) ?? "—",
+  }));
+}
+
+/** Daily top N (best score per user for today). Uses daily_key when present. */
+export async function getPinballLeaderboardDaily(limit = 10): Promise<
+  { rank: number; user_id: string; score: number; email?: string }[]
+> {
+  const dailyKey = getDailyKey();
+  const { data: scores, error } = await supabase()
+    .from("pinball_scores")
+    .select("user_id, score")
+    .eq("daily_key", dailyKey)
     .order("score", { ascending: false })
     .limit(limit * 3);
   if (error) return [];

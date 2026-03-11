@@ -18,7 +18,12 @@ const COLORS = {
 
 const BUMPER_SCORE = 100;
 const JACKPOT_SCORE = 5000;
+const SPINNER_SCORE = 50;
 const COMBO_DECAY_MS = 800;
+const MULTIBALL_JACKPOT_COUNT = 3;
+const MULTIBALL_JACKPOT_WINDOW_MS = 10000;
+const MULTIBALL_EXTRA_BALLS = 3;
+const MULTIBALL_MULTIPLIER = 3;
 
 type PinballGameProps = {
   sessionId: string;
@@ -46,8 +51,21 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
   const ballTrailRef = useRef<{ x: number; y: number }[]>([]);
   const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; life: number; hue: number }[]>([]);
   const animTimeRef = useRef(0);
+  const ballsRef = useRef<Matter.Body[]>([]);
+  const jackpotHitTimesRef = useRef<number[]>([]);
+  const multiplierRef = useRef(1);
+  const multiballModeRef = useRef(false);
+  const [multiballMode, setMultiballMode] = useState(false);
+  const jackpotLaneUnlockedRef = useRef(false);
+  const dropTargetsRef = useRef<{ body: Matter.Body; dropped: boolean; startY: number }[]>([]);
+  const bumperDataRef = useRef<{ body: Matter.Body; cx: number; cy: number; orbitR: number; phase: number; lastHit: number }[]>([]);
+  const shakeRef = useRef({ x: 0, y: 0 });
+  const scoreScaleRef = useRef(1);
+  const lastScoreDisplayRef = useRef(0);
+  const spinnerComboRef = useRef(0);
+  const lastSpinnerTimeRef = useRef(0);
 
-  const playSound = useCallback((type: "bumper" | "jackpot" | "flipper" | "drain") => {
+  const playSound = useCallback((type: "bumper" | "jackpot" | "flipper" | "drain" | "multiball") => {
     try {
       const ctx = audioContextRef.current ?? new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (!audioContextRef.current) audioContextRef.current = ctx;
@@ -80,6 +98,18 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.06);
+      } else if (type === "multiball") {
+        [400, 600, 800, 1000].forEach((f, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.15, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          o.start(ctx.currentTime + i * 0.04);
+          o.stop(ctx.currentTime + 0.35);
+        });
       } else {
         osc.frequency.setValueAtTime(80, ctx.currentTime);
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
@@ -104,11 +134,11 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
     const ox = (cw - w) / 2;
     const oy = (ch - h) / 2;
 
-    const engine = Matter.Engine.create({ gravity: { x: 0, y: 1 } });
+    const engine = Matter.Engine.create({ gravity: { x: 0, y: 1.1 } });
     engineRef.current = engine;
     const { world } = engine;
 
-    const wallOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.6, friction: 0 };
+    const wallOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.65, friction: 0 };
     const wallH = 20;
     Matter.World.add(world, [
       Matter.Bodies.rectangle(200, -wallH / 2, 420, wallH, wallOpts),
@@ -123,29 +153,57 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
     const leftFlipper = Matter.Bodies.rectangle(120, flipperY, flipperW, flipperH, {
       isStatic: true,
       angle: 0.35,
-      friction: 0.8,
-      restitution: 0.9,
+      friction: 0.7,
+      restitution: 0.95,
     } as Matter.IChamferableBodyDefinition);
     const rightFlipper = Matter.Bodies.rectangle(280, flipperY, flipperW, flipperH, {
       isStatic: true,
       angle: -0.35,
-      friction: 0.8,
-      restitution: 0.9,
+      friction: 0.7,
+      restitution: 0.95,
     } as Matter.IChamferableBodyDefinition);
     Matter.World.add(world, [leftFlipper, rightFlipper]);
     leftFlipperRef.current = leftFlipper;
     rightFlipperRef.current = rightFlipper;
 
-    const bumperOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 1.2, friction: 0, label: "bumper" };
-    const bumpers = [
-      Matter.Bodies.circle(200, 180, 28, bumperOpts),
-      Matter.Bodies.circle(120, 280, 24, bumperOpts),
-      Matter.Bodies.circle(280, 280, 24, bumperOpts),
-      Matter.Bodies.circle(160, 380, 22, bumperOpts),
-      Matter.Bodies.circle(240, 380, 22, bumperOpts),
+    const bumperOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 1.35, friction: 0, label: "bumper" };
+    const bumperPositions = [
+      { cx: 200, cy: 180, orbitR: 0, phase: 0 },
+      { cx: 120, cy: 280, orbitR: 18, phase: 0 },
+      { cx: 280, cy: 280, orbitR: 18, phase: Math.PI },
+      { cx: 160, cy: 380, orbitR: 14, phase: Math.PI / 2 },
+      { cx: 240, cy: 380, orbitR: 14, phase: -Math.PI / 2 },
     ];
-    bumpers.forEach((b) => ((b as Matter.Body & { label?: string }).label = "bumper"));
+    const bumpers = bumperPositions.map((p, i) => {
+      const radii = [28, 24, 24, 22, 22];
+      const b = Matter.Bodies.circle(p.cx, p.cy, radii[i], bumperOpts);
+      (b as Matter.Body & { label?: string }).label = "bumper";
+      return b;
+    });
+    bumperDataRef.current = bumperPositions.map((p, i) => ({
+      body: bumpers[i],
+      cx: p.cx,
+      cy: p.cy,
+      orbitR: p.orbitR,
+      phase: p.phase,
+      lastHit: 0,
+    }));
     Matter.World.add(world, bumpers);
+
+    const spinnerOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 0.9, friction: 0, label: "spinner" };
+    const spinner1 = Matter.Bodies.rectangle(80, 140, 16, 40, spinnerOpts);
+    const spinner2 = Matter.Bodies.rectangle(320, 140, 16, 40, spinnerOpts);
+    (spinner1 as Matter.Body & { label?: string }).label = "spinner";
+    (spinner2 as Matter.Body & { label?: string }).label = "spinner";
+    Matter.World.add(world, [spinner1, spinner2]);
+
+    const dropTargetOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 0.5, friction: 0, label: "droptarget" };
+    const dropYs = [105, 105, 105, 105, 105];
+    const dropXs = [80, 130, 200, 270, 320];
+    const dropTargets = dropXs.map((x, i) => Matter.Bodies.rectangle(x, dropYs[i], 36, 20, dropTargetOpts));
+    dropTargets.forEach((d) => ((d as Matter.Body & { label?: string }).label = "droptarget"));
+    dropTargetsRef.current = dropTargets.map((body, i) => ({ body, dropped: false, startY: dropYs[i] }));
+    Matter.World.add(world, dropTargets);
 
     const jackpotZone = Matter.Bodies.rectangle(200, 80, 80, 30, {
       isStatic: true,
@@ -154,52 +212,93 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
     } as Matter.IChamferableBodyDefinition);
     Matter.World.add(world, jackpotZone);
 
-    const ball = Matter.Bodies.circle(200, 300, 10, {
-      restitution: 0.8,
-      friction: 0.001,
-      density: 0.004,
-      label: "ball",
-    });
+    const createBall = () =>
+      Matter.Bodies.circle(200, 300, 10, {
+        restitution: 0.85,
+        friction: 0.001,
+        density: 0.004,
+        label: "ball",
+      });
+    const ball = createBall();
     Matter.Body.setVelocity(ball, { x: 0, y: 0 });
     Matter.World.add(world, ball);
     ballRef.current = ball;
+    ballsRef.current = [ball];
 
     Matter.Events.on(engine, "collisionStart", (event) => {
       const pairs = event.pairs;
+      const now = Date.now();
       for (const p of pairs) {
         const a = p.bodyA;
         const b = p.bodyB;
-        const now = Date.now();
         if (now - lastComboTimeRef.current > COMBO_DECAY_MS) comboRef.current = 0;
         lastComboTimeRef.current = now;
+
         if ((a.label === "bumper" || b.label === "bumper") && (a.label === "ball" || b.label === "ball")) {
+          const bumperBody = a.label === "bumper" ? a : b;
+          bumperDataRef.current.forEach((bd) => {
+            if (bd.body === bumperBody) bd.lastHit = now;
+          });
           comboRef.current += 1;
-          const mult = Math.min(comboRef.current, 5);
+          const mult = Math.min(comboRef.current, 5) * multiplierRef.current;
           const add = BUMPER_SCORE * mult;
           scoreRef.current += add;
           setScore(scoreRef.current);
           setCombo(comboRef.current);
+          scoreScaleRef.current = 1.25;
+          shakeRef.current = { x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 6 };
           playSound("bumper");
-          const bumperBody = a.label === "bumper" ? a : b;
-          const ballBody = a.label === "ball" ? a : b;
           for (let i = 0; i < 12; i++) {
             const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
             particlesRef.current.push({
               x: bumperBody.position.x,
               y: bumperBody.position.y,
-              vx: Math.cos(angle) * 4,
-              vy: Math.sin(angle) * 4,
+              vx: Math.cos(angle) * 5,
+              vy: Math.sin(angle) * 5,
               life: 1,
               hue: 280,
             });
           }
         }
+
+        if ((a.label === "spinner" || b.label === "spinner") && (a.label === "ball" || b.label === "ball")) {
+          if (now - lastSpinnerTimeRef.current > 400) spinnerComboRef.current = 0;
+          lastSpinnerTimeRef.current = now;
+          spinnerComboRef.current += 1;
+          const mult = Math.min(spinnerComboRef.current, 5) * multiplierRef.current;
+          const add = SPINNER_SCORE * mult;
+          scoreRef.current += add;
+          setScore(scoreRef.current);
+          scoreScaleRef.current = 1.15;
+          playSound("bumper");
+        }
+
+        if ((a.label === "droptarget" || b.label === "droptarget") && (a.label === "ball" || b.label === "ball")) {
+          const dtBody = a.label === "droptarget" ? a : b;
+          dropTargetsRef.current.forEach((dt) => {
+            if (dt.body === dtBody && !dt.dropped) {
+              dt.dropped = true;
+              Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: 700 });
+            }
+          });
+          const allDropped = dropTargetsRef.current.every((dt) => dt.dropped);
+          if (allDropped) jackpotLaneUnlockedRef.current = true;
+        }
+
         if ((a.label === "jackpot" || b.label === "jackpot") && (a.label === "ball" || b.label === "ball")) {
-          scoreRef.current += JACKPOT_SCORE;
+          if (!jackpotLaneUnlockedRef.current) continue;
+          jackpotLaneUnlockedRef.current = false;
+          scoreRef.current += JACKPOT_SCORE * multiplierRef.current;
           setScore(scoreRef.current);
           setJackpotMode(true);
-          playSound("jackpot");
           setTimeout(() => setJackpotMode(false), 1500);
+          playSound("jackpot");
+          dropTargetsRef.current.forEach((dt) => {
+            dt.dropped = false;
+            Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: dt.startY });
+          });
+          jackpotHitTimesRef.current.push(now);
+          jackpotHitTimesRef.current = jackpotHitTimesRef.current.filter((t) => now - t < MULTIBALL_JACKPOT_WINDOW_MS);
           const ballBody = a.label === "ball" ? a : b;
           for (let i = 0; i < 24; i++) {
             const angle = (Math.PI * 2 * i) / 24;
@@ -211,6 +310,25 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
               life: 1,
               hue: 120,
             });
+          }
+          if (jackpotHitTimesRef.current.length >= MULTIBALL_JACKPOT_COUNT && !multiballModeRef.current) {
+            multiballModeRef.current = true;
+            setMultiballMode(true);
+            multiplierRef.current = MULTIBALL_MULTIPLIER;
+            playSound("multiball");
+            const world = engine.world;
+            for (let i = 0; i < MULTIBALL_EXTRA_BALLS; i++) {
+              const nb = createBall();
+              Matter.Body.setPosition(nb, { x: 180 + i * 20, y: 280 });
+              Matter.Body.setVelocity(nb, { x: (Math.random() - 0.5) * 4, y: -2 });
+              Matter.World.add(world, nb);
+              ballsRef.current.push(nb);
+            }
+            setTimeout(() => setMultiballMode(false), 8000);
+            setTimeout(() => {
+              multiballModeRef.current = false;
+              multiplierRef.current = 1;
+            }, 8000);
           }
         }
       }
@@ -238,19 +356,27 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
 
       Matter.Engine.update(engine, 1000 / 60);
 
-      animTimeRef.current += 1;
       const t = animTimeRef.current * 0.05;
-      const pulse = 0.85 + 0.15 * Math.sin(t);
+      bumperDataRef.current.forEach((bd, i) => {
+        const angle = bd.phase + t * 0.4;
+        Matter.Body.setPosition(bd.body, {
+          x: bd.cx + bd.orbitR * Math.cos(angle),
+          y: bd.cy + bd.orbitR * Math.sin(angle),
+        });
+      });
 
-      ballTrailRef.current.push({ x: ball.position.x, y: ball.position.y });
-      if (ballTrailRef.current.length > 14) ballTrailRef.current.shift();
-
-      particlesRef.current = particlesRef.current
-        .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.028 }))
-        .filter((p) => p.life > 0);
-
-      const by = ball.position.y;
-      if (by > 620) {
+      ballsRef.current = ballsRef.current.filter((ballBody) => {
+        if (ballBody.position.y > 620) {
+          Matter.World.remove(world, ballBody);
+          dropTargetsRef.current.forEach((dt) => {
+            dt.dropped = false;
+            Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: dt.startY });
+          });
+          return false;
+        }
+        return true;
+      });
+      if (ballsRef.current.length === 0) {
         gameEndedRef.current = true;
         playSound("drain");
         setGameOver(true);
@@ -260,11 +386,28 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
         ballRef.current = null;
         leftFlipperRef.current = null;
         rightFlipperRef.current = null;
+        ballsRef.current = [];
         return;
       }
+      ballRef.current = ballsRef.current[0];
+
+      animTimeRef.current += 1;
+      const t = animTimeRef.current * 0.05;
+      const pulse = 0.85 + 0.15 * Math.sin(t);
+
+      ballTrailRef.current.push({ x: ballsRef.current[0].position.x, y: ballsRef.current[0].position.y });
+      if (ballTrailRef.current.length > 14) ballTrailRef.current.shift();
+
+      particlesRef.current = particlesRef.current
+        .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.028 }))
+        .filter((p) => p.life > 0);
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      shakeRef.current.x *= 0.88;
+      shakeRef.current.y *= 0.88;
+      scoreScaleRef.current += (1 - scoreScaleRef.current) * 0.12;
 
       const pad = 8;
       const tableW = 400;
@@ -276,7 +419,7 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.fillRect(0, 0, cw, ch);
 
       ctx.save();
-      ctx.translate(ox, oy);
+      ctx.translate(ox + shakeRef.current.x, oy + shakeRef.current.y);
       ctx.scale(scale, scale);
 
       ctx.fillStyle = "#0d0d18";
@@ -306,7 +449,11 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.font = "bold 18px monospace";
       ctx.fillStyle = COLORS.neonGreen;
       ctx.textAlign = "left";
-      ctx.fillText(`SCORE: ${scoreRef.current}`, 16, 36);
+      ctx.save();
+      ctx.translate(16, 36);
+      ctx.scale(scoreScaleRef.current, scoreScaleRef.current);
+      ctx.fillText(`SCORE: ${scoreRef.current}`, 0, 0);
+      ctx.restore();
       ctx.textAlign = "right";
       if (comboRef.current > 1) ctx.fillText(`COMBO x${comboRef.current}`, tableW - 16, 36);
 
@@ -352,11 +499,51 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.arc(300, 340, 80, 0.5 * Math.PI, 1.3 * Math.PI);
       ctx.stroke();
 
-      bumpers.forEach((b, i) => {
+      dropTargetsRef.current.forEach((dt) => {
+        if (dt.dropped) return;
+        const x = dt.body.position.x;
+        const y = dt.body.position.y;
+        const w = 36;
+        const h = 20;
+        ctx.fillStyle = "rgba(0,240,255,0.25)";
+        ctx.shadowColor = COLORS.neonBlue;
+        ctx.shadowBlur = 12;
+        ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        ctx.strokeStyle = COLORS.neonBlue;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        ctx.shadowBlur = 0;
+      });
+
+      const spinners = Matter.Composite.allBodies(world).filter((b) => b.label === "spinner");
+      spinners.forEach((sp) => {
+        const x = sp.position.x;
+        const y = sp.position.y;
+        const w = 16;
+        const h = 40;
+        const spinAngle = animTimeRef.current * 0.08;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(spinAngle);
+        ctx.fillStyle = "rgba(255,200,0,0.4)";
+        ctx.shadowColor = COLORS.gold;
+        ctx.shadowBlur = 10;
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        ctx.strokeStyle = COLORS.gold;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.restore();
+        ctx.shadowBlur = 0;
+      });
+
+      const now = Date.now();
+      bumperDataRef.current.forEach((bd, i) => {
+        const b = bd.body;
         const x = b.position.x;
         const y = b.position.y;
         const r = (b.bounds.max.x - b.bounds.min.x) / 2;
-        const bumpPulse = 0.9 + 0.1 * Math.sin(t + i);
+        const recentlyHit = now - bd.lastHit < 350;
+        const bumpPulse = recentlyHit ? 1.2 : 0.9 + 0.1 * Math.sin(t + i);
         ctx.shadowBlur = 0;
         ctx.fillStyle = "rgba(0,0,0,0.4)";
         ctx.beginPath();
@@ -453,26 +640,28 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       });
       ctx.shadowBlur = 0;
 
-      const ballGrad = ctx.createRadialGradient(
-        ball.position.x - 4,
-        ball.position.y - 4,
-        0,
-        ball.position.x,
-        ball.position.y,
-        12
-      );
-      ballGrad.addColorStop(0, "#fff");
-      ballGrad.addColorStop(0.4, COLORS.neonGreen);
-      ballGrad.addColorStop(1, "#0a3d0a");
-      ctx.fillStyle = ballGrad;
-      ctx.shadowColor = COLORS.neonGreen;
-      ctx.shadowBlur = 20;
-      ctx.beginPath();
-      ctx.arc(ball.position.x, ball.position.y, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ballsRef.current.forEach((ballBody) => {
+        const ballGrad = ctx.createRadialGradient(
+          ballBody.position.x - 4,
+          ballBody.position.y - 4,
+          0,
+          ballBody.position.x,
+          ballBody.position.y,
+          12
+        );
+        ballGrad.addColorStop(0, "#fff");
+        ballGrad.addColorStop(0.4, COLORS.neonGreen);
+        ballGrad.addColorStop(1, "#0a3d0a");
+        ctx.fillStyle = ballGrad;
+        ctx.shadowColor = COLORS.neonGreen;
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(ballBody.position.x, ballBody.position.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
 
       particlesRef.current.forEach((p) => {
         ctx.save();
@@ -496,6 +685,20 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
         ctx.font = "bold 32px monospace";
         ctx.textAlign = "center";
         ctx.fillText("JACKPOT!", cw / 2, backglassH * scale + oy + 28);
+      }
+      if (multiballModeRef.current) {
+        const flash = 0.4 + 0.3 * Math.sin(animTimeRef.current * 0.2);
+        ctx.fillStyle = `rgba(255,0,255,${flash})`;
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.fillStyle = COLORS.neonPurple;
+        ctx.shadowColor = COLORS.pink;
+        ctx.shadowBlur = 30;
+        ctx.font = "bold 28px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("MULTIBALL MODE", cw / 2, ch / 2 - 20);
+        ctx.font = "bold 16px monospace";
+        ctx.fillText(`x${MULTIBALL_MULTIPLIER} MULTIPLIER`, cw / 2, ch / 2 + 15);
+        ctx.shadowBlur = 0;
       }
 
       animId = requestAnimationFrame(render);
@@ -539,13 +742,38 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       className="relative w-full rounded-xl overflow-hidden bg-[#0a0a12] border-2 border-[#00f0ff]/50"
       style={{ boxShadow: "0 0 30px rgba(0,240,255,0.2)" }}
     >
-      <canvas
-        ref={canvasRef}
-        className="w-full touch-none"
-        style={{ height: "min(600px, 85vh)", display: "block" }}
-        width={400}
-        height={600}
-      />
+      <div className="relative" style={{ height: "min(600px, 85vh)" }}>
+        <canvas
+          ref={canvasRef}
+          className="w-full touch-none block"
+          style={{ height: "min(600px, 85vh)", display: "block" }}
+          width={400}
+          height={600}
+        />
+        {/* Mobile: press-and-hold left/right half of playfield for flippers */}
+        <div
+          className="absolute top-0 bottom-0 left-0 w-1/2 touch-none"
+          style={{ touchAction: "manipulation" }}
+          onTouchStart={(e) => { e.preventDefault(); handleTouchLeft(true); }}
+          onTouchEnd={(e) => { e.preventDefault(); handleTouchLeft(false); }}
+          onTouchCancel={() => handleTouchLeft(false)}
+          onMouseDown={() => handleTouchLeft(true)}
+          onMouseUp={() => handleTouchLeft(false)}
+          onMouseLeave={() => handleTouchLeft(false)}
+          aria-label="Left flipper"
+        />
+        <div
+          className="absolute top-0 bottom-0 right-0 w-1/2 touch-none"
+          style={{ touchAction: "manipulation" }}
+          onTouchStart={(e) => { e.preventDefault(); handleTouchRight(true); }}
+          onTouchEnd={(e) => { e.preventDefault(); handleTouchRight(false); }}
+          onTouchCancel={() => handleTouchRight(false)}
+          onMouseDown={() => handleTouchRight(true)}
+          onMouseUp={() => handleTouchRight(false)}
+          onMouseLeave={() => handleTouchRight(false)}
+          aria-label="Right flipper"
+        />
+      </div>
       <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-8 pointer-events-none">
         <span className="text-[#00f0ff] font-mono text-sm">Z / ← Left</span>
         <span className="text-[#00f0ff] font-mono text-sm">M / → Right</span>

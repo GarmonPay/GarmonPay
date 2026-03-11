@@ -28,7 +28,7 @@ export default function PinballPage() {
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [submitResult, setSubmitResult] = useState<{ rank: number | null; leaderboard: LeaderboardEntry[] } | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ all_time: LeaderboardEntry[]; weekly: LeaderboardEntry[] } | null>(null);
+  const [leaderboard, setLeaderboard] = useState<{ all_time: LeaderboardEntry[]; weekly: LeaderboardEntry[]; daily: LeaderboardEntry[] } | null>(null);
 
   const tokenOrId = session?.accessToken ?? session?.userId ?? "";
   const isToken = !!session?.accessToken;
@@ -57,9 +57,9 @@ export default function PinballPage() {
 
   const fetchLeaderboard = useCallback(() => {
     fetch(`${API_BASE}/games/pinball/leaderboard`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { all_time: [], weekly: [] }))
+      .then((r) => (r.ok ? r.json() : { all_time: [], weekly: [], daily: [] }))
       .then(setLeaderboard)
-      .catch(() => setLeaderboard({ all_time: [], weekly: [] }));
+      .catch(() => setLeaderboard({ all_time: [], weekly: [], daily: [] }));
   }, []);
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export default function PinballPage() {
   }, [tokenOrId, isToken, fetchBalance, fetchStats, fetchLeaderboard]);
 
   const handlePlay = () => {
-    if (!tokenOrId || starting || (balanceCents != null && balanceCents < 10)) return;
+    if (!tokenOrId || starting || (balanceCents != null && balanceCents < 25)) return;
     setError(null);
     setSubmitResult(null);
     setLastScore(null);
@@ -134,7 +134,7 @@ export default function PinballPage() {
     );
   }
 
-  const costCents = 10;
+  const costCents = 25;
   const canPlay = balanceCents != null && balanceCents >= costCents && !sessionId;
 
   return (
@@ -199,7 +199,7 @@ export default function PinballPage() {
           <PinballGame sessionId={sessionId} onGameEnd={handleGameEnd} />
         )}
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <div className="rounded-xl border border-[#00f0ff]/30 bg-black/20 p-6">
             <h3 className="text-[#00f0ff] font-semibold mb-3">Top 10 All-Time</h3>
             <ul className="space-y-1 text-sm">
@@ -213,7 +213,7 @@ export default function PinballPage() {
             </ul>
           </div>
           <div className="rounded-xl border border-[#bf00ff]/30 bg-black/20 p-6">
-            <h3 className="text-[#bf00ff] font-semibold mb-3">Weekly Champions</h3>
+            <h3 className="text-[#bf00ff] font-semibold mb-3">Weekly Tournament</h3>
             <ul className="space-y-1 text-sm">
               {(leaderboard?.weekly ?? []).slice(0, 10).map((e) => (
                 <li key={e.user_id} className="flex justify-between">
@@ -222,6 +222,18 @@ export default function PinballPage() {
                 </li>
               ))}
               {(!leaderboard?.weekly?.length) && <li className="text-white/50">No scores this week.</li>}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-[#39ff14]/30 bg-black/20 p-6">
+            <h3 className="text-[#39ff14] font-semibold mb-3">Daily Top 10</h3>
+            <ul className="space-y-1 text-sm">
+              {(leaderboard?.daily ?? []).slice(0, 10).map((e) => (
+                <li key={e.user_id} className="flex justify-between">
+                  <span className="text-white/90">#{e.rank} {(e.email ?? "").replace(/(.{2}).*(@.*)/, "$1…$2")}</span>
+                  <span className="text-[#39ff14] font-mono">{e.score}</span>
+                </li>
+              ))}
+              {(!leaderboard?.daily?.length) && <li className="text-white/50">No scores today.</li>}
             </ul>
           </div>
         </div>

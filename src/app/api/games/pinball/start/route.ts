@@ -3,7 +3,7 @@ import { getAuthUserId } from "@/lib/auth-request";
 import { createPinballSession } from "@/lib/pinball-db";
 import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger";
 
-const ENTRY_COST_CENTS = 10;
+const ENTRY_COST_CENTS = 25;
 
 /** POST /api/games/pinball/start — deduct entry fee, create session. Returns { session_id, balance_cents }. */
 export async function POST(req: Request) {
