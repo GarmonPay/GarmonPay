@@ -50,8 +50,8 @@ export default function BoxingGamePage() {
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-2xl font-bold text-white">Boxing Arena</h1>
-            <Link href="/dashboard/games/boxing" className="text-sm text-fintech-muted hover:text-white">
-              ← Back to games
+            <Link href="/games" className="text-sm text-fintech-muted hover:text-white">
+              ← Game Station
             </Link>
           </div>
           <p className="text-white/70 text-sm">
@@ -75,8 +75,8 @@ export default function BoxingGamePage() {
       <div className="max-w-5xl mx-auto space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-white">3D Boxing</h1>
-          <Link href="/dashboard/games/boxing" className="text-sm text-fintech-muted hover:text-white">
-            ← Back to games
+            <Link href="/games" className="text-sm text-fintech-muted hover:text-white">
+            ← Game Station
           </Link>
         </div>
         <p className="text-fintech-muted text-sm">

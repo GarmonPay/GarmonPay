@@ -143,7 +143,7 @@ export default function PinballPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/dashboard/games"
+              href="/games"
               className="text-[#00f0ff]/80 hover:text-[#00f0ff] text-sm font-medium"
             >
               ← Game Station

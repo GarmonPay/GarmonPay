@@ -100,7 +100,7 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
     engineRef.current = engine;
     const { world } = engine;
 
-    const wallOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 0.6, friction: 0 };
+    const wallOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.6, friction: 0 };
     const wallH = 20;
     Matter.World.add(world, [
       Matter.Bodies.rectangle(200, -wallH / 2, 420, wallH, wallOpts),
@@ -117,13 +117,13 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       angle: 0.35,
       friction: 0.8,
       restitution: 0.9,
-    });
+    } as Matter.IChamferableBodyDefinition);
     const rightFlipper = Matter.Bodies.rectangle(280, flipperY, flipperW, flipperH, {
       isStatic: true,
       angle: -0.35,
       friction: 0.8,
       restitution: 0.9,
-    });
+    } as Matter.IChamferableBodyDefinition);
     Matter.World.add(world, [leftFlipper, rightFlipper]);
     leftFlipperRef.current = leftFlipper;
     rightFlipperRef.current = rightFlipper;
@@ -143,7 +143,7 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       isStatic: true,
       isSensor: true,
       label: "jackpot",
-    });
+    } as Matter.IChamferableBodyDefinition);
     Matter.World.add(world, jackpotZone);
 
     const ball = Matter.Bodies.circle(200, 300, 10, {

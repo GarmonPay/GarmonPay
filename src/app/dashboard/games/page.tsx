@@ -125,6 +125,7 @@ export default function DashboardGamesPage() {
         <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Games</h1>
         <p className="text-sm text-fintech-muted mt-1">
           Rewards are drawn from the platform budget. Play fair — all calculations are server-side.
+          <Link href="/games" className="ml-2 text-fintech-accent hover:underline">Neon Game Station →</Link>
         </p>
       </div>
 
