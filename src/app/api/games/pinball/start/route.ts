@@ -18,20 +18,25 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const ref = `pinball_${userId}_${Date.now()}`;
+  let session: Awaited<ReturnType<typeof createPinballSession>>;
+  try {
+    session = await createPinballSession(userId);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Database error";
+    console.error("Pinball start create session error:", e);
+    return NextResponse.json(
+      { error: "Failed to start game. Run database migrations (e.g. supabase db push).", details: message },
+      { status: 500 }
+    );
+  }
+  const ref = `pinball_${userId}_${session.id}`;
   const result = await walletLedgerEntry(userId, "game_play", -ENTRY_COST_CENTS, ref);
   if (!result.success) {
     return NextResponse.json({ error: result.message }, { status: 400 });
   }
-  try {
-    const session = await createPinballSession(userId);
-    return NextResponse.json({
-      session_id: session.id,
-      balance_cents: result.balance_cents,
-      cost_cents: ENTRY_COST_CENTS,
-    });
-  } catch (e) {
-    console.error("Pinball start create session error:", e);
-    return NextResponse.json({ error: "Failed to start game" }, { status: 500 });
-  }
+  return NextResponse.json({
+    session_id: session.id,
+    balance_cents: result.balance_cents,
+    cost_cents: ENTRY_COST_CENTS,
+  });
 }

@@ -92,7 +92,7 @@ export default function PinballPage() {
       credentials: "include",
     })
       .then((r) => {
-        if (!r.ok) return r.json().then((d: { error?: string }) => Promise.reject(new Error(d.error ?? "Failed to start")));
+        if (!r.ok) return r.json().then((d: { error?: string; details?: string }) => Promise.reject(new Error(d.details ? `${d.error}: ${d.details}` : d.error ?? "Failed to start")));
         return r.json();
       })
       .then((d: { session_id: string; balance_cents: number }) => {
