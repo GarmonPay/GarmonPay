@@ -8,7 +8,12 @@ const COLORS = {
   neonGreen: "#39ff14",
   neonPurple: "#bf00ff",
   pink: "#ff00ff",
+  gold: "#ffd700",
   bg: "#0a0a12",
+  playfield: "#0d1f0d",
+  playfieldHighlight: "#142814",
+  cabinet: "#1a0a0a",
+  rail: "#00c8ff",
 };
 
 const BUMPER_SCORE = 100;
@@ -38,6 +43,9 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
   const flipperSoundPlayed = useRef({ left: false, right: false });
   const audioContextRef = useRef<AudioContext | null>(null);
   const gameEndedRef = useRef(false);
+  const ballTrailRef = useRef<{ x: number; y: number }[]>([]);
+  const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; life: number; hue: number }[]>([]);
+  const animTimeRef = useRef(0);
 
   const playSound = useCallback((type: "bumper" | "jackpot" | "flipper" | "drain") => {
     try {
@@ -172,6 +180,19 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
           setScore(scoreRef.current);
           setCombo(comboRef.current);
           playSound("bumper");
+          const bumperBody = a.label === "bumper" ? a : b;
+          const ballBody = a.label === "ball" ? a : b;
+          for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
+            particlesRef.current.push({
+              x: bumperBody.position.x,
+              y: bumperBody.position.y,
+              vx: Math.cos(angle) * 4,
+              vy: Math.sin(angle) * 4,
+              life: 1,
+              hue: 280,
+            });
+          }
         }
         if ((a.label === "jackpot" || b.label === "jackpot") && (a.label === "ball" || b.label === "ball")) {
           scoreRef.current += JACKPOT_SCORE;
@@ -179,6 +200,18 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
           setJackpotMode(true);
           playSound("jackpot");
           setTimeout(() => setJackpotMode(false), 1500);
+          const ballBody = a.label === "ball" ? a : b;
+          for (let i = 0; i < 24; i++) {
+            const angle = (Math.PI * 2 * i) / 24;
+            particlesRef.current.push({
+              x: ballBody.position.x,
+              y: ballBody.position.y,
+              vx: Math.cos(angle) * 8,
+              vy: Math.sin(angle) * 8,
+              life: 1,
+              hue: 120,
+            });
+          }
         }
       }
     });
@@ -205,6 +238,17 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
 
       Matter.Engine.update(engine, 1000 / 60);
 
+      animTimeRef.current += 1;
+      const t = animTimeRef.current * 0.05;
+      const pulse = 0.85 + 0.15 * Math.sin(t);
+
+      ballTrailRef.current.push({ x: ball.position.x, y: ball.position.y });
+      if (ballTrailRef.current.length > 14) ballTrailRef.current.shift();
+
+      particlesRef.current = particlesRef.current
+        .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.028 }))
+        .filter((p) => p.life > 0);
+
       const by = ball.position.y;
       if (by > 620) {
         gameEndedRef.current = true;
@@ -222,94 +266,236 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      ctx.fillStyle = COLORS.bg;
+      const pad = 8;
+      const tableW = 400;
+      const tableH = 600;
+      const backglassH = 52;
+      const playfieldY = backglassH;
+
+      ctx.fillStyle = COLORS.cabinet;
       ctx.fillRect(0, 0, cw, ch);
 
       ctx.save();
       ctx.translate(ox, oy);
       ctx.scale(scale, scale);
 
+      ctx.fillStyle = "#0d0d18";
+      ctx.fillRect(-pad, -pad, tableW + pad * 2, backglassH + pad * 2);
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, backglassH);
+      bgGrad.addColorStop(0, "#1a1a2e");
+      bgGrad.addColorStop(0.5, "#16213e");
+      bgGrad.addColorStop(1, "#0f0f1a");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, tableW, backglassH);
       ctx.strokeStyle = COLORS.neonBlue;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 15;
-      ctx.lineWidth = 4;
-      ctx.strokeRect(10, 10, 380, 580);
-
-      ctx.save();
-      ctx.font = "bold 20px monospace";
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(2, 2, tableW - 4, backglassH - 4);
+      ctx.font = "bold 22px monospace";
       ctx.textAlign = "center";
       ctx.fillStyle = COLORS.neonBlue;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 25;
-      ctx.fillText("GARMONPAY", 200, 32);
-      ctx.restore();
+      ctx.shadowBlur = 30;
+      ctx.fillText("GARMONPAY", tableW / 2, 22);
+      ctx.font = "bold 14px monospace";
+      ctx.fillStyle = COLORS.gold;
+      ctx.shadowColor = COLORS.gold;
+      ctx.shadowBlur = 15;
+      ctx.fillText("PINBALL", tableW / 2, 40);
+      ctx.shadowBlur = 0;
+      ctx.font = "bold 18px monospace";
+      ctx.fillStyle = COLORS.neonGreen;
+      ctx.textAlign = "left";
+      ctx.fillText(`SCORE: ${scoreRef.current}`, 16, 36);
+      ctx.textAlign = "right";
+      if (comboRef.current > 1) ctx.fillText(`COMBO x${comboRef.current}`, tableW - 16, 36);
 
-      bumpers.forEach((b) => {
+      const playfieldGrad = ctx.createRadialGradient(tableW / 2, 350, 0, tableW / 2, 350, 450);
+      playfieldGrad.addColorStop(0, COLORS.playfieldHighlight);
+      playfieldGrad.addColorStop(0.6, COLORS.playfield);
+      playfieldGrad.addColorStop(1, "#081008");
+      ctx.fillStyle = playfieldGrad;
+      ctx.fillRect(0, playfieldY, tableW, tableH - playfieldY);
+      ctx.fillStyle = "rgba(0,240,255,0.03)";
+      for (let i = 0; i < 20; i++) {
+        ctx.fillRect((i % 5) * 90 + 10, playfieldY + (Math.floor(i / 5) * 120) + 10, 80, 100);
+      }
+
+      const railWidth = 14;
+      const railGlow = pulse * 18;
+      ctx.strokeStyle = COLORS.rail;
+      ctx.shadowColor = COLORS.neonBlue;
+      ctx.shadowBlur = railGlow;
+      ctx.lineWidth = railWidth;
+      ctx.strokeRect(railWidth / 2 + 4, playfieldY + railWidth / 2 + 4, tableW - railWidth - 8, tableH - playfieldY - railWidth - 8);
+      ctx.strokeStyle = COLORS.neonBlue;
+      ctx.shadowBlur = railGlow * 0.6;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(10, playfieldY + 10, tableW - 20, tableH - playfieldY - 20);
+      ctx.setLineDash([8, 6]);
+      ctx.strokeStyle = "rgba(0,240,255,0.4)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(18, playfieldY + 18, tableW - 36, tableH - playfieldY - 36);
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = COLORS.neonPurple;
+      ctx.shadowColor = COLORS.neonPurple;
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(200, 220, 120, 0.2 * Math.PI, 0.8 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(100, 340, 80, -0.3 * Math.PI, 0.5 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(300, 340, 80, 0.5 * Math.PI, 1.3 * Math.PI);
+      ctx.stroke();
+
+      bumpers.forEach((b, i) => {
         const x = b.position.x;
         const y = b.position.y;
         const r = (b.bounds.max.x - b.bounds.min.x) / 2;
-        ctx.fillStyle = COLORS.neonPurple;
+        const bumpPulse = 0.9 + 0.1 * Math.sin(t + i);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        const ringGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+        ringGrad.addColorStop(0, COLORS.pink);
+        ringGrad.addColorStop(0.6, COLORS.neonPurple);
+        ringGrad.addColorStop(1, "#400060");
+        ctx.fillStyle = ringGrad;
         ctx.shadowColor = COLORS.neonPurple;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 22 * bumpPulse;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = COLORS.pink;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.ellipse(x - r * 0.25, y - r * 0.25, r * 0.35, r * 0.2, -0.3, 0, Math.PI * 2);
+        ctx.fill();
       });
 
-      ctx.fillStyle = COLORS.neonGreen;
-      ctx.shadowColor = COLORS.neonGreen;
-      ctx.shadowBlur = 25;
-      ctx.fillRect(jackpotZone.position.x - 40, jackpotZone.position.y - 15, 80, 30);
-      ctx.font = "12px monospace";
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = jackpotMode ? COLORS.gold : COLORS.neonGreen;
+      ctx.shadowColor = jackpotMode ? COLORS.gold : COLORS.neonGreen;
+      ctx.shadowBlur = jackpotMode ? 35 : 25;
+      const jx = jackpotZone.position.x - 42;
+      const jy = jackpotZone.position.y - 16;
+      const jw = 84;
+      const jh = 32;
+      const jr = 6;
+      ctx.beginPath();
+      ctx.moveTo(jx + jr, jy);
+      ctx.lineTo(jx + jw - jr, jy);
+      ctx.quadraticCurveTo(jx + jw, jy, jx + jw, jy + jr);
+      ctx.lineTo(jx + jw, jy + jh - jr);
+      ctx.quadraticCurveTo(jx + jw, jy + jh, jx + jw - jr, jy + jh);
+      ctx.lineTo(jx + jr, jy + jh);
+      ctx.quadraticCurveTo(jx, jy + jh, jx, jy + jh - jr);
+      ctx.lineTo(jx, jy + jr);
+      ctx.quadraticCurveTo(jx, jy, jx + jr, jy);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = "bold 13px monospace";
+      ctx.fillStyle = "#000";
       ctx.shadowBlur = 0;
       ctx.textAlign = "center";
-      ctx.fillText("JACKPOT", jackpotZone.position.x, jackpotZone.position.y + 4);
+      ctx.fillText("JACKPOT", jackpotZone.position.x, jackpotZone.position.y + 5);
 
+      const flipperGrad = ctx.createLinearGradient(-flipperW / 2, 0, flipperW / 2, 0);
+      flipperGrad.addColorStop(0, "#004050");
+      flipperGrad.addColorStop(0.3, COLORS.neonBlue);
+      flipperGrad.addColorStop(0.7, COLORS.neonBlue);
+      flipperGrad.addColorStop(1, "#004050");
       ctx.save();
       ctx.translate(leftFlipper.position.x, leftFlipper.position.y);
       ctx.rotate(leftFlipper.angle);
-      ctx.fillStyle = COLORS.neonBlue;
+      ctx.fillStyle = flipperGrad;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
       ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.fillRect(-flipperW / 2 + 4, -flipperH / 2 + 2, flipperW * 0.4, flipperH - 4);
       ctx.restore();
-
       ctx.save();
       ctx.translate(rightFlipper.position.x, rightFlipper.position.y);
       ctx.rotate(rightFlipper.angle);
-      ctx.fillStyle = COLORS.neonBlue;
+      ctx.fillStyle = flipperGrad;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
       ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.fillRect(flipperW / 2 - flipperW * 0.4 - 4, -flipperH / 2 + 2, flipperW * 0.4, flipperH - 4);
       ctx.restore();
 
-      ctx.fillStyle = COLORS.neonGreen;
+      ballTrailRef.current.forEach((p, i) => {
+        const alpha = (i + 1) / ballTrailRef.current.length;
+        ctx.fillStyle = `rgba(57,255,20,${0.15 * alpha})`;
+        ctx.shadowColor = COLORS.neonGreen;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+
+      const ballGrad = ctx.createRadialGradient(
+        ball.position.x - 4,
+        ball.position.y - 4,
+        0,
+        ball.position.x,
+        ball.position.y,
+        12
+      );
+      ballGrad.addColorStop(0, "#fff");
+      ballGrad.addColorStop(0.4, COLORS.neonGreen);
+      ballGrad.addColorStop(1, "#0a3d0a");
+      ctx.fillStyle = ballGrad;
       ctx.shadowColor = COLORS.neonGreen;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.beginPath();
       ctx.arc(ball.position.x, ball.position.y, 10, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      particlesRef.current.forEach((p) => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.hue > 150 ? `hsla(${p.hue}, 100%, 60%, 0.9)` : `hsla(${p.hue}, 100%, 70%, 0.9)`;
+        ctx.shadowColor = p.hue > 150 ? COLORS.neonGreen : COLORS.neonPurple;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
 
       ctx.restore();
 
       ctx.shadowBlur = 0;
-      ctx.fillStyle = COLORS.neonBlue;
-      ctx.font = "bold 24px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(`SCORE: ${scoreRef.current}`, 20, 40);
-      if (comboRef.current > 1) {
-        ctx.fillStyle = COLORS.neonGreen;
-        ctx.fillText(`COMBO x${comboRef.current}`, 20, 70);
-      }
       if (jackpotMode) {
-        ctx.fillStyle = COLORS.neonPurple;
-        ctx.font = "bold 28px monospace";
+        ctx.fillStyle = COLORS.gold;
+        ctx.shadowColor = COLORS.gold;
+        ctx.shadowBlur = 25;
+        ctx.font = "bold 32px monospace";
         ctx.textAlign = "center";
-        ctx.fillText("JACKPOT!", cw / 2, 50);
+        ctx.fillText("JACKPOT!", cw / 2, backglassH * scale + oy + 28);
       }
 
       animId = requestAnimationFrame(render);
