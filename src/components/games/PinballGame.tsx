@@ -14,6 +14,13 @@ const COLORS = {
   playfieldHighlight: "#142814",
   cabinet: "#1a0a0a",
   rail: "#00c8ff",
+  chromeHighlight: "#e8f4fc",
+  chromeMid: "#8a9ba8",
+  chromeShadow: "#2a3540",
+  rubber: "#1a1a1a",
+  woodDark: "#2a1810",
+  woodMid: "#4a2818",
+  woodLight: "#6b3d28",
 };
 
 const BUMPER_SCORE = 100;
@@ -414,38 +421,64 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       const backglassH = 52;
       const playfieldY = backglassH;
 
-      ctx.fillStyle = COLORS.cabinet;
+      // Cabinet background (dark wood)
+      ctx.fillStyle = COLORS.woodDark;
+      ctx.fillRect(0, 0, cw, ch);
+      const cabGrad = ctx.createLinearGradient(0, 0, cw, 0);
+      cabGrad.addColorStop(0, "#1a0f0a");
+      cabGrad.addColorStop(0.5, COLORS.woodDark);
+      cabGrad.addColorStop(1, "#1a0f0a");
+      ctx.fillStyle = cabGrad;
       ctx.fillRect(0, 0, cw, ch);
 
       ctx.save();
       ctx.translate(ox + shakeRef.current.x, oy + shakeRef.current.y);
       ctx.scale(scale, scale);
 
-      ctx.fillStyle = "#0d0d18";
-      ctx.fillRect(-pad, -pad, tableW + pad * 2, backglassH + pad * 2);
+      // Wood frame around entire table (bevel)
+      const frameInset = 6;
+      const woodFrame = (x: number, y: number, w: number, h: number) => {
+        const lg = ctx.createLinearGradient(x, y, x + w, y + h);
+        lg.addColorStop(0, COLORS.woodLight);
+        lg.addColorStop(0.3, COLORS.woodMid);
+        lg.addColorStop(0.7, COLORS.woodDark);
+        lg.addColorStop(1, "#1a0f0a");
+        ctx.fillStyle = lg;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, w, h);
+      };
+      woodFrame(-frameInset, -frameInset, tableW + frameInset * 2, tableH + frameInset * 2);
+
+      // Backglass (lit display area)
+      const bgInset = 4;
+      ctx.fillStyle = "#0a0a14";
+      ctx.fillRect(bgInset, bgInset, tableW - bgInset * 2, backglassH - 2);
       const bgGrad = ctx.createLinearGradient(0, 0, 0, backglassH);
-      bgGrad.addColorStop(0, "#1a1a2e");
-      bgGrad.addColorStop(0.5, "#16213e");
-      bgGrad.addColorStop(1, "#0f0f1a");
+      bgGrad.addColorStop(0, "#1a1a35");
+      bgGrad.addColorStop(0.4, "#0f0f22");
+      bgGrad.addColorStop(1, "#080810");
       ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, tableW, backglassH);
+      ctx.fillRect(bgInset + 2, bgInset + 2, tableW - bgInset * 2 - 4, backglassH - 6);
       ctx.strokeStyle = COLORS.neonBlue;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 20;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(2, 2, tableW - 4, backglassH - 4);
-      ctx.font = "bold 22px monospace";
+      ctx.shadowBlur = 25;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bgInset + 2, bgInset + 2, tableW - bgInset * 2 - 4, backglassH - 6);
+      ctx.shadowBlur = 0;
+      ctx.font = "bold 20px monospace";
       ctx.textAlign = "center";
       ctx.fillStyle = COLORS.neonBlue;
-      ctx.shadowBlur = 30;
-      ctx.fillText("GARMONPAY", tableW / 2, 22);
-      ctx.font = "bold 14px monospace";
+      ctx.shadowColor = COLORS.neonBlue;
+      ctx.shadowBlur = 12;
+      ctx.fillText("GARMONPAY", tableW / 2, 20);
+      ctx.font = "bold 12px monospace";
       ctx.fillStyle = COLORS.gold;
       ctx.shadowColor = COLORS.gold;
-      ctx.shadowBlur = 15;
-      ctx.fillText("PINBALL", tableW / 2, 40);
+      ctx.fillText("PINBALL", tableW / 2, 36);
       ctx.shadowBlur = 0;
-      ctx.font = "bold 18px monospace";
+      ctx.font = "bold 16px monospace";
       ctx.fillStyle = COLORS.neonGreen;
       ctx.textAlign = "left";
       ctx.save();
@@ -454,87 +487,127 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.fillText(`SCORE: ${scoreRef.current}`, 0, 0);
       ctx.restore();
       ctx.textAlign = "right";
-      if (comboRef.current > 1) ctx.fillText(`COMBO x${comboRef.current}`, tableW - 16, 36);
-
-      const playfieldGrad = ctx.createRadialGradient(tableW / 2, 350, 0, tableW / 2, 350, 450);
-      playfieldGrad.addColorStop(0, COLORS.playfieldHighlight);
-      playfieldGrad.addColorStop(0.6, COLORS.playfield);
-      playfieldGrad.addColorStop(1, "#081008");
-      ctx.fillStyle = playfieldGrad;
-      ctx.fillRect(0, playfieldY, tableW, tableH - playfieldY);
-      ctx.fillStyle = "rgba(0,240,255,0.03)";
-      for (let i = 0; i < 20; i++) {
-        ctx.fillRect((i % 5) * 90 + 10, playfieldY + (Math.floor(i / 5) * 120) + 10, 80, 100);
+      if (comboRef.current > 1) {
+        ctx.fillStyle = COLORS.gold;
+        ctx.fillText(`COMBO x${comboRef.current}`, tableW - 16, 36);
       }
 
-      const railWidth = 14;
-      const railGlow = pulse * 18;
-      ctx.strokeStyle = COLORS.rail;
+      // Playfield (felt) with subtle weave
+      const playfieldGrad = ctx.createRadialGradient(tableW / 2, 380, 0, tableW / 2, 380, 520);
+      playfieldGrad.addColorStop(0, "#0f2a0f");
+      playfieldGrad.addColorStop(0.4, COLORS.playfield);
+      playfieldGrad.addColorStop(1, "#051505");
+      ctx.fillStyle = playfieldGrad;
+      ctx.fillRect(0, playfieldY, tableW, tableH - playfieldY);
+      ctx.fillStyle = "rgba(0,255,100,0.02)";
+      for (let i = 0; i < 24; i++) {
+        for (let j = 0; j < 36; j++) {
+          if ((i + j) % 2 === 0) ctx.fillRect(j * 11, playfieldY + i * 22, 12, 23);
+        }
+      }
+
+      // Wood rails with neon edge (inner playfield border)
+      const railWidth = 16;
+      const railInset = 8;
+      const railGlow = pulse * 22;
+      ctx.fillStyle = COLORS.woodMid;
+      ctx.fillRect(0, playfieldY, tableW, railWidth);
+      ctx.fillRect(0, playfieldY, railWidth, tableH - playfieldY);
+      ctx.fillRect(tableW - railWidth, playfieldY, railWidth, tableH - playfieldY);
+      ctx.fillRect(0, tableH - railWidth, tableW, railWidth);
+      ctx.strokeStyle = COLORS.neonBlue;
       ctx.shadowColor = COLORS.neonBlue;
       ctx.shadowBlur = railGlow;
-      ctx.lineWidth = railWidth;
-      ctx.strokeRect(railWidth / 2 + 4, playfieldY + railWidth / 2 + 4, tableW - railWidth - 8, tableH - playfieldY - railWidth - 8);
-      ctx.strokeStyle = COLORS.neonBlue;
-      ctx.shadowBlur = railGlow * 0.6;
       ctx.lineWidth = 4;
-      ctx.strokeRect(10, playfieldY + 10, tableW - 20, tableH - playfieldY - 20);
-      ctx.setLineDash([8, 6]);
-      ctx.strokeStyle = "rgba(0,240,255,0.4)";
+      ctx.strokeRect(railInset, playfieldY + railInset, tableW - railInset * 2, tableH - playfieldY - railInset * 2);
+      ctx.setLineDash([10, 8]);
+      ctx.strokeStyle = "rgba(0,240,255,0.35)";
       ctx.lineWidth = 2;
-      ctx.strokeRect(18, playfieldY + 18, tableW - 36, tableH - playfieldY - 36);
+      ctx.strokeRect(railInset + 6, playfieldY + railInset + 6, tableW - (railInset + 6) * 2, tableH - playfieldY - (railInset + 6) * 2);
       ctx.setLineDash([]);
+      ctx.shadowBlur = 0;
 
+      // Wireform-style arc paths (neon rails)
       ctx.strokeStyle = COLORS.neonPurple;
       ctx.shadowColor = COLORS.neonPurple;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(200, 220, 120, 0.2 * Math.PI, 0.8 * Math.PI);
+      ctx.arc(200, 220, 115, 0.22 * Math.PI, 0.78 * Math.PI);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(100, 340, 80, -0.3 * Math.PI, 0.5 * Math.PI);
+      ctx.arc(100, 340, 75, -0.28 * Math.PI, 0.52 * Math.PI);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(300, 340, 80, 0.5 * Math.PI, 1.3 * Math.PI);
+      ctx.arc(300, 340, 75, 0.48 * Math.PI, 1.28 * Math.PI);
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
+      // Drop targets (stand-up target look: red/white stripe, 3D bevel)
       dropTargetsRef.current.forEach((dt) => {
         if (dt.dropped) return;
         const x = dt.body.position.x;
         const y = dt.body.position.y;
         const w = 36;
         const h = 20;
-        ctx.fillStyle = "rgba(0,240,255,0.25)";
-        ctx.shadowColor = COLORS.neonBlue;
-        ctx.shadowBlur = 12;
+        const bw = 3;
+        ctx.fillStyle = "#8b0000";
         ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, (h - 4) / 2);
+        ctx.fillStyle = "#8b0000";
+        ctx.fillRect(x - w / 2 + 2, y - 2, w - 4, (h - 4) / 2);
+        ctx.strokeStyle = "#400";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        ctx.fillStyle = "rgba(255,255,255,0.4)";
+        ctx.fillRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, 2);
+        ctx.shadowColor = COLORS.neonBlue;
+        ctx.shadowBlur = 8;
         ctx.strokeStyle = COLORS.neonBlue;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1;
         ctx.strokeRect(x - w / 2, y - h / 2, w, h);
         ctx.shadowBlur = 0;
       });
 
+      // Spinners (rotating disc with stripes)
       const spinners = Matter.Composite.allBodies(world).filter((b) => b.label === "spinner");
       spinners.forEach((sp) => {
         const x = sp.position.x;
         const y = sp.position.y;
-        const w = 16;
-        const h = 40;
         const spinAngle = animTimeRef.current * 0.08;
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(spinAngle);
-        ctx.fillStyle = "rgba(255,200,0,0.4)";
-        ctx.shadowColor = COLORS.gold;
-        ctx.shadowBlur = 10;
-        ctx.fillRect(-w / 2, -h / 2, w, h);
-        ctx.strokeStyle = COLORS.gold;
+        const rad = 22;
+        const sg = ctx.createRadialGradient(-rad * 0.3, -rad * 0.3, 0, 0, 0, rad);
+        sg.addColorStop(0, "#666");
+        sg.addColorStop(0.5, COLORS.gold);
+        sg.addColorStop(1, "#664400");
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.arc(0, 0, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#332200";
         ctx.lineWidth = 2;
-        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          ctx.fillStyle = i % 2 === 0 ? "#ffcc00" : "#996600";
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, rad - 2, a, a + Math.PI / 4);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.beginPath();
+        ctx.arc(-4, -4, 5, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
-        ctx.shadowBlur = 0;
       });
 
+      // Pop bumpers (dome style: base ring + dome with highlight)
       const now = Date.now();
       bumperDataRef.current.forEach((bd, i) => {
         const b = bd.body;
@@ -542,40 +615,61 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
         const y = b.position.y;
         const r = (b.bounds.max.x - b.bounds.min.x) / 2;
         const recentlyHit = now - bd.lastHit < 350;
-        const bumpPulse = recentlyHit ? 1.2 : 0.9 + 0.1 * Math.sin(t + i);
+        const bumpPulse = recentlyHit ? 1.35 : 0.92 + 0.08 * Math.sin(t + i);
         ctx.shadowBlur = 0;
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        const baseR = r + 6;
+        const baseGrad = ctx.createLinearGradient(x - baseR, y + baseR, x + baseR, y - baseR);
+        baseGrad.addColorStop(0, "#1a1a1a");
+        baseGrad.addColorStop(0.5, "#333");
+        baseGrad.addColorStop(1, "#111");
+        ctx.fillStyle = baseGrad;
         ctx.beginPath();
-        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.arc(x, y, baseR, 0, Math.PI * 2);
         ctx.fill();
-        const ringGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
-        ringGrad.addColorStop(0, COLORS.pink);
-        ringGrad.addColorStop(0.6, COLORS.neonPurple);
-        ringGrad.addColorStop(1, "#400060");
-        ctx.fillStyle = ringGrad;
+        ctx.strokeStyle = "#555";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        const domeGrad = ctx.createRadialGradient(
+          x - r * 0.4,
+          y - r * 0.4,
+          0,
+          x,
+          y,
+          r
+        );
+        domeGrad.addColorStop(0, recentlyHit ? "#ff88ff" : COLORS.pink);
+        domeGrad.addColorStop(0.35, COLORS.neonPurple);
+        domeGrad.addColorStop(0.8, "#300050");
+        domeGrad.addColorStop(1, "#180028");
+        ctx.fillStyle = domeGrad;
         ctx.shadowColor = COLORS.neonPurple;
-        ctx.shadowBlur = 22 * bumpPulse;
+        ctx.shadowBlur = recentlyHit ? 35 : 20 * bumpPulse;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = COLORS.pink;
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255,200,255,0.6)";
+        ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
         ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
         ctx.beginPath();
-        ctx.ellipse(x - r * 0.25, y - r * 0.25, r * 0.35, r * 0.2, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(x - r * 0.3, y - r * 0.3, r * 0.4, r * 0.22, -0.4, 0, Math.PI * 2);
         ctx.fill();
       });
 
-      ctx.fillStyle = jackpotMode ? COLORS.gold : COLORS.neonGreen;
-      ctx.shadowColor = jackpotMode ? COLORS.gold : COLORS.neonGreen;
-      ctx.shadowBlur = jackpotMode ? 35 : 25;
+      // Jackpot lane (lit scoop)
       const jx = jackpotZone.position.x - 42;
       const jy = jackpotZone.position.y - 16;
       const jw = 84;
       const jh = 32;
       const jr = 6;
+      const jGrad = ctx.createLinearGradient(jx, jy, jx + jw, jy + jh);
+      jGrad.addColorStop(0, jackpotMode ? "#ffcc00" : "#0a4d0a");
+      jGrad.addColorStop(0.5, jackpotMode ? "#ffdd44" : "#0d6b0d");
+      jGrad.addColorStop(1, jackpotMode ? "#cc9900" : "#063806");
+      ctx.fillStyle = jGrad;
+      ctx.shadowColor = jackpotMode ? COLORS.gold : COLORS.neonGreen;
+      ctx.shadowBlur = jackpotMode ? 40 : 28;
       ctx.beginPath();
       ctx.moveTo(jx + jr, jy);
       ctx.lineTo(jx + jw - jr, jy);
@@ -587,77 +681,96 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.lineTo(jx, jy + jr);
       ctx.quadraticCurveTo(jx, jy, jx + jr, jy);
       ctx.fill();
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = jackpotMode ? "#ffdd88" : "rgba(0,255,100,0.8)";
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.font = "bold 13px monospace";
-      ctx.fillStyle = "#000";
       ctx.shadowBlur = 0;
+      ctx.font = "bold 14px monospace";
+      ctx.fillStyle = jackpotMode ? "#331100" : "#001100";
       ctx.textAlign = "center";
       ctx.fillText("JACKPOT", jackpotZone.position.x, jackpotZone.position.y + 5);
 
-      const flipperGrad = ctx.createLinearGradient(-flipperW / 2, 0, flipperW / 2, 0);
-      flipperGrad.addColorStop(0, "#004050");
-      flipperGrad.addColorStop(0.3, COLORS.neonBlue);
-      flipperGrad.addColorStop(0.7, COLORS.neonBlue);
-      flipperGrad.addColorStop(1, "#004050");
+      // Drain slot (dark gap between flippers)
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(160, 548, 80, 28);
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(162, 550, 76, 24);
+
+      // Flippers (metal body + rubber pad, professional look)
+      const flipperMetal = ctx.createLinearGradient(-flipperW / 2, 0, flipperW / 2, 0);
+      flipperMetal.addColorStop(0, "#1a2530");
+      flipperMetal.addColorStop(0.2, "#3a5568");
+      flipperMetal.addColorStop(0.5, COLORS.neonBlue);
+      flipperMetal.addColorStop(0.8, "#3a5568");
+      flipperMetal.addColorStop(1, "#1a2530");
       ctx.save();
       ctx.translate(leftFlipper.position.x, leftFlipper.position.y);
       ctx.rotate(leftFlipper.angle);
-      ctx.fillStyle = flipperGrad;
+      ctx.fillStyle = flipperMetal;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
       ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.25)";
-      ctx.fillRect(-flipperW / 2 + 4, -flipperH / 2 + 2, flipperW * 0.4, flipperH - 4);
+      ctx.strokeRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
+      ctx.fillStyle = COLORS.rubber;
+      ctx.fillRect(-flipperW / 2 + 2, -flipperH / 2 + 2, flipperW * 0.5, flipperH - 4);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(-flipperW / 2 + 6, -flipperH / 2 + 3, flipperW * 0.35, 2);
       ctx.restore();
       ctx.save();
       ctx.translate(rightFlipper.position.x, rightFlipper.position.y);
       ctx.rotate(rightFlipper.angle);
-      ctx.fillStyle = flipperGrad;
+      ctx.fillStyle = flipperMetal;
       ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
       ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.25)";
-      ctx.fillRect(flipperW / 2 - flipperW * 0.4 - 4, -flipperH / 2 + 2, flipperW * 0.4, flipperH - 4);
+      ctx.fillStyle = COLORS.rubber;
+      ctx.fillRect(flipperW / 2 - flipperW * 0.5 - 2, -flipperH / 2 + 2, flipperW * 0.5, flipperH - 4);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(flipperW / 2 - flipperW * 0.35 - 6, -flipperH / 2 + 3, flipperW * 0.35, 2);
       ctx.restore();
 
       ballTrailRef.current.forEach((p, i) => {
         const alpha = (i + 1) / ballTrailRef.current.length;
-        ctx.fillStyle = `rgba(57,255,20,${0.15 * alpha})`;
-        ctx.shadowColor = COLORS.neonGreen;
-        ctx.shadowBlur = 8;
+        ctx.fillStyle = `rgba(180,200,220,${0.2 * alpha})`;
+        ctx.shadowColor = "#88aacc";
+        ctx.shadowBlur = 6;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
         ctx.fill();
       });
       ctx.shadowBlur = 0;
 
+      // Chrome/silver pinball (realistic metal ball)
       ballsRef.current.forEach((ballBody) => {
+        const bx = ballBody.position.x;
+        const by = ballBody.position.y;
+        const br = 10;
         const ballGrad = ctx.createRadialGradient(
-          ballBody.position.x - 4,
-          ballBody.position.y - 4,
+          bx - br * 0.5,
+          by - br * 0.5,
           0,
-          ballBody.position.x,
-          ballBody.position.y,
-          12
+          bx,
+          by,
+          br
         );
-        ballGrad.addColorStop(0, "#fff");
-        ballGrad.addColorStop(0.4, COLORS.neonGreen);
-        ballGrad.addColorStop(1, "#0a3d0a");
+        ballGrad.addColorStop(0, COLORS.chromeHighlight);
+        ballGrad.addColorStop(0.25, "#b0c4d8");
+        ballGrad.addColorStop(0.5, COLORS.chromeMid);
+        ballGrad.addColorStop(0.85, COLORS.chromeShadow);
+        ballGrad.addColorStop(1, "#1a2028");
         ctx.fillStyle = ballGrad;
-        ctx.shadowColor = COLORS.neonGreen;
-        ctx.shadowBlur = 20;
+        ctx.shadowColor = "rgba(200,220,255,0.5)";
+        ctx.shadowBlur = 12;
         ctx.beginPath();
-        ctx.arc(ballBody.position.x, ballBody.position.y, 10, 0, Math.PI * 2);
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
         ctx.lineWidth = 1;
         ctx.stroke();
       });
@@ -738,8 +851,12 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
 
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden bg-[#0a0a12] border-2 border-[#00f0ff]/50"
-      style={{ boxShadow: "0 0 30px rgba(0,240,255,0.2)" }}
+      className="relative w-full rounded-xl overflow-hidden"
+      style={{
+        background: "linear-gradient(180deg, #2a1810 0%, #1a0f0a 30%, #0f0a08 100%)",
+        border: "3px solid #3d2818",
+        boxShadow: "inset 0 0 40px rgba(0,0,0,0.5), 0 0 25px rgba(0,240,255,0.15), 0 8px 24px rgba(0,0,0,0.4)",
+      }}
     >
       <div className="relative" style={{ height: "min(600px, 85vh)" }}>
         <canvas
