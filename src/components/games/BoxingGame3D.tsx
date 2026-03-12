@@ -6,15 +6,32 @@ import {
   Scene,
   ArcRotateCamera,
   HemisphericLight,
+  DirectionalLight,
+  PointLight,
   Vector3,
   MeshBuilder,
   StandardMaterial,
   Color3,
+  Color4,
   type TransformNode,
   type InstantiatedEntries,
   LoadAssetContainerAsync,
+  ShadowGenerator,
+  DynamicTexture,
+  ParticleSystem,
+  Texture,
+  type AbstractMesh,
+  Mesh,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF/2.0";
+
+// Arena dimensions (Las Vegas-style ring)
+const RING_SIZE = 7.3; // ~24ft
+const RING_HEIGHT = 1;
+const ROPE_RADIUS = 0.04;
+const POST_HEIGHT = 1.8;
+const STADIUM_RADIUS = 35;
+const STADIUM_HEIGHT = 8;
 
 const ROUND_DURATION_SEC = 60;
 const TOTAL_ROUNDS = 3;
@@ -66,6 +83,7 @@ export function BoxingGame3D({
   const lastHitRef = useRef<{ at: number; by: "p1" | "p2" } | null>(null);
   const roundTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resultReportedRef = useRef(false);
+  const cameraRef = useRef<ArcRotateCamera | null>(null);
 
   const reportResult = useCallback(
     async (winnerId: string, loserId: string) => {
@@ -133,21 +151,271 @@ export function BoxingGame3D({
       );
       camera.attachControl(canvas, true);
       camera.lowerRadiusLimit = 12;
-      camera.upperRadiusLimit = 35;
+      camera.upperRadiusLimit = 42;
+      camera.alpha = -Math.PI / 2;
+      camera.beta = Math.PI / 2.4;
+      camera.radius = 28;
+      cameraRef.current = camera;
 
-      const light = new HemisphericLight(
-        "light1",
+      // ---- Arena: Las Vegas-style boxing ring ----
+      const half = RING_SIZE / 2;
+
+      // Ring platform (raised floor)
+      const platform = MeshBuilder.CreateBox(
+        "ringPlatform",
+        { width: RING_SIZE + 1.2, height: RING_HEIGHT * 0.5, depth: RING_SIZE + 1.2 },
+        scene
+      );
+      platform.position.y = -RING_HEIGHT * 0.25;
+      const platformMat = new StandardMaterial("platformMat", scene);
+      platformMat.diffuseColor = new Color3(0.15, 0.12, 0.1);
+      platformMat.specularColor = new Color3(0.1, 0.1, 0.1);
+      platform.material = platformMat;
+
+      // Ring canvas (fighting surface)
+      const canvasFloor = MeshBuilder.CreateGround(
+        "ringCanvas",
+        { width: RING_SIZE, height: RING_SIZE, subdivisions: 4 },
+        scene
+      );
+      canvasFloor.position.y = 0.02;
+      const canvasMat = new StandardMaterial("canvasMat", scene);
+      canvasMat.diffuseColor = new Color3(0.92, 0.9, 0.85);
+      canvasMat.specularColor = new Color3(0.3, 0.3, 0.3);
+      canvasMat.specularPower = 64;
+      canvasFloor.material = canvasMat;
+
+      // Corner posts (metal)
+      const postPositions: [number, number][] = [
+        [-half - 0.15, -half - 0.15],
+        [half + 0.15, -half - 0.15],
+        [half + 0.15, half + 0.15],
+        [-half - 0.15, half + 0.15],
+      ];
+      const posts: AbstractMesh[] = [];
+      const postMat = new StandardMaterial("postMat", scene);
+      postMat.diffuseColor = new Color3(0.35, 0.35, 0.4);
+      postMat.specularColor = new Color3(0.5, 0.5, 0.55);
+      postMat.emissiveColor = new Color3(0.02, 0.02, 0.05);
+      postPositions.forEach(([x, z], i) => {
+        const post = MeshBuilder.CreateCylinder(
+          "post_" + i,
+          { height: POST_HEIGHT, diameter: 0.2, tessellation: 12 },
+          scene
+        );
+        post.position.set(x, POST_HEIGHT / 2 + 0.02, z);
+        post.material = postMat;
+        posts.push(post);
+      });
+
+      // Ropes (three horizontal cables per side)
+      const ropeMat = new StandardMaterial("ropeMat", scene);
+      ropeMat.diffuseColor = new Color3(0.95, 0.95, 0.95);
+      ropeMat.specularColor = new Color3(0.4, 0.4, 0.4);
+      const ropeHeights = [0.45, 0.75, 1.05];
+      const ropeSegments: AbstractMesh[] = [];
+      const sideHalf = half + 0.1;
+      const sides: { p1: [number, number]; p2: [number, number] }[] = [
+        { p1: [-sideHalf, -sideHalf], p2: [sideHalf, -sideHalf] },
+        { p1: [sideHalf, -sideHalf], p2: [sideHalf, sideHalf] },
+        { p1: [sideHalf, sideHalf], p2: [-sideHalf, sideHalf] },
+        { p1: [-sideHalf, sideHalf], p2: [-sideHalf, -sideHalf] },
+      ];
+      sides.forEach((side, sideIdx) => {
+        const [x1, z1] = side.p1;
+        const [x2, z2] = side.p2;
+        const len = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+        ropeHeights.forEach((h, ropeIdx) => {
+          const rope = MeshBuilder.CreateCylinder(
+            `rope_${sideIdx}_${ropeIdx}`,
+            { height: len, diameter: ROPE_RADIUS * 2, tessellation: 8 },
+            scene
+          );
+          rope.position.set((x1 + x2) / 2, h, (z1 + z2) / 2);
+          rope.rotation.z = Math.PI / 2;
+          rope.rotation.y = Math.atan2(z2 - z1, x2 - x1);
+          rope.material = ropeMat;
+          ropeSegments.push(rope);
+        });
+      });
+
+      // Padded corners (turnbuckle pads) - red and blue
+      const padMatRed = new StandardMaterial("padRed", scene);
+      padMatRed.diffuseColor = new Color3(0.75, 0.1, 0.1);
+      padMatRed.specularColor = new Color3(0.2, 0.02, 0.02);
+      padMatRed.emissiveColor = new Color3(0.08, 0, 0);
+      const padMatBlue = new StandardMaterial("padBlue", scene);
+      padMatBlue.diffuseColor = new Color3(0.1, 0.15, 0.6);
+      padMatBlue.specularColor = new Color3(0.02, 0.02, 0.2);
+      padMatBlue.emissiveColor = new Color3(0, 0.02, 0.08);
+      const padPositions: [number, number, number, number][] = [
+        [-sideHalf - 0.25, 0.2, -sideHalf - 0.25, 0],
+        [sideHalf + 0.25, 0.2, -sideHalf - 0.25, Math.PI / 2],
+        [sideHalf + 0.25, 0.2, sideHalf + 0.25, Math.PI],
+        [-sideHalf - 0.25, 0.2, sideHalf + 0.25, -Math.PI / 2],
+      ];
+      padPositions.forEach(([x, y, z, rotY], i) => {
+        const pad = MeshBuilder.CreateBox(
+          "pad_" + i,
+          { width: 0.5, height: 0.5, depth: 0.25 },
+          scene
+        );
+        pad.position.set(x, y, z);
+        pad.rotation.y = rotY;
+        pad.material = i % 2 === 0 ? padMatRed : padMatBlue;
+      });
+
+      // Stadium seating (stepped rows around the ring)
+      const seatMat = new StandardMaterial("seatMat", scene);
+      seatMat.diffuseColor = new Color3(0.12, 0.1, 0.08);
+      seatMat.specularColor = new Color3(0.05, 0.05, 0.05);
+      const seatRows = 12;
+      const seatStep = 1.8;
+      const seatDepth = 1.2;
+      for (let row = 0; row < seatRows; row++) {
+        const r = half + 2 + row * seatStep;
+        const y = -0.2 + row * 0.35;
+        const perimeter = 2 * Math.PI * r;
+        const segments = Math.max(12, Math.floor(perimeter / 2.5));
+        for (let s = 0; s < segments; s++) {
+          const angle = (s / segments) * Math.PI * 2;
+          const seat = MeshBuilder.CreateBox(
+            `seat_${row}_${s}`,
+            { width: perimeter / segments - 0.1, height: 0.4, depth: seatDepth },
+            scene
+          );
+          seat.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+          seat.rotation.y = -angle;
+          seat.material = seatMat;
+        }
+      }
+
+      // Crowd planes (animated silhouettes / cards)
+      const crowdMat = new StandardMaterial("crowdMat", scene);
+      crowdMat.diffuseColor = new Color3(0.15, 0.12, 0.2);
+      crowdMat.emissiveColor = new Color3(0.02, 0.01, 0.03);
+      crowdMat.alpha = 0.9;
+      const crowdPlanes: AbstractMesh[] = [];
+      for (let c = 0; c < 40; c++) {
+        const angle = (c / 40) * Math.PI * 2 + 0.1;
+        const r = STADIUM_RADIUS - 2 - (c % 3) * 1.5;
+        const plane = MeshBuilder.CreatePlane(
+          "crowd_" + c,
+          { size: 1.2 + (c % 2) * 0.4, sideOrientation: 2 },
+          scene
+        );
+        plane.position.set(Math.cos(angle) * r, 0.5 + (c % 4) * 0.3, Math.sin(angle) * r);
+        plane.rotation.y = -angle;
+        plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+        plane.material = crowdMat;
+        crowdPlanes.push(plane);
+      }
+
+      // LED screens with GarmonPay branding
+      const ledWidth = 8;
+      const ledHeight = 2;
+      const ledScreen = MeshBuilder.CreatePlane("ledScreen", { width: ledWidth, height: ledHeight }, scene);
+      ledScreen.position.set(0, STADIUM_HEIGHT - 1, -STADIUM_RADIUS + 2);
+      ledScreen.rotation.x = Math.PI / 2 - 0.15;
+      const ledTexture = new DynamicTexture("ledTex", { width: 256, height: 64 }, scene, false);
+      ledTexture.hasAlpha = true;
+      const ledCtx = ledTexture.getContext() as CanvasRenderingContext2D;
+      ledCtx.fillStyle = "#0a0a14";
+      ledCtx.fillRect(0, 0, 256, 64);
+      ledCtx.fillStyle = "#00d4ff";
+      ledCtx.font = "bold 42px Arial";
+      ledCtx.textAlign = "center";
+      ledCtx.fillText("GARMONPAY", 128, 42);
+      ledTexture.update();
+      const ledMat = new StandardMaterial("ledMat", scene);
+      ledMat.diffuseTexture = ledTexture;
+      ledMat.emissiveTexture = ledTexture;
+      ledMat.emissiveColor = new Color3(0.15, 0.5, 0.6);
+      ledScreen.material = ledMat;
+
+      // Second LED strip (side)
+      const ledScreen2 = MeshBuilder.CreatePlane("ledScreen2", { width: 6, height: 1.5 }, scene);
+      ledScreen2.position.set(-STADIUM_RADIUS + 1.5, STADIUM_HEIGHT - 2, 0);
+      ledScreen2.rotation.y = Math.PI / 2;
+      ledScreen2.rotation.x = Math.PI / 2 - 0.1;
+      ledScreen2.material = ledMat;
+
+      // Neon / key lights
+      const dirLight = new DirectionalLight(
+        "dirLight",
+        new Vector3(-2, -5, -2),
+        scene
+      );
+      dirLight.position = new Vector3(10, 20, 10);
+      dirLight.intensity = 1.2;
+      dirLight.diffuse = new Color3(1, 0.98, 0.95);
+      dirLight.specular = new Color3(0.4, 0.4, 0.45);
+
+      const hemi = new HemisphericLight(
+        "hemi",
         new Vector3(0, 1, 0),
         scene
       );
-      light.intensity = 1;
-      new HemisphericLight("light2", new Vector3(0, -1, 0), scene).intensity = 0.3;
+      hemi.intensity = 0.6;
+      hemi.diffuse = new Color3(0.6, 0.55, 0.65);
+      hemi.groundColor = new Color3(0.15, 0.1, 0.2);
 
-      const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
-      ground.position.y = 0;
-      const groundMat = new StandardMaterial("groundMat", scene);
-      groundMat.diffuseColor = new Color3(0.08, 0.08, 0.1);
-      ground.material = groundMat;
+      const neonRed = new PointLight("neonRed", new Vector3(-half - 1, POST_HEIGHT, -half - 1), scene);
+      neonRed.intensity = 80;
+      neonRed.diffuse = new Color3(1, 0.2, 0.25);
+      const neonBlue = new PointLight("neonBlue", new Vector3(half + 1, POST_HEIGHT, -half - 1), scene);
+      neonBlue.intensity = 80;
+      neonBlue.diffuse = new Color3(0.2, 0.4, 1);
+
+      // Shadows
+      const shadowGen = new ShadowGenerator(1024, dirLight);
+      shadowGen.useBlurExponentialShadowMap = true;
+      shadowGen.blurKernel = 32;
+      [platform, canvasFloor].forEach((m) => shadowGen.addShadowCaster(m));
+      posts.forEach((m) => shadowGen.addShadowCaster(m));
+      ropeSegments.forEach((m) => shadowGen.addShadowCaster(m));
+      [platform, canvasFloor].forEach((m) => { m.receiveShadows = true; });
+
+      // Arena floor (beyond ring)
+      const arenaFloor = MeshBuilder.CreateGround(
+        "arenaFloor",
+        { width: STADIUM_RADIUS * 2.2, height: STADIUM_RADIUS * 2.2, subdivisions: 8 },
+        scene
+      );
+      arenaFloor.position.y = -0.5;
+      const floorMat = new StandardMaterial("arenaFloorMat", scene);
+      floorMat.diffuseColor = new Color3(0.06, 0.05, 0.08);
+      floorMat.specularColor = new Color3(0.02, 0.02, 0.02);
+      arenaFloor.material = floorMat;
+      arenaFloor.receiveShadows = true;
+
+      // Atmosphere particles
+      const particleSystem = new ParticleSystem("arenaDust", 400, scene);
+      particleSystem.particleTexture = new Texture("https://www.babylonjs.com/assets/Flare.png", scene);
+      particleSystem.emitter = new Vector3(0, 2, 0);
+      particleSystem.minEmitBox = new Vector3(-RING_SIZE, 0, -RING_SIZE);
+      particleSystem.maxEmitBox = new Vector3(RING_SIZE, 1, RING_SIZE);
+      particleSystem.color1 = new Color4(0.7, 0.7, 0.8, 0.06);
+      particleSystem.color2 = new Color4(0.5, 0.5, 0.6, 0);
+      particleSystem.minSize = 0.12;
+      particleSystem.maxSize = 0.35;
+      particleSystem.minLifeTime = 2;
+      particleSystem.maxLifeTime = 5;
+      particleSystem.emitRate = 15;
+      particleSystem.blendMode = ParticleSystem.BLENDMODE_ONEONE;
+      particleSystem.minEmitPower = 0.1;
+      particleSystem.maxEmitPower = 0.3;
+      particleSystem.updateSpeed = 0.01;
+      particleSystem.start();
+
+      // Crowd animation (subtle bounce)
+      let crowdTime = 0;
+      scene.onBeforeRenderObservable.add(() => {
+        crowdTime += 0.02;
+        crowdPlanes.forEach((p, i) => {
+          p.position.y = 0.5 + (i % 4) * 0.3 + Math.sin(crowdTime + i * 0.5) * 0.03;
+        });
+      });
 
       let lastP1: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
       let lastP2: "idle" | "jab" | "punch" | "block" | "knockout" = "idle";
@@ -201,12 +469,18 @@ export function BoxingGame3D({
             tn.position.set(-3, 0, 0);
             tn.scaling.setAll(scale);
             tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.9, 0.25, 0.25);
+            if (node.getChildMeshes) {
+              node.getChildMeshes().forEach((child) => shadowGen.addShadowCaster(child));
+            }
           }
           for (const node of blueCorner.rootNodes) {
             const tn = node as TransformNode;
             tn.position.set(3, 0, 0);
             tn.scaling.setAll(scale);
             tintMeshColor(node as { getChildMeshes?: () => { material?: unknown }[]; material?: unknown }, 0.25, 0.35, 0.95);
+            if (node.getChildMeshes) {
+              node.getChildMeshes().forEach((child) => shadowGen.addShadowCaster(child));
+            }
           }
           player1Entries = redCorner;
           player2Entries = blueCorner;
@@ -254,6 +528,7 @@ export function BoxingGame3D({
     }
 
     return () => {
+      cameraRef.current = null;
       player1Entries?.dispose();
       player2Entries?.dispose();
       if (scene) scene.dispose();
@@ -498,45 +773,70 @@ export function BoxingGame3D({
         </div>
       )}
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4">
-        <div className="flex justify-between items-start">
-          <div className="bg-black/60 rounded-lg p-3 min-w-[140px]">
-            <p className="text-red-400 font-bold text-sm">Player 1</p>
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden mt-1">
+        <div className="flex justify-between items-start gap-2">
+          <div className="bg-black/70 rounded-xl p-3 min-w-[140px] border border-red-500/30 shadow-lg shadow-red-500/10">
+            <p className="text-red-400 font-bold text-sm uppercase tracking-wider">Red Corner</p>
+            <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden mt-2">
               <div
-                className="h-full bg-red-500 transition-all duration-200"
+                className="h-full bg-red-500 transition-all duration-200 rounded-full"
                 style={{ width: `${p1Health}%` }}
               />
             </div>
-            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1.5">
               <div
-                className="h-full bg-amber-500 transition-all duration-200"
+                className="h-full bg-amber-500 transition-all duration-200 rounded-full"
                 style={{ width: `${p1Stamina}%` }}
               />
             </div>
           </div>
-          <div className="bg-black/60 rounded-lg px-4 py-2 text-center">
-            <p className="text-white font-bold">
-              Round {round}/{TOTAL_ROUNDS}
+          <div className="bg-black/80 rounded-xl px-5 py-3 text-center border border-amber-500/40 shadow-lg flex-shrink-0">
+            <p className="text-amber-400/90 font-bold text-xs uppercase tracking-widest">Round</p>
+            <p className="text-white font-bold text-lg">
+              {round} / {TOTAL_ROUNDS}
             </p>
-            <p className="text-2xl font-mono text-white">{roundTimeLeft}s</p>
+            <p className="text-2xl font-mono font-bold text-amber-300 tabular-nums">{roundTimeLeft}s</p>
           </div>
-          <div className="bg-black/60 rounded-lg p-3 min-w-[140px] text-right">
-            <p className="text-blue-400 font-bold text-sm">Player 2</p>
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden mt-1">
+          <div className="bg-black/70 rounded-xl p-3 min-w-[140px] text-right border border-blue-500/30 shadow-lg shadow-blue-500/10">
+            <p className="text-blue-400 font-bold text-sm uppercase tracking-wider">Blue Corner</p>
+            <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden mt-2">
               <div
-                className="h-full bg-blue-500 ml-auto transition-all duration-200"
+                className="h-full bg-blue-500 transition-all duration-200 rounded-full ml-auto"
                 style={{ width: `${p2Health}%` }}
               />
             </div>
-            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1.5">
               <div
-                className="h-full bg-amber-500 ml-auto transition-all duration-200"
+                className="h-full bg-amber-500 transition-all duration-200 rounded-full ml-auto"
                 style={{ width: `${p2Stamina}%` }}
               />
             </div>
           </div>
         </div>
-        <div className="flex justify-center gap-8 text-xs text-white/80 flex-wrap">
+        <div className="flex justify-center items-center gap-2 pointer-events-auto">
+          <span className="text-xs text-white/70">Camera:</span>
+          {[
+            { label: "Broadcast", alpha: -Math.PI / 2, beta: Math.PI / 2.4, radius: 28 },
+            { label: "Side", alpha: -Math.PI / 2, beta: Math.PI / 2.1, radius: 22 },
+            { label: "Corner", alpha: -Math.PI / 2 - 0.3, beta: Math.PI / 2.3, radius: 20 },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/20 border border-white/20"
+              onClick={() => {
+                const cam = cameraRef.current;
+                if (cam) {
+                  cam.alpha = preset.alpha;
+                  cam.beta = preset.beta;
+                  cam.radius = preset.radius;
+                }
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-center gap-6 text-xs text-white/80 flex-wrap">
           <span>P1: WASD move · J Jab · K Punch · L Block</span>
           <span>P2: Arrows move · 1 Jab · 2 Punch · 3 Block</span>
         </div>

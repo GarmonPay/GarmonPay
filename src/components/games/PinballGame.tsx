@@ -190,14 +190,14 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
     }));
     Matter.World.add(world, bumpers);
 
-    const spinnerOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 0.9, friction: 0, label: "spinner" };
+    const spinnerOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.9, friction: 0, label: "spinner" };
     const spinner1 = Matter.Bodies.rectangle(80, 140, 16, 40, spinnerOpts);
     const spinner2 = Matter.Bodies.rectangle(320, 140, 16, 40, spinnerOpts);
     (spinner1 as Matter.Body & { label?: string }).label = "spinner";
     (spinner2 as Matter.Body & { label?: string }).label = "spinner";
     Matter.World.add(world, [spinner1, spinner2]);
 
-    const dropTargetOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 0.5, friction: 0, label: "droptarget" };
+    const dropTargetOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.5, friction: 0, label: "droptarget" };
     const dropYs = [105, 105, 105, 105, 105];
     const dropXs = [80, 130, 200, 270, 320];
     const dropTargets = dropXs.map((x, i) => Matter.Bodies.rectangle(x, dropYs[i], 36, 20, dropTargetOpts));
@@ -356,6 +356,7 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
 
       Matter.Engine.update(engine, 1000 / 60);
 
+      animTimeRef.current += 1;
       const t = animTimeRef.current * 0.05;
       bumperDataRef.current.forEach((bd, i) => {
         const angle = bd.phase + t * 0.4;
@@ -391,8 +392,6 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       }
       ballRef.current = ballsRef.current[0];
 
-      animTimeRef.current += 1;
-      const t = animTimeRef.current * 0.05;
       const pulse = 0.85 + 0.15 * Math.sin(t);
 
       ballTrailRef.current.push({ x: ballsRef.current[0].position.x, y: ballsRef.current[0].position.y });
