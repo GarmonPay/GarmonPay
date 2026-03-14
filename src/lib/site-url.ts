@@ -32,3 +32,8 @@ export function getRegisterUrl(): string {
 export function getLoginUrl(): string {
   return `${getSiteUrl()}/login`;
 }
+
+/** Password reset redirect (user clicks link in email). Configure 15-min token expiry in Supabase Auth. */
+export function getResetPasswordUrl(): string {
+  return `${getSiteUrl()}/reset-password`;
+}

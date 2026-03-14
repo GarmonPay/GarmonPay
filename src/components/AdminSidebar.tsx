@@ -20,6 +20,7 @@ const links = [
   { href: "/admin/platform", label: "Platform" },
   { href: "/admin/wallet-monitor", label: "Wallet" },
   { href: "/admin/boxing", label: "Boxing" },
+  { href: "/admin/security", label: "Security" },
   { href: "/admin/settings", label: "Settings" },
 ];
 

@@ -37,6 +37,11 @@ export async function login(email: string, password: string): Promise<LoginResul
     return { ok: false, message: msg };
   }
   if (!data.session?.user) return { ok: false, message: "Login failed. No session." };
+  const authUser = data.user as { email_confirmed_at?: string | null };
+  if (authUser.email_confirmed_at == null || authUser.email_confirmed_at === "") {
+    await supabase.auth.signOut();
+    return { ok: false, message: "Please verify your email before logging in. Check your inbox for the verification link." };
+  }
   const uid = data.user.id;
   let role = "member";
   let isSuperAdmin = false;

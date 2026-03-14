@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getClientIp } from "@/lib/rate-limit";
 
 const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
@@ -71,16 +72,28 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, message: updateError.message }, { status: 500 });
       }
     } else {
+      const registrationIp = getClientIp(req);
       const { error: insertError } = await supabase.from("users").insert({
         id,
         email: emailVal,
         role: "user",
         balance: 0,
         created_at: new Date().toISOString(),
+        registration_ip: registrationIp !== "unknown" ? registrationIp : null,
       });
       if (insertError) {
         console.error("Sync-user insert error:", insertError);
         return NextResponse.json({ success: false, message: insertError.message }, { status: 500 });
+      }
+      try {
+        await supabase.from("security_events").insert({
+          user_id: id,
+          email: emailVal,
+          ip_text: registrationIp !== "unknown" ? registrationIp : null,
+          event_type: "signup",
+        });
+      } catch {
+        // best-effort
       }
       try {
         const { error: walletErr } = await supabase.from("wallets").insert({

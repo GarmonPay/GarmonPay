@@ -23,6 +23,7 @@ const nav = [
   { href: "/dashboard/teams", label: "Teams" },
   { href: "/dashboard/referrals", label: "Referrals" },
   { href: "/dashboard/finance", label: "Finance" },
+  { href: "/dashboard/security", label: "Security" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
 

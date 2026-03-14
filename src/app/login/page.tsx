@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getDashboardUrl } from "@/lib/site-url";
 import { login as authLogin } from "@/core/auth";
+import { createBrowserClient } from "@/core/supabase";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -25,10 +26,51 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
+      const lockRes = await fetch("/api/auth/check-lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
+      const lockData = await lockRes.json().catch(() => ({}));
+      if (lockData.locked) {
+        const until = lockData.lockedUntil ? new Date(lockData.lockedUntil).toLocaleTimeString() : "";
+        setError(until ? `Account temporarily locked. Try again after ${until}.` : "Account temporarily locked. Try again later.");
+        setLoading(false);
+        return;
+      }
       const result = await authLogin(trimmedEmail, password);
       if (!result.ok) {
+        try {
+          await fetch("/api/auth/login-failed", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: trimmedEmail }),
+          });
+        } catch {
+          // ignore
+        }
         setError(result.message);
+        setLoading(false);
         return;
+      }
+      const supabase = createBrowserClient();
+      if (supabase) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.nextLevel === "aal2") {
+          window.location.href = "/login/verify-2fa";
+          return;
+        }
+      }
+      try {
+        const session = await import("@/lib/session").then((m) => m.getSessionAsync());
+        if (session?.accessToken) {
+          await fetch("/api/auth/login-success", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          });
+        }
+      } catch {
+        // best-effort
       }
       if (result.isAdmin) {
         window.location.href = "/admin";
@@ -75,6 +117,10 @@ export default function LoginPage() {
           >
             {loading ? "Logging in…" : "Login"}
           </button>
+
+          <p className="mt-2 text-right">
+            <Link href="/forgot-password" className="text-sm text-blue-400 hover:underline">Forgot password?</Link>
+          </p>
 
           {error && <p className="text-red-500 mt-3 text-sm">{error}</p>}
         </form>

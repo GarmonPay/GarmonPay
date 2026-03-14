@@ -21,6 +21,10 @@ export async function getSessionAsync(): Promise<ClientSession | null> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        const u = session.user as { email_confirmed_at?: string | null };
+        if (u.email_confirmed_at == null || u.email_confirmed_at === "") {
+          return null;
+        }
         return {
           userId: session.user.id,
           email: session.user.email ?? "",

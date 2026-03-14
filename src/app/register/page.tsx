@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getRegisterUrl } from "@/lib/site-url";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 export default function RegisterPage() {
   const searchParams = useSearchParams();
   const supabase = createBrowserClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,6 +41,8 @@ export default function RegisterPage() {
     return "";
   }
 
+  const onTurnstileVerify = useCallback((token: string) => setTurnstileToken(token), []);
+
   async function register() {
     setError("");
     setMessage("");
@@ -54,7 +59,22 @@ export default function RegisterPage() {
       setError("Password must be at least 8 characters");
       return;
     }
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
     setLoading(true);
+    const checkRes = await fetch("/api/auth/check-signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: trimmedEmail, turnstileToken: turnstileToken || undefined }),
+    });
+    const checkData = await checkRes.json().catch(() => ({}));
+    if (!checkRes.ok || !checkData.allowed) {
+      setError(checkData.message || "Signup check failed. Try again.");
+      setLoading(false);
+      return;
+    }
     const refCode = getStoredReferralCode();
     const { data, error: err } = await supabase.auth.signUp({
       email: trimmedEmail,
@@ -101,7 +121,8 @@ export default function RegisterPage() {
 
         <input
           type="email"
-          className="w-full p-2 mb-3 text-black"
+          autoComplete="email"
+          className="w-full p-2 mb-3 text-black rounded"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -109,7 +130,7 @@ export default function RegisterPage() {
 
         <input
           type="password"
-          className="w-full p-2 mb-3 text-black"
+          className="w-full p-2 mb-3 text-black rounded"
           placeholder="Password (min 8 characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -117,6 +138,10 @@ export default function RegisterPage() {
           minLength={8}
           autoComplete="new-password"
         />
+
+        {TURNSTILE_SITE_KEY && (
+          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onVerify={onTurnstileVerify} />
+        )}
 
         <button
           type="button"
