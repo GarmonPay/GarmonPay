@@ -9,7 +9,7 @@ import {
   type AdTypeDb,
 } from "@/lib/advertisements-db";
 
-const PLACEMENTS: AdPlacement[] = ["homepage", "dashboard", "fight_arena"];
+const PLACEMENTS: AdPlacement[] = ["homepage", "dashboard", "arena"];
 const AD_TYPES: AdTypeDb[] = ["banner", "video"];
 
 /** Allowed target URL: https or http, basic sanity. */
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   const placement = PLACEMENTS.includes(body.placement as AdPlacement) ? (body.placement as AdPlacement) : null;
   if (!title || !ad_type || !placement) {
     return NextResponse.json(
-      { message: "title, ad_type (banner|video), and placement (homepage|dashboard|fight_arena) required" },
+      { message: "title, ad_type (banner|video), and placement (homepage|dashboard|arena) required" },
       { status: 400 }
     );
   }

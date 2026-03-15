@@ -14,7 +14,6 @@ function supabase() {
 
 export type GameSlug =
   | "pinball"
-  | "boxing"
   | "runner"
   | "snake"
   | "shooter"

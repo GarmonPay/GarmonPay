@@ -19,7 +19,7 @@ const links = [
   { href: "/admin/referrals", label: "Referrals" },
   { href: "/admin/platform", label: "Platform" },
   { href: "/admin/wallet-monitor", label: "Wallet" },
-  { href: "/admin/boxing", label: "Boxing" },
+  { href: "/admin/arena", label: "Arena" },
   { href: "/admin/security", label: "Security" },
   { href: "/admin/settings", label: "Settings" },
 ];

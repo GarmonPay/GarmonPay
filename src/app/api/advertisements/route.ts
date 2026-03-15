@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listActiveByPlacement, type AdPlacement } from "@/lib/advertisements-db";
 
-const PLACEMENTS: AdPlacement[] = ["homepage", "dashboard", "fight_arena"];
+const PLACEMENTS: AdPlacement[] = ["homepage", "dashboard", "arena"];
 
 /**
- * GET /api/advertisements?placement=homepage|dashboard|fight_arena
+ * GET /api/advertisements?placement=homepage|dashboard|arena
  * Returns active ads for the given placement (for AdDisplay). Public, cached.
  */
 export async function GET(request: Request) {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const placement = searchParams.get("placement") as AdPlacement | null;
   if (!placement || !PLACEMENTS.includes(placement)) {
     return NextResponse.json(
-      { error: "placement required: homepage | dashboard | fight_arena" },
+      { error: "placement required: homepage | dashboard | arena" },
       { status: 400 }
     );
   }

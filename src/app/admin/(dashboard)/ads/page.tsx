@@ -6,7 +6,7 @@ import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 type AdType = "banner" | "video";
-type Placement = "homepage" | "dashboard" | "fight_arena";
+type Placement = "homepage" | "dashboard" | "arena";
 
 interface Advertisement {
   id: string;
@@ -25,7 +25,7 @@ interface Advertisement {
 const PLACEMENTS: { value: Placement; label: string }[] = [
   { value: "homepage", label: "Homepage" },
   { value: "dashboard", label: "Dashboard" },
-  { value: "fight_arena", label: "Fight Arena" },
+  { value: "arena", label: "Arena" },
 ];
 
 const AD_TYPES: { value: AdType; label: string }[] = [

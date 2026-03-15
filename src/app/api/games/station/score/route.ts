@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { insertGameScore, getGameLeaderboard, type GameSlug } from "@/lib/game-station-db";
 
-const VALID_SLUGS: GameSlug[] = ["runner", "snake", "shooter", "dodge", "tap", "memory", "reaction", "spin", "boxing"];
+const VALID_SLUGS: GameSlug[] = ["runner", "snake", "shooter", "dodge", "tap", "memory", "reaction", "spin"];
 
 /** POST /api/games/station/score — submit score for a game. Body: { game_slug, score }. */
 export async function POST(req: Request) {

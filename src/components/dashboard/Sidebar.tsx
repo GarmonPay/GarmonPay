@@ -8,10 +8,8 @@ import { createBrowserClient } from "@/lib/supabase";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/arena", label: "GarmonPay Arena" },
   { href: "/dashboard/transactions", label: "Transactions" },
-  { href: "/dashboard/fight-arena", label: "Fight Arena" },
-  { href: "/dashboard/training-gym", label: "Training Gym" },
-  { href: "/dashboard/my-fighter", label: "My Fighter" },
   { href: "/dashboard/leaderboard", label: "Leaderboard" },
   { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/rewards", label: "Rewards" },

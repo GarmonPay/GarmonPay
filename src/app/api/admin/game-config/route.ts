@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
-const GAME_NAMES = ["spin_wheel", "scratch_card", "pinball", "mystery_box", "boxing"] as const;
+const GAME_NAMES = ["spin_wheel", "scratch_card", "pinball", "mystery_box"] as const;
 
 /** GET /api/admin/game-config — return game_config (house_edge_percent per game). */
 export async function GET(request: Request) {

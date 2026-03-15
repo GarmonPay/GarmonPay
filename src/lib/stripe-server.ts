@@ -18,7 +18,7 @@ export function isStripeConfigured(): boolean {
   return !!(raw?.trim() && raw.trim().startsWith("sk_"));
 }
 
-export type StripeProductType = "subscription" | "platform_access" | "upgrade" | "payment" | "wallet_fund";
+export type StripeProductType = "subscription" | "platform_access" | "upgrade" | "payment" | "wallet_fund" | "arena_store" | "arena_season_pass";
 
 export function getCheckoutBaseUrl(request: Request): string {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;

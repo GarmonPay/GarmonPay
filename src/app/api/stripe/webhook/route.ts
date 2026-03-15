@@ -123,6 +123,26 @@ export async function POST(req: Request) {
     return new Response("OK", { status: 200 });
   }
 
+  const supabaseForWebhook = createAdminClient();
+
+  if (eventType === "customer.subscription.updated" || eventType === "customer.subscription.deleted") {
+    const sub = event.data.object as Stripe.Subscription;
+    const productType = (sub.metadata?.product_type as string) || "";
+    if (productType !== "arena_season_pass" || !supabaseForWebhook) return new Response("OK", { status: 200 });
+    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    const status = eventType === "customer.subscription.deleted" ? "canceled" : sub.status === "active" ? "active" : sub.status === "past_due" ? "past_due" : "canceled";
+    const userId = (sub.metadata?.user_id as string) || null;
+    if (userId) {
+      await supabaseForWebhook.from("arena_season_pass").update({ status, current_period_end: periodEnd, updated_at: new Date().toISOString() }).eq("stripe_subscription_id", sub.id);
+    } else {
+      const { data: existing } = await supabaseForWebhook.from("arena_season_pass").select("id").eq("stripe_subscription_id", sub.id).maybeSingle();
+      if (existing) {
+        await supabaseForWebhook.from("arena_season_pass").update({ status, current_period_end: periodEnd, updated_at: new Date().toISOString() }).eq("stripe_subscription_id", sub.id);
+      }
+    }
+    return new Response("OK", { status: 200 });
+  }
+
   if (eventType !== "checkout.session.completed") {
     return new Response("OK", { status: 200 });
   }
@@ -177,6 +197,90 @@ export async function POST(req: Request) {
 
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
+  const product_type = (session.metadata?.product_type as string) || "payment";
+
+  if (product_type === "arena_store") {
+    const store_item_id = session.metadata?.store_item_id as string | undefined;
+    const fighter_id = session.metadata?.fighter_id as string | undefined;
+    if (store_item_id && fighter_id && supabase) {
+      const { data: item } = await supabase.from("arena_store_items").select("id, effect_class, name").eq("id", store_item_id).maybeSingle();
+      if (item) {
+        const effectClass = (item as { effect_class?: string }).effect_class;
+        if (effectClass === "coins") {
+          const addCoins = amount_dollars >= 7.99 ? 1200 : amount_dollars >= 3.99 ? 500 : 100;
+          const { data: u } = await supabase.from("users").select("arena_coins").eq("id", user_id).single();
+          const current = Number((u as { arena_coins?: number })?.arena_coins ?? 0);
+          await supabase.from("users").update({ arena_coins: current + addCoins }).eq("id", user_id);
+          await supabase.from("arena_coin_transactions").insert({
+            user_id,
+            amount: addCoins,
+            type: "stripe_purchase",
+            description: `Purchased ${addCoins} Arena Coins`,
+          });
+        } else if (effectClass === "recovery" || effectClass === "title") {
+          const { data: f } = await supabase.from("arena_fighters").select("id").eq("id", fighter_id).eq("user_id", user_id).maybeSingle();
+          if (f) {
+            if (effectClass === "recovery") {
+              await supabase.from("arena_fighters").update({ condition: "fresh", updated_at: new Date().toISOString() }).eq("id", fighter_id);
+            } else {
+              await supabase.from("arena_fighters").update({ title: (item as { name?: string }).name ?? "Title", updated_at: new Date().toISOString() }).eq("id", fighter_id);
+            }
+          }
+        } else {
+          const { data: f } = await supabase.from("arena_fighters").select("id").eq("id", fighter_id).eq("user_id", user_id).maybeSingle();
+          if (f) {
+            await supabase.from("arena_fighter_inventory").insert({ fighter_id, store_item_id });
+          }
+        }
+        await supabase.from("arena_admin_earnings").insert({
+          source_type: "store",
+          source_id: fighter_id,
+          amount: amount_dollars,
+        });
+      }
+    }
+    await supabase.from("stripe_payments").insert({
+      user_id,
+      email: (session.customer_email as string) || "unknown",
+      amount: amount_dollars,
+      currency: "usd",
+      product_type: "arena_store",
+      stripe_session_id: session_id,
+      session_id: session_id,
+      status: "completed",
+    }).then(({ error }) => { if (error) console.error("[Stripe webhook] stripe_payments arena_store:", error.message); });
+    return new Response("OK", { status: 200 });
+  }
+
+  if (product_type === "arena_season_pass" && session.mode === "subscription" && session.subscription && supabase) {
+    const stripe = getStripe();
+    const subId = typeof session.subscription === "string" ? session.subscription : (session.subscription as Stripe.Subscription).id;
+    const sub = await stripe.subscriptions.retrieve(subId);
+    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    const subStatus = sub.status === "active" ? "active" : sub.status === "past_due" ? "past_due" : "canceled";
+    await supabase.from("arena_season_pass").upsert(
+      {
+        user_id,
+        stripe_subscription_id: sub.id,
+        status: subStatus,
+        current_period_end: periodEnd,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+    await supabase.from("arena_admin_earnings").insert({ source_type: "season_pass", source_id: user_id, amount: 9.99 });
+    await supabase.from("stripe_payments").insert({
+      user_id,
+      email: (session.customer_email as string) || "unknown",
+      amount: 9.99,
+      currency: "usd",
+      product_type: "arena_season_pass",
+      stripe_session_id: session_id,
+      session_id: session_id,
+      status: "completed",
+    }).then(({ error }) => { if (error) console.error("[Stripe webhook] stripe_payments arena_season_pass:", error.message); });
+    return new Response("OK", { status: 200 });
+  }
 
   const ledgerResult = await walletLedgerEntry(user_id, "deposit", amount_total, `stripe_session_${session_id}`);
   if (ledgerResult.success) {

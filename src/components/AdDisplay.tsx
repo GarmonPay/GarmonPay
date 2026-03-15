@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
-export type AdPlacement = "homepage" | "dashboard" | "fight_arena";
+export type AdPlacement = "homepage" | "dashboard" | "arena";
 
 interface AdItem {
   id: string;

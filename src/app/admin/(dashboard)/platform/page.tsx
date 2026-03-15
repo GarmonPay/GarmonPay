@@ -17,7 +17,7 @@ function gameLabel(name: string) {
     .join(" ");
 }
 
-type GameName = "spin_wheel" | "scratch_card" | "pinball" | "mystery_box" | "boxing";
+type GameName = "spin_wheel" | "scratch_card" | "pinball" | "mystery_box";
 
 export default function AdminPlatformPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -68,7 +68,7 @@ export default function AdminPlatformPage() {
         const config = gameRes.config ?? {};
         setGameConfig(config);
         const inputs: Record<string, string> = {};
-        ["spin_wheel", "scratch_card", "pinball", "mystery_box", "boxing"].forEach((name) => {
+        ["spin_wheel", "scratch_card", "pinball", "mystery_box"].forEach((name) => {
           inputs[name] = String(config[name] ?? 10);
         });
         setGameInputs(inputs);
@@ -247,7 +247,7 @@ export default function AdminPlatformPage() {
               </tr>
             </thead>
             <tbody>
-              {(["spin_wheel", "scratch_card", "pinball", "mystery_box", "boxing"] as GameName[]).map((gameName) => (
+              {(["spin_wheel", "scratch_card", "pinball", "mystery_box"] as GameName[]).map((gameName) => (
                 <tr key={gameName} className="border-b border-white/5">
                   <td className="p-3 text-white font-medium">{gameLabel(gameName)}</td>
                   <td className="p-3">

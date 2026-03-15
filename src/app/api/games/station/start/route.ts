@@ -12,7 +12,6 @@ const COST: Record<string, number> = {
   memory: 5,
   reaction: 5,
   spin: 0,
-  boxing: 0,
 };
 
 /** POST /api/games/station/start — deduct credits to start a game. Body: { game_slug }. */

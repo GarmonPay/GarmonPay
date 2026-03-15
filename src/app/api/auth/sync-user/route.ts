@@ -119,13 +119,23 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString(),
           }).eq("id", id);
           const { createReferral } = await import("@/lib/viral-referral-db");
-          await createReferral({
+          const result = await createReferral({
             referrerUserId: referrerId,
             referredUserId: id,
             referralCode: refCode,
             grantSignupBonus: true,
             referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
           });
+          if (result?.success) {
+            const { data: existing } = await supabase.from("arena_referral_bonus").select("id").eq("referred_user_id", id).maybeSingle();
+            if (!existing) {
+              const { data: refUser } = await supabase.from("users").select("arena_coins").eq("id", referrerId).single();
+              const coins = Number((refUser as { arena_coins?: number })?.arena_coins ?? 0) + 500;
+              await supabase.from("users").update({ arena_coins: coins }).eq("id", referrerId);
+              await supabase.from("arena_referral_bonus").insert({ referrer_user_id: referrerId, referred_user_id: id, coins_granted: 500 });
+              await supabase.from("arena_coin_transactions").insert({ user_id: referrerId, amount: 500, type: "referral", description: "Referred a new fighter" });
+            }
+          }
         }
       } catch (refErr) {
         console.warn("Sync-user referral apply (optional):", refErr);

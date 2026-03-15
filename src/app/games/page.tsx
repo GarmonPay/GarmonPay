@@ -17,7 +17,6 @@ type LeaderboardEntry = { rank: number; user_id: string; score: number; email?: 
 
 const GAMES: { slug: string; name: string; route: string; costCents: number; emoji: string; color: string }[] = [
   { slug: "pinball", name: "GarmonPay Pinball", route: "/games/pinball", costCents: 10, emoji: "🎮", color: "#00f0ff" },
-  { slug: "boxing", name: "Street Boxing", route: "/games/boxing", costCents: 0, emoji: "🥊", color: "#ff4444" },
   { slug: "runner", name: "Crypto Runner", route: "/games/runner", costCents: 5, emoji: "🏃", color: "#39ff14" },
   { slug: "snake", name: "Neon Snake", route: "/games/snake", costCents: 5, emoji: "🐍", color: "#bf00ff" },
   { slug: "shooter", name: "Token Shooter", route: "/games/shooter", costCents: 5, emoji: "🎯", color: "#ffaa00" },

@@ -4,7 +4,7 @@
 
 import { createAdminClient } from "@/lib/supabase";
 
-export type AdPlacement = "homepage" | "dashboard" | "fight_arena";
+export type AdPlacement = "homepage" | "dashboard" | "arena";
 export type AdTypeDb = "banner" | "video";
 
 export interface AdvertisementRow {
