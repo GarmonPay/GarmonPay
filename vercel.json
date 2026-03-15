@@ -1,5 +1,5 @@
 {
-  "buildCommand": "rm -rf .next && next build",
+  "buildCommand": "rm -rf .next && npm run build",
   "headers": [
     {
       "source": "/api/(.*)",
