@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/core/supabase";
 
@@ -125,7 +126,14 @@ export default function DashboardSecurityPage() {
           <div className="space-y-4">
             <p className="text-fintech-muted text-sm">Scan this QR code with your authenticator app, then enter the 6-digit code below.</p>
             <div className="flex justify-center">
-              <img src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`} alt="QR code" className="w-48 h-48 bg-white rounded" />
+              <Image
+                src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`}
+                alt="QR code"
+                width={192}
+                height={192}
+                className="w-48 h-48 bg-white rounded"
+                unoptimized
+              />
             </div>
             <input
               type="text"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 type SecurityEvent = {
@@ -41,12 +41,7 @@ export default function AdminSecurityPage() {
     getAdminSessionAsync().then(setSession);
   }, []);
 
-  useEffect(() => {
-    if (!session) return;
-    load();
-  }, [session]);
-
-  async function load() {
+  const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
@@ -66,7 +61,12 @@ export default function AdminSecurityPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    load();
+  }, [session, load]);
 
   async function banUser(userId: string, banned: boolean) {
     if (!session) return;

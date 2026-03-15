@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { VideoAdPlayer } from "./VideoAdPlayer";
 
 export type AdType = "video" | "image" | "text" | "website_visit" | "app_download";
@@ -89,8 +90,7 @@ function NonVideoAdView({
           {ad.adType} ad — reward <span className="text-fintech-money">${(ad.rewardCents / 100).toFixed(2)}</span> after {ad.requiredSeconds}s
         </p>
         {ad.adType === "image" && ad.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={ad.imageUrl} alt={ad.title} className="w-full rounded-lg mb-4" />
+          <Image src={ad.imageUrl} alt={ad.title} width={600} height={400} className="w-full rounded-lg mb-4 object-contain" unoptimized />
         )}
         {ad.adType === "text" && ad.textContent && (
           <p className="text-white/90 mb-4">{ad.textContent}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -155,8 +156,7 @@ export default function AdminBannersPage() {
                 {banners.map((b) => (
                   <tr key={b.id} className="border-b border-white/5">
                     <td className="p-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={b.image_url} alt="" className="h-12 w-auto max-w-[120px] object-contain rounded bg-black/20" />
+                      <Image src={b.image_url} alt="" width={120} height={48} className="h-12 w-auto max-w-[120px] object-contain rounded bg-black/20" unoptimized />
                     </td>
                     <td className="p-3 text-white">{b.title || "—"}</td>
                     <td className="p-3 text-[#9ca3af] text-sm">{b.owner_email ?? "—"}</td>

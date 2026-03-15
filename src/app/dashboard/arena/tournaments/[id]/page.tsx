@@ -9,11 +9,13 @@ import { io, Socket } from "socket.io-client";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
+type TournamentBracket = { rounds?: Array<{ matches: Array<{ fightId?: string; fighterAId?: string; fighterBId?: string; winnerId?: string }> }> };
+
 export default function ArenaTournamentBracketPage() {
   const params = useParams();
   const id = params.id as string;
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
-  const [tournament, setTournament] = useState<{ name: string; status: string; bracket: { rounds?: Array<{ matches: Array<{ fightId?: string; fighterAId?: string; fighterBId?: string; winnerId?: string }> }> } } | null>(null);
+  const [tournament, setTournament] = useState<{ name: string; status: string; bracket: TournamentBracket } | null>(null);
   const [fightersById, setFightersById] = useState<Record<string, { name: string; avatar: string }>>({});
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -42,7 +44,7 @@ export default function ArenaTournamentBracketPage() {
       s.emit("join_tournament_room", { tournamentId: id });
     });
     s.on("bracket_update", (payload: { bracket: unknown }) => {
-      setTournament((prev) => (prev ? { ...prev, bracket: payload.bracket as typeof tournament.bracket } : null));
+      setTournament((prev) => (prev ? { ...prev, bracket: payload.bracket as TournamentBracket } : null));
     });
     setSocket(s);
     return () => {

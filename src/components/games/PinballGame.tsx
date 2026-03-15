@@ -49,6 +49,8 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [jackpotMode, setJackpotMode] = useState(false);
+  const jackpotModeRef = useRef(jackpotMode);
+  jackpotModeRef.current = jackpotMode;
   const [gameOver, setGameOver] = useState(false);
   const flipperLeftDown = useRef(false);
   const flipperRightDown = useRef(false);
@@ -664,12 +666,13 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       const jh = 32;
       const jr = 6;
       const jGrad = ctx.createLinearGradient(jx, jy, jx + jw, jy + jh);
-      jGrad.addColorStop(0, jackpotMode ? "#ffcc00" : "#0a4d0a");
-      jGrad.addColorStop(0.5, jackpotMode ? "#ffdd44" : "#0d6b0d");
-      jGrad.addColorStop(1, jackpotMode ? "#cc9900" : "#063806");
+      const isJackpot = jackpotModeRef.current;
+      jGrad.addColorStop(0, isJackpot ? "#ffcc00" : "#0a4d0a");
+      jGrad.addColorStop(0.5, isJackpot ? "#ffdd44" : "#0d6b0d");
+      jGrad.addColorStop(1, isJackpot ? "#cc9900" : "#063806");
       ctx.fillStyle = jGrad;
-      ctx.shadowColor = jackpotMode ? COLORS.gold : COLORS.neonGreen;
-      ctx.shadowBlur = jackpotMode ? 40 : 28;
+      ctx.shadowColor = isJackpot ? COLORS.gold : COLORS.neonGreen;
+      ctx.shadowBlur = isJackpot ? 40 : 28;
       ctx.beginPath();
       ctx.moveTo(jx + jr, jy);
       ctx.lineTo(jx + jw - jr, jy);
@@ -681,12 +684,12 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.lineTo(jx, jy + jr);
       ctx.quadraticCurveTo(jx, jy, jx + jr, jy);
       ctx.fill();
-      ctx.strokeStyle = jackpotMode ? "#ffdd88" : "rgba(0,255,100,0.8)";
+      ctx.strokeStyle = isJackpot ? "#ffdd88" : "rgba(0,255,100,0.8)";
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.font = "bold 14px monospace";
-      ctx.fillStyle = jackpotMode ? "#331100" : "#001100";
+      ctx.fillStyle = isJackpot ? "#331100" : "#001100";
       ctx.textAlign = "center";
       ctx.fillText("JACKPOT", jackpotZone.position.x, jackpotZone.position.y + 5);
 
@@ -790,7 +793,7 @@ export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
       ctx.restore();
 
       ctx.shadowBlur = 0;
-      if (jackpotMode) {
+      if (jackpotModeRef.current) {
         ctx.fillStyle = COLORS.gold;
         ctx.shadowColor = COLORS.gold;
         ctx.shadowBlur = 25;

@@ -27,8 +27,8 @@ export async function GET(
   const bracket = (t as { bracket?: { rounds?: unknown[] } }).bracket || {};
   const fighterIds = new Set<string>();
   (entries ?? []).forEach((e: { fighter_id: string }) => fighterIds.add(e.fighter_id));
-  const rounds = bracket.rounds || [];
-  rounds.forEach((r: { matches?: Array<{ fighterAId?: string; fighterBId?: string; winnerId?: string }> }) => {
+  const rounds = (bracket.rounds || []) as Array<{ matches?: Array<{ fighterAId?: string; fighterBId?: string; winnerId?: string }> }>;
+  rounds.forEach((r) => {
     (r.matches || []).forEach((m) => {
       if (m.fighterAId) fighterIds.add(m.fighterAId);
       if (m.fighterBId) fighterIds.add(m.fighterBId);

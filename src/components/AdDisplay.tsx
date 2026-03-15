@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import Image from "next/image";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -128,13 +129,14 @@ export function AdDisplay({ placement, className, style }: AdDisplayProps) {
             }}
             className="block w-full overflow-hidden rounded-lg border border-white/10 bg-black/20"
           >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={ad.file_url ?? undefined}
+          <Image
+            src={ad.file_url ?? ""}
             alt={ad.title}
+            width={400}
+            height={280}
             loading="lazy"
-            decoding="async"
             className="w-full h-auto object-contain max-h-[280px]"
+            unoptimized
           />
         </a>
       )}

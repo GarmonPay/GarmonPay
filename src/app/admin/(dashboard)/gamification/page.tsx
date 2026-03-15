@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -38,7 +38,7 @@ export default function GamificationPage() {
     getAdminSessionAsync().then(setSession);
   }, []);
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!session) return;
     setLoadError(null);
     try {
@@ -57,11 +57,11 @@ export default function GamificationPage() {
       setConfig(DEFAULT_CONFIG);
       setLoadError("Request failed");
     }
-  }
+  }, [session]);
 
   useEffect(() => {
     if (session) load();
-  }, [session]);
+  }, [session, load]);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

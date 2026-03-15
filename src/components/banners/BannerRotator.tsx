@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 const ROTATION_SECONDS = 5;
@@ -96,11 +97,13 @@ export function BannerRotator({
         className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-fintech-accent rounded-xl overflow-hidden"
         aria-label={current?.title || "Banner"}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={current!.image_url}
           alt={current!.title || "Banner"}
+          width={640}
+          height={120}
           className={`w-full ${sizeClass} bg-black/20`}
+          unoptimized
         />
       </button>
       {banners.length > 1 && (

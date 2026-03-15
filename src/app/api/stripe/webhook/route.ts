@@ -126,7 +126,7 @@ export async function POST(req: Request) {
   const supabaseForWebhook = createAdminClient();
 
   if (eventType === "customer.subscription.updated" || eventType === "customer.subscription.deleted") {
-    const sub = event.data.object as Stripe.Subscription;
+    const sub = event.data.object as Stripe.Subscription & { current_period_end?: number };
     const productType = (sub.metadata?.product_type as string) || "";
     if (productType !== "arena_season_pass" || !supabaseForWebhook) return new Response("OK", { status: 200 });
     const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
@@ -255,7 +255,7 @@ export async function POST(req: Request) {
   if (product_type === "arena_season_pass" && session.mode === "subscription" && session.subscription && supabase) {
     const stripe = getStripe();
     const subId = typeof session.subscription === "string" ? session.subscription : (session.subscription as Stripe.Subscription).id;
-    const sub = await stripe.subscriptions.retrieve(subId);
+    const sub = await stripe.subscriptions.retrieve(subId) as Stripe.Subscription & { current_period_end?: number };
     const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
     const subStatus = sub.status === "active" ? "active" : sub.status === "past_due" ? "past_due" : "canceled";
     await supabase.from("arena_season_pass").upsert(
