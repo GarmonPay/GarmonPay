@@ -7,12 +7,13 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const safeMessage = typeof error.message === "string" ? error.message.slice(0, 500) : "Unknown error";
   return (
     <html lang="en">
       <body style={{ background: "#0a0e17", color: "#f9fafb", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", margin: 0, fontFamily: "system-ui, sans-serif" }}>
         <main style={{ padding: "2rem", textAlign: "center" }}>
           <h1 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Something went wrong</h1>
-          <p style={{ color: "#9ca3af", marginBottom: "1.5rem" }}>{error.message}</p>
+          <p style={{ color: "#9ca3af", marginBottom: "1.5rem", wordBreak: "break-all" }}>{safeMessage}</p>
           <button
             type="button"
             onClick={reset}
