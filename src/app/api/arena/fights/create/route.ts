@@ -3,7 +3,7 @@ import { createHmac } from "crypto";
 import { randomUUID } from "crypto";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { generateAIFighter } from "@/lib/arena-ai-generate";
+import { generateAIFighter, type AIGeneratedFighter } from "@/lib/arena-ai-generate";
 import { arenaRateLimitFightCreate, getClientIpArena } from "@/lib/arena-security";
 
 const CPU_USER_IDS = [
@@ -16,6 +16,49 @@ const CPU_USER_IDS = [
 ];
 
 const JOIN_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min
+
+/** Fallback when Anthropic fails — never show AI error to user. */
+const FALLBACK_AI_FIGHTERS: AIGeneratedFighter[] = [
+  {
+    name: "IRON VEGA",
+    style: "Brawler",
+    avatar: "💀",
+    strength: 85,
+    speed: 78,
+    stamina: 80,
+    defense: 70,
+    chin: 88,
+    special: 72,
+    taunt: "You're already done.",
+    weakness: "speed",
+  },
+  {
+    name: "THE SERPENT",
+    style: "Counterpuncher",
+    avatar: "🐍",
+    strength: 68,
+    speed: 92,
+    stamina: 85,
+    defense: 90,
+    chin: 72,
+    special: 80,
+    taunt: "I don't miss.",
+    weakness: "chin",
+  },
+  {
+    name: "STONE COLD",
+    style: "Pressure Fighter",
+    avatar: "🪨",
+    strength: 80,
+    speed: 68,
+    stamina: 94,
+    defense: 82,
+    chin: 95,
+    special: 60,
+    taunt: "Pain is my warmup.",
+    weakness: "speed",
+  },
+];
 
 function signJoinToken(payload: { fightId: string; userId: string; fighterAId: string; exp: number }): string {
   const secret = process.env.ARENA_JOIN_SECRET || "arena-join-secret-change-in-production";
@@ -72,9 +115,10 @@ export async function POST(req: Request) {
       (myFighter.chin ?? 0) +
       (myFighter.special ?? 0);
     const wins = (myFighter as { wins?: number }).wins ?? 0;
-    const generated = await generateAIFighter(wins, totalStats);
+    let generated: AIGeneratedFighter | null = await generateAIFighter(wins, totalStats);
     if (!generated) {
-      return NextResponse.json({ message: "AI opponent generation failed" }, { status: 503 });
+      const fallback = FALLBACK_AI_FIGHTERS[Math.floor(Math.random() * FALLBACK_AI_FIGHTERS.length)];
+      generated = fallback;
     }
     const aiUserId = randomUUID();
     await supabase.from("users").insert({
