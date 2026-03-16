@@ -17,6 +17,13 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json(
+        { error: "AI generation is currently unavailable. Please use manual fighter creation." },
+        { status: 503 }
+      );
+    }
+
     const supabase = createAdminClient();
     if (!supabase) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
@@ -131,6 +138,10 @@ export async function POST(request: Request) {
           fighter_color: character.color,
           portrait_svg: portraitSvg,
           generation_method: method,
+          // Reset 3D model so the fighter page shows it needs regeneration
+          model_3d_task_id: null,
+          model_3d_status: null,
+          model_3d_url: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingFighter.id)

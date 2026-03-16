@@ -12,7 +12,7 @@ import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { RingAnimationState } from "@/components/arena/BoxingRing";
 
-const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
+const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
 type Fighter = {
   id: string;

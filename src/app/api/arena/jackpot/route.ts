@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 
-/** GET /api/arena/jackpot — current week jackpot total (read-only). */
+/** GET /api/arena/jackpot — current week jackpot total (read-only, public). */
 export async function GET(req: Request) {
+  // userId may be null for unauthenticated requests — jackpot amount is public read-only data.
+  // We intentionally discard the result; auth is only required for mutations.
   await getAuthUserId(req);
   const supabase = createAdminClient();
   if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });

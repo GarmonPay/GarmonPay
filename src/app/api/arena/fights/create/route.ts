@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { randomUUID } from "crypto";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { generateAIFighter, type AIGeneratedFighter } from "@/lib/arena-ai-generate";
@@ -120,15 +119,13 @@ export async function POST(req: Request) {
       const fallback = FALLBACK_AI_FIGHTERS[Math.floor(Math.random() * FALLBACK_AI_FIGHTERS.length)];
       generated = fallback;
     }
-    const aiUserId = randomUUID();
-    await supabase.from("users").insert({
-      id: aiUserId,
-      email: `arena-ai-${aiUserId}@garmonpay.internal`,
-      balance: 0,
-      role: "user",
-      is_super_admin: false,
-      created_at: new Date().toISOString(),
-    });
+    // Use an existing CPU fighter's user_id instead of inserting a ghost user row
+    const { data: cpuUserRow } = await supabase
+      .from("arena_cpu_fighters")
+      .select("user_id")
+      .limit(1)
+      .single();
+    const aiUserId = cpuUserRow?.user_id ?? CPU_USER_IDS[Math.floor(Math.random() * CPU_USER_IDS.length)];
     const { data: aiFighter, error: aiFighterErr } = await supabase
       .from("arena_fighters")
       .insert({
@@ -203,6 +200,6 @@ export async function POST(req: Request) {
     fighterA: myFighter,
     fighterB: fighterBPayload,
     joinToken,
-    wsUrl: process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001",
+    wsUrl: process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001",
   });
 }

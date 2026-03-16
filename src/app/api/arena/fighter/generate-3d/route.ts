@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     if (!process.env.MESHY_API_KEY) {
-      return NextResponse.json({ error: "3D generation not configured" }, { status: 503 });
+      return NextResponse.json({ error: "3D model generation is not available at this time." }, { status: 503 });
     }
 
     let body: { fighterId?: string };

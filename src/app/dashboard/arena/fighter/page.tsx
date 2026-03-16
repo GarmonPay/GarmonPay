@@ -24,6 +24,7 @@ export default function MyFighterPage() {
   const [regenModal, setRegenModal] = useState(false);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenError, setRegenError] = useState("");
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [threeDProgress, setThreeDProgress] = useState<number>(0);
   const poll3dRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -94,7 +95,12 @@ export default function MyFighterPage() {
 
   useEffect(() => {
     const f = fighter as (FighterData & { model_3d_status?: string; model_3d_task_id?: string | null }) | null;
-    if (f?.model_3d_status !== "generating" || !f?.model_3d_task_id) {
+    const shouldPoll =
+      f?.model_3d_task_id != null &&
+      f?.model_3d_status !== "succeeded" &&
+      f?.model_3d_status !== "failed" &&
+      f?.model_3d_status !== "complete";
+    if (!shouldPoll) {
       if (poll3dRef.current) {
         clearInterval(poll3dRef.current);
         poll3dRef.current = null;
@@ -110,6 +116,7 @@ export default function MyFighterPage() {
 
   const handleGenerate3D = async () => {
     if (!session || !fighter) return;
+    setGenerationError(null);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     try {
@@ -121,6 +128,7 @@ export default function MyFighterPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setGenerationError(data.message || "3D generation is currently unavailable. Please try again later.");
         return;
       }
       if (data.taskId) {
@@ -134,9 +142,11 @@ export default function MyFighterPage() {
             : null
         );
         setThreeDProgress(0);
+      } else {
+        setGenerationError("3D generation is currently unavailable. Please try again later.");
       }
     } catch {
-      // ignore
+      setGenerationError("3D generation is currently unavailable. Please try again later.");
     }
   };
 
@@ -232,6 +242,7 @@ export default function MyFighterPage() {
               <button type="button" onClick={handleGenerate3D} className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]">
                 Generate 3D Fighter
               </button>
+              {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
             </div>
           )}
         </div>
@@ -292,6 +303,7 @@ export default function MyFighterPage() {
             >
               Generate Your 3D Fighter
             </button>
+            {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
           </div>
         )}
       </div>

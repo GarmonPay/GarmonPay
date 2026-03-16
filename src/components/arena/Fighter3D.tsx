@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, Component, ReactNode, useRef } from "react";
+import Image from "next/image";
 import { Canvas } from "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
@@ -83,32 +84,29 @@ export default function Fighter3D({
       }}
     >
       {thumbnailUrl && !loaded && hasModel && (
-        <img
+        <Image
           src={thumbnailUrl}
           alt="Fighter preview"
+          fill
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
             objectFit: "cover",
             opacity: loaded ? 0 : 1,
             transition: "opacity 0.4s ease",
           }}
         />
       )}
-      <Canvas camera={{ position: [0, 0.5, 3], fov: 45 }} shadows>
-        <ambientLight intensity={0.3} />
-        <spotLight
-          position={[0, 5, 3]}
-          intensity={2}
-          castShadow
-          color={fighterColor}
-        />
-        <spotLight position={[-3, 3, -2]} intensity={1} color="#ffffff" />
+      {hasModel ? (
+        <Canvas camera={{ position: [0, 0.5, 3], fov: 45 }} shadows>
+          <ambientLight intensity={0.3} />
+          <spotLight
+            position={[0, 5, 3]}
+            intensity={2}
+            castShadow
+            color={fighterColor}
+          />
+          <spotLight position={[-3, 3, -2]} intensity={1} color="#ffffff" />
 
-        <Suspense fallback={<SpinningGoldBox />}>
-          {hasModel ? (
+          <Suspense fallback={<SpinningGoldBox />}>
             <ModelErrorBoundary fallback={<SpinningGoldBox />} onError={handleModelError}>
               <PresentationControls
                 global
@@ -119,26 +117,36 @@ export default function Fighter3D({
                 <Model url={modelUrl!} onLoaded={() => setLoaded(true)} />
               </PresentationControls>
             </ModelErrorBoundary>
-          ) : (
-            <PresentationControls
-              global
-              rotation={[0, 0, 0]}
-              polar={[-0.1, 0.1]}
-              azimuth={[-0.5, 0.5]}
-            >
-              <SpinningGoldBox />
-            </PresentationControls>
-          )}
-          <ContactShadows
-            position={[0, -1.4, 0]}
-            opacity={0.7}
-            scale={4}
-            blur={2}
-            color="#000000"
-          />
-          <Environment preset="night" />
-        </Suspense>
-      </Canvas>
+            <ContactShadows
+              position={[0, -1.4, 0]}
+              opacity={0.7}
+              scale={4}
+              blur={2}
+              color="#000000"
+            />
+            <Environment preset="night" />
+          </Suspense>
+        </Canvas>
+      ) : (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#0a0a0a",
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 40 }}>🥊</span>
+          <p style={{ color: "#f0a500", fontWeight: 600, margin: 0 }}>No 3D Model Yet</p>
+          <p style={{ color: "#6b7280", fontSize: 13, margin: 0, textAlign: "center", padding: "0 16px" }}>
+            Generate a 3D model from your fighter profile
+          </p>
+        </div>
+      )}
     </div>
   );
 }

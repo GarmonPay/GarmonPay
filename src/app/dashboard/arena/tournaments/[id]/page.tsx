@@ -7,7 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
 import { getApiRoot } from "@/lib/api";
-const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
+const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
 type TournamentBracket = { rounds?: Array<{ matches: Array<{ fightId?: string; fighterAId?: string; fighterBId?: string; winnerId?: string }> }> };
 

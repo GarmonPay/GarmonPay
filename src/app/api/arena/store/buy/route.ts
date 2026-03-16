@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   await supabase.from("arena_admin_earnings").insert({
     source_type: "store",
     source_id: fighter.id,
-    amount: 0,
+    amount: effectivePrice,
   });
 
   return NextResponse.json({ success: true, arenaCoins: newCoins });

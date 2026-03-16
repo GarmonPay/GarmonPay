@@ -70,6 +70,7 @@ export default function CreateFighterAIPage() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [errorIsUnavailable, setErrorIsUnavailable] = useState(false);
   const [username, setUsername] = useState("");
 
   useEffect(() => {
@@ -81,20 +82,6 @@ export default function CreateFighterAIPage() {
 
   const currentQuestion = QUESTIONS[questionIndex];
   const progress = isAuto ? 0 : (questionIndex + 1) / QUESTIONS.length;
-
-  const handleAnswer = useCallback(
-    (optionId: string) => {
-      const next = [...answers, optionId];
-      setAnswers(next);
-      if (questionIndex + 1 >= QUESTIONS.length) {
-        setStep("loading");
-        runGeneration("questionnaire", next);
-      } else {
-        setQuestionIndex(questionIndex + 1);
-      }
-    },
-    [answers, questionIndex]
-  );
 
   const runGeneration = useCallback(
     async (method: "questionnaire" | "auto", ans: string[] = []) => {
@@ -125,6 +112,12 @@ export default function CreateFighterAIPage() {
           setStep("error");
           return;
         }
+        if (res.status === 503) {
+          setError("AI generation is temporarily unavailable. You can create your fighter manually instead.");
+          setErrorIsUnavailable(true);
+          setStep("error");
+          return;
+        }
         if (!res.ok) {
           setError(data.error || "AI is warming up. Try again in a moment.");
           setStep("error");
@@ -138,6 +131,20 @@ export default function CreateFighterAIPage() {
       }
     },
     [username, router]
+  );
+
+  const handleAnswer = useCallback(
+    (optionId: string) => {
+      const next = [...answers, optionId];
+      setAnswers(next);
+      if (questionIndex + 1 >= QUESTIONS.length) {
+        setStep("loading");
+        runGeneration("questionnaire", next);
+      } else {
+        setQuestionIndex(questionIndex + 1);
+      }
+    },
+    [answers, questionIndex, runGeneration]
   );
 
   useEffect(() => {
@@ -162,13 +169,20 @@ export default function CreateFighterAIPage() {
       <div className="max-w-lg mx-auto rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
         <p className="text-red-400 mb-4">{error}</p>
         <div className="flex gap-3 justify-center flex-wrap">
-          <button
-            type="button"
-            onClick={() => { setStep(isAuto ? "loading" : "questions"); setError(""); setQuestionIndex(0); setAnswers([]); if (isAuto) runGeneration("auto", []); }}
-            className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium"
-          >
-            Try again
-          </button>
+          {!errorIsUnavailable && (
+            <button
+              type="button"
+              onClick={() => { setStep(isAuto ? "loading" : "questions"); setError(""); setErrorIsUnavailable(false); setQuestionIndex(0); setAnswers([]); if (isAuto) runGeneration("auto", []); }}
+              className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium"
+            >
+              Try again
+            </button>
+          )}
+          {errorIsUnavailable && (
+            <Link href="/dashboard/arena/create/manual" className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium">
+              Create Manually
+            </Link>
+          )}
           <Link href="/dashboard/arena/create" className="px-4 py-2 rounded-lg border border-white/20 text-white">Back to choices</Link>
         </div>
       </div>

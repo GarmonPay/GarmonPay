@@ -10,6 +10,14 @@ const SHORTS = "#0a0f1e";
 const BOOT = "#111111";
 const HAIR = "#1a1a1a";
 
+function darkenHex(hex: string, factor = 0.6): string {
+  const clean = hex.replace("#", "");
+  const r = Math.round(parseInt(clean.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(clean.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(clean.slice(4, 6), 16) * factor);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
 export function FallbackFighter3D({
   color = "#f0a500",
   animation = "idle",
@@ -17,6 +25,8 @@ export function FallbackFighter3D({
   color?: string;
   animation?: string;
 }) {
+  const shortsColor = color;
+  const waistbandColor = darkenHex(color, 0.55);
   const groupRef = useRef<THREE.Group>(null);
   const torsoRef = useRef<THREE.Group>(null);
   const headRef = useRef<THREE.Group>(null);
@@ -99,12 +109,12 @@ export function FallbackFighter3D({
       {/* Main shorts body */}
       <mesh position={[0, 0.12, 0.02]} castShadow>
         <cylinderGeometry args={[0.22, 0.26, 0.32, 10]} />
-        <meshStandardMaterial color={SHORTS} roughness={0.9} metalness={0} />
+        <meshStandardMaterial color={shortsColor} roughness={0.9} metalness={0} />
       </mesh>
       {/* Waistband */}
       <mesh position={[0, 0.28, 0.02]} castShadow>
         <cylinderGeometry args={[0.23, 0.23, 0.06, 10]} />
-        <meshStandardMaterial color="#1a2a4a" roughness={0.85} metalness={0.1} />
+        <meshStandardMaterial color={waistbandColor} roughness={0.85} metalness={0.1} />
       </mesh>
       {/* Gold trim stripe */}
       <mesh position={[0, 0.31, 0.02]}>

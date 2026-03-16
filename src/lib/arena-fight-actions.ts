@@ -35,7 +35,7 @@ export const STYLE_TENDENCIES: Record<string, Partial<Record<ArenaActionType, nu
   Brawler: { HOOK: 3, RIGHT_HAND: 2.5, BODY_SHOT: 1.5, JAB: 1, BLOCK: 0.8 },
   Boxer: { JAB: 3, RIGHT_HAND: 2, DODGE_LEFT: 1.2, DODGE_RIGHT: 1.2, BLOCK: 1 },
   Slugger: { RIGHT_HAND: 2.5, HOOK: 2.5, SPECIAL: 1.5, BODY_SHOT: 1.2 },
-  "Counter Puncher": { BLOCK: 2, DODGE_LEFT: 1.5, DODGE_RIGHT: 1.5, JAB: 1.5, RIGHT_HAND: 1.2 },
+  Counterpuncher: { BLOCK: 2, DODGE_LEFT: 1.5, DODGE_RIGHT: 1.5, JAB: 1.5, RIGHT_HAND: 1.2 },
   Swarmer: { JAB: 2.5, BODY_SHOT: 2, HOOK: 1.5, DODGE_LEFT: 1, DODGE_RIGHT: 1 },
   Technician: { JAB: 2, RIGHT_HAND: 1.5, BLOCK: 1.5, DODGE_LEFT: 1.2, DODGE_RIGHT: 1.2, SPECIAL: 1 },
 };

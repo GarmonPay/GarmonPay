@@ -19,7 +19,7 @@ const BoxingRing3D = dynamic(
 );
 import { FighterModelInRing } from "@/components/arena/FighterModelInRing";
 
-const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
+const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
 const ARENA_ACTIONS = [
   { key: "JAB", label: "JAB" },
@@ -242,7 +242,7 @@ export default function FindFightPage() {
       s.disconnect();
       setSocket(null);
     };
-  }, [fightId, joinToken, clearCountInterval]);
+  }, [fightId, joinToken, clearCountInterval, fighterA?.id]);
 
   const sendAction = (type: string) => {
     if (socket && winnerId == null) {
