@@ -1,41 +1,20 @@
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
 
-/** POST /api/arena/fighters — create fighter (one per user). Auth via session cookies. */
+/** POST /api/arena/fighters — create fighter (one per user). Auth via Bearer token (session in localStorage). */
 export async function POST(request: Request) {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anonKey) {
-      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
-    }
-
-    const cookieStore = await cookies();
-    const supabase = createServerClient(url, anonKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll().map((c) => ({ name: c.name, value: c.value }));
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        },
-      },
-    });
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const userId = await getAuthUserIdStrict(request);
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const supabase = createAdminClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
     const body = await request.json();
@@ -55,18 +34,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure user exists in public.users (arena_fighters FK). Use admin client for sync.
-    const admin = createAdminClient();
-    if (!admin) {
-      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
-    }
-    const { data: userRow } = await admin.from("users").select("id").eq("id", user.id).maybeSingle();
+    // Ensure user exists in public.users (arena_fighters FK).
+    const { data: userRow } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
     if (!userRow) {
-      const authResponse = await admin.auth.admin.getUserById(user.id);
+      const authResponse = await supabase.auth.admin.getUserById(userId);
       const authUser = authResponse.data?.user ?? null;
       const email = authUser?.email ?? "";
-      const { error: insertUserErr } = await admin.from("users").insert({
-        id: user.id,
+      const { error: insertUserErr } = await supabase.from("users").insert({
+        id: userId,
         email: email || null,
         role: "user",
         balance: 0,
@@ -82,20 +57,20 @@ export async function POST(request: Request) {
     }
 
     // Check if fighter already exists for this user
-    const { data: existing } = await admin
+    const { data: existing } = await supabase
       .from("arena_fighters")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (existing) {
       return NextResponse.json({ error: "Fighter already exists" }, { status: 400 });
     }
 
-    const { data: fighter, error } = await admin
+    const { data: fighter, error } = await supabase
       .from("arena_fighters")
       .insert({
-        user_id: user.id,
+        user_id: userId,
         name,
         style,
         avatar,

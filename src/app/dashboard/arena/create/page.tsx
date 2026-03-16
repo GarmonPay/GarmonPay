@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
+import { getSessionAsync } from "@/lib/session";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
@@ -31,13 +32,23 @@ export default function CreateFighterPage() {
     }
     setLoading(true);
     try {
+      const session = await getSessionAsync();
+      const token = session?.accessToken;
+      if (!token) {
+        setError("Please log in again.");
+        setLoading(false);
+        return;
+      }
       const apiUrl =
         typeof window !== "undefined"
           ? "/api/arena/fighters"
           : `${getApiRoot()}/arena/fighters`;
       const res = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         credentials: "include",
         body: JSON.stringify({ name: trimmed, style, avatar }),
       });
