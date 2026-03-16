@@ -5,6 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { Referee3D, type RefereeState } from "./Referee3D";
+import "./boxing-ring.css";
 
 const GOLD = "#f0a500";
 const RED = "#c1272d";
@@ -13,19 +14,42 @@ const DARK_GREY = "#1a1a1a";
 
 function RingFloor() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[8, 8]} />
-      <meshStandardMaterial color={DARK_GREY} roughness={0.9} metalness={0.1} />
-    </mesh>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[8, 8]} />
+        <meshStandardMaterial color={DARK_GREY} roughness={0.9} metalness={0.1} />
+      </mesh>
+      <Text
+        position={[0, 0.02, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.35}
+        color="#f0a500"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={3}
+      >
+        GARMONPAY
+      </Text>
+    </group>
   );
 }
 
-function CornerPost({ position }: { position: [number, number, number] }) {
+function CornerPostWithPad({
+  position,
+  padColor,
+}: {
+  position: [number, number, number];
+  padColor: string;
+}) {
   return (
     <group position={position}>
       <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[0.08, 0.1, 1.2, 16]} />
+        <cylinderGeometry args={[0.06, 0.07, 1.1, 16]} />
         <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.2, 0.22, 0.5, 16]} />
+        <meshStandardMaterial color={padColor} roughness={0.85} metalness={0.1} />
       </mesh>
     </group>
   );
@@ -234,6 +258,23 @@ function SpotLights({ winnerSide = null }: { winnerSide?: "left" | "right" | nul
       />
       <spotLight position={[0, 8, 2]} angle={0.3} penumbra={0.6} intensity={1.5} color="#ffffff" />
       <spotLight position={[0, 6, -2]} angle={0.35} penumbra={0.5} intensity={1} color="#fff8e7" />
+      {/* Spotlights directly above each fighter for shadow */}
+      <spotLight
+        position={[-1.2, 5, 0]}
+        angle={0.25}
+        penumbra={0.6}
+        intensity={1.2}
+        color="#ffffff"
+        castShadow
+      />
+      <spotLight
+        position={[1.2, 5, 0]}
+        angle={0.25}
+        penumbra={0.6}
+        intensity={1.2}
+        color="#ffffff"
+        castShadow
+      />
     </>
   );
 }
@@ -247,6 +288,7 @@ type BoxingRing3DProps = {
   refereeState?: RefereeState;
   winnerSide?: "left" | "right" | null;
   knockdownCount?: number;
+  modelGenerating?: boolean;
 };
 
 function SceneContent({
@@ -300,10 +342,10 @@ function SceneContent({
       <RingFloor />
       <Ropes />
       <Apron />
-      <CornerPost position={[-3.8, 0.6, -3.8]} />
-      <CornerPost position={[3.8, 0.6, -3.8]} />
-      <CornerPost position={[3.8, 0.6, 3.8]} />
-      <CornerPost position={[-3.8, 0.6, 3.8]} />
+      <CornerPostWithPad position={[-3.8, 0.6, -3.8]} padColor={GOLD} />
+      <CornerPostWithPad position={[3.8, 0.6, -3.8]} padColor={RED} />
+      <CornerPostWithPad position={[3.8, 0.6, 3.8]} padColor={RED} />
+      <CornerPostWithPad position={[-3.8, 0.6, 3.8]} padColor={GOLD} />
       <CrowdParticles
         intensity={1 + koIntensity * 0.5}
         celebration={celebration}
@@ -334,6 +376,7 @@ export const BoxingRing3D = forwardRef<
     refereeState = "watching",
     winnerSide = null,
     knockdownCount = 0,
+    modelGenerating = false,
   },
   ref
 ) {
@@ -344,10 +387,19 @@ export const BoxingRing3D = forwardRef<
   }));
 
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 320, background: "#0a0a0a" }}>
+    <div
+      className="arena-ring-3d-container"
+      style={{
+        width: "100%",
+        height: "100%",
+        minHeight: 320,
+        background: "#0a0a0a",
+        position: "relative",
+      }}
+    >
       <Canvas
         shadows
-        camera={{ position: [0, 2.5, 6], fov: 45 }}
+        camera={{ position: [0, 3.5, 8], fov: 42 }}
         gl={{ antialias: true, alpha: false }}
       >
         <SceneContent
@@ -360,6 +412,11 @@ export const BoxingRing3D = forwardRef<
           knockdownCount={knockdownCount}
         />
       </Canvas>
+      {modelGenerating && (
+        <div className="arena-ring-3d-generating-badge">
+          ✨ 3D Model Generating...
+        </div>
+      )}
     </div>
   );
 });

@@ -4,22 +4,10 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
+import { FallbackFighter3D } from "./FallbackFighter3D";
 
 const GOLD = "#f0a500";
 const RED = "#c1272d";
-
-function PlaceholderBox({ color }: { color: string }) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, delta) => {
-    if (ref.current) ref.current.rotation.y += delta * 0.3;
-  });
-  return (
-    <mesh ref={ref} position={[0, 0.5, 0]} scale={[0.4, 0.8, 0.3]} castShadow>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={color} metalness={0.4} roughness={0.6} />
-    </mesh>
-  );
-}
 
 function ModelInRing({ url }: { url: string }) {
   const { scene } = useGLTF(url);
@@ -64,7 +52,7 @@ export function FighterModelInRing({
       {modelUrl ? (
         <ModelInRing url={modelUrl} />
       ) : (
-        <PlaceholderBox color={color} />
+        <FallbackFighter3D color={color} animation={animation} />
       )}
     </group>
   );

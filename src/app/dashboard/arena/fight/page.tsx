@@ -305,7 +305,7 @@ export default function FindFightPage() {
     if (useWebGL) {
       return (
         <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
-          <div className="min-h-[320px] w-full">
+          <div className="min-h-[60vh] min-h-[320px] w-full">
             <BoxingRing3D
               ref={ring3dRef}
               mode={ringMode}
@@ -313,6 +313,7 @@ export default function FindFightPage() {
               refereeState={effectiveRefereeState}
               winnerSide={refereeWinnerSide}
               knockdownCount={knockdownCount}
+              modelGenerating={!(fa as { model_3d_url?: string | null })?.model_3d_url || !(fb as { model_3d_url?: string | null })?.model_3d_url}
               fighterASlot={
                 <FighterModelInRing
                   modelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}

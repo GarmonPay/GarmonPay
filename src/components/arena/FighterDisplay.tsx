@@ -39,7 +39,7 @@ export function FighterDisplay({
   size = "medium",
   animation = "idle",
   action,
-  showStats = false,
+  showStats = false, // unused: stats only in stats panel, never on fighter graphic
   showGear = true,
   mirrored = false,
   className = "",
@@ -131,12 +131,6 @@ export function FighterDisplay({
           <LayerHair hairStyle={hairStyle} skinTone={skinTone} />
         </g>
       </svg>
-      {showStats && fighter.strength != null && (
-        <div className="absolute bottom-0 left-0 right-0 p-1 bg-black/60 rounded text-[10px] text-white text-center">
-          <span>S{fighter.strength}</span> <span>Sp{fighter.speed}</span> <span>St{fighter.stamina}</span>
-          <span>D{fighter.defense}</span> <span>C{fighter.chin}</span> <span>X{fighter.special}</span>
-        </div>
-      )}
     </div>
   );
 }

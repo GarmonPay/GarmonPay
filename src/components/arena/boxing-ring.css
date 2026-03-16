@@ -450,3 +450,31 @@
   0%, 100% { opacity: 0.9; transform: translateX(-50%) scale(1); }
   50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
 }
+
+/* Boxing ring 3D container and generating badge */
+.arena-ring-3d-container {
+  min-height: 60vh;
+}
+@media (min-width: 768px) {
+  .arena-ring-3d-container {
+    min-height: 400px;
+  }
+}
+.arena-ring-3d-generating-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(240, 165, 0, 0.4);
+  color: #f0a500;
+  font-size: 12px;
+  font-weight: 600;
+  animation: arena-generating-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes arena-generating-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
