@@ -4,6 +4,7 @@ import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
+import { Referee3D, type RefereeState } from "./Referee3D";
 
 const GOLD = "#f0a500";
 const RED = "#c1272d";
@@ -95,7 +96,16 @@ function Apron() {
 }
 
 const CROWD_COUNT = 80;
-function CrowdParticles({ intensity = 1 }: { intensity?: number }) {
+const CONFETTI_COUNT = 40;
+function CrowdParticles({
+  intensity = 1,
+  celebration = 0,
+  armsUp = false,
+}: {
+  intensity?: number;
+  celebration?: number;
+  armsUp?: boolean;
+}) {
   const ref = useRef<THREE.Points>(null);
   const positions = useRef<Float32Array>(new Float32Array(CROWD_COUNT * 3));
   const rand = useRef(() => Math.random() - 0.5);
@@ -109,14 +119,16 @@ function CrowdParticles({ intensity = 1 }: { intensity?: number }) {
     }
   }, []);
 
+  const mult = 1 + celebration * 2;
   useFrame((state) => {
     if (!ref.current) return;
-    const t = state.clock.elapsedTime * (0.3 + intensity * 0.4);
+    const t = state.clock.elapsedTime * (0.3 + intensity * 0.4 * mult);
     const pos = ref.current.geometry.attributes.position;
+    const sway = armsUp ? 0.08 : 0.02;
     for (let i = 0; i < CROWD_COUNT; i++) {
-      const ix = i * 3;
       const baseX = pos.getX(i);
-      pos.setX(i, baseX + Math.sin(t + i * 0.2) * 0.02);
+      pos.setX(i, baseX + Math.sin(t + i * 0.2) * sway);
+      if (armsUp) pos.setY(i, pos.getY(i) + Math.sin(t * 2 + i * 0.3) * 0.03);
     }
     pos.needsUpdate = true;
   });
@@ -130,19 +142,75 @@ function CrowdParticles({ intensity = 1 }: { intensity?: number }) {
           count={CROWD_COUNT}
         />
       </bufferGeometry>
-      <pointsMaterial size={0.15} color="#0a0a0a" transparent opacity={0.6} sizeAttenuation />
+      <pointsMaterial
+        size={0.15}
+        color={celebration > 0 ? "#f0a500" : "#0a0a0a"}
+        transparent
+        opacity={0.5 + celebration * 0.2}
+        sizeAttenuation
+      />
     </points>
   );
 }
 
-function SpotLights() {
+function ConfettiParticles({ active = false }: { active?: boolean }) {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useRef<Float32Array>(new Float32Array(CONFETTI_COUNT * 3));
+  const velocities = useRef<Float32Array>(new Float32Array(CONFETTI_COUNT * 3));
+
+  useEffect(() => {
+    const p = positions.current;
+    const v = velocities.current;
+    for (let i = 0; i < CONFETTI_COUNT; i++) {
+      p[i * 3] = (Math.random() - 0.5) * 6;
+      p[i * 3 + 1] = 5 + Math.random() * 3;
+      p[i * 3 + 2] = (Math.random() - 0.5) * 4;
+      v[i * 3] = (Math.random() - 0.5) * 0.02;
+      v[i * 3 + 1] = -0.03 - Math.random() * 0.02;
+      v[i * 3 + 2] = (Math.random() - 0.5) * 0.01;
+    }
+  }, [active]);
+
+  useFrame((_, delta) => {
+    if (!active || !ref.current) return;
+    const p = ref.current.geometry.attributes.position;
+    const v = velocities.current;
+    for (let i = 0; i < CONFETTI_COUNT; i++) {
+      p.setX(i, p.getX(i) + v[i * 3] * 60 * delta);
+      p.setY(i, p.getY(i) + v[i * 3 + 1] * 60 * delta);
+      p.setZ(i, p.getZ(i) + v[i * 3 + 2] * 60 * delta);
+      if (p.getY(i) < -1) {
+        p.setY(i, 5 + Math.random() * 2);
+        p.setX(i, (Math.random() - 0.5) * 6);
+      }
+    }
+    p.needsUpdate = true;
+  });
+
+  if (!active) return null;
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions.current, 3]}
+          count={CONFETTI_COUNT}
+        />
+      </bufferGeometry>
+      <pointsMaterial size={0.12} color="#f0a500" transparent opacity={0.9} sizeAttenuation />
+    </points>
+  );
+}
+
+function SpotLights({ winnerSide = null }: { winnerSide?: "left" | "right" | null }) {
   const ref1 = useRef<THREE.SpotLight>(null);
   const ref2 = useRef<THREE.SpotLight>(null);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
+    const sweep = winnerSide === "left" ? 1.5 : winnerSide === "right" ? 1.5 : 1;
     const f = 0.98 + Math.sin(t * 2) * 0.02;
-    if (ref1.current) ref1.current.intensity = 2 * f;
-    if (ref2.current) ref2.current.intensity = 2 * (1.02 - f * 0.02);
+    if (ref1.current) ref1.current.intensity = (winnerSide === "left" ? 3 : 2) * f * sweep;
+    if (ref2.current) ref2.current.intensity = (winnerSide === "right" ? 3 : 2) * (1.02 - f * 0.02) * sweep;
   });
   return (
     <>
@@ -176,6 +244,9 @@ type BoxingRing3DProps = {
   mode?: "fight" | "setup" | "victory";
   koIntensity?: number;
   cameraShakeRef?: React.MutableRefObject<(() => void) | null>;
+  refereeState?: RefereeState;
+  winnerSide?: "left" | "right" | null;
+  knockdownCount?: number;
 };
 
 function SceneContent({
@@ -183,14 +254,23 @@ function SceneContent({
   fighterBSlot,
   koIntensity = 0,
   cameraShakeRef,
+  refereeState = "watching",
+  winnerSide = null,
+  knockdownCount = 0,
 }: {
   fighterASlot?: React.ReactNode;
   fighterBSlot?: React.ReactNode;
   koIntensity?: number;
   cameraShakeRef?: React.MutableRefObject<(() => void) | null>;
+  refereeState?: RefereeState;
+  winnerSide?: "left" | "right" | null;
+  knockdownCount?: number;
 }) {
   const sceneRef = useRef<THREE.Group>(null);
   const shakeTime = useRef(0);
+  const celebration = refereeState === "stopped" ? 3 : refereeState === "arm_raise" ? 2 : koIntensity;
+  const armsUp = refereeState === "stopped" || refereeState === "arm_raise";
+  const confettiActive = refereeState === "arm_raise" && winnerSide != null;
 
   useFrame((_, delta) => {
     if (sceneRef.current && shakeTime.current > 0) {
@@ -216,7 +296,7 @@ function SceneContent({
   return (
     <group ref={sceneRef}>
       <ambientLight intensity={0.25} />
-      <SpotLights />
+      <SpotLights winnerSide={confettiActive ? winnerSide : null} />
       <RingFloor />
       <Ropes />
       <Apron />
@@ -224,9 +304,20 @@ function SceneContent({
       <CornerPost position={[3.8, 0.6, -3.8]} />
       <CornerPost position={[3.8, 0.6, 3.8]} />
       <CornerPost position={[-3.8, 0.6, 3.8]} />
-      <CrowdParticles intensity={1 + koIntensity * 0.5} />
+      <CrowdParticles
+        intensity={1 + koIntensity * 0.5}
+        celebration={celebration}
+        armsUp={armsUp}
+      />
+      <ConfettiParticles active={confettiActive} />
       {fighterASlot && <group position={[-1.2, 0, 0]}>{fighterASlot}</group>}
       {fighterBSlot && <group position={[1.2, 0, 0]}>{fighterBSlot}</group>}
+      <Referee3D
+        state={refereeState}
+        winnerSide={winnerSide}
+        knockdownCount={knockdownCount}
+        position={[0, 0, 0]}
+      />
     </group>
   );
 }
@@ -235,7 +326,15 @@ export const BoxingRing3D = forwardRef<
   { shake: () => void },
   BoxingRing3DProps
 >(function BoxingRing3D(
-  { fighterASlot, fighterBSlot, mode = "fight", koIntensity = 0 },
+  {
+    fighterASlot,
+    fighterBSlot,
+    mode = "fight",
+    koIntensity = 0,
+    refereeState = "watching",
+    winnerSide = null,
+    knockdownCount = 0,
+  },
   ref
 ) {
   const cameraShakeRef = useRef<(() => void) | null>(null);
@@ -256,6 +355,9 @@ export const BoxingRing3D = forwardRef<
           fighterBSlot={fighterBSlot}
           koIntensity={koIntensity}
           cameraShakeRef={cameraShakeRef}
+          refereeState={refereeState}
+          winnerSide={winnerSide}
+          knockdownCount={knockdownCount}
         />
       </Canvas>
     </div>

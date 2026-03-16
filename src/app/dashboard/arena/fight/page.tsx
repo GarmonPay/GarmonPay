@@ -246,6 +246,11 @@ export default function FindFightPage() {
     const animTo3D = (a: string) =>
       a === "victory" ? "victory" : a === "ko" || a === "defeat" ? "defeat" : a === "fighting" ? "punch-left" : "idle";
 
+    const refereeState =
+      winnerId != null ? "arm_raise" : showPreFight ? "pre_fight" : "watching";
+    const refereeWinnerSide =
+      winnerId === fa?.id ? "left" : winnerId === fb?.id ? "right" : null;
+
     if (useWebGL) {
       return (
         <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
@@ -254,6 +259,9 @@ export default function FindFightPage() {
               ref={ring3dRef}
               mode={ringMode}
               koIntensity={winnerId != null ? 1 : 0}
+              refereeState={refereeState}
+              winnerSide={refereeWinnerSide}
+              knockdownCount={0}
               fighterASlot={
                 <FighterModelInRing
                   modelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}
