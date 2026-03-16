@@ -34,7 +34,9 @@ export default function CreateFighterPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError((data.message as string) || "Failed to create fighter");
+        const msg = (data.message as string) || "Failed to create fighter";
+        const detail = data.errorDetail as string | undefined;
+        setError(detail ? `${msg} — ${detail}` : msg);
         setLoading(false);
         return;
       }

@@ -16,6 +16,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
+  // Ensure user exists in public.users (arena_fighters.user_id FK). Sync if missing.
+  const { data: userRow } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
+  if (!userRow) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId).then((r) => r.data);
+    const email = authUser?.user?.email ?? "";
+    const { error: insertUserErr } = await supabase.from("users").insert({
+      id: userId,
+      email: email || null,
+      role: "user",
+      balance: 0,
+      created_at: new Date().toISOString(),
+    });
+    if (insertUserErr) {
+      const dbError = `${insertUserErr.code ?? "PGRST"}: ${insertUserErr.message}${insertUserErr.details ? ` (${JSON.stringify(insertUserErr.details)})` : ""}`;
+      console.error("[arena/fighters] Ensure user in public.users failed:", dbError);
+      return NextResponse.json(
+        { message: "Account sync failed. Please try again.", errorDetail: dbError },
+        { status: 500 }
+      );
+    }
+  }
+
   const { data: existing } = await supabase.from("arena_fighters").select("id").eq("user_id", userId).maybeSingle();
   if (existing) {
     return NextResponse.json({ message: "You already have a fighter" }, { status: 400 });
@@ -53,7 +75,12 @@ export async function POST(req: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    const dbError = `${error.code ?? "PGRST"}: ${error.message}${error.details ? ` (${JSON.stringify(error.details)})` : ""}`;
+    console.error("[arena/fighters] Create fighter DB error:", dbError);
+    return NextResponse.json(
+      { message: error.message, errorDetail: dbError },
+      { status: 500 }
+    );
   }
   return NextResponse.json({ fighter });
 }
