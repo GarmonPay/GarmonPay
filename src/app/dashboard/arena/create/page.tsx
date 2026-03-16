@@ -32,7 +32,17 @@ export default function CreateFighterPage() {
         credentials: "include",
         body: JSON.stringify({ name: trimmed, style, avatar }),
       });
-      const data = await res.json().catch(() => ({}));
+      const text = await res.text();
+      let data: { message?: string; errorDetail?: string } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        if (!res.ok) {
+          setError(res.status === 401 ? "Please log in again." : text || `Request failed (${res.status}).`);
+          setLoading(false);
+          return;
+        }
+      }
       if (!res.ok) {
         const msg = (data.message as string) || "Failed to create fighter";
         const detail = data.errorDetail as string | undefined;

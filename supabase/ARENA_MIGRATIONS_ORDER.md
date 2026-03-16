@@ -1,6 +1,9 @@
 # Arena migrations (production)
 
-Apply these in order if production has not run them yet. Easiest: from repo root run:
+**Quick fix for "Failed to create fighter" only:** run the single file in Supabase Dashboard → SQL Editor:
+- **`run-in-production-arena-fighters.sql`** — creates `arena_fighters` and dependencies. Safe to run multiple times.
+
+**Full arena schema:** Apply these in order if production has not run them yet. Easiest: from repo root run:
 
 ```bash
 supabase link --project-ref <your-project-ref>
