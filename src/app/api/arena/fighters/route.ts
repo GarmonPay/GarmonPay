@@ -19,8 +19,9 @@ export async function POST(req: Request) {
   // Ensure user exists in public.users (arena_fighters.user_id FK). Sync if missing.
   const { data: userRow } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
   if (!userRow) {
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId).then((r) => r.data);
-    const email = authUser?.user?.email ?? "";
+    const authResponse = await supabase.auth.admin.getUserById(userId);
+    const authUser = authResponse.data?.user ?? null;
+    const email = authUser?.email ?? "";
     const { error: insertUserErr } = await supabase.from("users").insert({
       id: userId,
       email: email || null,
