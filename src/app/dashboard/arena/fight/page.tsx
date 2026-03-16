@@ -9,6 +9,7 @@ import { io, Socket } from "socket.io-client";
 import { getApiRoot } from "@/lib/api";
 import { getHasWebGL } from "@/lib/webgl-detect";
 import { BoxingRing } from "@/components/arena/BoxingRing";
+import type { RefereeState } from "@/components/arena/Referee3D";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { RingAnimationState } from "@/components/arena/BoxingRing";
 
@@ -77,8 +78,18 @@ export default function FindFightPage() {
   const [loserKoActive, setLoserKoActive] = useState(false);
   const [opponentKoActive, setOpponentKoActive] = useState(false);
   const [ringAnimation, setRingAnimation] = useState<RingAnimationState>("idle");
+  const [refereeState, setRefereeState] = useState<RefereeState>("watching");
+  const [knockdownCount, setKnockdownCount] = useState(0);
+  const countIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ring3dRef = useRef<{ shake: () => void } | null>(null);
   const useWebGL = getHasWebGL();
+
+  const clearCountInterval = useCallback(() => {
+    if (countIntervalRef.current) {
+      clearInterval(countIntervalRef.current);
+      countIntervalRef.current = null;
+    }
+  }, []);
 
   const fetchCpu = useCallback(async () => {
     const s = await getSessionAsync();
@@ -136,6 +147,9 @@ export default function FindFightPage() {
         setHealthB(100);
         setLog([]);
         setWinnerId(null);
+        setRefereeState("pre_fight");
+        setKnockdownCount(0);
+        clearCountInterval();
       }
     } catch (e) {
       setError("Network error");
@@ -158,11 +172,38 @@ export default function FindFightPage() {
     s.on("fight_start", (payload: { healthA: number; healthB: number }) => {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
+      setRefereeState("pre_fight");
+      setKnockdownCount(0);
+      clearCountInterval();
+      setTimeout(() => setRefereeState("watching"), 3000);
     });
     s.on("exchange_result", (payload: { actionA: string; actionB: string; damageAtoB: number; damageBtoA: number; healthA: number; healthB: number; hitA: boolean; hitB: boolean }) => {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
-      setLog((prev) => [...prev, payload]);
+      setLog((prev) => {
+        const next = [...prev, payload];
+        const last = prev[prev.length - 1];
+        const backToBackSpecial =
+          (payload.actionA === "SPECIAL" || payload.actionB === "SPECIAL") &&
+          last &&
+          (last.actionA === "SPECIAL" || last.actionB === "SPECIAL");
+        if (backToBackSpecial) {
+          setRefereeState("warning");
+          setTimeout(() => setRefereeState("watching"), 3000);
+        }
+        if (payload.healthA <= 0 || payload.healthB <= 0) {
+          clearCountInterval();
+          setRefereeState("knockdown");
+          setKnockdownCount(0);
+          let c = 0;
+          countIntervalRef.current = setInterval(() => {
+            c += 1;
+            setKnockdownCount(c);
+            if (c >= 10) clearCountInterval();
+          }, 800);
+        }
+        return next;
+      });
       if (payload.hitA || payload.hitB) {
         setRingAnimation("big_hit");
         ring3dRef.current?.shake();
@@ -179,9 +220,12 @@ export default function FindFightPage() {
       }
     });
     s.on("fight_over", (payload: { winnerId: string }) => {
+      clearCountInterval();
+      setRefereeState("stopped");
       setWinnerId(payload.winnerId);
       setRingAnimation("ko");
       setTimeout(() => setRingAnimation("victory"), 800);
+      setTimeout(() => setRefereeState("arm_raise"), 1200);
       const myId = fighterA?.id;
       if (myId && payload.winnerId !== myId) {
         setLoserKoActive(true);
@@ -194,10 +238,11 @@ export default function FindFightPage() {
     });
     setSocket(s);
     return () => {
+      clearCountInterval();
       s.disconnect();
       setSocket(null);
     };
-  }, [fightId, joinToken]);
+  }, [fightId, joinToken, clearCountInterval]);
 
   const sendAction = (type: string) => {
     if (socket && winnerId == null) {
@@ -246,8 +291,14 @@ export default function FindFightPage() {
     const animTo3D = (a: string) =>
       a === "victory" ? "victory" : a === "ko" || a === "defeat" ? "defeat" : a === "fighting" ? "punch-left" : "idle";
 
-    const refereeState =
-      winnerId != null ? "arm_raise" : showPreFight ? "pre_fight" : "watching";
+    const effectiveRefereeState: RefereeState =
+      winnerId != null
+        ? refereeState === "arm_raise"
+          ? "arm_raise"
+          : "stopped"
+        : showPreFight && !fightId
+          ? "pre_fight"
+          : refereeState;
     const refereeWinnerSide =
       winnerId === fa?.id ? "left" : winnerId === fb?.id ? "right" : null;
 
@@ -259,9 +310,9 @@ export default function FindFightPage() {
               ref={ring3dRef}
               mode={ringMode}
               koIntensity={winnerId != null ? 1 : 0}
-              refereeState={refereeState}
+              refereeState={effectiveRefereeState}
               winnerSide={refereeWinnerSide}
-              knockdownCount={0}
+              knockdownCount={knockdownCount}
               fighterASlot={
                 <FighterModelInRing
                   modelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}
@@ -303,6 +354,9 @@ export default function FindFightPage() {
                     setWinnerId(null);
                     setPendingAiFight(null);
                     setShowPreFight(false);
+                    setRefereeState("pre_fight");
+                    setKnockdownCount(0);
+                    clearCountInterval();
                   }}
                   className="mt-4 px-4 py-2 rounded-lg bg-[#f0a500] text-black font-semibold hover:bg-[#e09500]"
                 >
@@ -390,6 +444,9 @@ export default function FindFightPage() {
                 setWinnerId(null);
                 setPendingAiFight(null);
                 setShowPreFight(false);
+                setRefereeState("pre_fight");
+                setKnockdownCount(0);
+                clearCountInterval();
               }}
               className="mt-4 px-4 py-2 rounded-lg bg-[#f0a500] text-black font-semibold hover:bg-[#e09500]"
             >

@@ -224,7 +224,20 @@ async function saveFightResult(supabase, fightId, winnerId, fightLog, fightType)
   }
 }
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        status: "alive",
+        timestamp: new Date().toISOString(),
+        service: "garmonpay-fight-server",
+      })
+    );
+    return;
+  }
+  // Let Socket.io handle all other requests (e.g. /socket.io)
+});
 const io = new Server(server, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
 });

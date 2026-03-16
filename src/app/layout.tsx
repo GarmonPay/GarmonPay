@@ -2,6 +2,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
+import { KeepAlive } from "@/components/KeepAlive";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
 
@@ -55,6 +56,7 @@ export default function RootLayout({
         <AuthStateProvider>
           {children}
         </AuthStateProvider>
+        <KeepAlive />
         <PwaRegistration />
         <PwaInstallPrompt />
         <Footer />

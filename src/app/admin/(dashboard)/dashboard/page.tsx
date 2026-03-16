@@ -104,6 +104,9 @@ export default function Dashboard() {
         <p className="text-sm text-[#9ca3af] mt-0.5">Overview of platform stats and recent activity</p>
       </header>
       <div className="p-6 flex-1">
+        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-200/90 text-sm">
+          Fight server is on free tier. Upgrade to Render Starter ($7/month) to eliminate cold start delays and improve fight performance.
+        </div>
         {statsError && (
           <div className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm flex items-center justify-between gap-4">
             <span>{statsError}</span>
