@@ -10,165 +10,148 @@ import "./boxing-ring.css";
 const GOLD = "#f0a500";
 const RED = "#c1272d";
 const NAVY = "#0a0f1e";
+const FLOOR_COLOR = "#3d2510";
+const CHROME = "#d0d0d0";
 
-// ─── Scene fog ───────────────────────────────────────────────────────────────
 function SceneFog() {
   const { scene } = useThree();
   useEffect(() => {
     scene.fog = new THREE.FogExp2("#000000", 0.035);
-    return () => {
-      scene.fog = null;
-    };
+    return () => { scene.fog = null; };
   }, [scene]);
   return null;
 }
 
-// ─── Floor ───────────────────────────────────────────────────────────────────
 function RingFloor() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[8, 8]} />
-      <meshStandardMaterial color="#3d2510" roughness={0.95} metalness={0} />
-    </mesh>
-  );
-}
-
-// ─── Corner posts ─────────────────────────────────────────────────────────────
-function CornerPost({
-  position,
-  padColor,
-}: {
-  position: [number, number, number];
-  padColor: string;
-}) {
-  return (
-    <group position={position}>
-      {/* Main post - silver chrome */}
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[0.06, 0.07, 2.2, 16]} />
-        <meshStandardMaterial color="#c8c8c8" metalness={0.9} roughness={0.1} />
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[8, 8]} />
+        <meshStandardMaterial color={FLOOR_COLOR} roughness={0.95} metalness={0} />
       </mesh>
-      {/* Padding cylinder */}
-      <mesh position={[0, 0.6, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.12, 0.13, 0.7, 16]} />
-        <meshStandardMaterial color={padColor} roughness={0.85} metalness={0.05} />
-      </mesh>
+      <Text
+        position={[0, 0.01, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.28}
+        color={GOLD}
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={3}
+        fillOpacity={0.35}
+      >
+        GARMONPAY
+      </Text>
     </group>
   );
 }
 
-// ─── Single rope ─────────────────────────────────────────────────────────────
-function Rope({ height, color }: { height: number; color: string }) {
-  const half = 3.8;
-  const sag = 0.08;
-  const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-half, height, -half),
-    new THREE.Vector3(0, height - sag, -half),
-    new THREE.Vector3(half, height, -half),
-    new THREE.Vector3(half, height - sag, 0),
-    new THREE.Vector3(half, height, half),
-    new THREE.Vector3(0, height - sag, half),
-    new THREE.Vector3(-half, height, half),
-    new THREE.Vector3(-half, height - sag, 0),
-    new THREE.Vector3(-half, height, -half),
-  ], true);
+function CornerPost({ position, padColor }: { position: [number, number, number]; padColor: string }) {
   return (
-    <mesh castShadow>
-      <tubeGeometry args={[curve, 80, 0.028, 8, true]} />
-      <meshStandardMaterial color={color} metalness={0.2} roughness={0.75} />
-    </mesh>
+    <group position={position}>
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[0.05, 0.05, 2.2, 16]} />
+        <meshStandardMaterial color={CHROME} metalness={0.9} roughness={0.1} />
+      </mesh>
+      <mesh position={[0, 1.1, 0]} castShadow>
+        <cylinderGeometry args={[0.14, 0.17, 0.44, 16]} />
+        <meshStandardMaterial color={padColor} roughness={0.85} metalness={0} />
+      </mesh>
+    </group>
   );
 }
 
 function Ropes() {
-  const ropes = [
-    { height: 0.65, color: GOLD },
-    { height: 0.95, color: RED },
-    { height: 1.25, color: GOLD },
-    { height: 1.55, color: RED },
+  const configs = [
+    { y: 0.65, color: GOLD },
+    { y: 0.95, color: RED },
+    { y: 1.25, color: GOLD },
+    { y: 1.55, color: RED },
   ];
+  const half = 3.8;
+  const sag = 0.08;
   return (
     <group>
-      {ropes.map((r, i) => (
-        <Rope key={i} height={r.height} color={r.color} />
-      ))}
+      {configs.map((r, i) => {
+        const curve = new THREE.CatmullRomCurve3(
+          [
+            new THREE.Vector3(-half, r.y, -half),
+            new THREE.Vector3(0, r.y - sag, -half),
+            new THREE.Vector3(half, r.y, -half),
+            new THREE.Vector3(half, r.y, 0),
+            new THREE.Vector3(half, r.y, half),
+            new THREE.Vector3(0, r.y - sag, half),
+            new THREE.Vector3(-half, r.y, half),
+            new THREE.Vector3(-half, r.y, 0),
+            new THREE.Vector3(-half, r.y, -half),
+          ],
+          true
+        );
+        return (
+          <mesh key={i} castShadow>
+            <tubeGeometry args={[curve, 80, 0.028, 8, true]} />
+            <meshStandardMaterial
+              color={r.color}
+              metalness={0.15}
+              roughness={0.65}
+              emissive={r.color}
+              emissiveIntensity={0.04}
+            />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
 
-// ─── Apron ───────────────────────────────────────────────────────────────────
 function Apron() {
   return (
     <group>
-      {/* Front apron */}
-      <mesh position={[0, -0.18, 4.55]} receiveShadow>
-        <boxGeometry args={[9.5, 0.38, 1.4]} />
-        <meshStandardMaterial color={NAVY} roughness={0.9} metalness={0} />
+      <mesh position={[0, -0.12, 4.45]} receiveShadow>
+        <boxGeometry args={[9.2, 0.22, 1.3]} />
+        <meshStandardMaterial color={NAVY} roughness={0.95} metalness={0} />
       </mesh>
-      <Text
-        position={[0, -0.18, 4.56]}
-        fontSize={0.22}
-        color={GOLD}
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={5}
-      >
+      <Text position={[0, -0.0, 4.46]} fontSize={0.2} color={GOLD} anchorX="center" anchorY="middle" maxWidth={5} fillOpacity={0.9}>
         GARMONPAY ARENA
       </Text>
-      {/* Back apron */}
-      <mesh position={[0, -0.18, -4.55]} receiveShadow>
-        <boxGeometry args={[9.5, 0.38, 1.4]} />
-        <meshStandardMaterial color={NAVY} roughness={0.9} metalness={0} />
+      <mesh position={[0, -0.12, -4.45]} receiveShadow>
+        <boxGeometry args={[9.2, 0.22, 1.3]} />
+        <meshStandardMaterial color={NAVY} roughness={0.95} metalness={0} />
       </mesh>
-      {/* Left apron */}
-      <mesh position={[-4.55, -0.18, 0]} receiveShadow>
-        <boxGeometry args={[1.4, 0.38, 9.5]} />
-        <meshStandardMaterial color={NAVY} roughness={0.9} metalness={0} />
+      <mesh position={[4.45, -0.12, 0]} receiveShadow>
+        <boxGeometry args={[1.3, 0.22, 9.2]} />
+        <meshStandardMaterial color={NAVY} roughness={0.95} metalness={0} />
       </mesh>
-      {/* Right apron */}
-      <mesh position={[4.55, -0.18, 0]} receiveShadow>
-        <boxGeometry args={[1.4, 0.38, 9.5]} />
-        <meshStandardMaterial color={NAVY} roughness={0.9} metalness={0} />
+      <mesh position={[-4.45, -0.12, 0]} receiveShadow>
+        <boxGeometry args={[1.3, 0.22, 9.2]} />
+        <meshStandardMaterial color={NAVY} roughness={0.95} metalness={0} />
       </mesh>
     </group>
   );
 }
 
-// ─── Crowd particles ──────────────────────────────────────────────────────────
 const CROWD_COUNT = 200;
-
-function CrowdParticles({
-  intensity = 1,
-  celebration = 0,
-}: {
-  intensity?: number;
-  celebration?: number;
-}) {
+function CrowdParticles({ celebration = 0 }: { celebration?: number }) {
   const ref = useRef<THREE.Points>(null);
-  const positions = useRef(new Float32Array(CROWD_COUNT * 3));
+  const posArr = useRef(new Float32Array(CROWD_COUNT * 3));
 
   useEffect(() => {
-    const p = positions.current;
+    const p = posArr.current;
     for (let i = 0; i < CROWD_COUNT; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = 9 + Math.random() * 5;
-      p[i * 3] = Math.cos(angle) * r;
-      p[i * 3 + 1] = 0.5 + Math.random() * 3.5;
-      p[i * 3 + 2] = Math.sin(angle) * r;
-    }
-    if (ref.current) {
-      ref.current.geometry.attributes.position.needsUpdate = true;
+      const angle = (i / CROWD_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const radius = 9 + Math.random() * 5;
+      p[i * 3] = Math.cos(angle) * radius;
+      p[i * 3 + 1] = 1 + Math.random() * 2.5;
+      p[i * 3 + 2] = Math.sin(angle) * radius;
     }
   }, []);
 
   useFrame((state) => {
     if (!ref.current) return;
-    const t = state.clock.elapsedTime * (0.3 + intensity * 0.15);
+    const t = state.clock.elapsedTime;
     const pos = ref.current.geometry.attributes.position;
-    const sway = 0.002;
     for (let i = 0; i < CROWD_COUNT; i++) {
-      const baseX = pos.getX(i);
-      pos.setX(i, baseX + Math.sin(t + i * 0.3) * sway);
+      const base = posArr.current[i * 3 + 1];
+      pos.setY(i, base + Math.sin(t * 0.8 + i * 0.4) * (0.05 + celebration * 0.25));
     }
     pos.needsUpdate = true;
   });
@@ -176,40 +159,28 @@ function CrowdParticles({
   return (
     <points ref={ref}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions.current, 3]}
-          count={CROWD_COUNT}
-        />
+        <bufferAttribute attach="attributes-position" args={[posArr.current, 3]} count={CROWD_COUNT} />
       </bufferGeometry>
-      <pointsMaterial
-        size={celebration > 0 ? 0.22 : 0.14}
-        color="#111111"
-        transparent
-        opacity={0.7}
-        sizeAttenuation
-      />
+      <pointsMaterial size={celebration > 0 ? 0.2 : 0.13} color="#111111" transparent opacity={0.85} sizeAttenuation />
     </points>
   );
 }
 
-// ─── Confetti ─────────────────────────────────────────────────────────────────
-const CONFETTI_COUNT = 60;
-
+const CONFETTI_COUNT = 50;
 function ConfettiParticles({ active = false }: { active?: boolean }) {
   const ref = useRef<THREE.Points>(null);
-  const positions = useRef(new Float32Array(CONFETTI_COUNT * 3));
-  const velocities = useRef(new Float32Array(CONFETTI_COUNT * 3));
+  const posArr = useRef(new Float32Array(CONFETTI_COUNT * 3));
+  const velArr = useRef(new Float32Array(CONFETTI_COUNT * 3));
 
   useEffect(() => {
-    const p = positions.current;
-    const v = velocities.current;
+    const p = posArr.current;
+    const v = velArr.current;
     for (let i = 0; i < CONFETTI_COUNT; i++) {
-      p[i * 3] = (Math.random() - 0.5) * 8;
-      p[i * 3 + 1] = 4 + Math.random() * 4;
-      p[i * 3 + 2] = (Math.random() - 0.5) * 6;
+      p[i * 3] = (Math.random() - 0.5) * 6;
+      p[i * 3 + 1] = 5 + Math.random() * 3;
+      p[i * 3 + 2] = (Math.random() - 0.5) * 4;
       v[i * 3] = (Math.random() - 0.5) * 0.02;
-      v[i * 3 + 1] = -0.025 - Math.random() * 0.025;
+      v[i * 3 + 1] = -0.03 - Math.random() * 0.02;
       v[i * 3 + 2] = (Math.random() - 0.5) * 0.01;
     }
   }, [active]);
@@ -217,14 +188,14 @@ function ConfettiParticles({ active = false }: { active?: boolean }) {
   useFrame((_, delta) => {
     if (!active || !ref.current) return;
     const p = ref.current.geometry.attributes.position;
-    const v = velocities.current;
+    const v = velArr.current;
     for (let i = 0; i < CONFETTI_COUNT; i++) {
       p.setX(i, p.getX(i) + v[i * 3] * 60 * delta);
       p.setY(i, p.getY(i) + v[i * 3 + 1] * 60 * delta);
       p.setZ(i, p.getZ(i) + v[i * 3 + 2] * 60 * delta);
       if (p.getY(i) < -1) {
-        p.setY(i, 5 + Math.random() * 3);
-        p.setX(i, (Math.random() - 0.5) * 8);
+        p.setY(i, 5 + Math.random() * 2);
+        p.setX(i, (Math.random() - 0.5) * 6);
       }
     }
     p.needsUpdate = true;
@@ -234,54 +205,30 @@ function ConfettiParticles({ active = false }: { active?: boolean }) {
   return (
     <points ref={ref}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions.current, 3]}
-          count={CONFETTI_COUNT}
-        />
+        <bufferAttribute attach="attributes-position" args={[posArr.current, 3]} count={CONFETTI_COUNT} />
       </bufferGeometry>
       <pointsMaterial size={0.12} color={GOLD} transparent opacity={0.9} sizeAttenuation />
     </points>
   );
 }
 
-// ─── Winner spotlights ────────────────────────────────────────────────────────
 function SpotLights({ winnerSide = null }: { winnerSide?: "left" | "right" | null }) {
-  const ref1 = useRef<THREE.SpotLight>(null);
-  const ref2 = useRef<THREE.SpotLight>(null);
-
+  const refL = useRef<THREE.SpotLight>(null);
+  const refR = useRef<THREE.SpotLight>(null);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    const f = 0.98 + Math.sin(t * 2) * 0.02;
-    if (ref1.current) ref1.current.intensity = (winnerSide === "left" ? 3.5 : 2) * f;
-    if (ref2.current) ref2.current.intensity = (winnerSide === "right" ? 3.5 : 2) * (1.02 - f * 0.02);
+    const f = 0.97 + Math.sin(t * 2) * 0.03;
+    if (refL.current) refL.current.intensity = (winnerSide === "left" ? 2.5 : 0.6) * f;
+    if (refR.current) refR.current.intensity = (winnerSide === "right" ? 2.5 : 0.6) * (1.03 - f * 0.03);
   });
-
   return (
     <>
-      <spotLight
-        ref={ref1}
-        position={[-2, 8, 0]}
-        angle={0.4}
-        penumbra={0.5}
-        intensity={2}
-        color={GOLD}
-        castShadow
-      />
-      <spotLight
-        ref={ref2}
-        position={[2, 8, 0]}
-        angle={0.4}
-        penumbra={0.5}
-        intensity={2}
-        color={RED}
-        castShadow
-      />
+      <spotLight ref={refL} position={[-2, 7, 1]} angle={0.4} penumbra={0.6} intensity={0.6} color={GOLD} castShadow />
+      <spotLight ref={refR} position={[2, 7, 1]} angle={0.4} penumbra={0.6} intensity={0.6} color={RED} castShadow />
     </>
   );
 }
 
-// ─── BoxingRing3D props ───────────────────────────────────────────────────────
 type BoxingRing3DProps = {
   fighterASlot?: React.ReactNode;
   fighterBSlot?: React.ReactNode;
@@ -294,7 +241,6 @@ type BoxingRing3DProps = {
   modelGenerating?: boolean;
 };
 
-// ─── Scene content (inside Canvas) ────────────────────────────────────────────
 function SceneContent({
   fighterASlot,
   fighterBSlot,
@@ -314,7 +260,6 @@ function SceneContent({
 }) {
   const sceneRef = useRef<THREE.Group>(null);
   const shakeTime = useRef(0);
-
   const celebration = refereeState === "stopped" ? 3 : refereeState === "arm_raise" ? 2 : koIntensity;
   const confettiActive = refereeState === "arm_raise" && winnerSide != null;
 
@@ -331,101 +276,45 @@ function SceneContent({
 
   useEffect(() => {
     if (!cameraShakeRef) return;
-    cameraShakeRef.current = () => {
-      shakeTime.current = 0.25;
-    };
-    return () => {
-      if (cameraShakeRef) cameraShakeRef.current = null;
-    };
+    cameraShakeRef.current = () => { shakeTime.current = 0.25; };
+    return () => { if (cameraShakeRef) cameraShakeRef.current = null; };
   }, [cameraShakeRef]);
 
   return (
     <group ref={sceneRef}>
       <SceneFog />
-
-      {/* Lighting */}
       <ambientLight intensity={0.08} />
-      {/* Main overhead dramatic spotlight */}
-      <spotLight
-        position={[0, 12, 0]}
-        angle={0.3}
-        penumbra={0.7}
-        intensity={4}
-        castShadow
-        color="#ffffff"
-      />
-      {/* Side fills */}
-      <spotLight position={[-5, 8, 0]} angle={0.5} penumbra={0.8} intensity={0.6} color="#fff8e0" />
-      <spotLight position={[5, 8, 0]} angle={0.5} penumbra={0.8} intensity={0.6} color="#fff8e0" />
-
+      <spotLight position={[0, 12, 0]} angle={0.3} penumbra={0.7} intensity={4} color="#ffffff" castShadow shadow-mapSize={[2048, 2048]} />
       <SpotLights winnerSide={confettiActive ? winnerSide : null} />
-
       <RingFloor />
-
-      <ContactShadows
-        position={[0, 0.01, 0]}
-        opacity={0.6}
-        scale={10}
-        blur={2}
-        color="#000000"
-      />
-
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.65} scale={12} blur={2.5} color="#000000" />
       <Ropes />
       <Apron />
-
-      {/* Corner posts: GOLD on LEFT, RED on RIGHT */}
-      <CornerPost position={[-3.8, 0, -3.8]} padColor={GOLD} />
-      <CornerPost position={[-3.8, 0, 3.8]} padColor={GOLD} />
-      <CornerPost position={[3.8, 0, -3.8]} padColor={RED} />
-      <CornerPost position={[3.8, 0, 3.8]} padColor={RED} />
-
-      <CrowdParticles intensity={1 + koIntensity * 0.5} celebration={celebration} />
+      <CornerPost position={[-3.8, 0.6, -3.8]} padColor={GOLD} />
+      <CornerPost position={[-3.8, 0.6, 3.8]} padColor={GOLD} />
+      <CornerPost position={[3.8, 0.6, -3.8]} padColor={RED} />
+      <CornerPost position={[3.8, 0.6, 3.8]} padColor={RED} />
+      <CrowdParticles celebration={celebration} />
       <ConfettiParticles active={confettiActive} />
-
       {fighterASlot && <group position={[-1.2, 0, 0]}>{fighterASlot}</group>}
       {fighterBSlot && <group position={[1.2, 0, 0]}>{fighterBSlot}</group>}
-
-      <Referee3D
-        state={refereeState}
-        winnerSide={winnerSide}
-        knockdownCount={knockdownCount}
-        position={[0, 0, 0]}
-      />
+      <Referee3D state={refereeState} winnerSide={winnerSide} knockdownCount={knockdownCount} position={[0, 0, 0]} />
     </group>
   );
 }
 
-// ─── Exported component ───────────────────────────────────────────────────────
 export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>(
   function BoxingRing3D(
-    {
-      fighterASlot,
-      fighterBSlot,
-      mode = "fight",
-      koIntensity = 0,
-      refereeState = "watching",
-      winnerSide = null,
-      knockdownCount = 0,
-      modelGenerating = false,
-    },
+    { fighterASlot, fighterBSlot, mode = "fight", koIntensity = 0, refereeState = "watching", winnerSide = null, knockdownCount = 0, modelGenerating = false },
     ref
   ) {
     const cameraShakeRef = useRef<(() => void) | null>(null);
-
-    useImperativeHandle(ref, () => ({
-      shake: () => cameraShakeRef.current?.(),
-    }));
+    useImperativeHandle(ref, () => ({ shake: () => cameraShakeRef.current?.() }));
 
     return (
       <div
         className="arena-ring-3d-container"
-        style={{
-          width: "100%",
-          height: "100%",
-          minHeight: 320,
-          background: "#000000",
-          position: "relative",
-        }}
+        style={{ width: "100%", height: "100%", minHeight: 320, background: "#000000", position: "relative" }}
       >
         <Canvas
           shadows

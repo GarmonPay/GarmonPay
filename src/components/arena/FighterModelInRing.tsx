@@ -6,25 +6,15 @@ import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { FallbackFighter3D } from "./FallbackFighter3D";
 
-const GOLD = "#f0a500";
-const RED = "#c1272d";
-
 function ModelInRing({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const clone = scene.clone();
-  return (
-    <primitive
-      object={clone}
-      position={[0, 0, 0]}
-      scale={0.8}
-      rotation={[0, 0, 0]}
-    />
-  );
+  return <primitive object={clone} position={[0, 0, 0]} scale={0.8} rotation={[0, 0, 0]} />;
 }
 
 export function FighterModelInRing({
   modelUrl,
-  color = GOLD,
+  color = "#f0a500",
   animation = "idle",
 }: {
   modelUrl?: string | null;
