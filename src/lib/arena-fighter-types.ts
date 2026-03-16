@@ -119,6 +119,10 @@ export interface FighterData {
   equipped_shoes?: GearShoesKey | string | null;
   equipped_shorts?: GearShortsKey | string | null;
   equipped_headgear?: GearHeadgearKey | string | null;
+  equipped_gloves_key?: GearGlovesKey | string | null;
+  equipped_shoes_key?: GearShoesKey | string | null;
+  equipped_shorts_key?: GearShortsKey | string | null;
+  equipped_headgear_key?: GearHeadgearKey | string | null;
   [key: string]: unknown;
 }
 

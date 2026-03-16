@@ -51,13 +51,28 @@ export function FighterDisplay({
   const skinTone = (fighter.skin_tone as string) ?? DEFAULT_FIGHTER_VISUAL.skin_tone ?? "tone3";
   const faceStyle = (fighter.face_style as string) ?? DEFAULT_FIGHTER_VISUAL.face_style ?? "determined";
   const hairStyle = (fighter.hair_style as string) ?? DEFAULT_FIGHTER_VISUAL.hair_style ?? "short_fade";
-  const glovesKey = (showGear && fighter.equipped_gloves) ? String(fighter.equipped_gloves) : "default";
-  const shoesKey = (showGear && fighter.equipped_shoes) ? String(fighter.equipped_shoes) : "default";
-  const shortsKey = (showGear && fighter.equipped_shorts) ? String(fighter.equipped_shorts) : "default";
-  const headgearKey = (showGear && fighter.equipped_headgear) ? String(fighter.equipped_headgear) : "none";
+  const gear = showGear ? {
+    gloves: (fighter.equipped_gloves_key ?? fighter.equipped_gloves) as string | undefined,
+    shoes: (fighter.equipped_shoes_key ?? fighter.equipped_shoes) as string | undefined,
+    shorts: (fighter.equipped_shorts_key ?? fighter.equipped_shorts) as string | undefined,
+    headgear: (fighter.equipped_headgear_key ?? fighter.equipped_headgear) as string | undefined,
+  } : { gloves: undefined, shoes: undefined, shorts: undefined, headgear: undefined };
+  const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  const glovesKey = gear.gloves && !isUuid(gear.gloves) ? gear.gloves : "default";
+  const shoesKey = gear.shoes && !isUuid(gear.shoes) ? gear.shoes : "default";
+  const shortsKey = gear.shorts && !isUuid(gear.shorts) ? gear.shorts : "default";
+  const headgearKey = gear.headgear && !isUuid(gear.headgear) ? gear.headgear : "none";
 
   const showVictoryEffect = animation === "victory";
 
+  const fightingActionClass =
+    action === "JAB"
+      ? "arena-fighter-action-jab"
+      : action === "RIGHT_HAND" || action === "HOOK" || action === "BODY_SHOT" || action === "SPECIAL"
+        ? "arena-fighter-action-punch"
+        : action === "BLOCK"
+          ? "arena-fighter-action-block"
+          : "";
   const animationClass =
     animation === "idle"
       ? "arena-fighter-idle"
@@ -67,8 +82,8 @@ export function FighterDisplay({
           ? "arena-fighter-victory"
           : animation === "defeat"
             ? "arena-fighter-defeat"
-            : animation === "fighting" && action === "JAB"
-              ? "arena-fighter-fighting arena-fighter-action-jab"
+            : animation === "fighting" && action
+              ? `arena-fighter-fighting ${fightingActionClass || "arena-fighter-action-jab"}`
               : animation === "hit"
                 ? "arena-fighter-hit"
                 : animation === "ko"

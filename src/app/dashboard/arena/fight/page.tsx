@@ -61,6 +61,7 @@ export default function FindFightPage() {
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<string | null>(null);
 
   const fetchCpu = useCallback(async () => {
     const s = await getSessionAsync();
@@ -163,6 +164,8 @@ export default function FindFightPage() {
   const sendAction = (type: string) => {
     if (socket && winnerId == null) {
       socket.emit("action", { type });
+      setLastAction(type);
+      setTimeout(() => setLastAction(null), 450);
     }
   };
 
@@ -218,7 +221,8 @@ export default function FindFightPage() {
               <FighterDisplay
                 fighter={(fa ?? { name: "You" }) as FighterData}
                 size="medium"
-                animation={winnerId != null ? (iWon ? "victory" : "defeat") : "idle"}
+                animation={winnerId != null ? (iWon ? "victory" : "defeat") : lastAction ? "fighting" : "idle"}
+                action={lastAction ?? undefined}
                 showGear
               />
             </div>

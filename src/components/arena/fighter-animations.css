@@ -89,6 +89,25 @@
   animation: arena-fighter-fight-jab 0.25s ease-out;
 }
 
+@keyframes arena-fighter-fight-punch {
+  0% { transform: translate(0, 0); }
+  35% { transform: translate(12px, -6px); }
+  100% { transform: translate(0, 0); }
+}
+
+.arena-fighter-fighting.arena-fighter-action-punch .arena-fighter-gloves {
+  animation: arena-fighter-fight-punch 0.3s ease-out;
+}
+
+@keyframes arena-fighter-block {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(0, -3px) scale(1.05); }
+}
+
+.arena-fighter-fighting.arena-fighter-action-block .arena-fighter-gloves {
+  animation: arena-fighter-block 0.2s ease-out;
+}
+
 /* Hit reaction */
 @keyframes arena-fighter-hit-snap {
   0% { transform: translateX(0); }

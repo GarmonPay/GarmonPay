@@ -5,6 +5,8 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
 
 type StoreItem = {
   id: string;
@@ -36,6 +38,7 @@ export default function ArenaStorePage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buying, setBuying] = useState<string | null>(null);
+  const [fighter, setFighter] = useState<FighterData | null>(null);
 
   const fetchData = useCallback(async () => {
     const s = await getSessionAsync();
@@ -50,6 +53,7 @@ export default function ArenaStorePage() {
     ]);
     const itemsData = itemsRes.ok ? await itemsRes.json() : null;
     const invData = invRes.ok ? await invRes.json() : null;
+    const meData = meRes.ok ? await meRes.json() : null;
     if (itemsData?.items) {
       setItems(itemsData.items);
       setCategories(itemsData.categories ?? []);
@@ -57,6 +61,7 @@ export default function ArenaStorePage() {
     if (invData?.inventory) setInventory(invData.inventory);
     if (invData?.equipped) setEquipped(invData.equipped || {});
     if (typeof invData?.arenaCoins === "number") setArenaCoins(invData.arenaCoins);
+    if (meData?.fighter) setFighter(meData.fighter);
     setLoading(false);
   }, []);
 
@@ -136,7 +141,12 @@ export default function ArenaStorePage() {
       credentials: "include",
       body: JSON.stringify({ slot, storeItemId }),
     });
-    if (res.ok) fetchData();
+    if (res.ok) {
+      fetchData();
+      const meRes = await fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" });
+      const meData = meRes.ok ? await meRes.json() : null;
+      if (meData?.fighter) setFighter(meData.fighter);
+    }
   };
 
   const ownedIds = new Set(inventory.map((i) => i.storeItemId));
@@ -163,6 +173,14 @@ export default function ArenaStorePage() {
         </div>
       </div>
       {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
+      {fighter && (
+        <div className="flex justify-center mb-6 p-4 rounded-lg bg-[#0d1117] border border-white/10">
+          <div>
+            <p className="text-[#9ca3af] text-sm text-center mb-2">Your fighter — gear updates when you equip</p>
+            <FighterDisplay fighter={fighter} size="medium" animation="idle" showGear />
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 mb-4">
         <button
           type="button"

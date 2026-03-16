@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getTotalStats, getWeightClass } from "@/lib/arena-achievements";
+import {
+  storeItemToGlovesKey,
+  storeItemToShoesKey,
+  storeItemToShortsKey,
+  storeItemToHeadgearKey,
+} from "@/lib/arena-gear-keys";
 
-/** GET /api/arena/me — current user's fighter (if any). */
+/** GET /api/arena/me — current user's fighter (if any). Resolves equipped gear IDs to visual keys. */
 export async function GET(req: Request) {
   const userId = await getAuthUserIdStrict(req);
   if (!userId) {
@@ -23,12 +29,65 @@ export async function GET(req: Request) {
   }
   let weightClass: string | null = null;
   let totalStats = 0;
+  let resolvedFighter = fighter;
+
   if (fighter) {
     totalStats = getTotalStats(fighter as Record<string, number>);
     weightClass = getWeightClass(totalStats);
+
+    const ids = [
+      (fighter as { equipped_gloves?: string }).equipped_gloves,
+      (fighter as { equipped_shoes?: string }).equipped_shoes,
+      (fighter as { equipped_shorts?: string }).equipped_shorts,
+      (fighter as { equipped_headgear?: string }).equipped_headgear,
+    ].filter(Boolean) as string[];
+    if (ids.length > 0) {
+      const { data: items } = await supabase
+        .from("arena_store_items")
+        .select("id, category, name")
+        .in("id", ids);
+      const byId = Object.fromEntries(
+        ((items ?? []) as { id: string; category: string; name: string }[]).map((i) => [i.id, i])
+      );
+      const f = fighter as { equipped_gloves?: string; equipped_shoes?: string; equipped_shorts?: string; equipped_headgear?: string };
+      resolvedFighter = {
+        ...fighter,
+        equipped_gloves_key: f.equipped_gloves
+          ? storeItemToGlovesKey(byId[f.equipped_gloves]?.category ?? "", byId[f.equipped_gloves]?.name ?? "")
+          : "default",
+        equipped_shoes_key: f.equipped_shoes
+          ? storeItemToShoesKey(byId[f.equipped_shoes]?.category ?? "", byId[f.equipped_shoes]?.name ?? "")
+          : "default",
+        equipped_shorts_key: f.equipped_shorts
+          ? storeItemToShortsKey(byId[f.equipped_shorts]?.category ?? "", byId[f.equipped_shorts]?.name ?? "")
+          : "default",
+        equipped_headgear_key: f.equipped_headgear
+          ? storeItemToHeadgearKey(byId[f.equipped_headgear]?.category ?? "", byId[f.equipped_headgear]?.name ?? "")
+          : "none",
+      } as typeof fighter & {
+        equipped_gloves_key: string;
+        equipped_shoes_key: string;
+        equipped_shorts_key: string;
+        equipped_headgear_key: string;
+      };
+    } else {
+      resolvedFighter = {
+        ...fighter,
+        equipped_gloves_key: "default",
+        equipped_shoes_key: "default",
+        equipped_shorts_key: "default",
+        equipped_headgear_key: "none",
+      } as typeof fighter & {
+        equipped_gloves_key: string;
+        equipped_shoes_key: string;
+        equipped_shorts_key: string;
+        equipped_headgear_key: string;
+      };
+    }
   }
+
   return NextResponse.json({
-    fighter: fighter ?? null,
+    fighter: resolvedFighter ?? null,
     weightClass,
     totalStats,
   });
