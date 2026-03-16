@@ -23,5 +23,6 @@ Or in **Supabase Dashboard → SQL Editor**, run each file’s contents in this 
 9. `20250321000008_arena_activity_log.sql`
 10. `20250321000009_arena_season_pass_stripe_columns.sql`
 11. `20250322000000_arena_fighter_visual_columns.sql` — body_type, skin_tone, face_style, hair_style (visual builder)
+12. `20250323000000_arena_ai_fighter_columns.sql` — nickname, origin, backstory, personality, portrait_svg, generation_method, etc.; users.arena_free_generation_used
 
 If `arena_fighters` is missing, the create-fighter API will fail with a DB error; applying step 1 fixes that.

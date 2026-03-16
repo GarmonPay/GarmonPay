@@ -1,294 +1,136 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
-import {
-  BODY_TYPES,
-  SKIN_TONES,
-  FACE_STYLES,
-  HAIR_STYLES,
-  type BodyType,
-  type SkinTone,
-  type FaceStyle,
-  type HairStyle,
-  type FighterData,
-} from "@/lib/arena-fighter-types";
+import { getApiRoot } from "@/lib/api";
 
-const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
-const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
+const REGEN_COST = 500;
 
-function isHtmlResponse(str: string): boolean {
-  const trimmed = str.trimStart();
-  return trimmed.startsWith("<!") || trimmed.startsWith("<html") || trimmed.startsWith("<?xml");
-}
-
-function randomChoice<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-export default function CreateFighterPage() {
+export default function CreateFighterEntryPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [style, setStyle] = useState<(typeof STYLES)[number]>("Brawler");
-  const [avatar, setAvatar] = useState(AVATARS[0]);
-  const [bodyType, setBodyType] = useState<BodyType>("middleweight");
-  const [skinTone, setSkinTone] = useState<SkinTone>("tone3");
-  const [faceStyle, setFaceStyle] = useState<FaceStyle>("determined");
-  const [hairStyle, setHairStyle] = useState<HairStyle>("short_fade");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [fighter, setFighter] = useState<unknown>(null);
+  const [arenaCoins, setArenaCoins] = useState<number>(0);
+  const [freeGenerationUsed, setFreeGenerationUsed] = useState(false);
 
-  const previewFighter: FighterData = {
-    name: name || "Fighter",
-    style,
-    avatar,
-    body_type: bodyType,
-    skin_tone: skinTone,
-    face_style: faceStyle,
-    hair_style: hairStyle,
-    strength: 48,
-    speed: 48,
-    stamina: 48,
-    defense: 48,
-    chin: 48,
-    special: 20,
-  };
+  useEffect(() => {
+    let cancelled = false;
+    getSessionAsync().then((session) => {
+      if (!session || cancelled) return;
+      const token = session.accessToken ?? session.userId;
+      const headers: Record<string, string> = session.accessToken
+        ? { Authorization: `Bearer ${token}` }
+        : { "X-User-Id": token };
+      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          if (data.fighter) setFighter(data.fighter);
+          if (typeof data.arenaCoins === "number") setArenaCoins(data.arenaCoins);
+          if (data.freeGenerationUsed === true) setFreeGenerationUsed(true);
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    });
+    return () => { cancelled = true; };
+  }, []);
 
-  function handleRandomize() {
-    setBodyType(randomChoice(BODY_TYPES).value);
-    setSkinTone(randomChoice(SKIN_TONES).value);
-    setFaceStyle(randomChoice(FACE_STYLES).value);
-    setHairStyle(randomChoice(HAIR_STYLES).value);
-    setStyle(randomChoice(STYLES));
-    setAvatar(randomChoice(AVATARS));
+  useEffect(() => {
+    if (loading || !fighter) return;
+    router.replace("/dashboard/arena");
+  }, [loading, fighter, router]);
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Loading…</p>
+      </div>
+    );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    const trimmed = name.trim();
-    if (trimmed.length < 2) {
-      setError("Fighter name must be at least 2 characters");
-      return;
-    }
-    setLoading(true);
-    try {
-      const session = await getSessionAsync();
-      const token = session?.accessToken;
-      if (!token) {
-        setError("Please log in again.");
-        setLoading(false);
-        return;
-      }
-      const apiUrl =
-        typeof window !== "undefined"
-          ? "/api/arena/fighters"
-          : `${getApiRoot()}/arena/fighters`;
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          name: trimmed,
-          style,
-          avatar,
-          body_type: bodyType,
-          skin_tone: skinTone,
-          face_style: faceStyle,
-          hair_style: hairStyle,
-        }),
-      });
-      const text = await res.text();
-      let data: { message?: string; error?: string; errorDetail?: string } = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        if (!res.ok) {
-          const safeMsg =
-            res.status === 401
-              ? "Please log in again."
-              : isHtmlResponse(text)
-                ? `Request failed (${res.status}). Please try again.`
-                : text.slice(0, 200) || `Request failed (${res.status}).`;
-          setError(safeMsg);
-          setLoading(false);
-          return;
-        }
-      }
-      if (!res.ok) {
-        const msg = (data.error ?? data.message) || "Failed to create fighter";
-        const detail = data.errorDetail as string | undefined;
-        const safeDetail = detail && !isHtmlResponse(detail) ? detail : undefined;
-        setError(safeDetail ? `${msg} — ${safeDetail}` : msg);
-        setLoading(false);
-        return;
-      }
-      router.replace("/dashboard/arena");
-    } catch {
-      setError("Request failed");
-      setLoading(false);
-    }
+  if (fighter) {
+    return (
+      <div className="max-w-2xl mx-auto rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Redirecting to Arena…</p>
+      </div>
+    );
   }
+
+  const canAffordAI = arenaCoins >= REGEN_COST;
+  const aiCostLabel = freeGenerationUsed ? `${REGEN_COST} coins to regenerate` : "FREE — One time only";
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-        <h1 className="text-2xl font-bold text-white mb-2">Create your fighter</h1>
-        <p className="text-[#9ca3af] text-sm mb-6">Customize your fighter, then name them and enter the Arena.</p>
+    <div className="max-w-4xl mx-auto">
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-6 md:p-8">
+        <h1 className="text-3xl font-bold text-white text-center mb-2">CREATE YOUR FIGHTER</h1>
+        <p className="text-[#9ca3af] text-center mb-6">Choose how you want to begin</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            <p className="text-[#f0a500] font-medium">STEP 1 — Body type</p>
-            <div className="flex flex-wrap gap-2">
-              {BODY_TYPES.map((b) => (
-                <button
-                  key={b.value}
-                  type="button"
-                  onClick={() => setBodyType(b.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    bodyType === b.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
+        {freeGenerationUsed && (
+          <p className="text-center text-[#f0a500] text-sm mb-4">You have {arenaCoins} coins. Regenerating costs {REGEN_COST} coins.</p>
+        )}
 
-            <p className="text-[#f0a500] font-medium pt-2">STEP 2 — Skin tone</p>
-            <div className="flex flex-wrap gap-2">
-              {SKIN_TONES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setSkinTone(t.value)}
-                  className={`w-10 h-10 rounded-full border-2 transition ${
-                    skinTone === t.value ? "border-[#f0a500] scale-110" : "border-white/20 hover:border-white/40"
-                  }`}
-                  style={{ backgroundColor: t.hex }}
-                  title={t.label}
-                />
-              ))}
-            </div>
-
-            <p className="text-[#f0a500] font-medium pt-2">STEP 3 — Face</p>
-            <div className="flex flex-wrap gap-2">
-              {FACE_STYLES.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFaceStyle(f.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    faceStyle === f.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[#f0a500] font-medium pt-2">STEP 4 — Hair</p>
-            <div className="flex flex-wrap gap-2">
-              {HAIR_STYLES.map((h) => (
-                <button
-                  key={h.value}
-                  type="button"
-                  onClick={() => setHairStyle(h.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    hairStyle === h.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleRandomize}
-              className="mt-2 px-4 py-2 rounded-lg border border-white/20 text-white text-sm font-medium hover:bg-white/5"
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Card 1 — AI Questionnaire (recommended) */}
+          <div className={`rounded-xl border-2 p-6 flex flex-col ${freeGenerationUsed ? "border-white/20 bg-[#0d1117]" : "border-[#f0a500] bg-[#0d1117]"}`}>
+            <div className="text-3xl mb-3">✨</div>
+            <h2 className="text-xl font-bold text-white mb-2">LET AI BUILD YOU</h2>
+            <p className="text-[#9ca3af] text-sm mb-4 flex-1">
+              Answer 3 questions. Claude AI creates your unique fighter, backstory, name, and style.
+            </p>
+            <p className="text-[#f0a500] text-xs font-medium mb-4">{aiCostLabel}</p>
+            <Link
+              href="/dashboard/arena/create/ai"
+              className={`block w-full py-3 rounded-lg text-center font-bold ${freeGenerationUsed && !canAffordAI ? "bg-[#6b7280] text-white cursor-not-allowed" : "bg-[#f0a500] text-black hover:bg-[#e09500]"}`}
+              onClick={(e) => freeGenerationUsed && !canAffordAI && e.preventDefault()}
             >
-              Randomize
-            </button>
+              GENERATE MY FIGHTER
+            </Link>
+            {freeGenerationUsed && !canAffordAI && (
+              <Link href="/dashboard/arena/store" className="block text-center text-[#f0a500] text-sm mt-2 hover:underline">Buy coins</Link>
+            )}
           </div>
 
-          <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4">
-            <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
-            <FighterDisplay fighter={previewFighter} size="large" animation="idle" showGear />
+          {/* Card 2 — Quick / Auto */}
+          <div className="rounded-xl border-2 border-white/20 bg-[#0d1117] p-6 flex flex-col">
+            <div className="text-3xl mb-3">⚡</div>
+            <h2 className="text-xl font-bold text-white mb-2">AUTO GENERATE</h2>
+            <p className="text-[#9ca3af] text-sm mb-4 flex-1">
+              Claude instantly creates a fighter based on your username. No questions needed.
+            </p>
+            <p className="text-[#f0a500] text-xs font-medium mb-4">{aiCostLabel}</p>
+            <Link
+              href="/dashboard/arena/create/ai?auto=1"
+              className={`block w-full py-3 rounded-lg text-center font-bold border border-white/20 ${freeGenerationUsed && !canAffordAI ? "text-[#6b7280] cursor-not-allowed" : "text-white hover:bg-white/10"}`}
+              onClick={(e) => freeGenerationUsed && !canAffordAI && e.preventDefault()}
+            >
+              INSTANT CREATE
+            </Link>
+            {freeGenerationUsed && !canAffordAI && (
+              <Link href="/dashboard/arena/store" className="block text-center text-[#f0a500] text-sm mt-2 hover:underline">Buy coins</Link>
+            )}
+          </div>
+
+          {/* Card 3 — Build manually */}
+          <div className="rounded-xl border-2 border-white/20 bg-[#0d1117] p-6 flex flex-col">
+            <div className="text-3xl mb-3">🔧</div>
+            <h2 className="text-xl font-bold text-white mb-2">BUILD YOURSELF</h2>
+            <p className="text-[#9ca3af] text-sm mb-4 flex-1">
+              Choose every detail yourself. Full control over your fighter.
+            </p>
+            <p className="text-[#86efac] text-xs font-medium mb-4">Always free</p>
+            <Link
+              href="/dashboard/arena/create/manual"
+              className="block w-full py-3 rounded-lg text-center font-bold border border-white/20 text-white hover:bg-white/10"
+            >
+              BUILD MANUALLY
+            </Link>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 border-t border-white/10 pt-6">
-          <p className="text-[#9ca3af] font-medium">Name, style & avatar</p>
-          <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">Fighter name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Iron Mike"
-              className="w-full px-4 py-2.5 rounded-lg bg-[#0d1117] border border-white/10 text-white placeholder-[#6b7280]"
-              maxLength={50}
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-2">Style</label>
-            <div className="flex flex-wrap gap-2">
-              {STYLES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStyle(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    style === s ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-2">Avatar</label>
-            <div className="flex flex-wrap gap-2">
-              {AVATARS.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => setAvatar(a)}
-                  className={`text-2xl w-12 h-12 rounded-lg border transition ${
-                    avatar === a ? "border-[#f0a500] bg-[#f0a500]/20" : "border-white/10 hover:bg-white/5"
-                  }`}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
-          </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-3 rounded-lg bg-[#f0a500] text-black font-bold hover:bg-[#e09500] disabled:opacity-70"
-            >
-              {loading ? "Creating…" : "Confirm Fighter"}
-            </button>
-            <Link
-              href="/dashboard/arena"
-              className="px-4 py-3 rounded-lg border border-white/20 text-white font-medium hover:bg-white/5"
-            >
-              Back
-            </Link>
-          </div>
-        </form>
+        <div className="text-center">
+          <Link href="/dashboard/arena" className="text-[#9ca3af] hover:text-white text-sm">Back to Arena</Link>
+        </div>
       </div>
     </div>
   );

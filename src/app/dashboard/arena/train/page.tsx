@@ -12,7 +12,7 @@ import {
 } from "@/lib/arena-training";
 
 import { getApiRoot } from "@/lib/api";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 const SIGNATURE_MOVE_NAMES: Record<SignatureMoveKey, string> = {
@@ -146,22 +146,23 @@ export default function TrainingGymPage() {
   const balanceDollars = balanceCents != null ? (balanceCents / 100).toFixed(2) : "—";
 
   return (
-    <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+      <div className="flex items-center justify-between p-6 pb-2">
         <h1 className="text-2xl font-bold text-white">Training Gym</h1>
         <div className="flex items-center gap-4">
           <span className="text-[#9ca3af]">Wallet: <span className="text-white font-medium">${balanceDollars}</span></span>
           <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
         </div>
       </div>
-      <div className="flex justify-center mb-6">
-        <FighterDisplay
-          fighter={fighter as FighterData}
-          size="medium"
-          animation={trainingSessionKey ? "training" : "idle"}
-          showGear
+      <div className="min-h-[280px] px-4">
+        <BoxingRing
+          mode="profile"
+          fighterA={fighter as FighterData}
+          fighterAAnimation={trainingSessionKey ? "training" : "idle"}
+          animation="idle"
         />
       </div>
+      <div className="p-6 pt-2">
       <p className="text-[#9ca3af] text-sm mb-6">
         Stats cap at {STAT_CAP}. Sessions 5 & 6 unlock after 2 and 3 completed sessions. Real wallet deduction from your GarmonPay balance.
       </p>
@@ -239,6 +240,7 @@ export default function TrainingGymPage() {
 
       <div className="mt-6 pt-4 border-t border-white/10">
         <Link href="/dashboard/arena/fighter" className="text-[#f0a500] hover:underline">View my fighter stats</Link>
+      </div>
       </div>
     </div>
   );

@@ -19,14 +19,19 @@ export async function GET(req: Request) {
   if (!supabase) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
-  const { data: fighter, error } = await supabase
-    .from("arena_fighters")
-    .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions, body_type, skin_tone, face_style, hair_style, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data: fighter, error }, { data: userRow }] = await Promise.all([
+    supabase
+      .from("arena_fighters")
+      .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions, body_type, skin_tone, face_style, hair_style, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear, nickname, origin, backstory, personality, trash_talk_style, signature_move_name, signature_move_desc, recommended_training, fighter_color, portrait_svg, generation_method")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase.from("users").select("arena_coins, arena_free_generation_used").eq("id", userId).single(),
+  ]);
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
+  const arenaCoins = userRow != null ? Number((userRow as { arena_coins?: number }).arena_coins ?? 0) : 0;
+  const freeGenerationUsed = !!(userRow as { arena_free_generation_used?: boolean })?.arena_free_generation_used;
   let weightClass: string | null = null;
   let totalStats = 0;
   let resolvedFighter = fighter;
@@ -90,5 +95,7 @@ export async function GET(req: Request) {
     fighter: resolvedFighter ?? null,
     weightClass,
     totalStats,
+    arenaCoins,
+    freeGenerationUsed,
   });
 }

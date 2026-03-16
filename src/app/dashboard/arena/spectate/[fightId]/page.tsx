@@ -8,6 +8,10 @@ import { io, Socket } from "socket.io-client";
 import { computeOdds } from "@/lib/arena-economy";
 
 import { getApiRoot } from "@/lib/api";
+import { BoxingRing } from "@/components/arena/BoxingRing";
+import type { FighterData } from "@/lib/arena-fighter-types";
+import type { RingAnimationState } from "@/components/arena/BoxingRing";
+
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
 type Fighter = {
@@ -40,6 +44,7 @@ export default function SpectateFightPage() {
   const [betting, setBetting] = useState(false);
   const [betError, setBetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ringAnimation, setRingAnimation] = useState<RingAnimationState>("idle");
 
   const fetchFight = useCallback(async () => {
     const s = await getSessionAsync();
@@ -81,10 +86,14 @@ export default function SpectateFightPage() {
     s.on("exchange_result", (payload: { healthA: number; healthB: number; actionA: string; actionB: string; damageAtoB: number; damageBtoA: number }) => {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
+      setRingAnimation("big_hit");
+      setTimeout(() => setRingAnimation("idle"), 350);
       setLog((prev) => [...prev, { actionA: payload.actionA, actionB: payload.actionB, damageAtoB: payload.damageAtoB, damageBtoA: payload.damageBtoA }]);
     });
     s.on("fight_over", (payload: { winnerId: string }) => {
       setWinnerId(payload.winnerId);
+      setRingAnimation("ko");
+      setTimeout(() => setRingAnimation("victory"), 800);
       setFight((f) => (f ? { ...f, winnerId: payload.winnerId, bettingOpen: false } : f));
       s.disconnect();
     });
@@ -147,86 +156,80 @@ export default function SpectateFightPage() {
   const oddsA = totalA + totalB > 0 ? computeOdds(totalA, totalB) : 1.85;
   const oddsB = totalA + totalB > 0 ? computeOdds(totalB, totalA) : 1.85;
 
+  const ringMode = winnerId ? "victory" : fight.bettingOpen && log.length === 0 ? "setup" : "fight";
+  const winnerSide = winnerId === fighterA.id ? "a" : winnerId === fighterB.id ? "b" : null;
+
   return (
-    <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-white">Spectating</h1>
-        <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline">Back to lobby</Link>
-      </div>
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10">
-          <p className="text-[#9ca3af] text-sm">Fighter A</p>
-          <p className="text-xl font-bold text-white">{fighterA.name}</p>
-          <p className="text-[#f0a500]">{fighterA.style}</p>
-          <div className="mt-2 h-3 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${healthA}%` }} />
-          </div>
-          <p className="text-white text-sm mt-1">{healthA} HP</p>
+    <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+      <BoxingRing
+        mode={ringMode}
+        fighterA={fighterA as FighterData}
+        fighterB={fighterB as FighterData}
+        winner={winnerSide}
+        currentRound={1}
+        animation={ringAnimation}
+        healthA={healthA}
+        healthB={healthB}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-xl font-bold text-white">Spectating</h1>
+          <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline">Back to lobby</Link>
         </div>
-        <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10">
-          <p className="text-[#9ca3af] text-sm">Fighter B</p>
-          <p className="text-xl font-bold text-white">{fighterB.name}</p>
-          <p className="text-[#f0a500]">{fighterB.style}</p>
-          <div className="mt-2 h-3 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${healthB}%` }} />
-          </div>
-          <p className="text-white text-sm mt-1">{healthB} HP</p>
-        </div>
-      </div>
-      {winnerId && (
-        <p className="text-lg font-bold text-white mb-4">
-          Winner: {winnerId === fighterA.id ? fighterA.name : fighterB.name}
-        </p>
-      )}
-      {fight.bettingOpen && !winnerId && (
-        <div className="mb-6 p-4 rounded-lg bg-[#0d1117] border border-white/10">
-          <p className="text-white font-medium mb-2">Place spectator bet (before first punch)</p>
-          {betError && <p className="text-red-400 text-sm mb-2">{betError}</p>}
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={betAmount}
-              onChange={(e) => setBetAmount(e.target.value)}
-              placeholder="Amount ($)"
-              className="rounded-lg bg-[#161b22] border border-white/20 px-3 py-2 text-white w-24"
-            />
-            <button
-              type="button"
-              onClick={() => setBetOn(fighterA.id)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterA.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
-            >
-              {fighterA.name} ({(oddsA).toFixed(2)}x)
-            </button>
-            <button
-              type="button"
-              onClick={() => setBetOn(fighterB.id)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterB.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
-            >
-              {fighterB.name} ({(oddsB).toFixed(2)}x)
-            </button>
-            <button
-              type="button"
-              disabled={betting || !betOn || !betAmount}
-              onClick={placeBet}
-              className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium hover:bg-[#e09500] disabled:opacity-50"
-            >
-              Place bet
-            </button>
-          </div>
-          <p className="text-[#9ca3af] text-xs mt-2">Admin keeps 10% of spectator pot. Winners split 90%.</p>
-        </div>
-      )}
-      {log.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
-          {log.slice(-12).map((e, i) => (
-            <div key={i}>
-              {e.actionA} → {e.damageAtoB} dmg · {e.actionB} → {e.damageBtoA} dmg
+        {winnerId && (
+          <p className="text-lg font-bold text-white mb-3">
+            Winner: {winnerId === fighterA.id ? fighterA.name : fighterB.name}
+          </p>
+        )}
+        {fight.bettingOpen && !winnerId && (
+          <div className="mb-4 p-4 rounded-lg bg-[#0d1117] border border-white/10">
+            <p className="text-white font-medium mb-2">Place spectator bet (before first punch)</p>
+            {betError && <p className="text-red-400 text-sm mb-2">{betError}</p>}
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                placeholder="Amount ($)"
+                className="rounded-lg bg-[#161b22] border border-white/20 px-3 py-2 text-white w-24"
+              />
+              <button
+                type="button"
+                onClick={() => setBetOn(fighterA.id)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterA.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
+              >
+                {fighterA.name} ({(oddsA).toFixed(2)}x)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBetOn(fighterB.id)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterB.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
+              >
+                {fighterB.name} ({(oddsB).toFixed(2)}x)
+              </button>
+              <button
+                type="button"
+                disabled={betting || !betOn || !betAmount}
+                onClick={placeBet}
+                className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium hover:bg-[#e09500] disabled:opacity-50"
+              >
+                Place bet
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+            <p className="text-[#9ca3af] text-xs mt-2">Admin keeps 10% of spectator pot. Winners split 90%.</p>
+          </div>
+        )}
+        {log.length > 0 && (
+          <div className="max-h-32 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
+            {log.slice(-8).map((e, i) => (
+              <div key={i}>
+                {e.actionA} → {e.damageAtoB} dmg · {e.actionB} → {e.damageBtoA} dmg
+              </div>
+            ))}
+          </div>
+        )}
+      </BoxingRing>
     </div>
   );
 }

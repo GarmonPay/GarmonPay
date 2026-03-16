@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 export default function ArenaHubPage() {
@@ -55,17 +55,18 @@ export default function ArenaHubPage() {
         </div>
         <div className="p-6">
           {fighter ? (
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="flex justify-center rounded-lg bg-[#0d1117] border border-white/10 p-4">
-                <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
+            <div className="flex flex-col md:flex-row md:items-stretch gap-6">
+              <div className="min-h-[220px] md:min-w-[280px] md:max-w-[340px] rounded-lg overflow-hidden border border-white/10">
+                <BoxingRing mode="profile" fighterA={fighter} animation="idle" />
               </div>
-              <div className="rounded-lg bg-[#0d1117] border border-white/10 p-4">
-                <p className="text-[#9ca3af] text-sm">Your fighter</p>
-                <p className="text-xl font-bold text-white">{fighter.name}</p>
-                <p className="text-[#f0a500]">{fighter.style}</p>
-                <p className="text-sm text-white mt-1">Record: {fighter.wins ?? 0}W – {fighter.losses ?? 0}L</p>
-              </div>
-              <div className="flex gap-3">
+              <div className="flex-1 flex flex-col justify-center gap-4">
+                <div>
+                  <p className="text-[#9ca3af] text-sm">Your fighter</p>
+                  <p className="text-xl font-bold text-white">{fighter.name}</p>
+                  <p className="text-[#f0a500]">{fighter.style}</p>
+                  <p className="text-sm text-white mt-1">Record: {fighter.wins ?? 0}W – {fighter.losses ?? 0}L</p>
+                </div>
+              <div className="flex flex-wrap gap-3">
                 <Link
                   href="/dashboard/arena/fighter"
                   className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-[#3b82f6] text-white font-semibold hover:bg-[#2563eb]"
@@ -126,6 +127,7 @@ export default function ArenaHubPage() {
                 >
                   Fair Play & Legal
                 </Link>
+              </div>
               </div>
             </div>
           ) : (

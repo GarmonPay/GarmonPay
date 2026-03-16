@@ -15,6 +15,7 @@ export default function AdminArenaPage() {
   const [data, setData] = useState<{
     earnings?: Record<string, number>;
     stats?: { fightCount: number; spectatorBetCount: number; activeSeasonPassCount: number };
+    aiGenerations?: { questionnaire: number; auto: number; total: number; regenerationCount: number; regenerationRevenueCoins: number };
     tournaments?: Array<{ id: string; name: string; status: string; prize_pool: number; tournament_type: string }>;
     jackpots?: Array<{ id: string; week_start: string; total_amount: number; paid_out: boolean }>;
     recentEarnings?: Array<{ source_type: string; amount: number; source_id?: string; created_at: string }>;
@@ -90,6 +91,17 @@ export default function AdminArenaPage() {
             </div>
           </div>
 
+          {(data?.aiGenerations != null) && (
+            <div className="rounded-lg border border-[#f0a500]/30 bg-[#161b22] p-4 mb-6">
+              <h3 className="text-[#f0a500] font-semibold mb-2">AI fighter generations</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div><span className="text-[#9ca3af]">Questionnaire</span><p className="font-semibold text-white">{data.aiGenerations.questionnaire}</p></div>
+                <div><span className="text-[#9ca3af]">Auto</span><p className="font-semibold text-white">{data.aiGenerations.auto}</p></div>
+                <div><span className="text-[#9ca3af]">Regenerations</span><p className="font-semibold text-white">{data.aiGenerations.regenerationCount}</p></div>
+                <div><span className="text-[#9ca3af]">Regen revenue (coins)</span><p className="font-semibold text-white">{data.aiGenerations.regenerationRevenueCoins}</p></div>
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-3 mb-6">
             <div className="rounded-lg border border-white/10 bg-[#0d1117] p-4">
               <p className="text-[#9ca3af] text-sm">Fights</p>

@@ -40,6 +40,28 @@ export async function GET(req: Request) {
       supabase.from("arena_season_pass").select("id, user_id, status, current_period_end").eq("status", "active"),
     ]);
 
+    let aiGenerations = { questionnaire: 0, auto: 0, total: 0, regenerationCount: 0, regenerationRevenueCoins: 0 };
+    try {
+      const [{ data: fightersForAi }, { data: regenTx }] = await Promise.all([
+        supabase.from("arena_fighters").select("generation_method").not("generation_method", "is", null),
+        supabase.from("arena_coin_transactions").select("id, amount").eq("type", "regeneration"),
+      ]);
+      const aiByMethod: Record<string, number> = {};
+      for (const r of fightersForAi ?? []) {
+        const m = (r as { generation_method?: string }).generation_method ?? "manual";
+        aiByMethod[m] = (aiByMethod[m] ?? 0) + 1;
+      }
+      aiGenerations = {
+        questionnaire: aiByMethod["questionnaire"] ?? 0,
+        auto: aiByMethod["auto"] ?? 0,
+        total: (fightersForAi ?? []).length,
+        regenerationCount: regenTx?.length ?? 0,
+        regenerationRevenueCoins: (regenTx ?? []).reduce((sum, t) => sum + Math.abs(Number((t as { amount?: number }).amount ?? 0)), 0),
+      };
+    } catch (_) {
+      // Columns may not exist before migration 12
+    }
+
     const recentEarnings = (rows ?? []).slice(0, 30).map((r: Record<string, unknown>) => ({
       source_type: r.source_type,
       amount: Number(r.amount ?? 0),
@@ -52,6 +74,7 @@ export async function GET(req: Request) {
     if (pendingWithdrawals != null) payoutQueue.push({ type: "Withdrawals", count: pendingWithdrawals });
 
     return NextResponse.json({
+      aiGenerations,
       earnings: {
         fightCuts,
         spectatorCuts,

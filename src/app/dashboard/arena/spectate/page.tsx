@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { BoxingRing } from "@/components/arena/BoxingRing";
 import { FighterDisplay } from "@/components/arena/FighterDisplay";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
@@ -44,12 +45,27 @@ export default function SpectateLobbyPage() {
     );
   }
 
+  const firstFight = fights[0];
+  const hasFighters = firstFight?.fighterA && firstFight?.fighterB;
+
   return (
-    <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+      <div className="flex items-center justify-between p-6 pb-2">
         <h1 className="text-2xl font-bold text-white">Live Fight Lobby</h1>
         <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
       </div>
+      {fights.length > 0 && hasFighters && (
+        <div className="min-h-[200px] px-4 mb-2">
+          <BoxingRing
+            mode="setup"
+            fighterA={firstFight.fighterA as FighterData}
+            fighterB={firstFight.fighterB as FighterData}
+            currentRound={1}
+            animation="idle"
+          />
+        </div>
+      )}
+      <div className="p-6 pt-0">
       <p className="text-[#9ca3af] text-sm mb-4">Watch any active fight. Place a bet before the first exchange (betting closes when the fight starts).</p>
       {fights.length === 0 ? (
         <p className="text-[#9ca3af]">No live fights right now. Start one from Find Fight.</p>
@@ -77,6 +93,7 @@ export default function SpectateLobbyPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
