@@ -5,6 +5,8 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
 
 type LiveFight = {
   id: string;
@@ -54,13 +56,13 @@ export default function SpectateLobbyPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {fights.map((f) => (
-            <div key={f.id} className="rounded-lg bg-[#0d1117] border border-white/10 p-4 flex items-center justify-between">
+            <div key={f.id} className="rounded-lg bg-[#0d1117] border border-white/10 p-4 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{f.fighterA?.avatar ?? "🥊"}</span>
+                <FighterDisplay fighter={(f.fighterA ?? { name: "—" }) as FighterData} size="small" animation="idle" showGear />
                 <span className="text-white font-medium">{f.fighterA?.name ?? "—"}</span>
                 <span className="text-[#9ca3af]">vs</span>
                 <span className="text-white font-medium">{f.fighterB?.name ?? "—"}</span>
-                <span className="text-2xl">{f.fighterB?.avatar ?? "🥊"}</span>
+                <FighterDisplay fighter={(f.fighterB ?? { name: "—" }) as FighterData} size="small" animation="idle" showGear mirrored />
               </div>
               <div className="flex items-center gap-2">
                 {f.bettingOpen && <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded">Betting open</span>}

@@ -62,6 +62,8 @@ export default function FindFightPage() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const [hitOnMe, setHitOnMe] = useState(false);
+  const [hitOnThem, setHitOnThem] = useState(false);
 
   const fetchCpu = useCallback(async () => {
     const s = await getSessionAsync();
@@ -146,8 +148,14 @@ export default function FindFightPage() {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
       setLog((prev) => [...prev, payload]);
-      if (payload.hitA && typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate(50);
+      if (payload.hitA) {
+        setHitOnMe(true);
+        setTimeout(() => setHitOnMe(false), 350);
+        if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(50);
+      }
+      if (payload.hitB) {
+        setHitOnThem(true);
+        setTimeout(() => setHitOnThem(false), 350);
       }
     });
     s.on("fight_over", (payload: { winnerId: string }) => {
@@ -221,7 +229,7 @@ export default function FindFightPage() {
               <FighterDisplay
                 fighter={(fa ?? { name: "You" }) as FighterData}
                 size="medium"
-                animation={winnerId != null ? (iWon ? "victory" : "defeat") : lastAction ? "fighting" : "idle"}
+                animation={winnerId != null ? (iWon ? "victory" : "defeat") : hitOnMe ? "hit" : lastAction ? "fighting" : "idle"}
                 action={lastAction ?? undefined}
                 showGear
               />
@@ -239,7 +247,7 @@ export default function FindFightPage() {
               <FighterDisplay
                 fighter={(fb ?? { name: "Opponent" }) as FighterData}
                 size="medium"
-                animation={winnerId != null ? (iWon ? "defeat" : "victory") : "idle"}
+                animation={winnerId != null ? (iWon ? "defeat" : "victory") : hitOnThem ? "hit" : "idle"}
                 showGear
                 mirrored
               />
