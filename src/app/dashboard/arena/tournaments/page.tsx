@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 type Tournament = {
   id: string;
@@ -31,7 +31,7 @@ export default function ArenaTournamentsPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/tournaments`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/tournaments`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.tournaments) setTournaments(data.tournaments);
     setLoading(false);
@@ -51,7 +51,7 @@ export default function ArenaTournamentsPage() {
       ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
     };
     try {
-      const res = await fetch(`${API_BASE}/arena/tournaments/${id}/join`, { method: "POST", headers, credentials: "include", body: "{}" });
+      const res = await fetch(`${getApiRoot()}/arena/tournaments/${id}/join`, { method: "POST", headers, credentials: "include", body: "{}" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.message || "Join failed");

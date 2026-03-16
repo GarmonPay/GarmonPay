@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 type SeasonPassState = {
   active: boolean;
@@ -27,7 +27,7 @@ export default function ArenaSeasonPassPage() {
       setSession(s);
       const token = s.accessToken ?? s.userId;
       const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-      const res = await fetch(`${API_BASE}/arena/season-pass`, { headers, credentials: "include" });
+      const res = await fetch(`${getApiRoot()}/arena/season-pass`, { headers, credentials: "include" });
       const data = res.ok ? await res.json() : null;
       if (data) setState(data);
       setLoading(false);
@@ -39,7 +39,7 @@ export default function ArenaSeasonPassPage() {
     setCheckoutLoading(true);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
-    const res = await fetch(`${API_BASE}/arena/season-pass/checkout`, { method: "POST", headers, credentials: "include", body: "{}" });
+    const res = await fetch(`${getApiRoot()}/arena/season-pass/checkout`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (data?.url) window.location.href = data.url;
     setCheckoutLoading(false);
@@ -50,7 +50,7 @@ export default function ArenaSeasonPassPage() {
     setPortalLoading(true);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
-    const res = await fetch(`${API_BASE}/arena/season-pass/portal`, { method: "POST", headers, credentials: "include", body: "{}" });
+    const res = await fetch(`${getApiRoot()}/arena/season-pass/portal`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (data?.url) window.location.href = data.url;
     setPortalLoading(false);

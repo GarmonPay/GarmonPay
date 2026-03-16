@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
 type TournamentBracket = { rounds?: Array<{ matches: Array<{ fightId?: string; fighterAId?: string; fighterBId?: string; winnerId?: string }> }> };
@@ -26,7 +26,7 @@ export default function ArenaTournamentBracketPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/tournaments/${id}`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/tournaments/${id}`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.tournament) setTournament(data.tournament);
     if (data?.fightersById) setFightersById(data.fightersById);

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 export default function MyFighterPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
@@ -21,7 +21,7 @@ export default function MyFighterPage() {
       setSession(s);
       const token = s.accessToken ?? s.userId;
       const isToken = !!s.accessToken;
-      fetch(`${API_BASE}/arena/me`, {
+      fetch(`${getApiRoot()}/arena/me`, {
         headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
         credentials: "include",
       })

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 type StoreItem = {
   id: string;
@@ -44,9 +44,9 @@ export default function ArenaStorePage() {
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     const [itemsRes, invRes, meRes] = await Promise.all([
-      fetch(`${API_BASE}/arena/store/items`, { headers, credentials: "include" }),
-      fetch(`${API_BASE}/arena/store/inventory`, { headers, credentials: "include" }),
-      fetch(`${API_BASE}/arena/me`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/store/items`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/store/inventory`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
     ]);
     const itemsData = itemsRes.ok ? await itemsRes.json() : null;
     const invData = invRes.ok ? await invRes.json() : null;
@@ -74,7 +74,7 @@ export default function ArenaStorePage() {
       ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
     };
     try {
-      const res = await fetch(`${API_BASE}/arena/store/checkout`, {
+      const res = await fetch(`${getApiRoot()}/arena/store/checkout`, {
         method: "POST",
         headers,
         credentials: "include",
@@ -103,7 +103,7 @@ export default function ArenaStorePage() {
       ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
     };
     try {
-      const res = await fetch(`${API_BASE}/arena/store/buy`, {
+      const res = await fetch(`${getApiRoot()}/arena/store/buy`, {
         method: "POST",
         headers,
         credentials: "include",
@@ -130,7 +130,7 @@ export default function ArenaStorePage() {
       "Content-Type": "application/json",
       ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
     };
-    const res = await fetch(`${API_BASE}/arena/fighter/equip`, {
+    const res = await fetch(`${getApiRoot()}/arena/fighter/equip`, {
       method: "POST",
       headers,
       credentials: "include",

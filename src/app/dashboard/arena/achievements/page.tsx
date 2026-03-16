@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 type Def = { key: string; name: string; coins: number; unlocked: boolean };
 
@@ -21,7 +21,7 @@ export default function ArenaAchievementsPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/achievements`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/achievements`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data) {
       setWeightClass(data.weightClass ?? null);
@@ -39,7 +39,7 @@ export default function ArenaAchievementsPage() {
     setChecking(true);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
-    await fetch(`${API_BASE}/arena/achievements/check`, { method: "POST", headers, credentials: "include", body: "{}" });
+    await fetch(`${getApiRoot()}/arena/achievements/check`, { method: "POST", headers, credentials: "include", body: "{}" });
     fetchAchievements();
     setChecking(false);
   };

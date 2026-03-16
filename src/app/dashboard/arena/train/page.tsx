@@ -11,7 +11,7 @@ import {
   type SignatureMoveKey,
 } from "@/lib/arena-training";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 const SIGNATURE_MOVE_NAMES: Record<SignatureMoveKey, string> = {
   THE_HAYMAKER: "The Haymaker",
   COUNTER_HOOK: "Counter Hook",
@@ -57,8 +57,8 @@ export default function TrainingGymPage() {
     const isToken = !!s.accessToken;
     const headers: Record<string, string> = isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     const [meRes, walletRes] = await Promise.all([
-      fetch(`${API_BASE}/arena/me`, { headers, credentials: "include" }),
-      fetch(`${API_BASE}/wallet/get`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/wallet/get`, { headers, credentials: "include" }),
     ]);
     const meData = meRes.ok ? await meRes.json() : null;
     const walletData = walletRes.ok ? await walletRes.json() : null;
@@ -82,7 +82,7 @@ export default function TrainingGymPage() {
       ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
       : { "X-User-Id": token, "Content-Type": "application/json" };
     try {
-      const res = await fetch(`${API_BASE}/arena/train`, {
+      const res = await fetch(`${getApiRoot()}/arena/train`, {
         method: "POST",
         headers,
         credentials: "include",

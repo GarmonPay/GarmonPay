@@ -7,7 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 import { computeOdds } from "@/lib/arena-economy";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
 type Fighter = {
@@ -47,7 +47,7 @@ export default function SpectateFightPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/fights/${fightId}`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.fight) {
       setFight(data.fight);
@@ -110,7 +110,7 @@ export default function SpectateFightPage() {
       ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
     };
     try {
-      const res = await fetch(`${API_BASE}/arena/fights/${fightId}/spectator-bet`, {
+      const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}/spectator-bet`, {
         method: "POST",
         headers,
         credentials: "include",

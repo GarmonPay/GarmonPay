@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getApiRoot } from "@/lib/api";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 function isHtmlResponse(str: string): boolean {
   const trimmed = str.trimStart();
@@ -31,7 +31,11 @@ export default function CreateFighterPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/arena/fighters`, {
+      const apiUrl =
+        typeof window !== "undefined"
+          ? "/api/arena/fighters"
+          : `${getApiRoot()}/arena/fighters`;
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

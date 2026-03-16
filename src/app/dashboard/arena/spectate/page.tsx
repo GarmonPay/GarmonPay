@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 type LiveFight = {
   id: string;
@@ -26,7 +26,7 @@ export default function SpectateLobbyPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/fights/live`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/fights/live`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.fights) setFights(data.fights);
     setLoading(false);

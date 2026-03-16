@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 export default function ArenaHubPage() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function ArenaHubPage() {
       setSession(s);
       const token = s.accessToken ?? s.userId;
       const isToken = !!s.accessToken;
-      fetch(`${API_BASE}/arena/me`, {
+      fetch(`${getApiRoot()}/arena/me`, {
         headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
         credentials: "include",
       })

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
 const ARENA_ACTIONS = [
@@ -65,7 +65,7 @@ export default function FindFightPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${API_BASE}/arena/cpu-fighters`, { headers, credentials: "include" });
+    const res = await fetch(`${getApiRoot()}/arena/cpu-fighters`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.fighters) setCpuFighters(data.fighters);
     setLoading(false);
@@ -87,7 +87,7 @@ export default function FindFightPage() {
     };
     const body = cpuId ? { cpuFighterId: cpuId } : { opponentType: "ai" };
     try {
-      const res = await fetch(`${API_BASE}/arena/fights/create`, {
+      const res = await fetch(`${getApiRoot()}/arena/fights/create`, {
         method: "POST",
         headers,
         credentials: "include",

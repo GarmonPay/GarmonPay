@@ -4,8 +4,17 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
+/** Base URL for API requests. Ensures /api prefix when NEXT_PUBLIC_API_URL is origin only (e.g. https://garmonpay.com). */
+export function getApiRoot(): string {
+  const url = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) || "";
+  if (!url.trim()) return "/api";
+  const base = url.trim().replace(/\/$/, "");
+  return base.endsWith("/api") ? base : `${base}/api`;
+}
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const root = getApiRoot();
+  const res = await fetch(`${root}${path.startsWith("/") ? "" : "/"}${path}`, {
     ...options,
     headers: { "Content-Type": "application/json", ...options?.headers },
     credentials: "include",

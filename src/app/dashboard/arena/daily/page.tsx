@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+import { getApiRoot } from "@/lib/api";
 
 export default function ArenaDailyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
@@ -23,9 +23,9 @@ export default function ArenaDailyPage() {
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     const [loginRes, spinRes, jackpotRes] = await Promise.all([
-      fetch(`${API_BASE}/arena/daily-login`, { headers, credentials: "include" }),
-      fetch(`${API_BASE}/arena/spin`, { headers, credentials: "include" }),
-      fetch(`${API_BASE}/arena/jackpot`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/daily-login`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/spin`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/jackpot`, { headers, credentials: "include" }),
     ]);
     if (loginRes.ok) setLoginStatus(await loginRes.json());
     if (spinRes.ok) setSpinStatus(await spinRes.json());
@@ -42,7 +42,7 @@ export default function ArenaDailyPage() {
     setClaiming(true);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
-    const res = await fetch(`${API_BASE}/arena/daily-login`, { method: "POST", headers, credentials: "include", body: "{}" });
+    const res = await fetch(`${getApiRoot()}/arena/daily-login`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) fetchAll();
     else setError(data.message || "Claim failed");
@@ -56,7 +56,7 @@ export default function ArenaDailyPage() {
     setSpinning(true);
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
-    const res = await fetch(`${API_BASE}/arena/spin`, { method: "POST", headers, credentials: "include", body: "{}" });
+    const res = await fetch(`${getApiRoot()}/arena/spin`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setSpinResult({ prizeCoins: data.prizeCoins ?? 0 });
