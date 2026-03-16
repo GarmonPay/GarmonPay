@@ -6,8 +6,9 @@ import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
 import { getApiRoot } from "@/lib/api";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import type { RingAnimationState } from "@/components/arena/BoxingRing";
 
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
@@ -64,6 +65,9 @@ export default function FindFightPage() {
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [hitOnMe, setHitOnMe] = useState(false);
   const [hitOnThem, setHitOnThem] = useState(false);
+  const [loserKoActive, setLoserKoActive] = useState(false);
+  const [opponentKoActive, setOpponentKoActive] = useState(false);
+  const [ringAnimation, setRingAnimation] = useState<RingAnimationState>("idle");
 
   const fetchCpu = useCallback(async () => {
     const s = await getSessionAsync();
@@ -148,6 +152,10 @@ export default function FindFightPage() {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
       setLog((prev) => [...prev, payload]);
+      if (payload.hitA || payload.hitB) {
+        setRingAnimation("big_hit");
+        setTimeout(() => setRingAnimation("idle"), 350);
+      }
       if (payload.hitA) {
         setHitOnMe(true);
         setTimeout(() => setHitOnMe(false), 350);
@@ -160,6 +168,16 @@ export default function FindFightPage() {
     });
     s.on("fight_over", (payload: { winnerId: string }) => {
       setWinnerId(payload.winnerId);
+      setRingAnimation("ko");
+      setTimeout(() => setRingAnimation("victory"), 800);
+      const myId = fighterA?.id;
+      if (myId && payload.winnerId !== myId) {
+        setLoserKoActive(true);
+        setTimeout(() => setLoserKoActive(false), 1500);
+      } else if (myId && payload.winnerId === myId) {
+        setOpponentKoActive(true);
+        setTimeout(() => setOpponentKoActive(false), 1500);
+      }
       s.disconnect();
     });
     setSocket(s);
@@ -189,12 +207,48 @@ export default function FindFightPage() {
     const fb = fighterB ?? pendingAiFight?.fighterB ?? null;
     const myFighterId = fa?.id;
     const iWon = winnerId != null && winnerId === myFighterId;
+    const ringMode = showPreFight && !fightId ? "setup" : winnerId != null ? "victory" : "fight";
+    const fighterAAnim =
+      winnerId != null
+        ? iWon
+          ? "victory"
+          : loserKoActive
+            ? "ko"
+            : "defeat"
+        : hitOnMe
+          ? "hit"
+          : lastAction
+            ? "fighting"
+            : "idle";
+    const fighterBAnim =
+      winnerId != null
+        ? iWon
+          ? opponentKoActive
+            ? "ko"
+            : "defeat"
+          : "victory"
+        : hitOnThem
+          ? "hit"
+          : "idle";
+
     return (
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-        <h1 className="text-2xl font-bold text-white mb-4">Fight</h1>
+      <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+      <BoxingRing
+        mode={ringMode}
+        fighterA={(fa ?? { name: "You" }) as FighterData}
+        fighterB={(fb ?? { name: "Opponent" }) as FighterData}
+        winner={winnerId === fa?.id ? "a" : winnerId === fb?.id ? "b" : null}
+        currentRound={1}
+        animation={ringAnimation}
+        fighterAAnimation={fighterAAnim}
+        fighterBAnimation={fighterBAnim}
+        healthA={healthA}
+        healthB={healthB}
+        lastAction={ringMode === "fight" ? lastAction : null}
+      >
         {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
         {showPreFight && pendingAiFight && fb?.isAi && (
-          <div className="mb-6 p-4 rounded-xl bg-[#0d1117] border border-[#f0a500]/30">
+          <div className="mb-4 p-4 rounded-xl bg-[#0d1117] border border-[#f0a500]/30">
             <p className="text-[#9ca3af] text-sm mb-1">AI Opponent</p>
             <p className="text-xl font-bold text-white flex items-center gap-2">
               <span>🤖</span> {fb.name}
@@ -223,54 +277,14 @@ export default function FindFightPage() {
             </button>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10 flex flex-col items-center">
-            <div className="flex justify-center">
-              <FighterDisplay
-                fighter={(fa ?? { name: "You" }) as FighterData}
-                size="medium"
-                animation={winnerId != null ? (iWon ? "victory" : "defeat") : hitOnMe ? "hit" : lastAction ? "fighting" : "idle"}
-                action={lastAction ?? undefined}
-                showGear
-              />
-            </div>
-            <p className="text-[#9ca3af] text-sm mt-2">You</p>
-            <p className="text-xl font-bold text-white">{fa?.name}</p>
-            <p className="text-[#f0a500]">{fa?.style}</p>
-            <div className="mt-2 w-full h-3 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${healthA}%` }} />
-            </div>
-            <p className="text-white text-sm mt-1">{healthA} HP</p>
-          </div>
-          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10 flex flex-col items-center">
-            <div className="flex justify-center">
-              <FighterDisplay
-                fighter={(fb ?? { name: "Opponent" }) as FighterData}
-                size="medium"
-                animation={winnerId != null ? (iWon ? "defeat" : "victory") : hitOnThem ? "hit" : "idle"}
-                showGear
-                mirrored
-              />
-            </div>
-            <p className="text-[#9ca3af] text-sm mt-2">{fb?.isAi ? "AI" : "CPU"}</p>
-            <p className="text-xl font-bold text-white flex items-center gap-1">
-              {fb?.isAi && <span>🤖</span>}
-              {fb?.name}
-            </p>
-            <p className="text-[#f0a500]">{fb?.style}</p>
-            <div className="mt-2 w-full h-3 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${healthB}%` }} />
-            </div>
-            <p className="text-white text-sm mt-1">{healthB} HP</p>
-          </div>
-        </div>
-        {winnerId != null ? (
-          <div className="mb-6 p-4 rounded-lg bg-[#0d1117] border border-white/10">
+        {winnerId != null && (
+          <div className="mb-4 p-4 rounded-lg bg-[#0d1117] border border-white/10">
             <p className="text-xl font-bold text-white">{iWon ? "You win!" : "You lost."}</p>
-            <Link href="/dashboard/arena/fight" className="inline-block mt-2 text-[#f0a500] hover:underline" onClick={() => { setFightId(null); setJoinToken(null); setFighterA(null); setFighterB(null); setWinnerId(null); setPendingAiFight(null); setShowPreFight(false); }}>Fight again</Link>
+            <Link href="/dashboard/arena/fight" className="inline-block mt-2 text-[#f0a500] hover:underline" onClick={() => { setFightId(null); setJoinToken(null); setFighterA(null); setFighterB(null); setWinnerId(null); setPendingAiFight(null); setShowPreFight(false); setLoserKoActive(false); setOpponentKoActive(false); }}>Fight again</Link>
             <Link href="/dashboard/arena" className="inline-block mt-2 ml-4 text-[#f0a500] hover:underline">Back to Arena</Link>
           </div>
-        ) : showPreFight && pendingAiFight ? null : (
+        )}
+        {ringMode === "fight" && (
           <>
             <p className="text-[#9ca3af] text-sm mb-2">Tap an action (or wait 1.5s for auto-jab)</p>
             <div className="grid grid-cols-4 gap-2 mb-4">
@@ -288,17 +302,18 @@ export default function FindFightPage() {
           </>
         )}
         {log.length > 0 && (
-          <div className="mt-4 max-h-32 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
-            {log.slice(-8).map((e, i) => (
+          <div className="mt-2 max-h-24 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
+            {log.slice(-6).map((e, i) => (
               <div key={i}>
-                You: {e.actionA} → {e.damageAtoB} dmg {e.hitA && "✓"} · CPU: {e.actionB} → {e.damageBtoA} dmg {e.hitB && "✓"}
+                You: {e.actionA} → {e.damageAtoB} dmg {e.hitA && "✓"} · Opp: {e.actionB} → {e.damageBtoA} dmg {e.hitB && "✓"}
               </div>
             ))}
           </div>
         )}
-        <div className="mt-4">
+        <div className="mt-3">
           <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
         </div>
+      </BoxingRing>
       </div>
     );
   }

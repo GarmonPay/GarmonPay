@@ -5,9 +5,12 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
 
 export default function ArenaDailyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
+  const [fighter, setFighter] = useState<FighterData | null>(null);
   const [loginStatus, setLoginStatus] = useState<{ claimed: boolean; dayStreak: number; coinsEarnedToday: number } | null>(null);
   const [spinStatus, setSpinStatus] = useState<{ spinsLeft: number; maxSpins: number; spinsUsed: number } | null>(null);
   const [jackpot, setJackpot] = useState<{ weekStart: string; totalAmount: number; paidOut: boolean } | null>(null);
@@ -22,14 +25,17 @@ export default function ArenaDailyPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const [loginRes, spinRes, jackpotRes] = await Promise.all([
+    const [loginRes, spinRes, jackpotRes, meRes] = await Promise.all([
       fetch(`${getApiRoot()}/arena/daily-login`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/spin`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/jackpot`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
     ]);
     if (loginRes.ok) setLoginStatus(await loginRes.json());
     if (spinRes.ok) setSpinStatus(await spinRes.json());
     if (jackpotRes.ok) setJackpot(await jackpotRes.json());
+    const meData = meRes.ok ? await meRes.json() : null;
+    if (meData?.fighter) setFighter(meData.fighter);
   }, []);
 
   useEffect(() => {
@@ -75,6 +81,12 @@ export default function ArenaDailyPage() {
         <h1 className="text-2xl font-bold text-white">Daily Engagement</h1>
         <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
       </div>
+      {fighter && (
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-[#0d1117] border border-white/10">
+          <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
+          <span className="text-white font-medium">{fighter.name}</span>
+        </div>
+      )}
       {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
 
       <div className="space-y-6">

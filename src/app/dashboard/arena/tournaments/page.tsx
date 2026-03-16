@@ -5,6 +5,8 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
 
 type Tournament = {
   id: string;
@@ -20,6 +22,7 @@ type Tournament = {
 
 export default function ArenaTournamentsPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
+  const [fighter, setFighter] = useState<FighterData | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
@@ -31,9 +34,14 @@ export default function ArenaTournamentsPage() {
     setSession(s);
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${getApiRoot()}/arena/tournaments`, { headers, credentials: "include" });
-    const data = res.ok ? await res.json() : null;
+    const [tournamentsRes, meRes] = await Promise.all([
+      fetch(`${getApiRoot()}/arena/tournaments`, { headers, credentials: "include" }),
+      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
+    ]);
+    const data = tournamentsRes.ok ? await tournamentsRes.json() : null;
     if (data?.tournaments) setTournaments(data.tournaments);
+    const meData = meRes.ok ? await meRes.json() : null;
+    if (meData?.fighter) setFighter(meData.fighter);
     setLoading(false);
   }, []);
 
@@ -75,6 +83,15 @@ export default function ArenaTournamentsPage() {
         <h1 className="text-2xl font-bold text-white">Arena Tournaments</h1>
         <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
       </div>
+      {fighter && (
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-[#0d1117] border border-white/10">
+          <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
+          <div>
+            <p className="text-white font-medium">{fighter.name}</p>
+            <p className="text-[#9ca3af] text-sm">Enter with your fighter</p>
+          </div>
+        </div>
+      )}
       <p className="text-[#9ca3af] text-sm mb-4">Daily free (coins), Weekly $5, Monthly $20, VIP $50. Admin keeps 15% of prize pool. When 8 players enter, bracket starts.</p>
       {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
       <div className="grid gap-4 md:grid-cols-2">

@@ -108,6 +108,36 @@
   animation: arena-fighter-block 0.2s ease-out;
 }
 
+/* Gear shine effects */
+@keyframes arena-gear-shimmer {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 0.95; filter: brightness(1.15); }
+}
+
+@keyframes arena-gear-sparkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.9; filter: brightness(1.1); }
+}
+
+@keyframes arena-gear-fire {
+  0%, 100% { opacity: 1; filter: hue-rotate(0deg); }
+  50% { opacity: 0.95; filter: brightness(1.08); }
+}
+
+.arena-gear-shimmer path,
+.arena-gear-shimmer ellipse {
+  animation: arena-gear-shimmer 2s ease-in-out infinite;
+}
+
+.arena-gear-sparkle path,
+.arena-gear-sparkle ellipse {
+  animation: arena-gear-sparkle 2.5s ease-in-out infinite;
+}
+
+.arena-gear-fire path {
+  animation: arena-gear-fire 2s ease-in-out infinite;
+}
+
 /* Hit reaction */
 @keyframes arena-fighter-hit-snap {
   0% { transform: translateX(0); }

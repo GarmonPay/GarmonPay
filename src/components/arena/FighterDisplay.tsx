@@ -112,10 +112,21 @@ export function FighterDisplay({
         >
           <LayerEffects show={showVictoryEffect} className="arena-fighter-effects" />
           <LayerBody bodyType={bodyType} skinTone={skinTone} />
-          <LayerShorts gearKey={shortsKey} bodyType={bodyType} />
+          <LayerShorts
+        gearKey={shortsKey}
+        bodyType={bodyType}
+        className={shortsKey === "gold_trunks" ? "arena-gear-shimmer" : shortsKey === "diamond_shorts" ? "arena-gear-sparkle" : shortsKey === "champion_trunks" ? "arena-gear-fire" : ""}
+      />
           <LayerShoes gearKey={shoesKey} />
-          <LayerGloves gearKey={glovesKey} bodyType={bodyType} className="arena-fighter-gloves" />
-          <LayerHeadgear gearKey={headgearKey} />
+          <LayerGloves
+            gearKey={glovesKey}
+            bodyType={bodyType}
+            className={`arena-fighter-gloves ${glovesKey === "championship_gloves" ? "arena-gear-shimmer" : glovesKey === "titanium_gloves" ? "arena-gear-sparkle" : ""}`}
+          />
+          <LayerHeadgear
+            gearKey={headgearKey}
+            className={headgearKey === "iron_skull" ? "arena-gear-sparkle" : ""}
+          />
           <LayerFace faceStyle={faceStyle} skinTone={skinTone} animation={animation} />
           <LayerHair hairStyle={hairStyle} skinTone={skinTone} />
         </g>
