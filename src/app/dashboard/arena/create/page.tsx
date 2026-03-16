@@ -8,6 +8,11 @@ const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpunch
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
+function isHtmlResponse(str: string): boolean {
+  const trimmed = str.trimStart();
+  return trimmed.startsWith("<!") || trimmed.startsWith("<html") || trimmed.startsWith("<?xml");
+}
+
 export default function CreateFighterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -38,7 +43,13 @@ export default function CreateFighterPage() {
         data = text ? JSON.parse(text) : {};
       } catch {
         if (!res.ok) {
-          setError(res.status === 401 ? "Please log in again." : text || `Request failed (${res.status}).`);
+          const safeMsg =
+            res.status === 401
+              ? "Please log in again."
+              : isHtmlResponse(text)
+                ? `Request failed (${res.status}). Please try again.`
+                : text.slice(0, 200) || `Request failed (${res.status}).`;
+          setError(safeMsg);
           setLoading(false);
           return;
         }
@@ -46,7 +57,8 @@ export default function CreateFighterPage() {
       if (!res.ok) {
         const msg = (data.message as string) || "Failed to create fighter";
         const detail = data.errorDetail as string | undefined;
-        setError(detail ? `${msg} — ${detail}` : msg);
+        const safeDetail = detail && !isHtmlResponse(detail) ? detail : undefined;
+        setError(safeDetail ? `${msg} — ${safeDetail}` : msg);
         setLoading(false);
         return;
       }

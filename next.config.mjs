@@ -36,9 +36,9 @@ const nextConfig = {
           { key: "Cache-Control", value: "no-store, max-age=0" },
         ],
       },
-      // Page routes: omit X-Content-Type-Options so HTML documents render if server sends wrong type
+      // Page/document routes only (exclude _next, static assets): omit nosniff so HTML renders if server sent wrong type
       {
-        source: "/((?!api/).*)",
+        source: "/((?!api/|_next/|favicon|icon|manifest|.*\\.(?:js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?)$).*)",
         headers: [
           { key: "Content-Security-Policy", value: csp },
           { key: "X-Frame-Options", value: "DENY" },
