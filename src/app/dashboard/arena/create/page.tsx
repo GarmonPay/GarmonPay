@@ -42,7 +42,7 @@ export default function CreateFighterPage() {
         body: JSON.stringify({ name: trimmed, style, avatar }),
       });
       const text = await res.text();
-      let data: { message?: string; errorDetail?: string } = {};
+      let data: { message?: string; error?: string; errorDetail?: string } = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -59,7 +59,7 @@ export default function CreateFighterPage() {
         }
       }
       if (!res.ok) {
-        const msg = (data.message as string) || "Failed to create fighter";
+        const msg = (data.error ?? data.message) || "Failed to create fighter";
         const detail = data.errorDetail as string | undefined;
         const safeDetail = detail && !isHtmlResponse(detail) ? detail : undefined;
         setError(safeDetail ? `${msg} — ${safeDetail}` : msg);
