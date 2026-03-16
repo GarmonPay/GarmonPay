@@ -1,11 +1,16 @@
+import Link from "next/link";
+
 export default function NotFound() {
   return (
-    <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem", background: "#0a0e17" }}>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>Page not found</h1>
-      <p style={{ color: "#9ca3af", marginBottom: "1.5rem" }}>The page you’re looking for doesn’t exist.</p>
-      <a href="/" style={{ padding: "0.75rem 1.5rem", borderRadius: "0.5rem", background: "#2563eb", color: "#fff", fontWeight: 500, textDecoration: "none" }}>
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0a0e17] text-[#f9fafb]">
+      <h1 className="text-2xl font-bold mb-2">Page not found</h1>
+      <p className="text-[#9ca3af] mb-6">The page you&apos;re looking for doesn&apos;t exist.</p>
+      <Link
+        href="/"
+        className="inline-block px-6 py-3 rounded-lg bg-[#2563eb] text-white font-medium hover:opacity-90 no-underline"
+      >
         Back to home
-      </a>
+      </Link>
     </main>
   );
 }
