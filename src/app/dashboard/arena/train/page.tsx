@@ -12,6 +12,9 @@ import {
 } from "@/lib/arena-training";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
+
 const SIGNATURE_MOVE_NAMES: Record<SignatureMoveKey, string> = {
   THE_HAYMAKER: "The Haymaker",
   COUNTER_HOOK: "Counter Hook",
@@ -21,7 +24,7 @@ const SIGNATURE_MOVE_NAMES: Record<SignatureMoveKey, string> = {
   THE_FINAL_ROUND: "The Final Round",
 };
 
-type FighterStats = {
+type FighterStats = FighterData & {
   id: string;
   strength: number;
   speed: number;
@@ -150,6 +153,14 @@ export default function TrainingGymPage() {
           <span className="text-[#9ca3af]">Wallet: <span className="text-white font-medium">${balanceDollars}</span></span>
           <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
         </div>
+      </div>
+      <div className="flex justify-center mb-6">
+        <FighterDisplay
+          fighter={fighter as FighterData}
+          size="medium"
+          animation={trainingSessionKey ? "training" : "idle"}
+          showGear
+        />
       </div>
       <p className="text-[#9ca3af] text-sm mb-6">
         Stats cap at {STAT_CAP}. Sessions 5 & 6 unlock after 2 and 3 completed sessions. Real wallet deduction from your GarmonPay balance.

@@ -4,6 +4,10 @@ import { createAdminClient } from "@/lib/supabase";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
+const BODY_TYPES = ["lightweight", "middleweight", "heavyweight"] as const;
+const SKIN_TONES = ["tone1", "tone2", "tone3", "tone4", "tone5", "tone6"] as const;
+const FACE_STYLES = ["determined", "fierce", "calm", "angry", "scarred", "young", "veteran", "masked"] as const;
+const HAIR_STYLES = ["bald", "short_fade", "dreads", "cornrows", "afro", "mohawk", "buzz_cut", "long_tied"] as const;
 
 /** POST /api/arena/fighters — create fighter (one per user). Auth via Bearer token (session in localStorage). */
 export async function POST(request: Request) {
@@ -18,7 +22,15 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name: rawName, style: rawStyle, avatar: rawAvatar } = body;
+    const {
+      name: rawName,
+      style: rawStyle,
+      avatar: rawAvatar,
+      body_type: rawBodyType,
+      skin_tone: rawSkinTone,
+      face_style: rawFaceStyle,
+      hair_style: rawHairStyle,
+    } = body;
     const name = typeof rawName === "string" ? rawName.trim().slice(0, 50) : "";
     const style =
       typeof rawStyle === "string" && STYLES.includes(rawStyle as (typeof STYLES)[number])
@@ -26,6 +38,22 @@ export async function POST(request: Request) {
         : STYLES[0];
     const avatar =
       typeof rawAvatar === "string" && AVATARS.includes(rawAvatar) ? rawAvatar : AVATARS[0];
+    const body_type =
+      typeof rawBodyType === "string" && BODY_TYPES.includes(rawBodyType as (typeof BODY_TYPES)[number])
+        ? rawBodyType
+        : "middleweight";
+    const skin_tone =
+      typeof rawSkinTone === "string" && SKIN_TONES.includes(rawSkinTone as (typeof SKIN_TONES)[number])
+        ? rawSkinTone
+        : "tone3";
+    const face_style =
+      typeof rawFaceStyle === "string" && FACE_STYLES.includes(rawFaceStyle as (typeof FACE_STYLES)[number])
+        ? rawFaceStyle
+        : "determined";
+    const hair_style =
+      typeof rawHairStyle === "string" && HAIR_STYLES.includes(rawHairStyle as (typeof HAIR_STYLES)[number])
+        ? rawHairStyle
+        : "short_fade";
 
     if (!name || name.length < 2) {
       return NextResponse.json(
@@ -74,6 +102,10 @@ export async function POST(request: Request) {
         name,
         style,
         avatar,
+        body_type,
+        skin_tone,
+        face_style,
+        hair_style,
         strength: 48,
         speed: 48,
         stamina: 48,

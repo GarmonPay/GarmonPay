@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   }
   const { data: fighter, error } = await supabase
     .from("arena_fighters")
-    .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions")
+    .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions, body_type, skin_tone, face_style, hair_style, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) {

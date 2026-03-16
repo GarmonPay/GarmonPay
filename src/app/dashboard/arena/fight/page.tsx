@@ -6,6 +6,9 @@ import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
 import { getApiRoot } from "@/lib/api";
+import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import type { FighterData } from "@/lib/arena-fighter-types";
+
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
 const ARENA_ACTIONS = [
@@ -210,23 +213,40 @@ export default function FindFightPage() {
           </div>
         )}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10">
-            <p className="text-[#9ca3af] text-sm">You</p>
+          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10 flex flex-col items-center">
+            <div className="flex justify-center">
+              <FighterDisplay
+                fighter={(fa ?? { name: "You" }) as FighterData}
+                size="medium"
+                animation={winnerId != null ? (iWon ? "victory" : "defeat") : "idle"}
+                showGear
+              />
+            </div>
+            <p className="text-[#9ca3af] text-sm mt-2">You</p>
             <p className="text-xl font-bold text-white">{fa?.name}</p>
             <p className="text-[#f0a500]">{fa?.style}</p>
-            <div className="mt-2 h-3 bg-white/10 rounded-full overflow-hidden">
+            <div className="mt-2 w-full h-3 bg-white/10 rounded-full overflow-hidden">
               <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${healthA}%` }} />
             </div>
             <p className="text-white text-sm mt-1">{healthA} HP</p>
           </div>
-          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10">
-            <p className="text-[#9ca3af] text-sm">{fb?.isAi ? "AI" : "CPU"}</p>
+          <div className="bg-[#0d1117] rounded-lg p-4 border border-white/10 flex flex-col items-center">
+            <div className="flex justify-center">
+              <FighterDisplay
+                fighter={(fb ?? { name: "Opponent" }) as FighterData}
+                size="medium"
+                animation={winnerId != null ? (iWon ? "defeat" : "victory") : "idle"}
+                showGear
+                mirrored
+              />
+            </div>
+            <p className="text-[#9ca3af] text-sm mt-2">{fb?.isAi ? "AI" : "CPU"}</p>
             <p className="text-xl font-bold text-white flex items-center gap-1">
               {fb?.isAi && <span>🤖</span>}
               {fb?.name}
             </p>
             <p className="text-[#f0a500]">{fb?.style}</p>
-            <div className="mt-2 h-3 bg-white/10 rounded-full overflow-hidden">
+            <div className="mt-2 w-full h-3 bg-white/10 rounded-full overflow-hidden">
               <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${healthB}%` }} />
             </div>
             <p className="text-white text-sm mt-1">{healthB} HP</p>
