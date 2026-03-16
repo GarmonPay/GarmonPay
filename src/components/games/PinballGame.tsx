@@ -1,934 +1,736 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import Matter from "matter-js";
+import {
+  GRAVITY,
+  BALL_RADIUS,
+  VELOCITY_CAP,
+  BOUNCE_COEF,
+  FRICTION,
+  FLIPPER_LENGTH,
+  FLIPPER_REST_ANGLE,
+  FLIPPER_ACTIVE_ANGLE,
+  FLIPPER_SPEED,
+  BUMPER_RADIUS,
+  BUMPER_BOOST,
+  BUMPER_MIN_SPEED,
+  GARMON_BONUS,
+  JACKPOT_BONUS_POINTS,
+  MULTIBALL_POINT_MULT,
+  clampSpeed,
+  distance,
+  circleCircle,
+  reflect,
+  flipperEndpoints,
+  pointToSegment,
+  BUMPER_POINTS,
+  DRAIN_GRACE_MS,
+} from "@/lib/pinball-physics";
 
-const COLORS = {
-  neonBlue: "#00f0ff",
-  neonGreen: "#39ff14",
-  neonPurple: "#bf00ff",
-  pink: "#ff00ff",
-  gold: "#ffd700",
-  bg: "#0a0a12",
-  playfield: "#0d1f0d",
-  playfieldHighlight: "#142814",
-  cabinet: "#1a0a0a",
-  rail: "#00c8ff",
-  chromeHighlight: "#e8f4fc",
-  chromeMid: "#8a9ba8",
-  chromeShadow: "#2a3540",
-  rubber: "#1a1a1a",
-  woodDark: "#2a1810",
-  woodMid: "#4a2818",
-  woodLight: "#6b3d28",
+const TABLE_W = 400;
+const TABLE_H = 600;
+const WALL_THICK = 16;
+const PLAYFIELD_X = WALL_THICK;
+const PLAYFIELD_Y = 52;
+const PLAYFIELD_W = TABLE_W - WALL_THICK * 2;
+const PLAYFIELD_H = TABLE_H - PLAYFIELD_Y - WALL_THICK;
+const FLIPPER_Y = TABLE_H - WALL_THICK - 35;
+const LEFT_FLIPPER_PIVOT_X = PLAYFIELD_X + 45;
+const RIGHT_FLIPPER_PIVOT_X = TABLE_W - WALL_THICK - 45;
+const DRAIN_Y = FLIPPER_Y + 25;
+const PLUNGER_X = TABLE_W - WALL_THICK - 25;
+const PLUNGER_Y = 420;
+
+const BUMPERS: { x: number; y: number; emoji: string; glow: string }[] = [
+  { x: 200, y: 160, emoji: "🥊", glow: "#c1272d" },
+  { x: 120, y: 260, emoji: "💰", glow: "#22c55e" },
+  { x: 280, y: 260, emoji: "🪙", glow: "#eab308" },
+  { x: 100, y: 360, emoji: "📱", glow: "#3b82f6" },
+  { x: 300, y: 360, emoji: "💎", glow: "#a855f7" },
+  { x: 200, y: 320, emoji: "🏆", glow: "#f59e0b" },
+];
+
+const GARMON_LANES = "GARMON".split("").map((letter, i) => ({
+  letter,
+  x: PLAYFIELD_X + 35 + i * 52,
+  y: PLAYFIELD_Y + 18,
+  w: 40,
+  h: 22,
+}));
+
+const JACKPOT_TARGET = { x: 200, y: 95, w: 70, h: 28 };
+
+export type PinballGameProps = {
+  sessionId?: string | null;
+  mode?: "free" | "h2h" | "tournament";
+  onGameEnd?: (
+    score: number,
+    stats?: { hits: { bumper: string; t: number }[]; durationMs?: number; ballsUsed?: number }
+  ) => void;
+  opponentScore?: number;
+  jackpotLit?: boolean;
+  jackpotLitUntil?: number;
 };
 
-const BUMPER_SCORE = 100;
-const JACKPOT_SCORE = 5000;
-const SPINNER_SCORE = 50;
-const COMBO_DECAY_MS = 800;
-const MULTIBALL_JACKPOT_COUNT = 3;
-const MULTIBALL_JACKPOT_WINDOW_MS = 10000;
-const MULTIBALL_EXTRA_BALLS = 3;
-const MULTIBALL_MULTIPLIER = 3;
+type Ball = { x: number; y: number; vx: number; vy: number; inPlay: boolean };
+type ScorePopup = { x: number; y: number; text: string; life: number };
 
-type PinballGameProps = {
-  sessionId: string;
-  onGameEnd: (score: number) => void;
-};
-
-export function PinballGame({ sessionId, onGameEnd }: PinballGameProps) {
+export function PinballGame({
+  sessionId = null,
+  mode = "free",
+  onGameEnd,
+  opponentScore = 0,
+  jackpotLit = false,
+  jackpotLitUntil = 0,
+}: PinballGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<Matter.Engine | null>(null);
-  const ballRef = useRef<Matter.Body | null>(null);
-  const leftFlipperRef = useRef<Matter.Body | null>(null);
-  const rightFlipperRef = useRef<Matter.Body | null>(null);
-  const scoreRef = useRef(0);
-  const comboRef = useRef(0);
-  const lastComboTimeRef = useRef(0);
   const [score, setScore] = useState(0);
-  const [combo, setCombo] = useState(0);
-  const [jackpotMode, setJackpotMode] = useState(false);
-  const jackpotModeRef = useRef(jackpotMode);
-  jackpotModeRef.current = jackpotMode;
+  const [lives, setLives] = useState(3);
+  const [multiplier, setMultiplier] = useState(1);
+  const [garmonLetters, setGarmonLetters] = useState<Set<string>>(new Set());
+  const [multiballActive, setMultiballActive] = useState(false);
+  const [jackpotLitState, setJackpotLitState] = useState(jackpotLit);
+  const [tiltWarning, setTiltWarning] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const flipperLeftDown = useRef(false);
-  const flipperRightDown = useRef(false);
-  const flipperSoundPlayed = useRef({ left: false, right: false });
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const [combo, setCombo] = useState(0);
+  const [rampMultiplierActive, setRampMultiplierActive] = useState(false);
+
+  const ballsRef = useRef<Ball[]>([]);
+  const leftFlipperAngleRef = useRef(FLIPPER_REST_ANGLE);
+  const rightFlipperAngleRef = useRef(FLIPPER_ACTIVE_ANGLE);
+  const leftFlipperDownRef = useRef(false);
+  const rightFlipperDownRef = useRef(false);
+  const plungerChargeRef = useRef(0);
+  const plungerHoldingRef = useRef(false);
+  const scorePopupsRef = useRef<ScorePopup[]>([]);
+  const hitLogRef = useRef<{ bumper: string; t: number }[]>([]);
+  const lastBumperHitRef = useRef<number>(0);
+  const comboResetWallRef = useRef(false);
+  const multiballEndTimeRef = useRef(0);
+  const rampMultiplierEndRef = useRef(0);
+  const jackpotLitEndRef = useRef(jackpotLitUntil || 0);
+  const shakeRef = useRef({ x: 0, y: 0 });
+  const ballInDrainZoneRef = useRef(false);
+  const drainGraceRef = useRef(0);
+  const tiltCountRef = useRef(0);
+  const tiltOutTriggerRef = useRef(false);
+  const lastTiltTimeRef = useRef(0);
   const gameEndedRef = useRef(false);
   const ballTrailRef = useRef<{ x: number; y: number }[]>([]);
-  const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; life: number; hue: number }[]>([]);
-  const animTimeRef = useRef(0);
-  const ballsRef = useRef<Matter.Body[]>([]);
-  const jackpotHitTimesRef = useRef<number[]>([]);
-  const multiplierRef = useRef(1);
-  const multiballModeRef = useRef(false);
-  const [multiballMode, setMultiballMode] = useState(false);
-  const jackpotLaneUnlockedRef = useRef(false);
-  const dropTargetsRef = useRef<{ body: Matter.Body; dropped: boolean; startY: number }[]>([]);
-  const bumperDataRef = useRef<{ body: Matter.Body; cx: number; cy: number; orbitR: number; phase: number; lastHit: number }[]>([]);
-  const shakeRef = useRef({ x: 0, y: 0 });
-  const scoreScaleRef = useRef(1);
-  const lastScoreDisplayRef = useRef(0);
-  const spinnerComboRef = useRef(0);
-  const lastSpinnerTimeRef = useRef(0);
+  const scaleRef = useRef(1);
+  const oxRef = useRef(0);
+  const oyRef = useRef(0);
+  const scoreRef = useRef(0);
+  const gameStartTimeRef = useRef(Date.now());
+  const ballsUsedRef = useRef(0);
+  scoreRef.current = score;
 
-  const playSound = useCallback((type: "bumper" | "jackpot" | "flipper" | "drain" | "multiball") => {
-    try {
-      const ctx = audioContextRef.current ?? new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      if (!audioContextRef.current) audioContextRef.current = ctx;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      if (type === "bumper") {
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.1);
-      } else if (type === "jackpot") {
-        [300, 500, 800, 1200].forEach((f, i) => {
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.connect(g);
-          g.connect(ctx.destination);
-          o.frequency.value = f;
-          g.gain.setValueAtTime(0.2, ctx.currentTime);
-          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-          o.start(ctx.currentTime + i * 0.05);
-          o.stop(ctx.currentTime + 0.4);
-        });
-      } else if (type === "flipper") {
-        osc.frequency.value = 120;
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.06);
-      } else if (type === "multiball") {
-        [400, 600, 800, 1000].forEach((f, i) => {
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.connect(g);
-          g.connect(ctx.destination);
-          o.frequency.value = f;
-          g.gain.setValueAtTime(0.15, ctx.currentTime);
-          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-          o.start(ctx.currentTime + i * 0.04);
-          o.stop(ctx.currentTime + 0.35);
-        });
-      } else {
-        osc.frequency.setValueAtTime(80, ctx.currentTime);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.35);
-      }
-    } catch {
-      // ignore
+  const addScore = useCallback((pts: number, x: number, y: number) => {
+    const mult = rampMultiplierEndRef.current > Date.now() ? 2 : 1;
+    const multiballMult = multiballEndTimeRef.current > Date.now() ? MULTIBALL_POINT_MULT : 1;
+    const total = Math.round(pts * mult * multiballMult * (multiplier || 1));
+    setScore((s) => s + total);
+    scorePopupsRef.current.push({ x, y, text: `+${total}`, life: 1 });
+  }, [multiplier]);
+
+  const spawnBall = useCallback((x: number, y: number) => {
+    ballsRef.current.push({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      inPlay: true,
+    });
+  }, []);
+
+  const launchFromPlunger = useCallback((charge: number) => {
+    const power = Math.min(1, Math.max(0, charge)) * 18;
+    const idx = ballsRef.current.findIndex((b) => b.inPlay && b.y > TABLE_H - 120);
+    if (idx >= 0) {
+      ballsRef.current[idx].vx = -power * 0.3;
+      ballsRef.current[idx].vy = -power * 0.95;
     }
   }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !sessionId) return;
+    jackpotLitEndRef.current = jackpotLitUntil || 0;
+    setJackpotLitState(jackpotLit);
+  }, [jackpotLit, jackpotLitUntil]);
 
-    const cw = (canvas.width = canvas.offsetWidth);
-    const ch = (canvas.height = canvas.offsetHeight);
-    const scale = Math.min(cw / 400, ch / 600);
-    const w = 400 * scale;
-    const h = 600 * scale;
-    const ox = (cw - w) / 2;
-    const oy = (ch - h) / 2;
-
-    const engine = Matter.Engine.create({ gravity: { x: 0, y: 1.1 } });
-    engineRef.current = engine;
-    const { world } = engine;
-
-    const wallOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.65, friction: 0 };
-    const wallH = 20;
-    Matter.World.add(world, [
-      Matter.Bodies.rectangle(200, -wallH / 2, 420, wallH, wallOpts),
-      Matter.Bodies.rectangle(200, 600 + wallH / 2, 420, wallH, wallOpts),
-      Matter.Bodies.rectangle(-wallH / 2, 300, wallH, 640, wallOpts),
-      Matter.Bodies.rectangle(400 + wallH / 2, 300, wallH, 640, wallOpts),
-    ]);
-
-    const flipperW = 60;
-    const flipperH = 12;
-    const flipperY = 560;
-    const leftFlipper = Matter.Bodies.rectangle(120, flipperY, flipperW, flipperH, {
-      isStatic: true,
-      angle: 0.35,
-      friction: 0.7,
-      restitution: 0.95,
-    } as Matter.IChamferableBodyDefinition);
-    const rightFlipper = Matter.Bodies.rectangle(280, flipperY, flipperW, flipperH, {
-      isStatic: true,
-      angle: -0.35,
-      friction: 0.7,
-      restitution: 0.95,
-    } as Matter.IChamferableBodyDefinition);
-    Matter.World.add(world, [leftFlipper, rightFlipper]);
-    leftFlipperRef.current = leftFlipper;
-    rightFlipperRef.current = rightFlipper;
-
-    const bumperOpts: Matter.IBodyDefinition = { isStatic: true, restitution: 1.35, friction: 0, label: "bumper" };
-    const bumperPositions = [
-      { cx: 200, cy: 180, orbitR: 0, phase: 0 },
-      { cx: 120, cy: 280, orbitR: 18, phase: 0 },
-      { cx: 280, cy: 280, orbitR: 18, phase: Math.PI },
-      { cx: 160, cy: 380, orbitR: 14, phase: Math.PI / 2 },
-      { cx: 240, cy: 380, orbitR: 14, phase: -Math.PI / 2 },
-    ];
-    const bumpers = bumperPositions.map((p, i) => {
-      const radii = [28, 24, 24, 22, 22];
-      const b = Matter.Bodies.circle(p.cx, p.cy, radii[i], bumperOpts);
-      (b as Matter.Body & { label?: string }).label = "bumper";
-      return b;
-    });
-    bumperDataRef.current = bumperPositions.map((p, i) => ({
-      body: bumpers[i],
-      cx: p.cx,
-      cy: p.cy,
-      orbitR: p.orbitR,
-      phase: p.phase,
-      lastHit: 0,
-    }));
-    Matter.World.add(world, bumpers);
-
-    const spinnerOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.9, friction: 0, label: "spinner" };
-    const spinner1 = Matter.Bodies.rectangle(80, 140, 16, 40, spinnerOpts);
-    const spinner2 = Matter.Bodies.rectangle(320, 140, 16, 40, spinnerOpts);
-    (spinner1 as Matter.Body & { label?: string }).label = "spinner";
-    (spinner2 as Matter.Body & { label?: string }).label = "spinner";
-    Matter.World.add(world, [spinner1, spinner2]);
-
-    const dropTargetOpts: Matter.IChamferableBodyDefinition = { isStatic: true, restitution: 0.5, friction: 0, label: "droptarget" };
-    const dropYs = [105, 105, 105, 105, 105];
-    const dropXs = [80, 130, 200, 270, 320];
-    const dropTargets = dropXs.map((x, i) => Matter.Bodies.rectangle(x, dropYs[i], 36, 20, dropTargetOpts));
-    dropTargets.forEach((d) => ((d as Matter.Body & { label?: string }).label = "droptarget"));
-    dropTargetsRef.current = dropTargets.map((body, i) => ({ body, dropped: false, startY: dropYs[i] }));
-    Matter.World.add(world, dropTargets);
-
-    const jackpotZone = Matter.Bodies.rectangle(200, 80, 80, 30, {
-      isStatic: true,
-      isSensor: true,
-      label: "jackpot",
-    } as Matter.IChamferableBodyDefinition);
-    Matter.World.add(world, jackpotZone);
-
-    const createBall = () =>
-      Matter.Bodies.circle(200, 300, 10, {
-        restitution: 0.85,
-        friction: 0.001,
-        density: 0.004,
-        label: "ball",
-      });
-    const ball = createBall();
-    Matter.Body.setVelocity(ball, { x: 0, y: 0 });
-    Matter.World.add(world, ball);
-    ballRef.current = ball;
-    ballsRef.current = [ball];
-
-    Matter.Events.on(engine, "collisionStart", (event) => {
-      const pairs = event.pairs;
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.DeviceMotionEvent) return;
+    const TILT_THRESHOLD = 15;
+    const TILT_COOLDOWN_MS = 800;
+    const handler = (e: DeviceMotionEvent) => {
+      const a = e.accelerationIncludingGravity;
+      if (!a) return;
       const now = Date.now();
-      for (const p of pairs) {
-        const a = p.bodyA;
-        const b = p.bodyB;
-        if (now - lastComboTimeRef.current > COMBO_DECAY_MS) comboRef.current = 0;
-        lastComboTimeRef.current = now;
-
-        if ((a.label === "bumper" || b.label === "bumper") && (a.label === "ball" || b.label === "ball")) {
-          const bumperBody = a.label === "bumper" ? a : b;
-          bumperDataRef.current.forEach((bd) => {
-            if (bd.body === bumperBody) bd.lastHit = now;
-          });
-          comboRef.current += 1;
-          const mult = Math.min(comboRef.current, 5) * multiplierRef.current;
-          const add = BUMPER_SCORE * mult;
-          scoreRef.current += add;
-          setScore(scoreRef.current);
-          setCombo(comboRef.current);
-          scoreScaleRef.current = 1.25;
-          shakeRef.current = { x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 6 };
-          playSound("bumper");
-          for (let i = 0; i < 12; i++) {
-            const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
-            particlesRef.current.push({
-              x: bumperBody.position.x,
-              y: bumperBody.position.y,
-              vx: Math.cos(angle) * 5,
-              vy: Math.sin(angle) * 5,
-              life: 1,
-              hue: 280,
-            });
-          }
-        }
-
-        if ((a.label === "spinner" || b.label === "spinner") && (a.label === "ball" || b.label === "ball")) {
-          if (now - lastSpinnerTimeRef.current > 400) spinnerComboRef.current = 0;
-          lastSpinnerTimeRef.current = now;
-          spinnerComboRef.current += 1;
-          const mult = Math.min(spinnerComboRef.current, 5) * multiplierRef.current;
-          const add = SPINNER_SCORE * mult;
-          scoreRef.current += add;
-          setScore(scoreRef.current);
-          scoreScaleRef.current = 1.15;
-          playSound("bumper");
-        }
-
-        if ((a.label === "droptarget" || b.label === "droptarget") && (a.label === "ball" || b.label === "ball")) {
-          const dtBody = a.label === "droptarget" ? a : b;
-          dropTargetsRef.current.forEach((dt) => {
-            if (dt.body === dtBody && !dt.dropped) {
-              dt.dropped = true;
-              Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: 700 });
-            }
-          });
-          const allDropped = dropTargetsRef.current.every((dt) => dt.dropped);
-          if (allDropped) jackpotLaneUnlockedRef.current = true;
-        }
-
-        if ((a.label === "jackpot" || b.label === "jackpot") && (a.label === "ball" || b.label === "ball")) {
-          if (!jackpotLaneUnlockedRef.current) continue;
-          jackpotLaneUnlockedRef.current = false;
-          scoreRef.current += JACKPOT_SCORE * multiplierRef.current;
-          setScore(scoreRef.current);
-          setJackpotMode(true);
-          setTimeout(() => setJackpotMode(false), 1500);
-          playSound("jackpot");
-          dropTargetsRef.current.forEach((dt) => {
-            dt.dropped = false;
-            Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: dt.startY });
-          });
-          jackpotHitTimesRef.current.push(now);
-          jackpotHitTimesRef.current = jackpotHitTimesRef.current.filter((t) => now - t < MULTIBALL_JACKPOT_WINDOW_MS);
-          const ballBody = a.label === "ball" ? a : b;
-          for (let i = 0; i < 24; i++) {
-            const angle = (Math.PI * 2 * i) / 24;
-            particlesRef.current.push({
-              x: ballBody.position.x,
-              y: ballBody.position.y,
-              vx: Math.cos(angle) * 8,
-              vy: Math.sin(angle) * 8,
-              life: 1,
-              hue: 120,
-            });
-          }
-          if (jackpotHitTimesRef.current.length >= MULTIBALL_JACKPOT_COUNT && !multiballModeRef.current) {
-            multiballModeRef.current = true;
-            setMultiballMode(true);
-            multiplierRef.current = MULTIBALL_MULTIPLIER;
-            playSound("multiball");
-            const world = engine.world;
-            for (let i = 0; i < MULTIBALL_EXTRA_BALLS; i++) {
-              const nb = createBall();
-              Matter.Body.setPosition(nb, { x: 180 + i * 20, y: 280 });
-              Matter.Body.setVelocity(nb, { x: (Math.random() - 0.5) * 4, y: -2 });
-              Matter.World.add(world, nb);
-              ballsRef.current.push(nb);
-            }
-            setTimeout(() => setMultiballMode(false), 8000);
-            setTimeout(() => {
-              multiballModeRef.current = false;
-              multiplierRef.current = 1;
-            }, 8000);
-          }
+      if (now - lastTiltTimeRef.current < TILT_COOLDOWN_MS) return;
+      const x = a.x ?? 0;
+      const y = a.y ?? 0;
+      const z = a.z ?? 0;
+      const mag = Math.sqrt(x * x + y * y + z * z);
+      if (mag > 20 || Math.abs(x) > TILT_THRESHOLD || Math.abs(y) > TILT_THRESHOLD) {
+        lastTiltTimeRef.current = now;
+        tiltCountRef.current += 1;
+        setTiltWarning(true);
+        setTimeout(() => setTiltWarning(false), 600);
+        if (tiltCountRef.current >= 3) {
+          tiltOutTriggerRef.current = true;
         }
       }
-    });
+    };
+    window.addEventListener("devicemotion", handler);
+    return () => window.removeEventListener("devicemotion", handler);
+  }, []);
 
-    let animId: number;
-    const render = () => {
-      if (gameEndedRef.current) return;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      const leftDown = flipperLeftDown.current;
-      const rightDown = flipperRightDown.current;
-      if (leftDown && !flipperSoundPlayed.current.left) {
-        playSound("flipper");
-        flipperSoundPlayed.current.left = true;
-      }
-      if (!leftDown) flipperSoundPlayed.current.left = false;
-      if (rightDown && !flipperSoundPlayed.current.right) {
-        playSound("flipper");
-        flipperSoundPlayed.current.right = true;
-      }
-      if (!rightDown) flipperSoundPlayed.current.right = false;
+    const cw = canvas.offsetWidth;
+    const ch = canvas.offsetHeight;
+    scaleRef.current = Math.min(cw / TABLE_W, ch / TABLE_H, 2);
+    oxRef.current = (cw - TABLE_W * scaleRef.current) / 2;
+    oyRef.current = (ch - TABLE_H * scaleRef.current) / 2;
+    canvas.width = cw;
+    canvas.height = ch;
 
-      Matter.Body.setAngle(leftFlipper, leftDown ? -0.35 : 0.35);
-      Matter.Body.setAngle(rightFlipper, rightDown ? 0.35 : -0.35);
+    if (ballsRef.current.length === 0) {
+      spawnBall(PLUNGER_X - 15, PLUNGER_Y);
+    }
+  }, [spawnBall]);
 
-      Matter.Engine.update(engine, 1000 / 60);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || gameEndedRef.current) return;
 
-      animTimeRef.current += 1;
-      const t = animTimeRef.current * 0.05;
-      bumperDataRef.current.forEach((bd, i) => {
-        const angle = bd.phase + t * 0.4;
-        Matter.Body.setPosition(bd.body, {
-          x: bd.cx + bd.orbitR * Math.cos(angle),
-          y: bd.cy + bd.orbitR * Math.sin(angle),
-        });
-      });
+    let rafId: number;
+    const now = () => Date.now();
 
-      ballsRef.current = ballsRef.current.filter((ballBody) => {
-        if (ballBody.position.y > 620) {
-          Matter.World.remove(world, ballBody);
-          dropTargetsRef.current.forEach((dt) => {
-            dt.dropped = false;
-            Matter.Body.setPosition(dt.body, { x: dt.body.position.x, y: dt.startY });
-          });
-          return false;
-        }
-        return true;
-      });
-      if (ballsRef.current.length === 0) {
-        gameEndedRef.current = true;
-        playSound("drain");
-        setGameOver(true);
-        onGameEnd(scoreRef.current);
-        Matter.Engine.clear(engine);
-        engineRef.current = null;
-        ballRef.current = null;
-        leftFlipperRef.current = null;
-        rightFlipperRef.current = null;
-        ballsRef.current = [];
-        return;
-      }
-      ballRef.current = ballsRef.current[0];
-
-      const pulse = 0.85 + 0.15 * Math.sin(t);
-
-      ballTrailRef.current.push({ x: ballsRef.current[0].position.x, y: ballsRef.current[0].position.y });
-      if (ballTrailRef.current.length > 14) ballTrailRef.current.shift();
-
-      particlesRef.current = particlesRef.current
-        .map((p) => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.028 }))
-        .filter((p) => p.life > 0);
-
+    const loop = () => {
       const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      if (!ctx || gameEndedRef.current) return;
 
-      shakeRef.current.x *= 0.88;
-      shakeRef.current.y *= 0.88;
-      scoreScaleRef.current += (1 - scoreScaleRef.current) * 0.12;
+      const scale = scaleRef.current;
+      const ox = oxRef.current;
+      const oy = oyRef.current;
+      const t = now();
 
-      const pad = 8;
-      const tableW = 400;
-      const tableH = 600;
-      const backglassH = 52;
-      const playfieldY = backglassH;
+      if (jackpotLitEndRef.current > 0 && t >= jackpotLitEndRef.current) {
+        jackpotLitEndRef.current = 0;
+        setJackpotLitState(false);
+      }
 
-      // Cabinet background (dark wood)
-      ctx.fillStyle = COLORS.woodDark;
-      ctx.fillRect(0, 0, cw, ch);
-      const cabGrad = ctx.createLinearGradient(0, 0, cw, 0);
-      cabGrad.addColorStop(0, "#1a0f0a");
-      cabGrad.addColorStop(0.5, COLORS.woodDark);
-      cabGrad.addColorStop(1, "#1a0f0a");
-      ctx.fillStyle = cabGrad;
-      ctx.fillRect(0, 0, cw, ch);
+      const leftDown = leftFlipperDownRef.current;
+      const rightDown = rightFlipperDownRef.current;
+      const targetLeft = leftDown ? FLIPPER_ACTIVE_ANGLE : FLIPPER_REST_ANGLE;
+      const targetRight = rightDown ? FLIPPER_REST_ANGLE : FLIPPER_ACTIVE_ANGLE;
+      leftFlipperAngleRef.current += (targetLeft - leftFlipperAngleRef.current) * 0.35;
+      rightFlipperAngleRef.current += (targetRight - rightFlipperAngleRef.current) * 0.35;
+
+      const leftAng = leftFlipperAngleRef.current;
+      const rightAng = rightFlipperAngleRef.current;
+      const left = flipperEndpoints(LEFT_FLIPPER_PIVOT_X, FLIPPER_Y, leftAng, FLIPPER_LENGTH);
+      const right = flipperEndpoints(RIGHT_FLIPPER_PIVOT_X, FLIPPER_Y, rightAng, FLIPPER_LENGTH);
+
+      comboResetWallRef.current = false;
+
+      if (tiltOutTriggerRef.current) {
+        const inPlay = ballsRef.current.filter((b) => b.inPlay);
+        if (inPlay.length > 0) {
+          inPlay[0].inPlay = false;
+          tiltOutTriggerRef.current = false;
+          tiltCountRef.current = 0;
+          ballInDrainZoneRef.current = false;
+          ballsUsedRef.current += 1;
+          setLives((l) => {
+            if (l <= 1) {
+              gameEndedRef.current = true;
+              setGameOver(true);
+              onGameEnd?.(scoreRef.current, {
+                hits: hitLogRef.current,
+                durationMs: Date.now() - gameStartTimeRef.current,
+                ballsUsed: ballsUsedRef.current,
+              });
+              return 0;
+            }
+            return l - 1;
+          });
+          if (ballsRef.current.filter((b) => b.inPlay).length === 0 && !gameEndedRef.current) {
+            setTimeout(() => {
+              tiltCountRef.current = 0;
+              spawnBall(PLUNGER_X - 15, PLUNGER_Y);
+            }, 800);
+          }
+        }
+      }
+
+      for (const ball of ballsRef.current) {
+        if (!ball.inPlay) continue;
+
+        ball.vy += GRAVITY;
+        ball.vx *= FRICTION;
+        ball.vy *= FRICTION;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        let speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        const { vx: vxC, vy: vyC } = clampSpeed(ball.vx, ball.vy);
+        ball.vx = vxC;
+        ball.vy = vyC;
+        speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+
+        if (ball.y >= DRAIN_Y && ball.y < DRAIN_Y + 30) {
+          if (!ballInDrainZoneRef.current) {
+            ballInDrainZoneRef.current = true;
+            drainGraceRef.current = t + DRAIN_GRACE_MS;
+          }
+          if (t > drainGraceRef.current) {
+            ball.inPlay = false;
+            ballInDrainZoneRef.current = false;
+            ballsUsedRef.current += 1;
+            setLives((l) => {
+              if (l <= 1) {
+                gameEndedRef.current = true;
+                setGameOver(true);
+                onGameEnd?.(scoreRef.current, {
+                  hits: hitLogRef.current,
+                  durationMs: Date.now() - gameStartTimeRef.current,
+                  ballsUsed: ballsUsedRef.current,
+                });
+                return 0;
+              }
+              return l - 1;
+            });
+            if (ballsRef.current.filter((b) => b.inPlay).length === 0 && !gameEndedRef.current) {
+              setTimeout(() => {
+                tiltCountRef.current = 0;
+                spawnBall(PLUNGER_X - 15, PLUNGER_Y);
+              }, 800);
+            }
+            continue;
+          }
+        } else {
+          ballInDrainZoneRef.current = false;
+        }
+
+        if (ball.x < PLAYFIELD_X + BALL_RADIUS) {
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, 1, 0, BOUNCE_COEF);
+          ball.vx = vx2;
+          ball.vy = vy2;
+          ball.x = PLAYFIELD_X + BALL_RADIUS;
+          comboResetWallRef.current = true;
+        }
+        if (ball.x > TABLE_W - WALL_THICK - BALL_RADIUS) {
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, -1, 0, BOUNCE_COEF);
+          ball.vx = vx2;
+          ball.vy = vy2;
+          ball.x = TABLE_W - WALL_THICK - BALL_RADIUS;
+          comboResetWallRef.current = true;
+        }
+        if (ball.y < PLAYFIELD_Y + BALL_RADIUS) {
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, 0, 1, BOUNCE_COEF);
+          ball.vx = vx2;
+          ball.vy = vy2;
+          ball.y = PLAYFIELD_Y + BALL_RADIUS;
+          comboResetWallRef.current = true;
+        }
+
+        for (const b of BUMPERS) {
+          if (!circleCircle(ball.x, ball.y, BALL_RADIUS, b.x, b.y, BUMPER_RADIUS)) continue;
+          const dx = ball.x - b.x;
+          const dy = ball.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, nx, ny, 1, BUMPER_BOOST);
+          ball.vx = vx2;
+          ball.vy = vy2;
+          ball.x = b.x + nx * (BUMPER_RADIUS + BALL_RADIUS + 2);
+          ball.y = b.y + ny * (BUMPER_RADIUS + BALL_RADIUS + 2);
+          const pts = BUMPER_POINTS[b.emoji] ?? 100;
+          hitLogRef.current.push({ bumper: b.emoji, t });
+          lastBumperHitRef.current = t;
+          if (comboResetWallRef.current) setCombo(0);
+          else setCombo((c) => c + 1);
+          const comboMult = Math.min(combo, 5);
+          addScore(pts * Math.max(1, comboMult), ball.x, ball.y);
+          if (pts >= 500) {
+            shakeRef.current = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
+          }
+        }
+
+        const j = JACKPOT_TARGET;
+        if (
+          ball.x >= j.x - j.w / 2 &&
+          ball.x <= j.x + j.w / 2 &&
+          ball.y >= j.y - j.h / 2 &&
+  ball.y <= j.y + j.h / 2 &&
+          jackpotLitEndRef.current > t
+        ) {
+          jackpotLitEndRef.current = 0;
+          setJackpotLitState(false);
+          addScore(JACKPOT_BONUS_POINTS, ball.x, ball.y);
+          shakeRef.current = { x: 10, y: 10 };
+        }
+
+        for (const lane of GARMON_LANES) {
+          if (
+            ball.x >= lane.x &&
+            ball.x <= lane.x + lane.w &&
+            ball.y >= lane.y - 5 &&
+            ball.y <= lane.y + lane.h + 5 &&
+            ball.vy < 0
+          ) {
+            setGarmonLetters((prev) => {
+              const next = new Set(prev);
+              next.add(lane.letter);
+              if (next.size >= 6) {
+                addScore(GARMON_BONUS, ball.x, ball.y);
+                setMultiballActive(true);
+                multiballEndTimeRef.current = t + 30000;
+                spawnBall(200, 280);
+                setTimeout(() => setMultiballActive(false), 30000);
+                return new Set();
+              }
+              return next;
+            });
+          }
+        }
+
+        const leftSeg = pointToSegment(ball.x, ball.y, left.x1, left.y1, left.x2, left.y2);
+        if (leftSeg.distSq < (BALL_RADIUS + 4) ** 2) {
+          const nx = ball.x - leftSeg.closestX;
+          const ny = ball.y - leftSeg.closestY;
+          const len = Math.sqrt(nx * nx + ny * ny) || 0.01;
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, nx / len, ny / len, 0.9);
+          ball.vx = vx2 + (leftDown ? 2 : 0);
+          ball.vy = vy2 - (leftDown ? 3 : 0);
+          ball.x += (nx / len) * (BALL_RADIUS + 5);
+          ball.y += (ny / len) * (BALL_RADIUS + 5);
+          comboResetWallRef.current = true;
+        }
+        const rightSeg = pointToSegment(ball.x, ball.y, right.x1, right.y1, right.x2, right.y2);
+        if (rightSeg.distSq < (BALL_RADIUS + 4) ** 2) {
+          const nx = ball.x - rightSeg.closestX;
+          const ny = ball.y - rightSeg.closestY;
+          const len = Math.sqrt(nx * nx + ny * ny) || 0.01;
+          const { vx: vx2, vy: vy2 } = reflect(ball.vx, ball.vy, nx / len, ny / len, 0.9);
+          ball.vx = vx2 - (rightDown ? 2 : 0);
+          ball.vy = vy2 - (rightDown ? 3 : 0);
+          ball.x += (nx / len) * (BALL_RADIUS + 5);
+          ball.y += (ny / len) * (BALL_RADIUS + 5);
+          comboResetWallRef.current = true;
+        }
+
+        if (comboResetWallRef.current) setCombo(0);
+      }
+
+      ballsRef.current = ballsRef.current.filter((b) => b.inPlay || b.y < TABLE_H + 50);
+      ballTrailRef.current = ballsRef.current[0]
+        ? [...ballTrailRef.current.slice(-12), { x: ballsRef.current[0].x, y: ballsRef.current[0].y }]
+        : [];
+      scorePopupsRef.current = scorePopupsRef.current
+        .map((p) => ({ ...p, life: p.life - 0.03 }))
+        .filter((p) => p.life > 0);
+      shakeRef.current.x *= 0.85;
+      shakeRef.current.y *= 0.85;
 
       ctx.save();
       ctx.translate(ox + shakeRef.current.x, oy + shakeRef.current.y);
       ctx.scale(scale, scale);
 
-      // Wood frame around entire table (bevel)
-      const frameInset = 6;
-      const woodFrame = (x: number, y: number, w: number, h: number) => {
-        const lg = ctx.createLinearGradient(x, y, x + w, y + h);
-        lg.addColorStop(0, COLORS.woodLight);
-        lg.addColorStop(0.3, COLORS.woodMid);
-        lg.addColorStop(0.7, COLORS.woodDark);
-        lg.addColorStop(1, "#1a0f0a");
-        ctx.fillStyle = lg;
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = "rgba(0,0,0,0.4)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, w, h);
-      };
-      woodFrame(-frameInset, -frameInset, tableW + frameInset * 2, tableH + frameInset * 2);
-
-      // Backglass (lit display area)
-      const bgInset = 4;
-      ctx.fillStyle = "#0a0a14";
-      ctx.fillRect(bgInset, bgInset, tableW - bgInset * 2, backglassH - 2);
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, backglassH);
-      bgGrad.addColorStop(0, "#1a1a35");
-      bgGrad.addColorStop(0.4, "#0f0f22");
-      bgGrad.addColorStop(1, "#080810");
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(bgInset + 2, bgInset + 2, tableW - bgInset * 2 - 4, backglassH - 6);
-      ctx.strokeStyle = COLORS.neonBlue;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 25;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(bgInset + 2, bgInset + 2, tableW - bgInset * 2 - 4, backglassH - 6);
-      ctx.shadowBlur = 0;
-      ctx.font = "bold 20px monospace";
-      ctx.textAlign = "center";
-      ctx.fillStyle = COLORS.neonBlue;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 12;
-      ctx.fillText("GARMONPAY", tableW / 2, 20);
-      ctx.font = "bold 12px monospace";
-      ctx.fillStyle = COLORS.gold;
-      ctx.shadowColor = COLORS.gold;
-      ctx.fillText("PINBALL", tableW / 2, 36);
-      ctx.shadowBlur = 0;
-      ctx.font = "bold 16px monospace";
-      ctx.fillStyle = COLORS.neonGreen;
-      ctx.textAlign = "left";
-      ctx.save();
-      ctx.translate(16, 36);
-      ctx.scale(scoreScaleRef.current, scoreScaleRef.current);
-      ctx.fillText(`SCORE: ${scoreRef.current}`, 0, 0);
-      ctx.restore();
-      ctx.textAlign = "right";
-      if (comboRef.current > 1) {
-        ctx.fillStyle = COLORS.gold;
-        ctx.fillText(`COMBO x${comboRef.current}`, tableW - 16, 36);
+      ctx.fillStyle = "#0d1117";
+      ctx.fillRect(0, 0, TABLE_W, TABLE_H);
+      for (let i = 0; i <= 20; i++) {
+        ctx.strokeStyle = "rgba(255,255,255,0.03)";
+        ctx.beginPath();
+        ctx.moveTo(0, i * 30);
+        ctx.lineTo(TABLE_W, i * 30);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(i * 20, 0);
+        ctx.lineTo(i * 20, TABLE_H);
+        ctx.stroke();
       }
-
-      // Playfield (felt) with subtle weave
-      const playfieldGrad = ctx.createRadialGradient(tableW / 2, 380, 0, tableW / 2, 380, 520);
-      playfieldGrad.addColorStop(0, "#0f2a0f");
-      playfieldGrad.addColorStop(0.4, COLORS.playfield);
-      playfieldGrad.addColorStop(1, "#051505");
-      ctx.fillStyle = playfieldGrad;
-      ctx.fillRect(0, playfieldY, tableW, tableH - playfieldY);
-      ctx.fillStyle = "rgba(0,255,100,0.02)";
-      for (let i = 0; i < 24; i++) {
-        for (let j = 0; j < 36; j++) {
-          if ((i + j) % 2 === 0) ctx.fillRect(j * 11, playfieldY + i * 22, 12, 23);
-        }
-      }
-
-      // Wood rails with neon edge (inner playfield border)
-      const railWidth = 16;
-      const railInset = 8;
-      const railGlow = pulse * 22;
-      ctx.fillStyle = COLORS.woodMid;
-      ctx.fillRect(0, playfieldY, tableW, railWidth);
-      ctx.fillRect(0, playfieldY, railWidth, tableH - playfieldY);
-      ctx.fillRect(tableW - railWidth, playfieldY, railWidth, tableH - playfieldY);
-      ctx.fillRect(0, tableH - railWidth, tableW, railWidth);
-      ctx.strokeStyle = COLORS.neonBlue;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = railGlow;
+      ctx.strokeStyle = "rgba(59, 130, 246, 0.6)";
       ctx.lineWidth = 4;
-      ctx.strokeRect(railInset, playfieldY + railInset, tableW - railInset * 2, tableH - playfieldY - railInset * 2);
-      ctx.setLineDash([10, 8]);
-      ctx.strokeStyle = "rgba(0,240,255,0.35)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(railInset + 6, playfieldY + railInset + 6, tableW - (railInset + 6) * 2, tableH - playfieldY - (railInset + 6) * 2);
-      ctx.setLineDash([]);
+      ctx.shadowColor = "#3b82f6";
+      ctx.shadowBlur = 20;
+      ctx.strokeRect(WALL_THICK, PLAYFIELD_Y, PLAYFIELD_W, PLAYFIELD_H);
       ctx.shadowBlur = 0;
 
-      // Wireform-style arc paths (neon rails)
-      ctx.strokeStyle = COLORS.neonPurple;
-      ctx.shadowColor = COLORS.neonPurple;
-      ctx.shadowBlur = 14;
+      ctx.font = "bold 24px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#f0a500";
+      ctx.fillText("GARMONPAY PINBALL", TABLE_W / 2, 28);
+      ctx.font = "bold 18px monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillText(`${score}`, TABLE_W / 2, 48);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "12px system-ui";
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i < lives ? "#f0a500" : "#374151";
+        ctx.beginPath();
+        ctx.arc(20 + i * 18, 48, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (multiballActive) {
+        ctx.fillStyle = "rgba(245, 158, 11, 0.3)";
+        ctx.fillRect(0, 0, TABLE_W, TABLE_H);
+      }
+      if (garmonLetters.size > 0) {
+        ctx.fillStyle = "#f0a500";
+        ctx.font = "bold 14px monospace";
+        ctx.textAlign = "center";
+        GARMON_LANES.forEach((lane) => {
+          ctx.fillStyle = garmonLetters.has(lane.letter) ? "#f0a500" : "#374151";
+          ctx.fillText(lane.letter, lane.x + lane.w / 2, lane.y + lane.h / 2 + 4);
+        });
+        ctx.textAlign = "left";
+      }
+      if (jackpotLitState || jackpotLitEndRef.current > t) {
+        ctx.fillStyle = "#f0a500";
+        ctx.font = "bold 14px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("JACKPOT LIT 🔥", JACKPOT_TARGET.x, JACKPOT_TARGET.y + 4);
+        ctx.textAlign = "left";
+      }
+      ctx.fillStyle = "#1f2937";
+      ctx.fillRect(JACKPOT_TARGET.x - JACKPOT_TARGET.w / 2, JACKPOT_TARGET.y - JACKPOT_TARGET.h / 2, JACKPOT_TARGET.w, JACKPOT_TARGET.h);
+      ctx.strokeStyle = jackpotLitState ? "#f0a500" : "#374151";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(JACKPOT_TARGET.x - JACKPOT_TARGET.w / 2, JACKPOT_TARGET.y - JACKPOT_TARGET.h / 2, JACKPOT_TARGET.w, JACKPOT_TARGET.h);
+
+      BUMPERS.forEach((b) => {
+        ctx.shadowColor = b.glow;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = b.glow;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BUMPER_RADIUS + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#1f2937";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BUMPER_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = b.glow;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.font = "20px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(b.emoji, b.x, b.y);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+      });
+
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "#f0a500";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(200, 220, 115, 0.22 * Math.PI, 0.78 * Math.PI);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(100, 340, 75, -0.28 * Math.PI, 0.52 * Math.PI);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(300, 340, 75, 0.48 * Math.PI, 1.28 * Math.PI);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Drop targets (stand-up target look: red/white stripe, 3D bevel)
-      dropTargetsRef.current.forEach((dt) => {
-        if (dt.dropped) return;
-        const x = dt.body.position.x;
-        const y = dt.body.position.y;
-        const w = 36;
-        const h = 20;
-        const bw = 3;
-        ctx.fillStyle = "#8b0000";
-        ctx.fillRect(x - w / 2, y - h / 2, w, h);
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, (h - 4) / 2);
-        ctx.fillStyle = "#8b0000";
-        ctx.fillRect(x - w / 2 + 2, y - 2, w - 4, (h - 4) / 2);
-        ctx.strokeStyle = "#400";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.fillRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, 2);
-        ctx.shadowColor = COLORS.neonBlue;
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = COLORS.neonBlue;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-        ctx.shadowBlur = 0;
-      });
-
-      // Spinners (rotating disc with stripes)
-      const spinners = Matter.Composite.allBodies(world).filter((b) => b.label === "spinner");
-      spinners.forEach((sp) => {
-        const x = sp.position.x;
-        const y = sp.position.y;
-        const spinAngle = animTimeRef.current * 0.08;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(spinAngle);
-        const rad = 22;
-        const sg = ctx.createRadialGradient(-rad * 0.3, -rad * 0.3, 0, 0, 0, rad);
-        sg.addColorStop(0, "#666");
-        sg.addColorStop(0.5, COLORS.gold);
-        sg.addColorStop(1, "#664400");
-        ctx.fillStyle = sg;
-        ctx.beginPath();
-        ctx.arc(0, 0, rad, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#332200";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          ctx.fillStyle = i % 2 === 0 ? "#ffcc00" : "#996600";
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.arc(0, 0, rad - 2, a, a + Math.PI / 4);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
-        ctx.beginPath();
-        ctx.arc(-4, -4, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // Pop bumpers (dome style: base ring + dome with highlight)
-      const now = Date.now();
-      bumperDataRef.current.forEach((bd, i) => {
-        const b = bd.body;
-        const x = b.position.x;
-        const y = b.position.y;
-        const r = (b.bounds.max.x - b.bounds.min.x) / 2;
-        const recentlyHit = now - bd.lastHit < 350;
-        const bumpPulse = recentlyHit ? 1.35 : 0.92 + 0.08 * Math.sin(t + i);
-        ctx.shadowBlur = 0;
-        const baseR = r + 6;
-        const baseGrad = ctx.createLinearGradient(x - baseR, y + baseR, x + baseR, y - baseR);
-        baseGrad.addColorStop(0, "#1a1a1a");
-        baseGrad.addColorStop(0.5, "#333");
-        baseGrad.addColorStop(1, "#111");
-        ctx.fillStyle = baseGrad;
-        ctx.beginPath();
-        ctx.arc(x, y, baseR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#555";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        const domeGrad = ctx.createRadialGradient(
-          x - r * 0.4,
-          y - r * 0.4,
-          0,
-          x,
-          y,
-          r
-        );
-        domeGrad.addColorStop(0, recentlyHit ? "#ff88ff" : COLORS.pink);
-        domeGrad.addColorStop(0.35, COLORS.neonPurple);
-        domeGrad.addColorStop(0.8, "#300050");
-        domeGrad.addColorStop(1, "#180028");
-        ctx.fillStyle = domeGrad;
-        ctx.shadowColor = COLORS.neonPurple;
-        ctx.shadowBlur = recentlyHit ? 35 : 20 * bumpPulse;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,200,255,0.6)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "rgba(255,255,255,0.7)";
-        ctx.beginPath();
-        ctx.ellipse(x - r * 0.3, y - r * 0.3, r * 0.4, r * 0.22, -0.4, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // Jackpot lane (lit scoop)
-      const jx = jackpotZone.position.x - 42;
-      const jy = jackpotZone.position.y - 16;
-      const jw = 84;
-      const jh = 32;
-      const jr = 6;
-      const jGrad = ctx.createLinearGradient(jx, jy, jx + jw, jy + jh);
-      const isJackpot = jackpotModeRef.current;
-      jGrad.addColorStop(0, isJackpot ? "#ffcc00" : "#0a4d0a");
-      jGrad.addColorStop(0.5, isJackpot ? "#ffdd44" : "#0d6b0d");
-      jGrad.addColorStop(1, isJackpot ? "#cc9900" : "#063806");
-      ctx.fillStyle = jGrad;
-      ctx.shadowColor = isJackpot ? COLORS.gold : COLORS.neonGreen;
-      ctx.shadowBlur = isJackpot ? 40 : 28;
-      ctx.beginPath();
-      ctx.moveTo(jx + jr, jy);
-      ctx.lineTo(jx + jw - jr, jy);
-      ctx.quadraticCurveTo(jx + jw, jy, jx + jw, jy + jr);
-      ctx.lineTo(jx + jw, jy + jh - jr);
-      ctx.quadraticCurveTo(jx + jw, jy + jh, jx + jw - jr, jy + jh);
-      ctx.lineTo(jx + jr, jy + jh);
-      ctx.quadraticCurveTo(jx, jy + jh, jx, jy + jh - jr);
-      ctx.lineTo(jx, jy + jr);
-      ctx.quadraticCurveTo(jx, jy, jx + jr, jy);
+      ctx.moveTo(left.x1, left.y1);
+      ctx.lineTo(left.x2, left.y2);
       ctx.fill();
-      ctx.strokeStyle = isJackpot ? "#ffdd88" : "rgba(0,255,100,0.8)";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(right.x1, right.y1);
+      ctx.lineTo(right.x2, right.y2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#374151";
+      ctx.strokeStyle = "#6b7280";
       ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(PLUNGER_X, PLUNGER_Y, 18, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.font = "bold 14px monospace";
-      ctx.fillStyle = isJackpot ? "#331100" : "#001100";
-      ctx.textAlign = "center";
-      ctx.fillText("JACKPOT", jackpotZone.position.x, jackpotZone.position.y + 5);
-
-      // Drain slot (dark gap between flippers)
-      ctx.fillStyle = "#0a0a0a";
-      ctx.fillRect(160, 548, 80, 28);
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(162, 550, 76, 24);
-
-      // Flippers (metal body + rubber pad, professional look)
-      const flipperMetal = ctx.createLinearGradient(-flipperW / 2, 0, flipperW / 2, 0);
-      flipperMetal.addColorStop(0, "#1a2530");
-      flipperMetal.addColorStop(0.2, "#3a5568");
-      flipperMetal.addColorStop(0.5, COLORS.neonBlue);
-      flipperMetal.addColorStop(0.8, "#3a5568");
-      flipperMetal.addColorStop(1, "#1a2530");
-      ctx.save();
-      ctx.translate(leftFlipper.position.x, leftFlipper.position.y);
-      ctx.rotate(leftFlipper.angle);
-      ctx.fillStyle = flipperMetal;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 16;
-      ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
-      ctx.fillStyle = COLORS.rubber;
-      ctx.fillRect(-flipperW / 2 + 2, -flipperH / 2 + 2, flipperW * 0.5, flipperH - 4);
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.fillRect(-flipperW / 2 + 6, -flipperH / 2 + 3, flipperW * 0.35, 2);
-      ctx.restore();
-      ctx.save();
-      ctx.translate(rightFlipper.position.x, rightFlipper.position.y);
-      ctx.rotate(rightFlipper.angle);
-      ctx.fillStyle = flipperMetal;
-      ctx.shadowColor = COLORS.neonBlue;
-      ctx.shadowBlur = 16;
-      ctx.fillRect(-flipperW / 2, -flipperH / 2, flipperW, flipperH);
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = COLORS.rubber;
-      ctx.fillRect(flipperW / 2 - flipperW * 0.5 - 2, -flipperH / 2 + 2, flipperW * 0.5, flipperH - 4);
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.fillRect(flipperW / 2 - flipperW * 0.35 - 6, -flipperH / 2 + 3, flipperW * 0.35, 2);
-      ctx.restore();
+      if (plungerChargeRef.current > 0) {
+        const g = ctx.createLinearGradient(PLUNGER_X - 20, PLUNGER_Y, PLUNGER_X + 20, PLUNGER_Y);
+        g.addColorStop(0, "#22c55e");
+        g.addColorStop(0.5, "#eab308");
+        g.addColorStop(1, "#ef4444");
+        ctx.fillStyle = g;
+        ctx.fillRect(PLUNGER_X - 8, PLUNGER_Y - 25, 16 * plungerChargeRef.current, 8);
+      }
 
       ballTrailRef.current.forEach((p, i) => {
-        const alpha = (i + 1) / ballTrailRef.current.length;
-        ctx.fillStyle = `rgba(180,200,220,${0.2 * alpha})`;
-        ctx.shadowColor = "#88aacc";
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      ctx.shadowBlur = 0;
-
-      // Chrome/silver pinball (realistic metal ball)
-      ballsRef.current.forEach((ballBody) => {
-        const bx = ballBody.position.x;
-        const by = ballBody.position.y;
-        const br = 10;
-        const ballGrad = ctx.createRadialGradient(
-          bx - br * 0.5,
-          by - br * 0.5,
-          0,
-          bx,
-          by,
-          br
-        );
-        ballGrad.addColorStop(0, COLORS.chromeHighlight);
-        ballGrad.addColorStop(0.25, "#b0c4d8");
-        ballGrad.addColorStop(0.5, COLORS.chromeMid);
-        ballGrad.addColorStop(0.85, COLORS.chromeShadow);
-        ballGrad.addColorStop(1, "#1a2028");
-        ctx.fillStyle = ballGrad;
-        ctx.shadowColor = "rgba(200,220,255,0.5)";
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(255,255,255,0.3)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      });
-
-      particlesRef.current.forEach((p) => {
-        ctx.save();
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.hue > 150 ? `hsla(${p.hue}, 100%, 60%, 0.9)` : `hsla(${p.hue}, 100%, 70%, 0.9)`;
-        ctx.shadowColor = p.hue > 150 ? COLORS.neonGreen : COLORS.neonPurple;
-        ctx.shadowBlur = 6;
+        ctx.globalAlpha = (i / ballTrailRef.current.length) * 0.5;
+        ctx.fillStyle = "#f0a500";
         ctx.beginPath();
         ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       });
+      ctx.globalAlpha = 1;
 
-      ctx.restore();
-
-      ctx.shadowBlur = 0;
-      if (jackpotModeRef.current) {
-        ctx.fillStyle = COLORS.gold;
-        ctx.shadowColor = COLORS.gold;
-        ctx.shadowBlur = 25;
-        ctx.font = "bold 32px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("JACKPOT!", cw / 2, backglassH * scale + oy + 28);
-      }
-      if (multiballModeRef.current) {
-        const flash = 0.4 + 0.3 * Math.sin(animTimeRef.current * 0.2);
-        ctx.fillStyle = `rgba(255,0,255,${flash})`;
-        ctx.fillRect(0, 0, cw, ch);
-        ctx.fillStyle = COLORS.neonPurple;
-        ctx.shadowColor = COLORS.pink;
-        ctx.shadowBlur = 30;
-        ctx.font = "bold 28px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("MULTIBALL MODE", cw / 2, ch / 2 - 20);
-        ctx.font = "bold 16px monospace";
-        ctx.fillText(`x${MULTIBALL_MULTIPLIER} MULTIPLIER`, cw / 2, ch / 2 + 15);
+      for (const ball of ballsRef.current) {
+        if (!ball.inPlay) continue;
+        const gr = ctx.createRadialGradient(
+          ball.x - 5,
+          ball.y - 5,
+          0,
+          ball.x,
+          ball.y,
+          BALL_RADIUS + 5
+        );
+        gr.addColorStop(0, "#fef3c7");
+        gr.addColorStop(0.5, "#f0a500");
+        gr.addColorStop(1, "#b45309");
+        ctx.fillStyle = gr;
+        ctx.shadowColor = "#f0a500";
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
         ctx.shadowBlur = 0;
       }
 
-      animId = requestAnimationFrame(render);
-    };
-    render();
+      scorePopupsRef.current.forEach((p) => {
+        ctx.font = "bold 14px system-ui";
+        ctx.fillStyle = "#f0a500";
+        ctx.globalAlpha = p.life;
+        ctx.fillText(p.text, p.x, p.y - 20 - (1 - p.life) * 30);
+        ctx.globalAlpha = 1;
+      });
 
-    const keyDown = (e: KeyboardEvent) => {
-      if (e.code === "ArrowLeft" || e.code === "KeyZ") {
-        flipperLeftDown.current = true;
-        e.preventDefault();
+      if (opponentScore > 0) {
+        ctx.font = "12px monospace";
+        ctx.fillStyle = "#9ca3af";
+        ctx.textAlign = "right";
+        ctx.fillText(`Opp: ${opponentScore}`, TABLE_W - 20, 48);
+        ctx.textAlign = "left";
       }
-      if (e.code === "ArrowRight" || e.code === "KeyM") {
-        flipperRightDown.current = true;
-        e.preventDefault();
+      if (combo > 1) {
+        ctx.font = "bold 14px monospace";
+        ctx.fillStyle = "#f0a500";
+        ctx.fillText(`x${combo} COMBO`, TABLE_W / 2 - 40, 70);
       }
-    };
-    const keyUp = (e: KeyboardEvent) => {
-      if (e.code === "ArrowLeft" || e.code === "KeyZ") flipperLeftDown.current = false;
-      if (e.code === "ArrowRight" || e.code === "KeyM") flipperRightDown.current = false;
-    };
-    window.addEventListener("keydown", keyDown);
-    window.addEventListener("keyup", keyUp);
 
+      ctx.restore();
+
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [score, lives, garmonLetters, multiballActive, jackpotLitState, multiplier, rampMultiplierActive, opponentScore, addScore, spawnBall, onGameEnd]);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const scale = scaleRef.current;
+      const ox = oxRef.current;
+      const oy = oyRef.current;
+      const x = (e.clientX - rect.left - ox) / scale;
+      const y = (e.clientY - rect.top - oy) / scale;
+      if (x < TABLE_W / 2) {
+        leftFlipperDownRef.current = true;
+      } else {
+        if (x > PLUNGER_X - 30 && x < PLUNGER_X + 30 && y > PLUNGER_Y - 30 && y < PLUNGER_Y + 30) {
+          plungerHoldingRef.current = true;
+          plungerChargeRef.current = 0;
+        } else {
+          rightFlipperDownRef.current = true;
+        }
+      }
+    },
+    []
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (plungerHoldingRef.current) {
+        launchFromPlunger(plungerChargeRef.current);
+        plungerHoldingRef.current = false;
+        plungerChargeRef.current = 0;
+      }
+      leftFlipperDownRef.current = false;
+      rightFlipperDownRef.current = false;
+    },
+    [launchFromPlunger]
+  );
+
+  useEffect(() => {
+    let chargeInterval: ReturnType<typeof setInterval>;
+    if (plungerHoldingRef.current) {
+      chargeInterval = setInterval(() => {
+        if (plungerHoldingRef.current) {
+          plungerChargeRef.current = Math.min(1, (plungerChargeRef.current || 0) + 0.03);
+        }
+      }, 16);
+    }
+    return () => clearInterval(chargeInterval);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" || e.pointerType === "touch") {
+        leftFlipperDownRef.current = false;
+        rightFlipperDownRef.current = false;
+        if (plungerHoldingRef.current) {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - oxRef.current) / scaleRef.current;
+            const y = (e.clientY - rect.top - oyRef.current) / scaleRef.current;
+            if (x > PLUNGER_X - 30 && x < PLUNGER_X + 30 && y > PLUNGER_Y - 30 && y < PLUNGER_Y + 30) {
+              launchFromPlunger(plungerChargeRef.current);
+            }
+          }
+          plungerHoldingRef.current = false;
+          plungerChargeRef.current = 0;
+        }
+      }
+    };
+    window.addEventListener("pointerup", handler);
+    window.addEventListener("pointercancel", handler);
     return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener("keydown", keyDown);
-      window.removeEventListener("keyup", keyUp);
-      if (engineRef.current) Matter.Engine.clear(engineRef.current);
+      window.removeEventListener("pointerup", handler);
+      window.removeEventListener("pointercancel", handler);
     };
-  }, [sessionId, onGameEnd, playSound]);
-
-  const handleTouchLeft = (down: boolean) => {
-    flipperLeftDown.current = down;
-  };
-  const handleTouchRight = (down: boolean) => {
-    flipperRightDown.current = down;
-  };
+  }, [launchFromPlunger]);
 
   return (
-    <div
-      className="relative w-full rounded-xl overflow-hidden"
-      style={{
-        background: "linear-gradient(180deg, #2a1810 0%, #1a0f0a 30%, #0f0a08 100%)",
-        border: "3px solid #3d2818",
-        boxShadow: "inset 0 0 40px rgba(0,0,0,0.5), 0 0 25px rgba(0,240,255,0.15), 0 8px 24px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div className="relative" style={{ height: "min(600px, 85vh)" }}>
-        <canvas
-          ref={canvasRef}
-          className="w-full touch-none block"
-          style={{ height: "min(600px, 85vh)", display: "block" }}
-          width={400}
-          height={600}
-        />
-        {/* Mobile: press-and-hold left/right half of playfield for flippers */}
-        <div
-          className="absolute top-0 bottom-0 left-0 w-1/2 touch-none"
-          style={{ touchAction: "manipulation" }}
-          onTouchStart={(e) => { e.preventDefault(); handleTouchLeft(true); }}
-          onTouchEnd={(e) => { e.preventDefault(); handleTouchLeft(false); }}
-          onTouchCancel={() => handleTouchLeft(false)}
-          onMouseDown={() => handleTouchLeft(true)}
-          onMouseUp={() => handleTouchLeft(false)}
-          onMouseLeave={() => handleTouchLeft(false)}
-          aria-label="Left flipper"
-        />
-        <div
-          className="absolute top-0 bottom-0 right-0 w-1/2 touch-none"
-          style={{ touchAction: "manipulation" }}
-          onTouchStart={(e) => { e.preventDefault(); handleTouchRight(true); }}
-          onTouchEnd={(e) => { e.preventDefault(); handleTouchRight(false); }}
-          onTouchCancel={() => handleTouchRight(false)}
-          onMouseDown={() => handleTouchRight(true)}
-          onMouseUp={() => handleTouchRight(false)}
-          onMouseLeave={() => handleTouchRight(false)}
-          aria-label="Right flipper"
-        />
-      </div>
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-8 pointer-events-none">
-        <span className="text-[#00f0ff] font-mono text-sm">Z / ← Left</span>
-        <span className="text-[#00f0ff] font-mono text-sm">M / → Right</span>
-      </div>
-      <div className="flex justify-center gap-6 py-4 px-2 pointer-events-auto touch-manipulation">
-        <button
-          type="button"
-          onTouchStart={() => handleTouchLeft(true)}
-          onTouchEnd={() => handleTouchLeft(false)}
-          onMouseDown={() => handleTouchLeft(true)}
-          onMouseUp={() => handleTouchLeft(false)}
-          onMouseLeave={() => handleTouchLeft(false)}
-          className="flex-1 max-w-[140px] py-4 rounded-xl bg-[#00f0ff]/20 border-2 border-[#00f0ff] text-[#00f0ff] font-bold text-lg select-none"
-          style={{ boxShadow: "0 0 20px rgba(0,240,255,0.3)" }}
-        >
-          LEFT FLIPPER
-        </button>
-        <button
-          type="button"
-          onTouchStart={() => handleTouchRight(true)}
-          onTouchEnd={() => handleTouchRight(false)}
-          onMouseDown={() => handleTouchRight(true)}
-          onMouseUp={() => handleTouchRight(false)}
-          onMouseLeave={() => handleTouchRight(false)}
-          className="flex-1 max-w-[140px] py-4 rounded-xl bg-[#00f0ff]/20 border-2 border-[#00f0ff] text-[#00f0ff] font-bold text-lg select-none"
-          style={{ boxShadow: "0 0 20px rgba(0,240,255,0.3)" }}
-        >
-          RIGHT FLIPPER
-        </button>
-      </div>
+    <div className="relative w-full min-h-[500px] bg-[#0d1117] rounded-xl overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        className="block w-full touch-none"
+        style={{ touchAction: "none" }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={() => {
+          leftFlipperDownRef.current = false;
+          rightFlipperDownRef.current = false;
+          if (plungerHoldingRef.current) {
+            launchFromPlunger(plungerChargeRef.current);
+            plungerHoldingRef.current = false;
+            plungerChargeRef.current = 0;
+          }
+        }}
+      />
+      {tiltWarning && (
+        <div className="absolute inset-0 flex items-center justify-center bg-yellow-500/20 pointer-events-none">
+          <p className="text-yellow-400 font-bold">TILT WARNING</p>
+        </div>
+      )}
       {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-[#39ff14]">Game Over</p>
-            <p className="text-[#00f0ff] mt-2">Final Score: {score}</p>
-          </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+          <p className="text-2xl font-bold text-white">Game Over</p>
+          <p className="text-[#f0a500] text-xl mt-2">Score: {score}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 px-6 py-2 rounded-lg bg-[#f0a500] text-black font-bold"
+          >
+            Back to Lobby
+          </button>
         </div>
       )}
     </div>

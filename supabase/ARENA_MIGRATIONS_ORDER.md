@@ -26,3 +26,5 @@ Or in **Supabase Dashboard → SQL Editor**, run each file’s contents in this 
 12. `20250323000000_arena_ai_fighter_columns.sql` — nickname, origin, backstory, personality, portrait_svg, generation_method, etc.; users.arena_free_generation_used
 
 If `arena_fighters` is missing, the create-fighter API will fail with a DB error; applying step 1 fixes that.
+
+**Check (step 12 applied):** AI character generation is ready. Verify in Supabase: `arena_fighters` has columns `nickname`, `portrait_svg`, `generation_method`; `users` has `arena_free_generation_used`. Then `/dashboard/arena/create` will show the three creation options and AI generate will work.

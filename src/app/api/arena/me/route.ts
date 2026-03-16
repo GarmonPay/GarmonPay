@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   const [{ data: fighter, error }, { data: userRow }] = await Promise.all([
     supabase
       .from("arena_fighters")
-      .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions, body_type, skin_tone, face_style, hair_style, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear, nickname, origin, backstory, personality, trash_talk_style, signature_move_name, signature_move_desc, recommended_training, fighter_color, portrait_svg, generation_method")
+      .select("id, name, style, avatar, title, strength, speed, stamina, defense, chin, special, wins, losses, condition, win_streak, training_sessions, body_type, skin_tone, face_style, hair_style, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear, nickname, origin, backstory, personality, trash_talk_style, signature_move_name, signature_move_desc, recommended_training, fighter_color, portrait_svg, generation_method, model_3d_url, model_3d_status, model_3d_task_id, model_thumbnail_url")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase.from("users").select("arena_coins, arena_free_generation_used").eq("id", userId).single(),

@@ -6,60 +6,64 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { PinballGame } from "@/components/games/PinballGame";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
-  return isToken
-    ? { Authorization: `Bearer ${accessTokenOrUserId}` }
-    : { "X-User-Id": accessTokenOrUserId };
+function authHeaders(accessToken: string): Record<string, string> {
+  return { Authorization: `Bearer ${accessToken}` };
 }
 
-type LeaderboardEntry = { rank: number; user_id: string; score: number; email?: string };
-type Stats = { bestScore: number; rank: number | null; gamesPlayed: number };
+type LeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  username: string | null;
+  highest_score: number;
+  level: number;
+  level_name: string;
+};
+type Stats = {
+  highest_score: number;
+  total_score: number;
+  games_played: number;
+  level: number;
+  level_name: string;
+  wins: number;
+  losses: number;
+};
 
 export default function PinballPage() {
   const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [loading, setLoading] = useState(true);
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastScore, setLastScore] = useState<number | null>(null);
-  const [submitResult, setSubmitResult] = useState<{ rank: number | null; leaderboard: LeaderboardEntry[] } | null>(null);
+  const [postResult, setPostResult] = useState<{
+    score: number;
+    coins_earned: number;
+    rank: number | null;
+    personal_best: number;
+    level: number;
+    level_name: string;
+    leaderboard: LeaderboardEntry[];
+  } | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ all_time: LeaderboardEntry[]; weekly: LeaderboardEntry[]; daily: LeaderboardEntry[] } | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [jackpotCents, setJackpotCents] = useState<number>(500);
 
-  const tokenOrId = session?.accessToken ?? session?.userId ?? "";
-  const isToken = !!session?.accessToken;
-
-  const fetchBalance = useCallback(() => {
-    if (!tokenOrId) return;
-    fetch(`${API_BASE}/wallet/get`, {
-      headers: authHeaders(tokenOrId, isToken),
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : { balance_cents: 0 }))
-      .then((d: { balance_cents?: number }) => setBalanceCents(d.balance_cents ?? 0))
-      .catch(() => setBalanceCents(0));
-  }, [tokenOrId, isToken]);
-
-  const fetchStats = useCallback(() => {
-    if (!tokenOrId) return;
-    fetch(`${API_BASE}/games/pinball/stats`, {
-      headers: authHeaders(tokenOrId, isToken),
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : { bestScore: 0, rank: null, gamesPlayed: 0 }))
-      .then(setStats)
-      .catch(() => setStats({ bestScore: 0, rank: null, gamesPlayed: 0 }));
-  }, [tokenOrId, isToken]);
+  const token = session?.accessToken ?? "";
 
   const fetchLeaderboard = useCallback(() => {
-    fetch(`${API_BASE}/games/pinball/leaderboard`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { all_time: [], weekly: [], daily: [] }))
-      .then(setLeaderboard)
-      .catch(() => setLeaderboard({ all_time: [], weekly: [], daily: [] }));
+    fetch(`${API_BASE}/api/pinball/leaderboard`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { leaderboard: [] }))
+      .then((d: { leaderboard?: LeaderboardEntry[] }) => setLeaderboard(d.leaderboard ?? []))
+      .catch(() => setLeaderboard([]));
+  }, []);
+
+  const fetchJackpot = useCallback(() => {
+    fetch(`${API_BASE}/api/pinball/jackpot/current`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { current_amount_cents?: number }) => setJackpotCents(d.current_amount_cents ?? 500))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -74,56 +78,84 @@ export default function PinballPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!tokenOrId) return;
-    fetchBalance();
-    fetchStats();
     fetchLeaderboard();
-  }, [tokenOrId, isToken, fetchBalance, fetchStats, fetchLeaderboard]);
+    fetchJackpot();
+  }, [fetchLeaderboard, fetchJackpot]);
 
-  const handlePlay = () => {
-    if (!tokenOrId || starting || (balanceCents != null && balanceCents < 25)) return;
+  useEffect(() => {
+    if (!token || !postResult) return;
+    setStats({
+      highest_score: postResult.personal_best,
+      total_score: 0,
+      games_played: 0,
+      level: postResult.level,
+      level_name: postResult.level_name,
+      wins: 0,
+      losses: 0,
+    });
+    setLeaderboard(postResult.leaderboard ?? []);
+  }, [token, postResult]);
+
+  const handleStartFreePlay = () => {
+    if (!token || starting) return;
     setError(null);
-    setSubmitResult(null);
-    setLastScore(null);
+    setPostResult(null);
     setStarting(true);
-    fetch(`${API_BASE}/games/pinball/start`, {
+    fetch(`${API_BASE}/api/pinball/game/start`, {
       method: "POST",
-      headers: { ...authHeaders(tokenOrId, isToken), "Content-Type": "application/json" },
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
       credentials: "include",
+      body: JSON.stringify({ mode: "free" }),
     })
       .then((r) => {
-        if (!r.ok) return r.json().then((d: { error?: string; details?: string }) => Promise.reject(new Error(d.details ? `${d.error}: ${d.details}` : d.error ?? "Failed to start")));
+        if (!r.ok) return r.json().then((d: { error?: string }) => Promise.reject(new Error(d.error ?? "Failed to start")));
         return r.json();
       })
-      .then((d: { session_id: string; balance_cents: number }) => {
+      .then((d: { session_id: string }) => {
         setSessionId(d.session_id);
-        setBalanceCents(d.balance_cents);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to start"))
       .finally(() => setStarting(false));
   };
 
   const handleGameEnd = useCallback(
-    (score: number) => {
-      setLastScore(score);
-      if (!sessionId || !tokenOrId) return;
-      fetch(`${API_BASE}/games/pinball/score`, {
+    (
+      score: number,
+      statsArg?: { hits: { bumper: string; t: number }[]; durationMs?: number; ballsUsed?: number }
+    ) => {
+      if (!sessionId || !token) return;
+      const durationSeconds = statsArg?.durationMs != null ? Math.round(statsArg.durationMs / 1000) : 0;
+      const ballsUsed = statsArg?.ballsUsed ?? 3;
+      fetch(`${API_BASE}/api/pinball/game/end`, {
         method: "POST",
-        headers: { ...authHeaders(tokenOrId, isToken), "Content-Type": "application/json" },
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ session_id: sessionId, score }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          score,
+          duration_seconds: durationSeconds,
+          balls_used: ballsUsed,
+          hits: statsArg?.hits ?? [],
+        }),
       })
-        .then((r) => (r.ok ? r.json() : {}))
-        .then((d: { ok?: boolean; rank?: number; leaderboard?: LeaderboardEntry[] }) => {
-          setSubmitResult({ rank: d.rank ?? null, leaderboard: d.leaderboard ?? [] });
-          fetchBalance();
-          fetchStats();
+        .then((r) => (r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(new Error(d.error ?? "Submit failed")))))
+        .then((d: { score?: number; coins_earned?: number; rank?: number | null; leaderboard?: LeaderboardEntry[]; personal_best?: number; level?: number; level_name?: string }) => {
+          setPostResult({
+            score: d.score ?? 0,
+            coins_earned: d.coins_earned ?? 0,
+            rank: d.rank ?? null,
+            leaderboard: d.leaderboard ?? [],
+            personal_best: d.personal_best ?? 0,
+            level: d.level ?? 1,
+            level_name: d.level_name ?? "ROOKIE",
+          });
           fetchLeaderboard();
+          fetchJackpot();
         })
-        .catch(() => {});
-      setSessionId(null);
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to submit score"))
+        .finally(() => setSessionId(null));
     },
-    [sessionId, tokenOrId, isToken, fetchBalance, fetchStats, fetchLeaderboard]
+    [sessionId, token, fetchLeaderboard, fetchJackpot]
   );
 
   if (loading || !session) {
@@ -134,31 +166,34 @@ export default function PinballPage() {
     );
   }
 
-  const costCents = 25;
-  const canPlay = balanceCents != null && balanceCents >= costCents && !sessionId;
-
   return (
-    <div className="min-h-screen bg-[#0a0a12] text-white">
+    <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="max-w-4xl mx-auto p-4 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
               href="/games"
-              className="text-[#00f0ff]/80 hover:text-[#00f0ff] text-sm font-medium"
+              className="text-[#94a3b8] hover:text-[#f0a500] text-sm font-medium"
             >
               ← Game Station
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#00f0ff", textShadow: "0 0 20px rgba(0,240,255,0.5)" }}>
-              GarmonPay Pinball
+            <h1
+              className="text-2xl font-bold tracking-tight"
+              style={{ color: "#f0a500", textShadow: "0 0 20px rgba(245,158,11,0.5)" }}
+            >
+              GARMONPAY PINBALL
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-[#39ff14] font-mono font-semibold">
-              Balance: ${((balanceCents ?? 0) / 100).toFixed(2)}
+            <span
+              className="text-[#f0a500] font-mono font-semibold animate-pulse"
+              style={{ textShadow: "0 0 12px rgba(245,158,11,0.6)" }}
+            >
+              Jackpot: ${(jackpotCents / 100).toFixed(2)}
             </span>
             {stats != null && (
-              <span className="text-[#bf00ff]/90 text-sm">
-                Best: {stats.bestScore} · Games: {stats.gamesPlayed}
+              <span className="text-[#94a3b8] text-sm">
+                Best: {stats.highest_score} · Lv.{stats.level} {stats.level_name}
               </span>
             )}
           </div>
@@ -167,76 +202,71 @@ export default function PinballPage() {
         {error && (
           <div className="rounded-xl bg-red-500/20 border border-red-500/50 p-4 flex items-center justify-between gap-4">
             <p className="text-red-200">{error}</p>
-            <button type="button" onClick={() => setError(null)} className="text-red-300 hover:text-white text-sm underline">
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-red-300 hover:text-white text-sm underline"
+            >
               Dismiss
             </button>
           </div>
         )}
 
-        {submitResult && lastScore != null && (
-          <div className="rounded-xl bg-[#39ff14]/15 border border-[#39ff14]/50 p-4">
-            <p className="text-[#39ff14] font-medium">Score submitted: {lastScore}</p>
-            {submitResult.rank != null && (
-              <p className="text-[#00f0ff] text-sm mt-1">Your rank: #{submitResult.rank}</p>
+        {postResult && (
+          <div className="rounded-xl bg-[#22c55e]/15 border border-[#22c55e]/50 p-4">
+            <p className="text-[#22c55e] font-medium">Score: {postResult.score}</p>
+            <p className="text-[#f0a500] text-sm mt-1">
+              +{postResult.coins_earned} Arena coins · Personal best: {postResult.personal_best}
+            </p>
+            {postResult.rank != null && (
+              <p className="text-[#94a3b8] text-sm">Rank: #{postResult.rank}</p>
             )}
           </div>
         )}
 
         {!sessionId ? (
-          <div className="rounded-xl border-2 border-[#00f0ff]/40 bg-[#0a0a12]/80 p-8 text-center" style={{ boxShadow: "0 0 40px rgba(0,240,255,0.1)" }}>
-            <p className="text-[#00f0ff]/90 mb-4">Pay {costCents}¢ per game. Hit bumpers for points, land in JACKPOT for 5000!</p>
-            <button
-              type="button"
-              onClick={handlePlay}
-              disabled={!canPlay || starting}
-              className="px-8 py-4 rounded-xl font-bold text-lg bg-[#00f0ff]/20 border-2 border-[#00f0ff] text-[#00f0ff] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00f0ff]/30 transition-all"
-              style={{ boxShadow: "0 0 25px rgba(0,240,255,0.3)" }}
-            >
-              {starting ? "Starting…" : canPlay ? `Play for ${costCents}¢` : "Insufficient balance"}
-            </button>
-          </div>
-        ) : (
-          <PinballGame sessionId={sessionId} onGameEnd={handleGameEnd} />
-        )}
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={handleStartFreePlay}
+                disabled={starting}
+                className="rounded-xl border-2 border-[#22c55e] bg-[#22c55e]/20 p-6 text-left hover:bg-[#22c55e]/30 disabled:opacity-50 transition-all"
+              >
+                <h3 className="text-lg font-bold text-[#22c55e]">FREE PLAY</h3>
+                <p className="text-sm text-white/80 mt-1">Practice & earn coins · 3 balls</p>
+                <p className="text-xs text-white/60 mt-2">No entry fee · Unlimited plays</p>
+              </button>
+              <div className="rounded-xl border-2 border-[#f0a500]/50 bg-[#f0a500]/10 p-6 text-left opacity-90">
+                <h3 className="text-lg font-bold text-[#f0a500]">HEAD TO HEAD</h3>
+                <p className="text-sm text-white/80 mt-1">Challenge a player · Coming soon</p>
+              </div>
+              <div className="rounded-xl border-2 border-[#ef4444]/50 bg-[#ef4444]/10 p-6 text-left opacity-90">
+                <h3 className="text-lg font-bold text-[#ef4444]">TOURNAMENT</h3>
+                <p className="text-sm text-white/80 mt-1">Enter the tournament · Coming soon</p>
+              </div>
+            </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl border border-[#00f0ff]/30 bg-black/20 p-6">
-            <h3 className="text-[#00f0ff] font-semibold mb-3">Top 10 All-Time</h3>
-            <ul className="space-y-1 text-sm">
-              {(leaderboard?.all_time ?? []).slice(0, 10).map((e) => (
-                <li key={e.user_id} className="flex justify-between">
-                  <span className="text-white/90">#{e.rank} {(e.email ?? "").replace(/(.{2}).*(@.*)/, "$1…$2")}</span>
-                  <span className="text-[#39ff14] font-mono">{e.score}</span>
-                </li>
-              ))}
-              {(!leaderboard?.all_time?.length) && <li className="text-white/50">No scores yet.</li>}
-            </ul>
-          </div>
-          <div className="rounded-xl border border-[#bf00ff]/30 bg-black/20 p-6">
-            <h3 className="text-[#bf00ff] font-semibold mb-3">Weekly Tournament</h3>
-            <ul className="space-y-1 text-sm">
-              {(leaderboard?.weekly ?? []).slice(0, 10).map((e) => (
-                <li key={e.user_id} className="flex justify-between">
-                  <span className="text-white/90">#{e.rank} {(e.email ?? "").replace(/(.{2}).*(@.*)/, "$1…$2")}</span>
-                  <span className="text-[#39ff14] font-mono">{e.score}</span>
-                </li>
-              ))}
-              {(!leaderboard?.weekly?.length) && <li className="text-white/50">No scores this week.</li>}
-            </ul>
-          </div>
-          <div className="rounded-xl border border-[#39ff14]/30 bg-black/20 p-6">
-            <h3 className="text-[#39ff14] font-semibold mb-3">Daily Top 10</h3>
-            <ul className="space-y-1 text-sm">
-              {(leaderboard?.daily ?? []).slice(0, 10).map((e) => (
-                <li key={e.user_id} className="flex justify-between">
-                  <span className="text-white/90">#{e.rank} {(e.email ?? "").replace(/(.{2}).*(@.*)/, "$1…$2")}</span>
-                  <span className="text-[#39ff14] font-mono">{e.score}</span>
-                </li>
-              ))}
-              {(!leaderboard?.daily?.length) && <li className="text-white/50">No scores today.</li>}
-            </ul>
-          </div>
-        </div>
+            <div className="rounded-xl border border-[#3b82f6]/40 bg-[#0d1117] p-6">
+              <h3 className="text-[#3b82f6] font-semibold mb-3">Top 10 — Free Play</h3>
+              <ul className="space-y-1 text-sm">
+                {(leaderboard ?? []).slice(0, 10).map((e) => (
+                  <li key={e.user_id} className="flex justify-between items-center">
+                    <span className="text-white/90">
+                      #{e.rank} {e.username ?? e.user_id.slice(0, 8)} · Lv.{e.level}
+                    </span>
+                    <span className="text-[#f0a500] font-mono">{e.highest_score}</span>
+                  </li>
+                ))}
+                {(!leaderboard || leaderboard.length === 0) && (
+                  <li className="text-white/50">No scores yet. Play to appear here!</li>
+                )}
+              </ul>
+            </div>
+          </>
+        ) : (
+          <PinballGame sessionId={sessionId} mode="free" onGameEnd={handleGameEnd} />
+        )}
       </div>
     </div>
   );

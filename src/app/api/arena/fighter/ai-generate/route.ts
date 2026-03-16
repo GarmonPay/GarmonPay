@@ -6,6 +6,7 @@ import {
   buildPortraitSVG,
   type AIGeneratedCharacter,
 } from "@/lib/arena-ai-character";
+import { startMeshy3DGeneration } from "@/lib/arena-meshy-3d";
 
 const REGENERATION_COST = 500;
 
@@ -205,6 +206,11 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: "Failed to create fighter" }, { status: 500 });
     }
+
+    // Start 3D generation in background (do not await)
+    startMeshy3DGeneration(fighter.id, userId).catch((e) =>
+      console.error("[ai-generate] 3D generation start failed:", e)
+    );
 
     return NextResponse.json({ success: true, fighter });
   } catch (err) {

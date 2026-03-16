@@ -23,6 +23,8 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@babylonjs/core": "^8.54.1",
     "@babylonjs/loaders": "^8.54.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@stripe/react-stripe-js": "^5.6.0",
     "@stripe/stripe-js": "^8.8.0",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
@@ -37,13 +39,15 @@
     "resend": "^6.9.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "stripe": "^20.3.1"
+    "stripe": "^20.3.1",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@types/matter-js": "^0.20.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/three": "^0.183.1",
     "autoprefixer": "^10.4.0",
     "concurrently": "^9.2.1",
     "eslint": "^8.0.0",
