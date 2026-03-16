@@ -5,14 +5,31 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
+import { getFightServerHealthUrl } from "@/lib/keepAlive";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
+
+type FightServerStatus = "connecting" | "connected" | "offline";
 
 export default function ArenaHubPage() {
   const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [fighter, setFighter] = useState<FighterData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fightServerStatus, setFightServerStatus] = useState<FightServerStatus>("connecting");
+
+  useEffect(() => {
+    const base = getFightServerHealthUrl();
+    if (!base) {
+      setFightServerStatus("offline");
+      return;
+    }
+    setFightServerStatus("connecting");
+    fetch(`${base}/health`, { method: "GET" })
+      .then((r) => (r.ok ? "connected" : "offline") as FightServerStatus)
+      .catch(() => "offline" as FightServerStatus)
+      .then((status) => setFightServerStatus(status));
+  }, []);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -50,6 +67,25 @@ export default function ArenaHubPage() {
         <div className="bg-gradient-to-r from-[#f0a500]/20 to-transparent border-b border-white/10 px-6 py-6">
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <span className="text-[#f0a500]">🥊</span> GARMONPAY ARENA
+            <span
+              className="inline-block w-3 h-3 rounded-full shrink-0"
+              title={
+                fightServerStatus === "connected"
+                  ? "Fight server connected"
+                  : fightServerStatus === "connecting"
+                    ? "Connecting…"
+                    : "Fight server offline"
+              }
+              style={{
+                backgroundColor:
+                  fightServerStatus === "connected"
+                    ? "#22c55e"
+                    : fightServerStatus === "connecting"
+                      ? "#eab308"
+                      : "#ef4444",
+              }}
+              aria-hidden
+            />
           </h1>
           <p className="text-[#9ca3af] mt-2">One fighter per account. Train, fight, earn.</p>
         </div>

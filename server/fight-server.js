@@ -9,7 +9,9 @@ const { Server } = require("socket.io");
 const crypto = require("crypto");
 
 const PORT = process.env.ARENA_PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const CORS_ORIGIN =
+  process.env.CORS_ORIGIN ||
+  (process.env.NODE_ENV === "production" ? "https://garmonpay.com" : "*");
 const ARENA_JOIN_SECRET = process.env.ARENA_JOIN_SECRET || "arena-join-secret-change-in-production";
 
 const CPU_USER_IDS = [
