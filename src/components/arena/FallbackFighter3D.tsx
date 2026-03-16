@@ -4,13 +4,16 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-const SKIN = "#e8b896";
-const SHORTS = "#4b5563";
-const SHORTS_STRIPE = "#ffffff";
+const SKIN = "#d4956a";
 const GLOVES = "#c1272d";
-const BOOTS = "#111111";
+const SHORTS_COLOR = "#0a0f1e";
+const BOOTS_COLOR = "#111111";
+const HAIR_COLOR = "#2a2a2a";
 
-/** Fallback fighter in boxing guard stance (orthodox): fists up, elbows in, left foot forward. */
+/**
+ * Realistic fallback boxer in orthodox guard stance.
+ * No stats text — purely visual geometry.
+ */
 export function FallbackFighter3D({
   color = "#f0a500",
   animation = "idle",
@@ -19,151 +22,153 @@ export function FallbackFighter3D({
   animation?: string;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const headRef = useRef<THREE.Group>(null);
-  const leftGloveRef = useRef<THREE.Group>(null);
-  const rightGloveRef = useRef<THREE.Group>(null);
-  const phaseRef = useRef(0);
-  const weightShiftRef = useRef(0);
+  const headRef = useRef<THREE.Mesh>(null);
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const t = state.clock.elapsedTime;
-    phaseRef.current += delta;
     const group = groupRef.current;
     const head = headRef.current;
-    const leftGlove = leftGloveRef.current;
-    const rightGlove = rightGloveRef.current;
-
     if (!group) return;
 
-    const isPunch = animation === "punch-left" || animation === "punch-right" || animation === "fighting";
+    const isPunch =
+      animation === "punch-left" ||
+      animation === "punch-right" ||
+      animation === "fighting";
 
+    // Idle breathing bob
+    group.position.y = Math.sin(t * 1.2) * 0.008;
+
+    // Forward lunge during punching animations
     if (isPunch) {
-      weightShiftRef.current = 0.15;
+      group.position.z = Math.sin(t * 8) * 0.02;
     } else {
-      weightShiftRef.current += delta * 0.5;
-      if (weightShiftRef.current > Math.PI * 2) weightShiftRef.current -= Math.PI * 2;
+      group.position.z = 0;
     }
 
-    const bounce = Math.sin(t * 1.8) * 0.008;
-    const weightShift = Math.sin(weightShiftRef.current * 0.5) * 0.015;
-    group.position.y = bounce;
-    group.position.x = weightShift;
-
-    if (head && !isPunch) {
-      head.rotation.y = Math.sin(t * 0.4) * 0.06;
-    }
-    if (leftGlove && !isPunch) {
-      const orbit = t * 0.6;
-      leftGlove.position.x = Math.sin(orbit) * 0.02;
-      leftGlove.position.z = Math.cos(orbit) * 0.02;
-    }
-    if (rightGlove && !isPunch) {
-      const orbit = t * 0.6 + 0.5;
-      rightGlove.position.x = Math.sin(orbit) * 0.02;
-      rightGlove.position.z = Math.cos(orbit) * 0.02;
+    // Head slight bob
+    if (head) {
+      head.rotation.x = Math.sin(t * 1.2) * 0.02;
     }
   });
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]} scale={[0.5, 0.5, 0.5]}>
-      {/* Legs: orthodox stance, left foot slightly forward, knees slightly bent */}
-      <group position={[0, 0.35, 0]}>
-        <mesh position={[-0.12, -0.35, 0.06]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.06, 0.07, 0.4, 8]} />
-          <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-        </mesh>
-        <mesh position={[0.12, -0.35, -0.02]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.06, 0.07, 0.4, 8]} />
-          <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-        </mesh>
-        {/* Shorts: waist/hips, dark grey, white stripe on sides */}
-        <mesh position={[0, 0.02, 0.02]} castShadow>
-          <cylinderGeometry args={[0.2, 0.22, 0.12, 8]} />
-          <meshStandardMaterial color={SHORTS} roughness={0.9} metalness={0} />
-        </mesh>
-        <mesh position={[-0.2, 0.02, 0.02]} rotation={[0, 0, Math.PI / 2]}>
-          <boxGeometry args={[0.04, 0.14, 0.02]} />
-          <meshStandardMaterial color={SHORTS_STRIPE} roughness={0.8} />
-        </mesh>
-        <mesh position={[0.2, 0.02, 0.02]} rotation={[0, 0, Math.PI / 2]}>
-          <boxGeometry args={[0.04, 0.14, 0.02]} />
-          <meshStandardMaterial color={SHORTS_STRIPE} roughness={0.8} />
-        </mesh>
-        {/* Boots */}
-        <mesh position={[-0.12, -0.55, 0.06]} castShadow>
-          <boxGeometry args={[0.14, 0.08, 0.2]} />
-          <meshStandardMaterial color={BOOTS} roughness={0.9} metalness={0} />
-        </mesh>
-        <mesh position={[0.12, -0.55, -0.02]} castShadow>
-          <boxGeometry args={[0.14, 0.08, 0.2]} />
-          <meshStandardMaterial color={BOOTS} roughness={0.9} metalness={0} />
-        </mesh>
-      </group>
+    /* Orthodox stance: slightly sideways */
+    <group ref={groupRef} rotation={[0, Math.PI * 0.15, 0]} scale={[0.5, 0.5, 0.5]}>
+      {/* ── BOOTS ─────────────────────────────────────────────── */}
+      {/* Right boot (back foot) */}
+      <mesh position={[-0.14, -0.55, -0.08]} castShadow receiveShadow>
+        <boxGeometry args={[0.18, 0.12, 0.28]} />
+        <meshStandardMaterial color={BOOTS_COLOR} roughness={0.85} metalness={0.05} />
+      </mesh>
+      {/* Right boot heel bump */}
+      <mesh position={[-0.14, -0.52, -0.16]} castShadow>
+        <boxGeometry args={[0.16, 0.06, 0.08]} />
+        <meshStandardMaterial color={BOOTS_COLOR} roughness={0.9} metalness={0} />
+      </mesh>
+      {/* Left boot (front foot, lead) */}
+      <mesh position={[0.14, -0.55, 0.14]} castShadow receiveShadow>
+        <boxGeometry args={[0.18, 0.12, 0.28]} />
+        <meshStandardMaterial color={BOOTS_COLOR} roughness={0.85} metalness={0.05} />
+      </mesh>
+      {/* Left boot heel bump */}
+      <mesh position={[0.14, -0.52, 0.06]} castShadow>
+        <boxGeometry args={[0.16, 0.06, 0.08]} />
+        <meshStandardMaterial color={BOOTS_COLOR} roughness={0.9} metalness={0} />
+      </mesh>
 
-      {/* Torso: wider shoulders, narrower waist, defined chest */}
-      <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.14, 0.18, 0.32, 8]} />
+      {/* ── LOWER LEGS ────────────────────────────────────────── */}
+      {/* Right lower leg */}
+      <mesh position={[-0.14, -0.3, -0.08]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.07, 0.07, 0.45, 8]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Left lower leg (slight forward lean) */}
+      <mesh position={[0.14, -0.3, 0.12]} rotation={[-0.15, 0, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.07, 0.07, 0.45, 8]} />
         <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
       </mesh>
 
-      {/* Neck */}
-      <mesh position={[0, 0.78, 0]} castShadow>
-        <cylinderGeometry args={[0.06, 0.08, 0.08, 8]} />
+      {/* ── SHORTS / HIPS ─────────────────────────────────────── */}
+      <mesh position={[0, 0.05, 0.02]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.25, 0.28, 0.28, 8]} />
+        <meshStandardMaterial color={SHORTS_COLOR} roughness={0.9} metalness={0} />
+      </mesh>
+      {/* Shorts lower section */}
+      <mesh position={[0, -0.1, 0.02]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.22, 0.25, 0.18, 8]} />
+        <meshStandardMaterial color={SHORTS_COLOR} roughness={0.9} metalness={0} />
+      </mesh>
+      {/* Shorts waistband stripe */}
+      <mesh position={[0, 0.19, 0.02]} castShadow>
+        <cylinderGeometry args={[0.255, 0.255, 0.04, 8]} />
+        <meshStandardMaterial color={GLOVES} roughness={0.85} metalness={0} />
+      </mesh>
+
+      {/* ── TORSO ─────────────────────────────────────────────── */}
+      <mesh position={[0, 0.42, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.44, 0.5, 0.28]} />
+        <meshStandardMaterial color={SKIN} roughness={0.78} metalness={0} />
+      </mesh>
+      {/* Chest muscle hints */}
+      <mesh position={[-0.1, 0.5, 0.14]} castShadow>
+        <boxGeometry args={[0.14, 0.12, 0.04]} />
+        <meshStandardMaterial color={SKIN} roughness={0.75} metalness={0} />
+      </mesh>
+      <mesh position={[0.1, 0.5, 0.14]} castShadow>
+        <boxGeometry args={[0.14, 0.12, 0.04]} />
+        <meshStandardMaterial color={SKIN} roughness={0.75} metalness={0} />
+      </mesh>
+
+      {/* ── NECK ──────────────────────────────────────────────── */}
+      <mesh position={[0, 0.72, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.08, 0.14, 10]} />
         <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
       </mesh>
 
-      {/* Head: round, slight forward lean built into position */}
-      <group ref={headRef} position={[0, 0.92, 0.02]}>
-        <mesh castShadow receiveShadow>
-          <sphereGeometry args={[0.12, 16, 12]} />
-          <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-        </mesh>
-        {/* Simple short hair on top */}
-        <mesh position={[0, 0.06, -0.04]} castShadow>
-          <sphereGeometry args={[0.1, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.4]} />
-          <meshStandardMaterial color="#2d2d2d" roughness={0.9} metalness={0} />
-        </mesh>
-      </group>
+      {/* ── HEAD ──────────────────────────────────────────────── */}
+      <mesh ref={headRef} position={[0, 0.9, 0.04]} castShadow receiveShadow>
+        <sphereGeometry args={[0.16, 16, 12]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Hair cap */}
+      <mesh position={[0, 0.99, 0.0]} castShadow>
+        <sphereGeometry args={[0.14, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.45]} />
+        <meshStandardMaterial color={HAIR_COLOR} roughness={0.9} metalness={0} />
+      </mesh>
 
-      {/* Arms in guard: elbows tucked, fists up near face */}
-      {/* Left arm: upper arm in, forearm + glove up */}
-      <group position={[-0.18, 0.72, 0.05]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.04, 0.05, 0.2, 6]} />
-          <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-        </mesh>
-        <group position={[-0.06, -0.12, 0.08]} rotation={[0.6, 0, 0]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[0.035, 0.04, 0.18, 6]} />
-            <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-          </mesh>
-          <group ref={leftGloveRef} position={[0, -0.1, 0.02]}>
-            <mesh castShadow>
-              <sphereGeometry args={[0.07, 12, 10]} />
-              <meshStandardMaterial color={GLOVES} roughness={0.6} metalness={0.1} />
-            </mesh>
-          </group>
-        </group>
-      </group>
-      {/* Right arm */}
-      <group position={[0.18, 0.72, 0.05]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.04, 0.05, 0.2, 6]} />
-          <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-        </mesh>
-        <group position={[0.06, -0.12, 0.08]} rotation={[0.6, 0, 0]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[0.035, 0.04, 0.18, 6]} />
-            <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
-          </mesh>
-          <group ref={rightGloveRef} position={[0, -0.1, 0.02]}>
-            <mesh castShadow>
-              <sphereGeometry args={[0.07, 12, 10]} />
-              <meshStandardMaterial color={GLOVES} roughness={0.6} metalness={0.1} />
-            </mesh>
-          </group>
-        </group>
-      </group>
+      {/* ── RIGHT ARM (back/power hand, near chin) ────────────── */}
+      {/* Right upper arm */}
+      <mesh position={[0.22, 0.55, 0.02]} rotation={[0.5, 0, -0.2]} castShadow>
+        <cylinderGeometry args={[0.065, 0.065, 0.28, 8]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Right forearm */}
+      <mesh position={[0.24, 0.7, 0.14]} rotation={[0.8, 0, -0.15]} castShadow>
+        <cylinderGeometry args={[0.055, 0.055, 0.24, 8]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Right glove (close to chin) */}
+      <mesh position={[0.22, 0.82, 0.26]} scale={[1, 1.2, 1]} castShadow>
+        <sphereGeometry args={[0.09, 12, 10]} />
+        <meshStandardMaterial color={GLOVES} roughness={0.6} metalness={0.08} />
+      </mesh>
+
+      {/* ── LEFT ARM (lead/jab hand, extended forward) ────────── */}
+      {/* Left upper arm */}
+      <mesh position={[-0.22, 0.52, 0.06]} rotation={[0.4, 0, 0.15]} castShadow>
+        <cylinderGeometry args={[0.06, 0.06, 0.28, 8]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Left forearm */}
+      <mesh position={[-0.2, 0.6, 0.28]} rotation={[0.7, 0, 0.1]} castShadow>
+        <cylinderGeometry args={[0.05, 0.05, 0.24, 8]} />
+        <meshStandardMaterial color={SKIN} roughness={0.8} metalness={0} />
+      </mesh>
+      {/* Left glove (extended forward toward opponent) */}
+      <mesh position={[-0.18, 0.72, 0.44]} scale={[1, 1.2, 1]} castShadow>
+        <sphereGeometry args={[0.085, 12, 10]} />
+        <meshStandardMaterial color={GLOVES} roughness={0.6} metalness={0.08} />
+      </mesh>
     </group>
   );
 }
