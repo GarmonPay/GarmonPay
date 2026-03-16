@@ -1,14 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
 import { getApiRoot } from "@/lib/api";
+import { getHasWebGL } from "@/lib/webgl-detect";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { RingAnimationState } from "@/components/arena/BoxingRing";
+
+const BoxingRing3D = dynamic(
+  () => import("@/components/arena/BoxingRing3D").then((m) => m.BoxingRing3D),
+  { ssr: false }
+);
+import { FighterModelInRing } from "@/components/arena/FighterModelInRing";
 
 const WS_URL = process.env.NEXT_PUBLIC_ARENA_WS_URL || "http://localhost:3001";
 
@@ -37,6 +45,7 @@ type OpponentFighter = {
   taunt?: string;
   weakness?: string;
   isAi?: boolean;
+  model_3d_url?: string | null;
 };
 
 export default function FindFightPage() {
@@ -68,6 +77,8 @@ export default function FindFightPage() {
   const [loserKoActive, setLoserKoActive] = useState(false);
   const [opponentKoActive, setOpponentKoActive] = useState(false);
   const [ringAnimation, setRingAnimation] = useState<RingAnimationState>("idle");
+  const ring3dRef = useRef<{ shake: () => void } | null>(null);
+  const useWebGL = getHasWebGL();
 
   const fetchCpu = useCallback(async () => {
     const s = await getSessionAsync();
@@ -154,6 +165,7 @@ export default function FindFightPage() {
       setLog((prev) => [...prev, payload]);
       if (payload.hitA || payload.hitB) {
         setRingAnimation("big_hit");
+        ring3dRef.current?.shake();
         setTimeout(() => setRingAnimation("idle"), 350);
       }
       if (payload.hitA) {
@@ -230,6 +242,106 @@ export default function FindFightPage() {
         : hitOnThem
           ? "hit"
           : "idle";
+
+    const animTo3D = (a: string) =>
+      a === "victory" ? "victory" : a === "ko" || a === "defeat" ? "defeat" : a === "fighting" ? "punch-left" : "idle";
+
+    if (useWebGL) {
+      return (
+        <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+          <div className="min-h-[320px] w-full">
+            <BoxingRing3D
+              ref={ring3dRef}
+              mode={ringMode}
+              koIntensity={winnerId != null ? 1 : 0}
+              fighterASlot={
+                <FighterModelInRing
+                  modelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}
+                  color="#f0a500"
+                  animation={animTo3D(fighterAAnim)}
+                />
+              }
+              fighterBSlot={
+                <FighterModelInRing
+                  modelUrl={(fb as { model_3d_url?: string | null })?.model_3d_url}
+                  color="#c1272d"
+                  animation={animTo3D(fighterBAnim)}
+                />
+              }
+            />
+          </div>
+          <div className="p-4 border-t border-white/10">
+            {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
+            {showPreFight && pendingAiFight && fb?.isAi && (
+              <div className="mb-4 p-4 rounded-xl bg-[#0d1117] border border-[#f0a500]/30">
+                <p className="text-[#9ca3af] text-sm mb-1">AI Opponent</p>
+                <p className="text-xl font-bold text-white flex items-center gap-2">
+                  <span>🤖</span> {fb.name}
+                </p>
+                <p className="text-[#f0a500]">{fb.style}</p>
+                {fb.taunt && <p className="mt-2 text-white italic">&ldquo;{fb.taunt}&rdquo;</p>}
+                {fb.weakness && <p className="mt-1 text-[#9ca3af] text-sm">Weakness: {fb.weakness}</p>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pendingAiFight) return;
+                    setFightId(pendingAiFight.fightId);
+                    setJoinToken(pendingAiFight.joinToken);
+                    setFighterA(pendingAiFight.fighterA);
+                    setFighterB(pendingAiFight.fighterB);
+                    setHealthA(100);
+                    setHealthB(100);
+                    setLog([]);
+                    setWinnerId(null);
+                    setPendingAiFight(null);
+                    setShowPreFight(false);
+                  }}
+                  className="mt-4 px-4 py-2 rounded-lg bg-[#f0a500] text-black font-semibold hover:bg-[#e09500]"
+                >
+                  Start Fight
+                </button>
+              </div>
+            )}
+            {winnerId != null && (
+              <div className="mb-4 p-4 rounded-lg bg-[#0d1117] border border-white/10">
+                <p className="text-xl font-bold text-white">{iWon ? "You win!" : "You lost."}</p>
+                <Link href="/dashboard/arena/fight" className="inline-block mt-2 text-[#f0a500] hover:underline" onClick={() => { setFightId(null); setJoinToken(null); setFighterA(null); setFighterB(null); setWinnerId(null); setPendingAiFight(null); setShowPreFight(false); setLoserKoActive(false); setOpponentKoActive(false); }}>Fight again</Link>
+                <Link href="/dashboard/arena" className="inline-block mt-2 ml-4 text-[#f0a500] hover:underline">Back to Arena</Link>
+              </div>
+            )}
+            {ringMode === "fight" && (
+              <>
+                <p className="text-[#9ca3af] text-sm mb-2">Tap an action (or wait 1.5s for auto-jab)</p>
+                <div className="grid grid-cols-4 gap-2 mb-4">
+                  {ARENA_ACTIONS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => sendAction(key)}
+                      className="py-3 px-2 rounded-lg bg-[#3b82f6] text-white text-sm font-medium hover:bg-[#2563eb]"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {log.length > 0 && (
+              <div className="mt-2 max-h-24 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
+                {log.slice(-6).map((e, i) => (
+                  <div key={i}>
+                    You: {e.actionA} → {e.damageAtoB} dmg {e.hitA && "✓"} · Opp: {e.actionB} → {e.damageBtoA} dmg {e.hitB && "✓"}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-3">
+              <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">

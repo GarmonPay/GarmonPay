@@ -1,13 +1,28 @@
 "use client";
 
-import { Suspense, useState, Component, ReactNode } from "react";
+import { Suspense, useState, Component, ReactNode, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { useGLTF, ContactShadows, PresentationControls } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { useGLTF, ContactShadows, PresentationControls, Environment } from "@react-three/drei";
 
 function Model({ url, onLoaded }: { url: string; onLoaded?: () => void }) {
   const { scene } = useGLTF(url);
   if (onLoaded) onLoaded();
   return <primitive object={scene} scale={1.5} position={[0, -1, 0]} />;
+}
+
+function SpinningGoldBox() {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation.y += delta * 0.8;
+  });
+  return (
+    <mesh ref={ref} position={[0, 0, 0]} castShadow receiveShadow>
+      <boxGeometry args={[0.6, 0.6, 0.6]} />
+      <meshStandardMaterial color="#f0a500" metalness={0.6} roughness={0.3} />
+    </mesh>
+  );
 }
 
 class ModelErrorBoundary extends Component<
@@ -32,7 +47,7 @@ export default function Fighter3D({
   size = "medium",
   fallback = null,
 }: {
-  modelUrl: string;
+  modelUrl?: string | null;
   thumbnailUrl?: string | null;
   fighterColor?: string;
   size?: "small" | "medium" | "large";
@@ -50,6 +65,7 @@ export default function Fighter3D({
   };
 
   const h = heights[size] ?? 350;
+  const hasModel = !!modelUrl && !error;
 
   if (error && fallback) {
     return <>{fallback}</>;
@@ -66,7 +82,7 @@ export default function Fighter3D({
         position: "relative",
       }}
     >
-      {thumbnailUrl && !loaded && (
+      {thumbnailUrl && !loaded && hasModel && (
         <img
           src={thumbnailUrl}
           alt="Fighter preview"
@@ -89,23 +105,30 @@ export default function Fighter3D({
           castShadow
           color={fighterColor}
         />
-        <spotLight
-          position={[-3, 3, -2]}
-          intensity={1}
-          color="#ffffff"
-        />
+        <spotLight position={[-3, 3, -2]} intensity={1} color="#ffffff" />
 
-        <Suspense fallback={null}>
-          <ModelErrorBoundary fallback={null} onError={handleModelError}>
+        <Suspense fallback={<SpinningGoldBox />}>
+          {hasModel ? (
+            <ModelErrorBoundary fallback={<SpinningGoldBox />} onError={handleModelError}>
+              <PresentationControls
+                global
+                rotation={[0, 0, 0]}
+                polar={[-0.1, 0.1]}
+                azimuth={[-0.5, 0.5]}
+              >
+                <Model url={modelUrl!} onLoaded={() => setLoaded(true)} />
+              </PresentationControls>
+            </ModelErrorBoundary>
+          ) : (
             <PresentationControls
               global
               rotation={[0, 0, 0]}
               polar={[-0.1, 0.1]}
               azimuth={[-0.5, 0.5]}
             >
-              <Model url={modelUrl} onLoaded={() => setLoaded(true)} />
+              <SpinningGoldBox />
             </PresentationControls>
-          </ModelErrorBoundary>
+          )}
           <ContactShadows
             position={[0, -1.4, 0]}
             opacity={0.7}
@@ -113,6 +136,7 @@ export default function Fighter3D({
             blur={2}
             color="#000000"
           />
+          <Environment preset="night" />
         </Suspense>
       </Canvas>
     </div>

@@ -15,6 +15,7 @@ type FighterRow = {
   user_id: string;
   body_type: string | null;
   personality: string | null;
+  fighter_color: string | null;
   equipped_gloves: string | null;
   equipped_shoes: string | null;
   equipped_shorts: string | null;
@@ -28,6 +29,7 @@ function buildFighterPrompt(fighter: {
   equipped_shoes?: string;
   equipped_headgear?: string;
   personality?: string | null;
+  fighter_color?: string | null;
 }): string {
   const shorts =
     fighter.equipped_shorts && fighter.equipped_shorts !== "default"
@@ -55,6 +57,7 @@ ${gloves}
 ${shoes}
 ${headgear}
 ${fighter.personality || "Fierce"} expression.
+${fighter.fighter_color ? `Accent color ${fighter.fighter_color}.` : ""}
 Dark dramatic studio lighting.
 Photorealistic detailed 3D character.
 Full body visible from head to toe.
@@ -76,7 +79,7 @@ export async function startMeshy3DGeneration(
   const { data: fighter, error: fighterErr } = await supabase
     .from("arena_fighters")
     .select(
-      "id, user_id, body_type, personality, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear"
+      "id, user_id, body_type, personality, fighter_color, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear"
     )
     .eq("id", fighterId)
     .eq("user_id", userId)
@@ -118,6 +121,7 @@ export async function startMeshy3DGeneration(
   const prompt = buildFighterPrompt({
     body_type: f.body_type,
     personality: f.personality,
+    fighter_color: f.fighter_color,
     equipped_shorts,
     equipped_gloves,
     equipped_shoes,
@@ -134,7 +138,7 @@ export async function startMeshy3DGeneration(
       mode: "preview",
       prompt,
       art_style: "realistic",
-      negative_prompt: "cartoon, anime, blurry, deformed, low quality, extra limbs",
+      negative_prompt: "cartoon, anime, blurry, deformed",
     }),
   });
 

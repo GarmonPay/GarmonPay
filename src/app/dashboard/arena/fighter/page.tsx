@@ -6,6 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
+import { getHasWebGL } from "@/lib/webgl-detect";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
@@ -219,8 +220,23 @@ export default function MyFighterPage() {
   const model3dUrl = (fighter as { model_3d_url?: string | null }).model_3d_url;
   const modelThumbnailUrl = (fighter as { model_thumbnail_url?: string | null }).model_thumbnail_url;
   const fighterColor = (fighter as { fighter_color?: string }).fighter_color ?? "#f0a500";
+  const useWebGL = getHasWebGL();
 
   const renderFighterVisual = () => {
+    if (!useWebGL) {
+      return (
+        <div className="flex-1 min-h-[260px] md:min-h-[320px] relative">
+          <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+          {model3dStatus === "not_started" && (
+            <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
+              <button type="button" onClick={handleGenerate3D} className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]">
+                Generate 3D Fighter
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
     if (model3dStatus === "complete" && model3dUrl) {
       return (
         <Fighter3D
@@ -252,7 +268,21 @@ export default function MyFighterPage() {
     }
     return (
       <div className="flex-1 min-h-[260px] md:min-h-[320px] relative">
-        <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+        {useWebGL ? (
+          <Fighter3D
+            modelUrl={null}
+            thumbnailUrl={null}
+            fighterColor={fighterColor}
+            size="medium"
+            fallback={
+              <div className="flex-1 min-h-[260px] md:min-h-[320px] flex items-center justify-center bg-[#0d1117]">
+                <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+              </div>
+            }
+          />
+        ) : (
+          <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+        )}
         {model3dStatus === "not_started" && (
           <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
             <button
@@ -260,7 +290,7 @@ export default function MyFighterPage() {
               onClick={handleGenerate3D}
               className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]"
             >
-              Generate 3D Fighter
+              Generate Your 3D Fighter
             </button>
           </div>
         )}
