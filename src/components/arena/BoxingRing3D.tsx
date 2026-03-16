@@ -10,7 +10,9 @@ import "./boxing-ring.css";
 const GOLD = "#f0a500";
 const RED = "#c1272d";
 const NAVY = "#0f172a";
-const DARK_GREY = "#1a1a1a";
+const DARK_GREY = "#111111";
+const ROPE_DARK_RED = "#6b0f13";
+const ROPE_DARK_GREY = "#2a2a2a";
 
 function RingFloor() {
   return (
@@ -69,10 +71,10 @@ function Ropes() {
   const y = 0.5;
   const half = 3.8;
   const ropes = [
-    { color: GOLD, offset: 0.2 },
-    { color: RED, offset: 0.35 },
-    { color: GOLD, offset: 0.5 },
-    { color: RED, offset: 0.65 },
+    { color: ROPE_DARK_GREY, offset: 0.2 },
+    { color: ROPE_DARK_RED, offset: 0.35 },
+    { color: ROPE_DARK_GREY, offset: 0.5 },
+    { color: ROPE_DARK_RED, offset: 0.65 },
   ];
   return (
     <group>
@@ -256,8 +258,10 @@ function SpotLights({ winnerSide = null }: { winnerSide?: "left" | "right" | nul
         color={RED}
         castShadow
       />
-      <spotLight position={[0, 8, 2]} angle={0.3} penumbra={0.6} intensity={1.5} color="#ffffff" />
-      <spotLight position={[0, 6, -2]} angle={0.35} penumbra={0.5} intensity={1} color="#fff8e7" />
+      {/* Main dramatic downward spotlight over center of ring */}
+      <spotLight position={[0, 10, 0]} angle={0.35} penumbra={0.8} intensity={2.5} color="#ffffff" castShadow />
+      <spotLight position={[0, 8, 2]} angle={0.3} penumbra={0.6} intensity={1.2} color="#ffffff" />
+      <spotLight position={[0, 6, -2]} angle={0.35} penumbra={0.5} intensity={0.8} color="#fff8e7" />
       {/* Spotlights directly above each fighter for shadow */}
       <spotLight
         position={[-1.2, 5, 0]}

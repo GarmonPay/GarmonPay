@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
@@ -9,10 +10,42 @@ const SKIN_TONES = ["tone1", "tone2", "tone3", "tone4", "tone5", "tone6"] as con
 const FACE_STYLES = ["determined", "fierce", "calm", "angry", "scarred", "young", "veteran", "masked"] as const;
 const HAIR_STYLES = ["bald", "short_fade", "dreads", "cornrows", "afro", "mohawk", "buzz_cut", "long_tied"] as const;
 
-/** POST /api/arena/fighters — create fighter (one per user). Auth via Bearer token (session in localStorage). */
+/** POST /api/arena/fighters — create fighter (one per user). Auth via cookies (Supabase SSR) or Bearer token fallback. */
 export async function POST(request: Request) {
   try {
-    const userId = await getAuthUserIdStrict(request);
+    // Primary: cookie-based auth via @supabase/ssr
+    const cookieStore = await cookies();
+    const supabaseSsr = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+        },
+      }
+    );
+    let userId: string | null = null;
+    const { data: { user: ssrUser } } = await supabaseSsr.auth.getUser();
+    if (ssrUser) {
+      userId = ssrUser.id;
+    }
+
+    // Fallback: Bearer token in Authorization header
+    if (!userId) {
+      const authHeader = request.headers.get("authorization");
+      const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (bearerToken) {
+        const { createServerClient: createTokenClient } = await import("@/lib/supabase");
+        const tokenClient = createTokenClient(bearerToken);
+        if (tokenClient) {
+          const { data: { user: tokenUser } } = await tokenClient.auth.getUser();
+          if (tokenUser) userId = tokenUser.id;
+        }
+      }
+    }
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
