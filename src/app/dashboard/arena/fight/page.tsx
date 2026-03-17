@@ -410,8 +410,8 @@ export default function FindFightPage() {
       <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
       <BoxingRing
         mode={ringMode}
-        fighterA={(fa ?? { name: "You" }) as FighterData}
-        fighterB={(fb ?? { name: "Opponent" }) as FighterData}
+        fighterA={(fa ?? { name: "You", body_type: "middleweight", skin_tone: "tone3", equipped_gloves: "default", equipped_shorts: "default", equipped_shoes: "default" }) as FighterData}
+        fighterB={(fb ?? { name: "Opponent", body_type: "middleweight", skin_tone: "tone4", equipped_gloves: "default", equipped_shorts: "default", equipped_shoes: "default" }) as FighterData}
         winner={winnerId === fa?.id ? "a" : winnerId === fb?.id ? "b" : null}
         currentRound={1}
         animation={ringAnimation}

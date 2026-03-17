@@ -3,6 +3,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
+  BODY_TYPES,
   FIGHTER_POSES,
   ANIMATIONS,
   getFighterConfig
@@ -49,8 +50,11 @@ export default function RealisticFighter({
     groupRef.current.position.x = position[0] + shift * animData.weightShift.amplitude
   })
 
+  // Guaranteed-safe body dimensions — falls back to middleweight if lookup ever fails
+  const bd = config.bodyType ?? BODY_TYPES.middleweight
+
   const skinMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(config.skinColor),
+    color: new THREE.Color(config.skinColor ?? '#d4956a'),
     roughness: 0.8,
     metalness: 0.0
   }), [config.skinColor])
@@ -71,8 +75,6 @@ export default function RealisticFighter({
     color: new THREE.Color(config.shoes?.color ?? '#111111'),
     roughness: 0.7
   }), [config.shoes?.color])
-
-  const bd = config.bodyType
 
   return (
     <group
@@ -239,7 +241,7 @@ export default function RealisticFighter({
       <pointLight
         position={[0, 2, 1]}
         intensity={0.4}
-        color={config.color}
+        color={config.color ?? '#f0a500'}
         distance={3}
       />
     </group>

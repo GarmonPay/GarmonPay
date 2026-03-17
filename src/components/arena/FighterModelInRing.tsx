@@ -53,7 +53,14 @@ export function FighterModelInRing({
         />
       ) : (
         <RealisticFighter
-          fighter={{ fighter_color: color }}
+          fighter={{
+            fighter_color: color,
+            body_type: 'middleweight',
+            skin_tone: 'tone3',
+            equipped_gloves: 'default',
+            equipped_shorts: 'default',
+            equipped_shoes: 'default',
+          }}
           pose="orthodox_guard"
           animation={animation}
           position={[0, -0.5, 0]}
