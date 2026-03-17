@@ -1,5 +1,7 @@
 # Arena migrations (production)
 
+**Database-first (recommended):** See **`DATABASE_FIRST.md`** for the 5-step process: (1) Check database, (2) Ensure all tables exist, (3) Ensure all columns exist, (4) Fix code, (5) Fix UI. Run **`CHECK_DATABASE.sql`** first, then **`APPLY_MISSING_MIGRATIONS.sql`** if anything is missing.
+
 **Quick fix for "Failed to create fighter" only:** run the single file in Supabase Dashboard → SQL Editor:
 - **`run-in-production-arena-fighters.sql`** — creates `arena_fighters` and dependencies. Safe to run multiple times.
 

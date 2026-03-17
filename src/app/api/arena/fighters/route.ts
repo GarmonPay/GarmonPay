@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase";
+import { startMeshy3DGeneration } from "@/lib/arena-meshy-3d";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
@@ -155,6 +156,13 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Trigger 3D generation in background (fire-and-forget)
+    if (fighter?.id && process.env.MESHY_API_KEY) {
+      startMeshy3DGeneration(fighter.id, userId).catch((err) =>
+        console.error("[arena/fighters] 3D generation trigger failed:", err)
+      );
     }
 
     return NextResponse.json({ success: true, fighter });

@@ -76,44 +76,44 @@ export async function PATCH(
     return NextResponse.json({ message: "winnerId required" }, { status: 400 });
   }
 
-  // Record fight result
+  // Record fight result (arena_fights has no ended_at column)
   const { error: updateErr } = await supabase
     .from("arena_fights")
-    .update({ winner_id: winnerId, betting_open: false, ended_at: new Date().toISOString() })
+    .update({ winner_id: winnerId, betting_open: false })
     .eq("id", fightId);
   if (updateErr) {
     return NextResponse.json({ message: updateErr.message }, { status: 500 });
   }
 
-  // Process spectator bet payouts
+  // Process spectator bet payouts (column is bet_on, not bet_on_fighter_id)
   const { data: bets } = await supabase
     .from("arena_spectator_bets")
-    .select("id, user_id, amount, bet_on_fighter_id, odds")
+    .select("id, user_id, amount, bet_on, odds")
     .eq("fight_id", fightId)
     .eq("payout_processed", false);
 
   if (bets && bets.length > 0) {
     for (const bet of bets) {
-      if ((bet as { bet_on_fighter_id: string }).bet_on_fighter_id === winnerId) {
+      if ((bet as { bet_on: string }).bet_on === winnerId) {
         const betAmount = Number((bet as { amount: number }).amount);
         const odds = Number((bet as { odds?: number }).odds ?? 1.9);
         const payout = Math.max(1, Math.floor(betAmount * odds));
-        // Add payout to bettor's arena_coins
+        // Add payout to bettor's arena_coins (stored on users table)
         const { error: rpcErr } = await supabase.rpc("increment_arena_coins", {
           p_user_id: (bet as { user_id: string }).user_id,
           p_amount: payout,
         });
         if (rpcErr) {
-          // Fallback: manual increment if rpc not available
+          // Fallback: manual increment on users.arena_coins if rpc not available
           const { data: userRow } = await supabase
-            .from("arena_fighters")
+            .from("users")
             .select("id, arena_coins")
-            .eq("user_id", (bet as { user_id: string }).user_id)
+            .eq("id", (bet as { user_id: string }).user_id)
             .maybeSingle();
           if (userRow) {
             const currentCoins = Number((userRow as { arena_coins?: number }).arena_coins ?? 0);
             await supabase
-              .from("arena_fighters")
+              .from("users")
               .update({ arena_coins: currentCoins + payout })
               .eq("id", (userRow as { id: string }).id);
           }

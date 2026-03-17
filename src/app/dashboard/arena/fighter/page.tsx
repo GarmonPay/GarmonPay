@@ -240,7 +240,7 @@ export default function MyFighterPage() {
           {model3dStatus === "not_started" && (
             <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
               <button type="button" onClick={handleGenerate3D} className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]">
-                Generate 3D Fighter
+                Generate My 3D Fighter
               </button>
               {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
             </div>
@@ -269,7 +269,7 @@ export default function MyFighterPage() {
           <div className="generating-3d-banner flex items-center gap-4 p-4 rounded-xl bg-[#161b22] border border-white/10 max-w-md">
             <div className="w-10 h-10 border-2 border-[#f0a500] border-t-transparent rounded-full animate-spin" />
             <div>
-              <p className="text-white font-medium">🤖 Your 3D fighter is being forged...</p>
+              <p className="text-white font-medium">⚡ Your 3D fighter is being forged...</p>
               <p className="text-[#f0a500] text-sm">{threeDProgress}% complete</p>
               <p className="text-[#9ca3af] text-xs">Usually takes 1-3 minutes</p>
             </div>
@@ -301,7 +301,7 @@ export default function MyFighterPage() {
               onClick={handleGenerate3D}
               className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]"
             >
-              Generate Your 3D Fighter
+              Generate My 3D Fighter
             </button>
             {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
           </div>
