@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import {
   TRAINING_SESSIONS,
@@ -12,8 +13,14 @@ import {
 } from "@/lib/arena-training";
 
 import { getApiRoot } from "@/lib/api";
+import { getHasWebGL } from "@/lib/webgl-detect";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
+
+const BoxingRing3D = dynamic(
+  () => import("@/components/arena/BoxingRing3D").then((m) => m.BoxingRing3D),
+  { ssr: false }
+);
 
 const SIGNATURE_MOVE_NAMES: Record<SignatureMoveKey, string> = {
   THE_HAYMAKER: "The Haymaker",
@@ -154,13 +161,20 @@ export default function TrainingGymPage() {
           <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
         </div>
       </div>
-      <div className="min-h-[280px] px-4">
-        <BoxingRing
-          mode="profile"
-          fighterA={fighter as FighterData}
-          fighterAAnimation={trainingSessionKey ? "training" : "idle"}
-          animation="idle"
-        />
+      <div className="min-h-[280px] px-4 relative">
+        {getHasWebGL() && (
+          <div className="absolute inset-0 min-h-[280px] rounded-xl overflow-hidden">
+            <BoxingRing3D mode="setup" />
+          </div>
+        )}
+        <div className={`relative z-10 flex items-center justify-center min-h-[280px] ${getHasWebGL() ? "pointer-events-none" : ""}`}>
+          <BoxingRing
+            mode="profile"
+            fighterA={fighter as FighterData}
+            fighterAAnimation={trainingSessionKey ? "training" : "idle"}
+            animation="idle"
+          />
+        </div>
       </div>
       <div className="p-6 pt-2">
       <p className="text-[#9ca3af] text-sm mb-6">

@@ -8,7 +8,7 @@ import { getFighterConfig } from "@/lib/arena/characterAssets";
 
 const VIEWBOX = "0 0 100 150";
 
-/** Body silhouette — side profile, guard stance. Different proportions per body type. */
+/** Body silhouette — side profile, boxing stance (left jab, right guard). */
 export function LayerBody({
   bodyType,
   skinTone,
@@ -27,32 +27,53 @@ export function LayerBody({
   const chestY = 35;
   const waistY = 75;
   const hipW = isLight ? 18 : isHeavy ? 24 : 21;
-  const legLen = 55;
-  const armLen = 28;
+  const armW = 5;
+  const sl = 50 - shoulderW / 2;
+  const sr = 50 + shoulderW / 2 - 4;
+  const shoulderY = chestY + 5;
+  const leftElbowX = 35;
+  const leftElbowY = 32;
+  const leftGloveX = 36;
+  const leftGloveY = 25;
+  const rightElbowX = 52;
+  const rightElbowY = 34;
+  const rightGloveX = 58;
+  const rightGloveY = 31;
+  const kneeBend = 4;
+  const waistYAdj = waistY + kneeBend;
   return (
     <g className={className}>
-      {/* Legs (back then front) */}
+      {/* Legs (back then front) — knees bent slightly */}
       <path
         fill={hex}
-        d={`M ${50 - hipW / 2} ${waistY} L ${48 - 6} ${150} L ${52 - 6} ${150} Z`}
+        d={`M ${50 - hipW / 2} ${waistYAdj} L ${48 - 6} ${150} L ${52 - 6} ${150} Z`}
       />
       <path
         fill={hex}
-        d={`M ${50 + hipW / 2 - 4} ${waistY} L ${50 + 8} ${150} L ${50 + 16} ${150} Z`}
+        d={`M ${50 + hipW / 2 - 4} ${waistYAdj} L ${50 + 8} ${150} L ${50 + 16} ${150} Z`}
       />
       {/* Torso */}
       <path
         fill={hex}
-        d={`M ${50 - shoulderW / 2} ${chestY} L ${50 - hipW / 2} ${waistY} L ${50 + hipW / 2} ${waistY} L ${50 + shoulderW / 2 - 4} ${chestY} Z`}
+        d={`M ${sl} ${chestY} L ${50 - hipW / 2} ${waistYAdj} L ${50 + hipW / 2} ${waistYAdj} L ${sr} ${chestY} Z`}
       />
-      {/* Arms (guard) */}
+      {/* Left arm: shoulder -> elbow -> jab (in front of face) */}
       <path
         fill={hex}
-        d={`M ${50 - shoulderW / 2} ${chestY + 5} L ${50 - shoulderW / 2 - armLen} ${chestY + 25} L ${50 - shoulderW / 2 - armLen + 8} ${chestY + 28} L ${50 - shoulderW / 2 + 4} ${chestY + 8} Z`}
+        d={`M ${sl} ${shoulderY} L ${leftElbowX - armW / 2} ${leftElbowY + 1} L ${leftElbowX + armW / 2} ${leftElbowY - 1} L ${sl + 2} ${shoulderY + 2} Z`}
       />
       <path
         fill={hex}
-        d={`M ${50 + shoulderW / 2 - 4} ${chestY + 8} L ${50 + shoulderW / 2 + armLen - 8} ${chestY + 22} L ${50 + shoulderW / 2 + armLen} ${chestY + 18} L ${50 + shoulderW / 2} ${chestY + 5} Z`}
+        d={`M ${leftElbowX} ${leftElbowY} L ${leftGloveX - 4} ${leftGloveY + 2} L ${leftGloveX + 4} ${leftGloveY + 2} L ${leftElbowX + armW / 2} ${leftElbowY - 1} Z`}
+      />
+      {/* Right arm: shoulder -> elbow -> guard (near chin) */}
+      <path
+        fill={hex}
+        d={`M ${sr} ${shoulderY} L ${rightElbowX + armW / 2} ${rightElbowY - 1} L ${rightElbowX - armW / 2} ${rightElbowY + 1} L ${sr - 2} ${shoulderY + 2} Z`}
+      />
+      <path
+        fill={hex}
+        d={`M ${rightElbowX} ${rightElbowY} L ${rightGloveX + 4} ${rightGloveY + 2} L ${rightGloveX + 4} ${rightGloveY - 4} L ${rightElbowX + armW / 2} ${rightElbowY - 1} Z`}
       />
       {/* Head */}
       <ellipse cx={50} cy={headY + headR} rx={headR} ry={headR + 2} fill={hex} />
@@ -131,7 +152,7 @@ export function LayerTorso({ skinTone, className = "" }: { skinTone: string; cla
   );
 }
 
-/** Gloves — guard position */
+/** Gloves — boxing stance: left jab (in front of face), right guard (near chin) */
 export function LayerGloves({
   gearKey,
   bodyType,
@@ -150,24 +171,14 @@ export function LayerGloves({
     championship_gloves: "#eab308",
   };
   const fill = colors[gearKey] ?? colors.default;
-  const shoulderW = bodyType === "heavyweight" ? 28 : bodyType === "lightweight" ? 22 : 25;
-  const armLen = 28;
+  const leftGloveX = 36;
+  const leftGloveY = 25;
+  const rightGloveX = 58;
+  const rightGloveY = 31;
   return (
     <g className={className}>
-      <ellipse
-        cx={50 - shoulderW / 2 - armLen + 10}
-        cy={42}
-        rx={10}
-        ry={12}
-        fill={fill}
-      />
-      <ellipse
-        cx={50 + shoulderW / 2 + armLen - 10}
-        cy={38}
-        rx={10}
-        ry={12}
-        fill={fill}
-      />
+      <ellipse cx={leftGloveX} cy={leftGloveY} rx={10} ry={12} fill={fill} />
+      <ellipse cx={rightGloveX} cy={rightGloveY} rx={10} ry={12} fill={fill} />
     </g>
   );
 }
