@@ -1,9 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import "./boxing-ring.css";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { FighterAnimation } from "@/lib/arena-fighter-types";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+
+const RealisticFighterCanvas = dynamic(
+  () => import("@/components/arena/RealisticFighterCanvas").then((m) => m.RealisticFighterCanvas),
+  { ssr: false, loading: () => <div style={{ width: "100%", height: "100%", minHeight: "200px", background: "#0d1117" }} /> }
+);
 
 export type BoxingRingMode = "fight" | "profile" | "setup" | "victory";
 export type RingAnimationState =
@@ -38,6 +43,12 @@ export interface BoxingRingProps {
 const GOLD = "#f0a500";
 const RED = "#c1272d";
 const NAVY = "#0f172a";
+
+function animToPose(anim: string): 'orthodox_guard' | 'victory' | 'defeat' {
+  if (anim === 'victory') return 'victory'
+  if (anim === 'defeat' || anim === 'ko') return 'defeat'
+  return 'orthodox_guard'
+}
 
 export function BoxingRing({
   mode,
@@ -132,19 +143,17 @@ export function BoxingRing({
         {/* Fighters on canvas */}
         <div className="arena-ring-fighters">
           {mode === "profile" && (
-            <div className="arena-ring-fighter-single">
-              <FighterDisplay fighter={fighterA} size="large" animation="idle" showStats showGear />
+            <div className="arena-ring-fighter-single" style={{ minHeight: "220px" }}>
+              <RealisticFighterCanvas fighter={fighterA} pose="orthodox_guard" animation="idle" />
             </div>
           )}
           {(mode === "fight" || mode === "setup" || mode === "victory") && (
             <>
               <div className="arena-ring-fighter-a">
-                <FighterDisplay
+                <RealisticFighterCanvas
                   fighter={fighterA}
-                  size="medium"
+                  pose={animToPose(animA)}
                   animation={animA}
-                  action={lastAction ?? undefined}
-                  showGear
                 />
                 {(mode === "fight" || mode === "victory") && (
                   <div className="arena-ring-hp arena-ring-hp-a">
@@ -155,11 +164,10 @@ export function BoxingRing({
               </div>
               {fighterB && (
                 <div className="arena-ring-fighter-b">
-                  <FighterDisplay
+                  <RealisticFighterCanvas
                     fighter={fighterB}
-                    size="medium"
+                    pose={animToPose(animB)}
                     animation={animB}
-                    showGear
                     mirrored
                   />
                   {(mode === "fight" || mode === "victory") && (

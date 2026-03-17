@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
-import { FallbackFighter3D } from "./FallbackFighter3D";
+import RealisticFighter from "./RealisticFighter";
 
 function ModelInRing({ url }: { url: string }) {
   const { scene } = useGLTF(url);
@@ -16,10 +16,12 @@ export function FighterModelInRing({
   modelUrl,
   color = "#f0a500",
   animation = "idle",
+  fighter,
 }: {
   modelUrl?: string | null;
   color?: string;
   animation?: string;
+  fighter?: any;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const punchTime = useRef(0);
@@ -41,8 +43,22 @@ export function FighterModelInRing({
     <group ref={groupRef}>
       {modelUrl ? (
         <ModelInRing url={modelUrl} />
+      ) : fighter ? (
+        <RealisticFighter
+          fighter={fighter}
+          pose={animation === 'victory' ? 'victory' : animation === 'defeat' ? 'defeat' : 'orthodox_guard'}
+          animation={animation}
+          position={[0, -0.5, 0]}
+          scale={0.8}
+        />
       ) : (
-        <FallbackFighter3D color={color} animation={animation} />
+        <RealisticFighter
+          fighter={{ fighter_color: color }}
+          pose="orthodox_guard"
+          animation={animation}
+          position={[0, -0.5, 0]}
+          scale={0.8}
+        />
       )}
     </group>
   );
