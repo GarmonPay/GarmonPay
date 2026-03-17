@@ -6,7 +6,7 @@ import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
 import { BoxingRing } from "@/components/arena/BoxingRing";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 type LiveFight = {

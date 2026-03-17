@@ -2,7 +2,9 @@
 
 import React from "react";
 import type { BodyType, FaceStyle, HairStyle, GearGlovesKey, GearShoesKey, GearShortsKey, GearHeadgearKey } from "@/lib/arena-fighter-types";
+import type { FighterData } from "@/lib/arena-fighter-types";
 import { getSkinHex } from "@/lib/arena-fighter-types";
+import { getFighterConfig } from "@/lib/arena/characterAssets";
 
 const VIEWBOX = "0 0 100 150";
 
@@ -297,5 +299,61 @@ export function LayerEffects({ show, className = "" }: { show: boolean; classNam
     <g className={className}>
       <ellipse cx={50} cy={75} rx={45} ry={70} fill="#eab308" fillOpacity={0.15} />
     </g>
+  );
+}
+
+/** Full fighter SVG display using layers. Use when API returns equipped_gloves_key etc. */
+export function FighterDisplay({
+  fighter,
+  size = "medium",
+  animation = "idle",
+  showGear = true,
+  mirrored = false,
+  className = "",
+}: {
+  fighter: FighterData;
+  size?: "small" | "medium" | "large";
+  animation?: string;
+  showGear?: boolean;
+  mirrored?: boolean;
+  className?: string;
+}) {
+  const f = fighter as FighterData & { equipped_gloves_key?: string; equipped_shoes_key?: string; equipped_shorts_key?: string; equipped_headgear_key?: string };
+  const normalized = {
+    ...fighter,
+    equipped_gloves: f?.equipped_gloves_key ?? f?.equipped_gloves ?? "default",
+    equipped_shoes: f?.equipped_shoes_key ?? f?.equipped_shoes ?? "default",
+    equipped_shorts: f?.equipped_shorts_key ?? f?.equipped_shorts ?? "default",
+    equipped_headgear: f?.equipped_headgear_key ?? f?.equipped_headgear ?? "none",
+  };
+  getFighterConfig(normalized); // ensure defaults applied for display
+  const bodyType = (fighter?.body_type ?? "middleweight") as string;
+  const skinTone = (fighter?.skin_tone ?? "tone3") as string;
+  const glovesKey = (normalized.equipped_gloves ?? "default") as string;
+  const shortsKey = (normalized.equipped_shorts ?? "default") as string;
+  const shoesKey = (normalized.equipped_shoes ?? "default") as string;
+  const headgearKey = (normalized.equipped_headgear ?? "none") as string;
+  const scale = size === "small" ? 0.5 : size === "large" ? 1.2 : 1;
+  const [vb0, vb1, vb2, vb3] = VIEWBOX.split(" ");
+  return (
+    <svg
+      viewBox={`${vb0} ${vb1} ${vb2} ${vb3}`}
+      width={100 * scale}
+      height={150 * scale}
+      className={className}
+      style={mirrored ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <g transform={`scale(${scale})`}>
+        <LayerBody bodyType={bodyType} skinTone={skinTone} />
+        {showGear && <LayerShorts gearKey={shortsKey} bodyType={bodyType} />}
+        {showGear && <LayerShoes gearKey={shoesKey} />}
+        {showGear && <LayerGloves gearKey={glovesKey} bodyType={bodyType} />}
+        {showGear && headgearKey !== "none" && <LayerHeadgear gearKey={headgearKey as GearHeadgearKey} />}
+        <LayerTorso skinTone={skinTone} />
+        <LayerFace faceStyle={(fighter?.face_style ?? "determined") as FaceStyle} skinTone={skinTone} animation={animation} />
+        <LayerHair hairStyle={(fighter?.hair_style ?? "short_fade") as HairStyle} skinTone={skinTone} />
+        <LayerEffects show={false} />
+      </g>
+    </svg>
   );
 }

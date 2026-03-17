@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 export default function ArenaDailyPage() {

@@ -10,7 +10,10 @@ import { getHasWebGL } from "@/lib/webgl-detect";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
-const Fighter3D = dynamic(() => import("@/components/arena/Fighter3D"), { ssr: false });
+const Fighter3D = dynamic(
+  () => import("@/components/arena/BoxingRing3D").then((m) => m.Fighter3D),
+  { ssr: false }
+);
 
 const REGEN_COST = 500;
 const POLL_3D_INTERVAL_MS = 15_000;

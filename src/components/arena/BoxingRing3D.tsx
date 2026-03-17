@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useRef, useEffect, useImperativeHandle, forwardRef, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { Text, ContactShadows } from "@react-three/drei";
+import { Text, ContactShadows, useGLTF } from "@react-three/drei";
 import { Referee3D, type RefereeState } from "./Referee3D";
 import "./boxing-ring.css";
 
@@ -300,6 +300,85 @@ function SceneContent({
       {fighterBSlot && <group position={[1.2, 0, 0]}>{fighterBSlot}</group>}
       <Referee3D state={refereeState} winnerSide={winnerSide} knockdownCount={knockdownCount} position={[0, 0, 0]} />
     </group>
+  );
+}
+
+/** Placeholder box when no GLB model. For use inside Canvas. */
+function FighterPlaceholder({ color = "#f0a500" }: { color?: string }) {
+  return (
+    <group scale={[0.8, 1.2, 0.4]}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Load and display GLB from URL. For use inside Canvas. */
+function GLBModel({ url, color }: { url: string; color?: string }) {
+  const { scene } = useGLTF(url);
+  const clone = scene.clone();
+  if (color) {
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mat = (child as THREE.Mesh).material;
+        if (mat && Array.isArray(mat)) mat.forEach((m) => ((m as THREE.MeshStandardMaterial).color?.setStyle?.(color)));
+        else if (mat && typeof mat === "object" && "color" in mat) (mat as THREE.MeshStandardMaterial).color?.setStyle?.(color);
+      }
+    });
+  }
+  return <primitive object={clone} />;
+}
+
+/** In-ring fighter slot: GLB when modelUrl provided, else placeholder. Use as child of BoxingRing3D Canvas. */
+export function FighterModelInRing({
+  modelUrl,
+  color = "#f0a500",
+  animation,
+}: {
+  modelUrl?: string | null;
+  color?: string;
+  animation?: string;
+}) {
+  if (!modelUrl || modelUrl.trim() === "") {
+    return <FighterPlaceholder color={color} />;
+  }
+  return (
+    <Suspense fallback={<FighterPlaceholder color={color} />}>
+      <GLBModel url={modelUrl} color={color} />
+    </Suspense>
+  );
+}
+
+/** Standalone 3D fighter view: Canvas with GLB or fallback. Used on fighter profile page. */
+export function Fighter3D({
+  modelUrl,
+  thumbnailUrl,
+  fighterColor = "#f0a500",
+  size = "medium",
+  fallback,
+}: {
+  modelUrl?: string | null;
+  thumbnailUrl?: string | null;
+  fighterColor?: string;
+  size?: "small" | "medium" | "large";
+  fallback?: React.ReactNode;
+}) {
+  const scale = size === "small" ? 0.6 : size === "large" ? 1.4 : 1;
+  if (!modelUrl || modelUrl.trim() === "") {
+    return <>{fallback ?? <div className="min-h-[200px] bg-[#0d1117]" />}</>;
+  }
+  return (
+    <div className="w-full h-full min-h-[260px]" style={{ background: "#000" }}>
+      <Canvas camera={{ position: [0, 1.2, 3], fov: 45 }} gl={{ antialias: true }}>
+        <ambientLight intensity={0.4} />
+        <spotLight position={[5, 10, 5]} angle={0.3} penumbra={1} intensity={1} />
+        <Suspense fallback={fallback ?? null}>
+          <GLBModel url={modelUrl} color={fighterColor} />
+        </Suspense>
+      </Canvas>
+    </div>
   );
 }
 

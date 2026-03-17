@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
-import { FighterDisplay } from "@/components/arena/FighterDisplay";
+import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 const QUESTIONS: {

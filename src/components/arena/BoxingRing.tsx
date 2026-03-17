@@ -1,210 +1,72 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import "./boxing-ring.css";
+import React from "react";
+import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
-import type { FighterAnimation } from "@/lib/arena-fighter-types";
-import { DEFAULT_FIGHTER_VISUAL } from "@/lib/arena-fighter-types";
 
-const RealisticFighterCanvas = dynamic(
-  () => import("@/components/arena/RealisticFighterCanvas").then((m) => m.RealisticFighterCanvas),
-  { ssr: false, loading: () => <div style={{ width: "100%", height: "100%", minHeight: "200px", background: "#0d1117" }} /> }
-);
+export type RingAnimationState = "idle" | "fight" | "victory" | "setup" | "profile" | "pre_fight" | "big_hit" | "ko";
 
-export type BoxingRingMode = "fight" | "profile" | "setup" | "victory";
-export type RingAnimationState =
-  | "idle"
-  | "big_hit"
-  | "knockdown"
-  | "round_start"
-  | "round_end"
-  | "ko"
-  | "victory";
-
-const PLACEHOLDER_FIGHTER: FighterData = {
-  name: "Loading…",
-  style: "—",
-  ...DEFAULT_FIGHTER_VISUAL,
-};
-
-export interface BoxingRingProps {
-  mode: BoxingRingMode;
-  fighterA: FighterData | null | undefined;
+type BoxingRingProps = {
+  mode?: RingAnimationState;
+  fighterA: FighterData;
   fighterB?: FighterData | null;
   winner?: "a" | "b" | null;
   currentRound?: number;
   animation?: RingAnimationState;
-  /** Fighter A display animation (fight/victory mode) */
-  fighterAAnimation?: FighterAnimation;
-  /** Fighter B display animation (fight/victory mode) */
-  fighterBAnimation?: FighterAnimation;
-  /** Optional: health 0–100 for HP bars in fight mode */
+  fighterAAnimation?: string;
+  fighterBAnimation?: string;
   healthA?: number;
   healthB?: number;
-  /** Optional: last action key for fighter A (e.g. JAB, HOOK) for punch animation */
-  lastAction?: string | null;
-  /** Optional: show action buttons (fight mode only) */
+  lastAction?: { actionA?: string; actionB?: string; damageAtoB?: number; damageBtoA?: number } | string | null;
   children?: React.ReactNode;
-}
-
-const GOLD = "#f0a500";
-const RED = "#c1272d";
-const NAVY = "#0f172a";
-
-function animToPose(anim: string): 'orthodox_guard' | 'victory' | 'defeat' {
-  if (anim === 'victory') return 'victory'
-  if (anim === 'defeat' || anim === 'ko') return 'defeat'
-  return 'orthodox_guard'
-}
+};
 
 export function BoxingRing({
-  mode,
+  mode = "idle",
   fighterA,
   fighterB = null,
   winner = null,
   currentRound = 1,
   animation = "idle",
-  fighterAAnimation,
-  fighterBAnimation,
+  fighterAAnimation = "idle",
+  fighterBAnimation = "idle",
   healthA = 100,
   healthB = 100,
-  lastAction,
+  lastAction = null,
   children,
 }: BoxingRingProps) {
-  const safeFighterA = fighterA ?? PLACEHOLDER_FIGHTER;
-  const isVictory = mode === "victory" || winner != null;
-  const iWon = winner === "a";
-  const showVS = mode === "setup" && fighterB;
-  const animA = fighterAAnimation ?? (mode === "victory" ? (iWon ? "victory" : "defeat") : animation === "ko" && !iWon ? "ko" : "idle");
-  const animB = fighterBAnimation ?? (mode === "victory" ? (iWon ? "defeat" : "victory") : animation === "ko" && iWon ? "ko" : "idle");
-  const ringClass = [
-    "arena-boxing-ring",
-    `arena-ring-mode-${mode}`,
-    `arena-ring-anim-${animation}`,
-    isVictory ? "arena-ring-victory" : "",
-    winner === "a" ? "arena-ring-winner-a" : winner === "b" ? "arena-ring-winner-b" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const isProfile = mode === "profile";
+  const fa = fighterA ?? ({ name: "Fighter A", body_type: "middleweight", skin_tone: "tone3", equipped_gloves: "default", equipped_shorts: "default", equipped_shoes: "default" } as FighterData);
+  const fb = fighterB ?? (isProfile ? null : ({ name: "Fighter B", body_type: "middleweight", skin_tone: "tone4", equipped_gloves: "default", equipped_shorts: "default", equipped_shoes: "default" } as FighterData));
 
   return (
-    <div className={ringClass} data-mode={mode}>
-      <div className="arena-ring-backdrop">
-        {/* Crowd silhouettes */}
-        <div className="arena-ring-crowd" aria-hidden />
-        {/* God rays / spotlights */}
-        <div className="arena-ring-spotlights" aria-hidden />
-        {/* Vignette */}
-        <div className="arena-ring-vignette" aria-hidden />
-      </div>
-
-      <div className="arena-ring-stage">
-        {/* 3/4 view ring */}
-        <div className="arena-ring-perspective">
-          <div className="arena-ring-platform">
-            {/* Apron (skirt) */}
-            <div className="arena-ring-apron">
-              <span className="arena-ring-apron-text">GARMONPAY ARENA</span>
-            </div>
-
-            {/* Canvas floor with corner squares */}
-            <div className="arena-ring-canvas">
-              <div className="arena-ring-corner arena-ring-corner-gold" data-corner="bl" />
-              <div className="arena-ring-corner arena-ring-corner-red" data-corner="br" />
-              <div className="arena-ring-corner arena-ring-corner-red" data-corner="tr" />
-              <div className="arena-ring-corner arena-ring-corner-gold" data-corner="tl" />
-              <div className="arena-ring-watermark" aria-hidden>
-                GarmonPay
+    <div className="flex flex-col rounded-xl bg-[#0d1117] border border-white/10 overflow-hidden">
+      <div className={`min-h-[200px] flex items-center justify-center gap-6 p-6 ${isProfile ? "py-8" : ""}`} style={{ background: "linear-gradient(180deg, #1a1008 0%, #0d1117 100%)" }}>
+        <div className="flex items-end justify-center gap-4 md:gap-8">
+          <div className="flex flex-col items-center">
+            {healthA !== undefined && healthA !== 100 && !isProfile && (
+              <div className="w-20 h-2 bg-[#1f2937] rounded-full overflow-hidden mb-1">
+                <div className="h-full bg-[#22c55e]" style={{ width: `${Math.max(0, healthA)}%` }} />
               </div>
-            </div>
-
-            {/* Ropes (4 ropes: gold, red, gold, red) */}
-            <svg className="arena-ring-ropes" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="rope-gold" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#fcd34d" />
-                  <stop offset="100%" stopColor="#b45309" />
-                </linearGradient>
-                <linearGradient id="rope-red" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#dc2626" />
-                  <stop offset="100%" stopColor="#7f1d1d" />
-                </linearGradient>
-              </defs>
-              {/* Rope 1 top */}
-              <path fill="none" stroke="url(#rope-gold)" strokeWidth="1.8" strokeLinecap="round" d="M 8 18 Q 50 14 92 18" />
-              {/* Rope 2 */}
-              <path fill="none" stroke="url(#rope-red)" strokeWidth="1.8" strokeLinecap="round" d="M 8 28 Q 50 24 92 28" />
-              {/* Rope 3 */}
-              <path fill="none" stroke="url(#rope-gold)" strokeWidth="1.8" strokeLinecap="round" d="M 8 38 Q 50 34 92 38" />
-              {/* Rope 4 bottom */}
-              <path fill="none" stroke="url(#rope-red)" strokeWidth="1.8" strokeLinecap="round" d="M 8 48 Q 50 44 92 48" />
-            </svg>
-
-            {/* Corner posts (chrome) */}
-            <div className="arena-ring-post arena-ring-post-tl" />
-            <div className="arena-ring-post arena-ring-post-tr" />
-            <div className="arena-ring-post arena-ring-post-bl arena-ring-pad-gold" />
-            <div className="arena-ring-post arena-ring-post-br arena-ring-pad-red" />
+            )}
+            <FighterDisplay fighter={fa} size={isProfile ? "large" : "medium"} animation={fighterAAnimation || animation} showGear />
+            {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fa.name}</span>}
           </div>
-        </div>
-
-        {/* Fighters on canvas */}
-        <div className="arena-ring-fighters">
-          {mode === "profile" && (
-            <div className="arena-ring-fighter-single" style={{ minHeight: "220px" }}>
-              <RealisticFighterCanvas fighter={safeFighterA} pose="orthodox_guard" animation="idle" />
-            </div>
-          )}
-          {(mode === "fight" || mode === "setup" || mode === "victory") && (
-            <>
-              <div className="arena-ring-fighter-a">
-                <RealisticFighterCanvas
-                  fighter={safeFighterA}
-                  pose={animToPose(animA)}
-                  animation={animA}
-                />
-                {(mode === "fight" || mode === "victory") && (
-                  <div className="arena-ring-hp arena-ring-hp-a">
-                    <div className="arena-ring-hp-bar" style={{ width: `${Math.min(100, Math.max(0, healthA ?? 100))}%` }} />
-                    <span className="arena-ring-hp-label">{safeFighterA?.name ?? "Fighter"}</span>
-                  </div>
-                )}
-              </div>
-              {fighterB && (
-                <div className="arena-ring-fighter-b">
-                  <RealisticFighterCanvas
-                    fighter={fighterB}
-                    pose={animToPose(animB)}
-                    animation={animB}
-                    mirrored
-                  />
-                  {(mode === "fight" || mode === "victory") && (
-                    <div className="arena-ring-hp arena-ring-hp-b">
-                      <div className="arena-ring-hp-bar" style={{ width: `${Math.min(100, Math.max(0, healthB ?? 100))}%` }} />
-                      <span className="arena-ring-hp-label">{fighterB?.name ?? "Fighter"}</span>
-                    </div>
-                  )}
+          {!isProfile && <span className="text-[#f0a500] font-medium pb-8">vs</span>}
+          {fb && (
+            <div className="flex flex-col items-center">
+              {healthB !== undefined && healthB !== 100 && !isProfile && (
+                <div className="w-20 h-2 bg-[#1f2937] rounded-full overflow-hidden mb-1">
+                  <div className="h-full bg-[#ef4444]" style={{ width: `${Math.max(0, healthB)}%` }} />
                 </div>
               )}
-              {showVS && (
-                <div className="arena-ring-vs" aria-hidden>
-                  VS
-                </div>
-              )}
-            </>
+              <FighterDisplay fighter={fb} size={isProfile ? "large" : "medium"} animation={fighterBAnimation || animation} showGear mirrored />
+              {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fb.name}</span>}
+            </div>
           )}
         </div>
-
-        {/* Round badge (fight mode) */}
-        {(mode === "fight" || mode === "setup") && (
-          <div className="arena-ring-round">
-            R{currentRound}
-          </div>
-        )}
       </div>
-
-      {/* Controls / content slot below ring */}
-      {children && <div className="arena-ring-controls">{children}</div>}
+      {children && <div className="p-4 border-t border-white/10">{children}</div>}
     </div>
   );
 }

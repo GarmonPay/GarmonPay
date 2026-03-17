@@ -13,11 +13,10 @@ import type { RefereeState } from "@/components/arena/Referee3D";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { RingAnimationState } from "@/components/arena/BoxingRing";
 
-const BoxingRing3D = dynamic(
-  () => import("@/components/arena/BoxingRing3D").then((m) => m.BoxingRing3D),
+const ArenaFight3DView = dynamic(
+  () => import("@/components/arena/ArenaFight3DView").then((m) => m.ArenaFight3DView),
   { ssr: false }
 );
-import { FighterModelInRing } from "@/components/arena/FighterModelInRing";
 
 const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
@@ -306,7 +305,7 @@ export default function FindFightPage() {
       return (
         <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
           <div className="min-h-[60vh] min-h-[320px] w-full">
-            <BoxingRing3D
+            <ArenaFight3DView
               ref={ring3dRef}
               mode={ringMode}
               koIntensity={winnerId != null ? 1 : 0}
@@ -314,20 +313,10 @@ export default function FindFightPage() {
               winnerSide={refereeWinnerSide}
               knockdownCount={knockdownCount}
               modelGenerating={!(fa as { model_3d_url?: string | null })?.model_3d_url || !(fb as { model_3d_url?: string | null })?.model_3d_url}
-              fighterASlot={
-                <FighterModelInRing
-                  modelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}
-                  color="#f0a500"
-                  animation={animTo3D(fighterAAnim)}
-                />
-              }
-              fighterBSlot={
-                <FighterModelInRing
-                  modelUrl={(fb as { model_3d_url?: string | null })?.model_3d_url}
-                  color="#c1272d"
-                  animation={animTo3D(fighterBAnim)}
-                />
-              }
+              fighterAModelUrl={(fa as { model_3d_url?: string | null })?.model_3d_url}
+              fighterBModelUrl={(fb as { model_3d_url?: string | null })?.model_3d_url}
+              fighterAAnim={fighterAAnim}
+              fighterBAnim={fighterBAnim}
             />
           </div>
           <div className="p-4 border-t border-white/10">

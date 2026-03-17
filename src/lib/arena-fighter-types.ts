@@ -1,7 +1,9 @@
 /**
- * Arena fighter visual system — types and constants.
- * Used by FighterDisplay and fighter creation flow.
+ * Arena fighter visual and gear types. Used by FighterLayers and pages.
+ * Gear keys align with characterAssets (GLOVE_STYLES, SHORTS_STYLES, etc.).
  */
+
+import { SKIN_TONES as SKIN_TONES_MAP } from "@/lib/arena/characterAssets";
 
 export type BodyType = "lightweight" | "middleweight" | "heavyweight";
 export type SkinTone = "tone1" | "tone2" | "tone3" | "tone4" | "tone5" | "tone6";
@@ -46,59 +48,20 @@ export type GearShortsKey =
   | "champion_trunks";
 export type GearHeadgearKey = "none" | "basic" | "pro" | "iron_skull";
 
-export const BODY_TYPES: { value: BodyType; label: string }[] = [
-  { value: "lightweight", label: "Lightweight" },
-  { value: "middleweight", label: "Middleweight" },
-  { value: "heavyweight", label: "Heavyweight" },
-];
-
-export const SKIN_TONES: { value: SkinTone; label: string; hex: string }[] = [
-  { value: "tone1", label: "Light", hex: "#f5d0c5" },
-  { value: "tone2", label: "Fair", hex: "#e8b4a0" },
-  { value: "tone3", label: "Medium", hex: "#c98b63" },
-  { value: "tone4", label: "Olive", hex: "#a67c52" },
-  { value: "tone5", label: "Brown", hex: "#6b4423" },
-  { value: "tone6", label: "Dark", hex: "#3d2314" },
-];
-
-export const FACE_STYLES: { value: FaceStyle; label: string }[] = [
-  { value: "determined", label: "Determined" },
-  { value: "fierce", label: "Fierce" },
-  { value: "calm", label: "Calm" },
-  { value: "angry", label: "Angry" },
-  { value: "scarred", label: "Scarred" },
-  { value: "young", label: "Young" },
-  { value: "veteran", label: "Veteran" },
-  { value: "masked", label: "Masked" },
-];
-
-export const HAIR_STYLES: { value: HairStyle; label: string }[] = [
-  { value: "bald", label: "Bald" },
-  { value: "short_fade", label: "Short fade" },
-  { value: "dreads", label: "Dreads" },
-  { value: "cornrows", label: "Cornrows" },
-  { value: "afro", label: "Afro" },
-  { value: "mohawk", label: "Mohawk" },
-  { value: "buzz_cut", label: "Buzz cut" },
-  { value: "long_tied", label: "Long tied back" },
-];
-
-export type FighterDisplaySize = "small" | "medium" | "large" | "full";
-export type FighterAnimation =
-  | "idle"
-  | "training"
-  | "victory"
-  | "defeat"
-  | "fighting"
-  | "special"
-  | "hit"
-  | "ko";
-
 export interface FighterData {
   id?: string;
   name: string;
   style?: string;
   avatar?: string;
+  body_type?: BodyType;
+  skin_tone?: SkinTone;
+  face_style?: FaceStyle;
+  hair_style?: HairStyle;
+  equipped_gloves?: GearGlovesKey | string | null;
+  equipped_shoes?: GearShoesKey | string | null;
+  equipped_shorts?: GearShortsKey | string | null;
+  equipped_headgear?: GearHeadgearKey | string | null;
+  fighter_color?: string | null;
   strength?: number;
   speed?: number;
   stamina?: number;
@@ -107,36 +70,66 @@ export interface FighterData {
   special?: number;
   wins?: number;
   losses?: number;
-  title?: string;
-  condition?: string;
+  title?: string | null;
+  origin?: string | null;
   win_streak?: number;
+  condition?: string | null;
   training_sessions?: number;
-  body_type?: BodyType | string | null;
-  skin_tone?: SkinTone | string | null;
-  face_style?: FaceStyle | string | null;
-  hair_style?: HairStyle | string | null;
-  equipped_gloves?: GearGlovesKey | string | null;
-  equipped_shoes?: GearShoesKey | string | null;
-  equipped_shorts?: GearShortsKey | string | null;
-  equipped_headgear?: GearHeadgearKey | string | null;
-  equipped_gloves_key?: GearGlovesKey | string | null;
-  equipped_shoes_key?: GearShoesKey | string | null;
-  equipped_shorts_key?: GearShortsKey | string | null;
-  equipped_headgear_key?: GearHeadgearKey | string | null;
+  backstory?: string | null;
   [key: string]: unknown;
 }
 
 export const DEFAULT_FIGHTER_VISUAL: Pick<
   FighterData,
-  "body_type" | "skin_tone" | "face_style" | "hair_style"
+  "body_type" | "skin_tone" | "face_style" | "hair_style" | "equipped_gloves" | "equipped_shoes" | "equipped_shorts" | "equipped_headgear"
 > = {
   body_type: "middleweight",
   skin_tone: "tone3",
   face_style: "determined",
   hair_style: "short_fade",
+  equipped_gloves: "default",
+  equipped_shoes: "default",
+  equipped_shorts: "default",
+  equipped_headgear: "none",
 };
 
-export function getSkinHex(tone: string | null | undefined): string {
-  const t = SKIN_TONES.find((x) => x.value === tone);
-  return t?.hex ?? SKIN_TONES[2].hex;
+/** Resolve skin tone string to hex. Uses characterAssets SKIN_TONES. */
+export function getSkinHex(skinTone: string): string {
+  const key = skinTone in SKIN_TONES_MAP ? (skinTone as keyof typeof SKIN_TONES_MAP) : "tone3";
+  return SKIN_TONES_MAP[key] ?? SKIN_TONES_MAP.tone3;
 }
+
+/** Option arrays for manual fighter creation UI */
+export const BODY_TYPES = [
+  { value: "lightweight" as const, label: "Lightweight" },
+  { value: "middleweight" as const, label: "Middleweight" },
+  { value: "heavyweight" as const, label: "Heavyweight" },
+];
+export const SKIN_TONES = [
+  { value: "tone1" as const, label: "Tone 1", hex: SKIN_TONES_MAP.tone1 },
+  { value: "tone2" as const, label: "Tone 2", hex: SKIN_TONES_MAP.tone2 },
+  { value: "tone3" as const, label: "Tone 3", hex: SKIN_TONES_MAP.tone3 },
+  { value: "tone4" as const, label: "Tone 4", hex: SKIN_TONES_MAP.tone4 },
+  { value: "tone5" as const, label: "Tone 5", hex: SKIN_TONES_MAP.tone5 },
+  { value: "tone6" as const, label: "Tone 6", hex: SKIN_TONES_MAP.tone6 },
+];
+export const FACE_STYLES = [
+  { value: "determined" as const, label: "Determined" },
+  { value: "fierce" as const, label: "Fierce" },
+  { value: "calm" as const, label: "Calm" },
+  { value: "angry" as const, label: "Angry" },
+  { value: "scarred" as const, label: "Scarred" },
+  { value: "young" as const, label: "Young" },
+  { value: "veteran" as const, label: "Veteran" },
+  { value: "masked" as const, label: "Masked" },
+];
+export const HAIR_STYLES = [
+  { value: "bald" as const, label: "Bald" },
+  { value: "short_fade" as const, label: "Short Fade" },
+  { value: "dreads" as const, label: "Dreads" },
+  { value: "cornrows" as const, label: "Cornrows" },
+  { value: "afro" as const, label: "Afro" },
+  { value: "mohawk" as const, label: "Mohawk" },
+  { value: "buzz_cut" as const, label: "Buzz Cut" },
+  { value: "long_tied" as const, label: "Long Tied" },
+];
