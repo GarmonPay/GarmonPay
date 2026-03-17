@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
-
 import { getApiRoot } from "@/lib/api";
 import { BoxingRing } from "@/components/arena/BoxingRing";
 import type { FighterData } from "@/lib/arena-fighter-types";
@@ -28,6 +28,7 @@ type InventoryEntry = {
 };
 
 export default function ArenaStorePage() {
+  const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [items, setItems] = useState<StoreItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -41,12 +42,17 @@ export default function ArenaStorePage() {
   const [fighter, setFighter] = useState<FighterData | null>(null);
 
   const fetchData = useCallback(async () => {
-    const s = await getSessionAsync();
-    if (!s) return;
-    setSession(s);
-    const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const [itemsRes, invRes, meRes] = await Promise.all([
+    try {
+      const s = await getSessionAsync();
+      if (!s) {
+        setLoading(false);
+        router.replace("/login?next=/dashboard/arena/store");
+        return;
+      }
+      setSession(s);
+      const token = s.accessToken ?? s.userId;
+      const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+      const [itemsRes, invRes, meRes] = await Promise.all([
       fetch(`${getApiRoot()}/arena/store/items`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/store/inventory`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
@@ -62,8 +68,12 @@ export default function ArenaStorePage() {
     if (invData?.equipped) setEquipped(invData.equipped || {});
     if (typeof invData?.arenaCoins === "number") setArenaCoins(invData.arenaCoins);
     if (meData?.fighter) setFighter(meData.fighter);
-    setLoading(false);
-  }, []);
+    } catch {
+      setError("Unable to load store.");
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     fetchData();
@@ -159,8 +169,19 @@ export default function ArenaStorePage() {
   const filtered = selectedCategory ? items.filter((i) => i.category === selectedCategory) : items;
   const byCategory = categories.length ? categories : Array.from(new Set(items.map((i) => i.category)));
 
-  if (loading || !session) {
-    return <div className="p-6 text-[#9ca3af]">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Loading…</p>
+      </div>
+    );
+  }
+  if (!session) {
+    return (
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Redirecting to login…</p>
+      </div>
+    );
   }
 
   return (

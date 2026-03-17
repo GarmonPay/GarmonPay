@@ -21,20 +21,22 @@ export default function ResetPasswordPage() {
       return;
     }
     function check() {
-      supabase!.auth.getSession().then(({ data: { session } }) => {
+      supabase!.auth.getSession().then(({ data }) => {
+        const session = data?.session ?? null;
         if (session?.user) {
           setValidSession(true);
           return;
         }
-        supabase!.auth.getUser().then(({ data: { user } }) => setValidSession(!!user));
+        supabase!.auth.getUser().then(({ data: userData }) => setValidSession(!!userData?.user));
       });
     }
     check();
     const t1 = setTimeout(check, 500);
     const t2 = setTimeout(check, 1500);
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: authChangeData } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") check();
     });
+    const subscription = authChangeData?.subscription;
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);

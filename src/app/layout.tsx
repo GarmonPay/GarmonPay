@@ -5,6 +5,7 @@ import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { KeepAlive } from "@/components/KeepAlive";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
+import { ClientErrorBoundary } from "@/components/ClientErrorBoundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -53,9 +54,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased flex min-h-screen flex-col">
-        <AuthStateProvider>
-          {children}
-        </AuthStateProvider>
+        <ClientErrorBoundary>
+          <AuthStateProvider>
+            {children}
+          </AuthStateProvider>
+        </ClientErrorBoundary>
         <KeepAlive />
         <PwaRegistration />
         <PwaInstallPrompt />

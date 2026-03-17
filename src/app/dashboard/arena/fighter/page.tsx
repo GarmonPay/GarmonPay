@@ -29,23 +29,39 @@ export default function MyFighterPage() {
   const poll3dRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchMe = useCallback(async () => {
-    const s = await getSessionAsync();
-    if (!s) return;
-    setSession(s);
-    const token = s.accessToken ?? s.userId;
-    const isToken = !!s.accessToken;
-    const res = await fetch(`${getApiRoot()}/arena/me`, {
-      headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
-      credentials: "include",
-    });
-    const data = res.ok ? await res.json() : null;
-    if (data?.fighter) setFighter(data.fighter);
-    if (typeof data?.arenaCoins === "number") setArenaCoins(data.arenaCoins);
-    setLoading(false);
-  }, []);
+    try {
+      const s = await getSessionAsync();
+      if (!s) {
+        setLoading(false);
+        router.replace("/login?next=/dashboard/arena/fighter");
+        return;
+      }
+      setSession(s);
+      const token = s.accessToken ?? s.userId;
+      const isToken = !!s.accessToken;
+      const res = await fetch(`${getApiRoot()}/arena/me`, {
+        headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        setLoading(false);
+        router.replace("/login?next=/dashboard/arena/fighter");
+        return;
+      }
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      if (data?.fighter) setFighter(data.fighter);
+      if (typeof data?.arenaCoins === "number") setArenaCoins(data.arenaCoins);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 10000);
     fetchMe();
+    return () => clearTimeout(t);
   }, [fetchMe]);
 
   const poll3dStatus = useCallback(() => {
@@ -186,8 +202,19 @@ export default function MyFighterPage() {
     }
   };
 
-  if (loading || !session) {
-    return <div className="p-6 text-[#9ca3af]">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Loading…</p>
+      </div>
+    );
+  }
+  if (!session) {
+    return (
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Redirecting to login…</p>
+      </div>
+    );
   }
   if (!fighter) {
     return (
@@ -205,25 +232,25 @@ export default function MyFighterPage() {
 
   const fighterData: FighterData = {
     ...fighter,
-    name: fighter.name,
-    style: fighter.style,
-    avatar: fighter.avatar,
-    strength: fighter.strength,
-    speed: fighter.speed,
-    stamina: fighter.stamina,
-    defense: fighter.defense,
-    chin: fighter.chin,
-    special: fighter.special,
-    wins: fighter.wins,
-    losses: fighter.losses,
-    body_type: fighter.body_type,
-    skin_tone: fighter.skin_tone,
-    face_style: fighter.face_style,
-    hair_style: fighter.hair_style,
-    equipped_gloves: fighter.equipped_gloves,
-    equipped_shoes: fighter.equipped_shoes,
-    equipped_shorts: fighter.equipped_shorts,
-    equipped_headgear: fighter.equipped_headgear,
+    name: fighter?.name ?? "Fighter",
+    style: fighter?.style ?? "Boxer",
+    avatar: fighter?.avatar ?? "🥊",
+    strength: fighter?.strength ?? 48,
+    speed: fighter?.speed ?? 48,
+    stamina: fighter?.stamina ?? 48,
+    defense: fighter?.defense ?? 48,
+    chin: fighter?.chin ?? 48,
+    special: fighter?.special ?? 20,
+    wins: fighter?.wins ?? 0,
+    losses: fighter?.losses ?? 0,
+    body_type: (fighter?.body_type as FighterData["body_type"]) ?? "middleweight",
+    skin_tone: (fighter?.skin_tone as FighterData["skin_tone"]) ?? "tone3",
+    face_style: (fighter?.face_style as FighterData["face_style"]) ?? "determined",
+    hair_style: (fighter?.hair_style as FighterData["hair_style"]) ?? "short_fade",
+    equipped_gloves: (fighter?.equipped_gloves as FighterData["equipped_gloves"]) ?? "default",
+    equipped_shoes: (fighter?.equipped_shoes as FighterData["equipped_shoes"]) ?? "default",
+    equipped_shorts: (fighter?.equipped_shorts as FighterData["equipped_shorts"]) ?? "default",
+    equipped_headgear: (fighter?.equipped_headgear as FighterData["equipped_headgear"]) ?? "none",
   };
 
   const model3dStatus = (fighter as { model_3d_status?: string }).model_3d_status ?? "not_started";

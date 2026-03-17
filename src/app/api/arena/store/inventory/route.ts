@@ -28,15 +28,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: iErr.message }, { status: 500 });
   }
   const itemIds = Array.from(new Set((inv ?? []).map((r) => (r as { store_item_id: string }).store_item_id)));
+  const f = fighter as { id?: string; equipped_gloves?: string | null; equipped_shoes?: string | null; equipped_shorts?: string | null; equipped_headgear?: string | null } | null;
   if (itemIds.length === 0) {
     return NextResponse.json({
-      fighterId: fighter.id,
+      fighterId: f?.id,
       arenaCoins,
       equipped: {
-        gloves: (fighter as { equipped_gloves?: string }).equipped_gloves,
-        shoes: (fighter as { equipped_shoes?: string }).equipped_shoes,
-        shorts: (fighter as { equipped_shorts?: string }).equipped_shorts,
-        headgear: (fighter as { equipped_headgear?: string }).equipped_headgear,
+        gloves: f?.equipped_gloves ?? undefined,
+        shoes: f?.equipped_shoes ?? undefined,
+        shorts: f?.equipped_shorts ?? undefined,
+        headgear: f?.equipped_headgear ?? undefined,
       },
       inventory: [],
       itemsById: {},
@@ -51,10 +52,10 @@ export async function GET(req: Request) {
   }
   const itemsById = Object.fromEntries((items as { id: string }[]).map((i) => [i.id, i]));
   const equipped = {
-    gloves: (fighter as { equipped_gloves?: string }).equipped_gloves,
-    shoes: (fighter as { equipped_shoes?: string }).equipped_shoes,
-    shorts: (fighter as { equipped_shorts?: string }).equipped_shorts,
-    headgear: (fighter as { equipped_headgear?: string }).equipped_headgear,
+    gloves: f?.equipped_gloves ?? undefined,
+    shoes: f?.equipped_shoes ?? undefined,
+    shorts: f?.equipped_shorts ?? undefined,
+    headgear: f?.equipped_headgear ?? undefined,
   };
   const inventory = (inv ?? []).map((r) => {
     const row = r as { id: string; store_item_id: string; purchased_at: string };

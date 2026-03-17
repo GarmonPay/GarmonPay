@@ -17,24 +17,32 @@ export default function CreateFighterEntryPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getSessionAsync().then((session) => {
-      if (!session || cancelled) return;
-      const token = session.accessToken ?? session.userId;
-      const headers: Record<string, string> = session.accessToken
-        ? { Authorization: `Bearer ${token}` }
-        : { "X-User-Id": token };
-      fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (cancelled || !data) return;
-          if (data.fighter) setFighter(data.fighter);
-          if (typeof data.arenaCoins === "number") setArenaCoins(data.arenaCoins);
-          if (data.freeGenerationUsed === true) setFreeGenerationUsed(true);
-        })
-        .finally(() => { if (!cancelled) setLoading(false); });
-    });
+    getSessionAsync()
+      .then((session) => {
+        if (cancelled) return;
+        if (!session) {
+          setLoading(false);
+          router.replace("/login?next=/dashboard/arena/create");
+          return;
+        }
+        const token = session.accessToken ?? session.userId;
+        const headers: Record<string, string> = session.accessToken
+          ? { Authorization: `Bearer ${token}` }
+          : { "X-User-Id": token };
+        return fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (cancelled || !data) return;
+            if (data.fighter) setFighter(data.fighter);
+            if (typeof data.arenaCoins === "number") setArenaCoins(data.arenaCoins);
+            if (data.freeGenerationUsed === true) setFreeGenerationUsed(true);
+          })
+          .finally(() => { if (!cancelled) setLoading(false); });
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (loading || !fighter) return;

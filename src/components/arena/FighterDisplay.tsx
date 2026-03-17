@@ -24,7 +24,7 @@ const SIZES: Record<FighterDisplaySize, { w: number; h: number }> = {
 };
 
 export interface FighterDisplayProps {
-  fighter: FighterData;
+  fighter?: FighterData | null;
   size?: FighterDisplaySize;
   animation?: FighterAnimation;
   action?: string;
@@ -34,8 +34,14 @@ export interface FighterDisplayProps {
   className?: string;
 }
 
+const PLACEHOLDER_FIGHTER: FighterData = {
+  name: "Loading…",
+  style: "—",
+  ...DEFAULT_FIGHTER_VISUAL,
+};
+
 export function FighterDisplay({
-  fighter,
+  fighter: fighterProp,
   size = "medium",
   animation = "idle",
   action,
@@ -44,18 +50,19 @@ export function FighterDisplay({
   mirrored = false,
   className = "",
 }: FighterDisplayProps) {
-  const { w, h } = SIZES[size];
+  const fighter = fighterProp ?? PLACEHOLDER_FIGHTER;
+  const { w, h } = SIZES[size] ?? SIZES.medium;
   const scale = useMemo(() => (size === "small" ? 0.8 : size === "medium" ? 1 : size === "large" ? 1.5 : 2), [size]);
 
-  const bodyType = (fighter.body_type as "lightweight" | "middleweight" | "heavyweight") ?? DEFAULT_FIGHTER_VISUAL.body_type ?? "middleweight";
-  const skinTone = (fighter.skin_tone as string) ?? DEFAULT_FIGHTER_VISUAL.skin_tone ?? "tone3";
-  const faceStyle = (fighter.face_style as string) ?? DEFAULT_FIGHTER_VISUAL.face_style ?? "determined";
-  const hairStyle = (fighter.hair_style as string) ?? DEFAULT_FIGHTER_VISUAL.hair_style ?? "short_fade";
+  const bodyType = (fighter?.body_type as "lightweight" | "middleweight" | "heavyweight") ?? DEFAULT_FIGHTER_VISUAL?.body_type ?? "middleweight";
+  const skinTone = (fighter?.skin_tone as string) ?? DEFAULT_FIGHTER_VISUAL?.skin_tone ?? "tone3";
+  const faceStyle = (fighter?.face_style as string) ?? DEFAULT_FIGHTER_VISUAL?.face_style ?? "determined";
+  const hairStyle = (fighter?.hair_style as string) ?? DEFAULT_FIGHTER_VISUAL?.hair_style ?? "short_fade";
   const gear = showGear ? {
-    gloves: (fighter.equipped_gloves_key ?? fighter.equipped_gloves) as string | undefined,
-    shoes: (fighter.equipped_shoes_key ?? fighter.equipped_shoes) as string | undefined,
-    shorts: (fighter.equipped_shorts_key ?? fighter.equipped_shorts) as string | undefined,
-    headgear: (fighter.equipped_headgear_key ?? fighter.equipped_headgear) as string | undefined,
+    gloves: (fighter?.equipped_gloves_key ?? fighter?.equipped_gloves) as string | undefined,
+    shoes: (fighter?.equipped_shoes_key ?? fighter?.equipped_shoes) as string | undefined,
+    shorts: (fighter?.equipped_shorts_key ?? fighter?.equipped_shorts) as string | undefined,
+    headgear: (fighter?.equipped_headgear_key ?? fighter?.equipped_headgear) as string | undefined,
   } : { gloves: undefined, shoes: undefined, shorts: undefined, headgear: undefined };
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   const glovesKey = gear.gloves && !isUuid(gear.gloves) ? gear.gloves : "default";

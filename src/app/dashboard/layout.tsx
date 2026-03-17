@@ -6,6 +6,7 @@ import { DesktopLayout } from "@/components/desktop-layout";
 import MobileNav from "@/components/mobile-nav";
 import { getSessionAsync } from "@/lib/session";
 import { attachReferralByReferrerIdSession } from "@/lib/api";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
 
@@ -34,7 +35,7 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <>
+    <AppErrorBoundary>
       {/* Mobile: default under 768px; bottom nav, no sidebar */}
       <div className="block tablet:hidden">
         <MobileLayout>{children}</MobileLayout>
@@ -44,6 +45,6 @@ export default function DashboardLayout({
         <DesktopLayout>{children}</DesktopLayout>
       </div>
       <MobileNav />
-    </>
+    </AppErrorBoundary>
   );
 }

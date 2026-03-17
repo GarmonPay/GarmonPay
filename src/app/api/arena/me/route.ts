@@ -40,11 +40,12 @@ export async function GET(req: Request) {
     totalStats = getTotalStats(fighter as Record<string, number>);
     weightClass = getWeightClass(totalStats);
 
+    const f = fighter as { equipped_gloves?: string | null; equipped_shoes?: string | null; equipped_shorts?: string | null; equipped_headgear?: string | null };
     const ids = [
-      (fighter as { equipped_gloves?: string }).equipped_gloves,
-      (fighter as { equipped_shoes?: string }).equipped_shoes,
-      (fighter as { equipped_shorts?: string }).equipped_shorts,
-      (fighter as { equipped_headgear?: string }).equipped_headgear,
+      f?.equipped_gloves ?? undefined,
+      f?.equipped_shoes ?? undefined,
+      f?.equipped_shorts ?? undefined,
+      f?.equipped_headgear ?? undefined,
     ].filter(Boolean) as string[];
     if (ids.length > 0) {
       const { data: items } = await supabase
@@ -54,22 +55,29 @@ export async function GET(req: Request) {
       const byId = Object.fromEntries(
         ((items ?? []) as { id: string; category: string; name: string }[]).map((i) => [i.id, i])
       );
-      const f = fighter as { equipped_gloves?: string; equipped_shoes?: string; equipped_shorts?: string; equipped_headgear?: string };
       resolvedFighter = {
         ...fighter,
-        equipped_gloves_key: f.equipped_gloves
+        body_type: (fighter as { body_type?: string | null })?.body_type ?? "middleweight",
+        skin_tone: (fighter as { skin_tone?: string | null })?.skin_tone ?? "tone3",
+        face_style: (fighter as { face_style?: string | null })?.face_style ?? "determined",
+        hair_style: (fighter as { hair_style?: string | null })?.hair_style ?? "short_fade",
+        equipped_gloves_key: f?.equipped_gloves
           ? storeItemToGlovesKey(byId[f.equipped_gloves]?.category ?? "", byId[f.equipped_gloves]?.name ?? "")
           : "default",
-        equipped_shoes_key: f.equipped_shoes
+        equipped_shoes_key: f?.equipped_shoes
           ? storeItemToShoesKey(byId[f.equipped_shoes]?.category ?? "", byId[f.equipped_shoes]?.name ?? "")
           : "default",
-        equipped_shorts_key: f.equipped_shorts
+        equipped_shorts_key: f?.equipped_shorts
           ? storeItemToShortsKey(byId[f.equipped_shorts]?.category ?? "", byId[f.equipped_shorts]?.name ?? "")
           : "default",
-        equipped_headgear_key: f.equipped_headgear
+        equipped_headgear_key: f?.equipped_headgear
           ? storeItemToHeadgearKey(byId[f.equipped_headgear]?.category ?? "", byId[f.equipped_headgear]?.name ?? "")
           : "none",
       } as typeof fighter & {
+        body_type: string;
+        skin_tone: string;
+        face_style: string;
+        hair_style: string;
         equipped_gloves_key: string;
         equipped_shoes_key: string;
         equipped_shorts_key: string;
@@ -78,11 +86,19 @@ export async function GET(req: Request) {
     } else {
       resolvedFighter = {
         ...fighter,
+        body_type: (fighter as { body_type?: string | null })?.body_type ?? "middleweight",
+        skin_tone: (fighter as { skin_tone?: string | null })?.skin_tone ?? "tone3",
+        face_style: (fighter as { face_style?: string | null })?.face_style ?? "determined",
+        hair_style: (fighter as { hair_style?: string | null })?.hair_style ?? "short_fade",
         equipped_gloves_key: "default",
         equipped_shoes_key: "default",
         equipped_shorts_key: "default",
         equipped_headgear_key: "none",
       } as typeof fighter & {
+        body_type: string;
+        skin_tone: string;
+        face_style: string;
+        hair_style: string;
         equipped_gloves_key: string;
         equipped_shoes_key: string;
         equipped_shorts_key: string;

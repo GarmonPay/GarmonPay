@@ -32,31 +32,74 @@ export default function ArenaHubPage() {
   }, []);
 
   useEffect(() => {
-    getSessionAsync().then((s) => {
-      if (!s) {
-        router.replace("/login?next=/dashboard/arena");
-        return;
-      }
-      setSession(s);
-      const token = s.accessToken ?? s.userId;
-      const isToken = !!s.accessToken;
-      fetch(`${getApiRoot()}/arena/me`, {
-        headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
-        credentials: "include",
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.fighter) setFighter(data.fighter);
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (cancelled) return;
+      setLoading(false);
+    }, 12000);
+
+    getSessionAsync()
+      .then((s) => {
+        if (cancelled) return;
+        if (!s) {
+          setLoading(false);
+          router.replace("/login?next=/dashboard/arena");
+          return;
+        }
+        setSession(s);
+        const token = s.accessToken ?? s.userId;
+        const isToken = !!s.accessToken;
+        const root = getApiRoot();
+        return fetch(`${root}/arena/me`, {
+          headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
+          credentials: "include",
         })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    });
+          .then((r) => {
+            if (cancelled) return null;
+            if (r.status === 401) {
+              router.replace("/login?next=/dashboard/arena");
+              return null;
+            }
+            return r.ok ? r.json() : null;
+          })
+          .then((data) => {
+            if (cancelled) return;
+            if (data?.fighter) setFighter(data.fighter);
+          })
+          .catch(() => {})
+          .finally(() => {
+            if (!cancelled) {
+              clearTimeout(timeout);
+              setLoading(false);
+            }
+          });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearTimeout(timeout);
+          setLoading(false);
+        }
+      })
+      .finally(() => clearTimeout(timeout));
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [router]);
 
-  if (!session || loading) {
+  if (loading) {
     return (
       <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
         <p className="text-[#9ca3af]">Loading GarmonPay Arena…</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">Redirecting to login…</p>
       </div>
     );
   }

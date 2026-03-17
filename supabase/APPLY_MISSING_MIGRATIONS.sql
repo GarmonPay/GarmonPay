@@ -38,6 +38,8 @@ CREATE INDEX IF NOT EXISTS arena_spectator_bets_payout ON public.arena_spectator
 -- (visual customization + AI generation + 3D model)
 -- ============================================================
 ALTER TABLE public.arena_fighters
+  ADD COLUMN IF NOT EXISTS title TEXT,
+  ADD COLUMN IF NOT EXISTS training_sessions INT NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS body_type TEXT DEFAULT 'middleweight',
   ADD COLUMN IF NOT EXISTS skin_tone TEXT DEFAULT 'tone3',
   ADD COLUMN IF NOT EXISTS face_style TEXT DEFAULT 'determined',
@@ -155,6 +157,59 @@ CREATE INDEX IF NOT EXISTS arena_model_queue_status ON public.arena_model_queue(
 
 
 -- ============================================================
+-- SECTION 7b: Pinball tables (if not exist)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.pinball_games (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('free', 'h2h', 'tournament')),
+  score INT NOT NULL DEFAULT 0 CHECK (score >= 0),
+  balls_used INT NOT NULL DEFAULT 0,
+  duration_seconds INT NOT NULL DEFAULT 0,
+  garmon_completions INT NOT NULL DEFAULT 0,
+  jackpot_hit BOOLEAN NOT NULL DEFAULT FALSE,
+  coins_earned INT NOT NULL DEFAULT 0,
+  cash_earned_cents INT NOT NULL DEFAULT 0,
+  hit_log JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS pinball_games_user_id ON public.pinball_games(user_id);
+CREATE INDEX IF NOT EXISTS pinball_games_created_at ON public.pinball_games(created_at DESC);
+CREATE INDEX IF NOT EXISTS pinball_games_mode ON public.pinball_games(mode);
+
+CREATE TABLE IF NOT EXISTS public.pinball_jackpot (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  current_amount_cents INT NOT NULL DEFAULT 500 CHECK (current_amount_cents >= 0),
+  last_won_at TIMESTAMPTZ,
+  last_winner_id UUID,
+  total_contributed_cents BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pinball_leaderboard (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE,
+  username TEXT,
+  highest_score INT NOT NULL DEFAULT 0,
+  total_score BIGINT NOT NULL DEFAULT 0,
+  games_played INT NOT NULL DEFAULT 0,
+  level INT NOT NULL DEFAULT 1,
+  level_name TEXT NOT NULL DEFAULT 'ROOKIE',
+  wins INT NOT NULL DEFAULT 0,
+  losses INT NOT NULL DEFAULT 0,
+  total_earned_cents BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pinball_leaderboard_highest ON public.pinball_leaderboard(highest_score DESC);
+CREATE INDEX IF NOT EXISTS pinball_leaderboard_total ON public.pinball_leaderboard(total_score DESC);
+
+INSERT INTO public.pinball_jackpot (current_amount_cents, updated_at)
+SELECT 500, NOW()
+WHERE NOT EXISTS (SELECT 1 FROM public.pinball_jackpot LIMIT 1);
+
+
+-- ============================================================
 -- SECTION 8: Fix arena_season_pass Stripe columns
 -- ============================================================
 ALTER TABLE public.arena_season_pass
@@ -203,6 +258,16 @@ INSERT INTO public.arena_fighters (
   ('a0000000-0000-0000-0000-000000000005', 'Rush',    'Swarmer',       '🥊', 55, 68, 58, 44, 48, 26),
   ('a0000000-0000-0000-0000-000000000006', 'Ice',     'Technician',    '🥊', 50, 55, 54, 62, 52, 35)
 ON CONFLICT (user_id) DO NOTHING;
+
+-- View used by fight create (AI opponent) to get a CPU user_id
+CREATE OR REPLACE VIEW public.arena_cpu_fighters AS
+SELECT id, user_id, name, style, avatar, strength, speed, stamina, defense, chin, special
+FROM public.arena_fighters
+WHERE user_id IN (
+  'a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002',
+  'a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004',
+  'a0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000006'
+);
 
 
 -- ============================================================
@@ -280,7 +345,12 @@ UNION ALL SELECT 'arena_tournaments.tournament_type', EXISTS(SELECT 1 FROM infor
 UNION ALL SELECT 'arena_daily_spin table',            EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='arena_daily_spin')
 UNION ALL SELECT 'arena_activity_log table',          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='arena_activity_log')
 UNION ALL SELECT 'arena_model_queue table',           EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='arena_model_queue')
+UNION ALL SELECT 'arena_cpu_fighters view',           EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='arena_cpu_fighters')
+UNION ALL SELECT 'pinball_games table',                EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='pinball_games')
+UNION ALL SELECT 'pinball_jackpot table',              EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='pinball_jackpot')
+UNION ALL SELECT 'pinball_leaderboard table',          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='pinball_leaderboard')
 UNION ALL SELECT 'cpu_fighters seeded',               EXISTS(SELECT 1 FROM public.arena_fighters WHERE user_id='a0000000-0000-0000-0000-000000000001')
 UNION ALL SELECT 'store_items seeded',                EXISTS(SELECT 1 FROM public.arena_store_items LIMIT 1)
 UNION ALL SELECT 'jackpot row exists',                EXISTS(SELECT 1 FROM public.arena_jackpot LIMIT 1)
-UNION ALL SELECT 'tournaments seeded',                EXISTS(SELECT 1 FROM public.arena_tournaments LIMIT 1);
+UNION ALL SELECT 'tournaments seeded',                EXISTS(SELECT 1 FROM public.arena_tournaments LIMIT 1)
+UNION ALL SELECT 'pinball_jackpot seeded',            EXISTS(SELECT 1 FROM public.pinball_jackpot LIMIT 1);

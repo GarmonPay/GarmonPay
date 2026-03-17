@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import "./boxing-ring.css";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import type { FighterAnimation } from "@/lib/arena-fighter-types";
+import { DEFAULT_FIGHTER_VISUAL } from "@/lib/arena-fighter-types";
 
 const RealisticFighterCanvas = dynamic(
   () => import("@/components/arena/RealisticFighterCanvas").then((m) => m.RealisticFighterCanvas),
@@ -20,9 +21,15 @@ export type RingAnimationState =
   | "ko"
   | "victory";
 
+const PLACEHOLDER_FIGHTER: FighterData = {
+  name: "Loading…",
+  style: "—",
+  ...DEFAULT_FIGHTER_VISUAL,
+};
+
 export interface BoxingRingProps {
   mode: BoxingRingMode;
-  fighterA: FighterData;
+  fighterA: FighterData | null | undefined;
   fighterB?: FighterData | null;
   winner?: "a" | "b" | null;
   currentRound?: number;
@@ -64,6 +71,7 @@ export function BoxingRing({
   lastAction,
   children,
 }: BoxingRingProps) {
+  const safeFighterA = fighterA ?? PLACEHOLDER_FIGHTER;
   const isVictory = mode === "victory" || winner != null;
   const iWon = winner === "a";
   const showVS = mode === "setup" && fighterB;
@@ -144,21 +152,21 @@ export function BoxingRing({
         <div className="arena-ring-fighters">
           {mode === "profile" && (
             <div className="arena-ring-fighter-single" style={{ minHeight: "220px" }}>
-              <RealisticFighterCanvas fighter={fighterA} pose="orthodox_guard" animation="idle" />
+              <RealisticFighterCanvas fighter={safeFighterA} pose="orthodox_guard" animation="idle" />
             </div>
           )}
           {(mode === "fight" || mode === "setup" || mode === "victory") && (
             <>
               <div className="arena-ring-fighter-a">
                 <RealisticFighterCanvas
-                  fighter={fighterA}
+                  fighter={safeFighterA}
                   pose={animToPose(animA)}
                   animation={animA}
                 />
                 {(mode === "fight" || mode === "victory") && (
                   <div className="arena-ring-hp arena-ring-hp-a">
-                    <div className="arena-ring-hp-bar" style={{ width: `${healthA}%` }} />
-                    <span className="arena-ring-hp-label">{fighterA.name}</span>
+                    <div className="arena-ring-hp-bar" style={{ width: `${Math.min(100, Math.max(0, healthA ?? 100))}%` }} />
+                    <span className="arena-ring-hp-label">{safeFighterA?.name ?? "Fighter"}</span>
                   </div>
                 )}
               </div>
@@ -172,8 +180,8 @@ export function BoxingRing({
                   />
                   {(mode === "fight" || mode === "victory") && (
                     <div className="arena-ring-hp arena-ring-hp-b">
-                      <div className="arena-ring-hp-bar" style={{ width: `${healthB}%` }} />
-                      <span className="arena-ring-hp-label">{fighterB.name}</span>
+                      <div className="arena-ring-hp-bar" style={{ width: `${Math.min(100, Math.max(0, healthB ?? 100))}%` }} />
+                      <span className="arena-ring-hp-label">{fighterB?.name ?? "Fighter"}</span>
                     </div>
                   )}
                 </div>

@@ -32,32 +32,32 @@ function buildFighterPrompt(fighter: {
   fighter_color?: string | null;
 }): string {
   const shorts =
-    fighter.equipped_shorts && fighter.equipped_shorts !== "default"
+    fighter?.equipped_shorts && fighter.equipped_shorts !== "default"
       ? `${fighter.equipped_shorts} colored`
       : "dark grey";
   const gloves =
-    fighter.equipped_gloves && fighter.equipped_gloves !== "default"
+    fighter?.equipped_gloves && fighter.equipped_gloves !== "default"
       ? "Wearing professional boxing gloves."
       : "Hands wrapped in white hand wraps.";
   const shoes =
-    fighter.equipped_shoes && fighter.equipped_shoes !== "default"
+    fighter?.equipped_shoes && fighter.equipped_shoes !== "default"
       ? "Wearing boxing boots."
       : "Bare feet.";
   const headgear =
-    fighter.equipped_headgear && fighter.equipped_headgear !== "none"
+    fighter?.equipped_headgear && fighter.equipped_headgear !== "none"
       ? "Wearing boxing headgear."
       : "";
 
   return `
 Professional underground boxer in fighting stance.
-${fighter.body_type || "athletic"} muscular build.
+${fighter?.body_type || "athletic"} muscular build.
 Hands raised in guard position.
 Wearing ${shorts} boxing shorts.
 ${gloves}
 ${shoes}
 ${headgear}
-${fighter.personality || "Fierce"} expression.
-${fighter.fighter_color ? `Accent color ${fighter.fighter_color}.` : ""}
+${fighter?.personality || "Fierce"} expression.
+${fighter?.fighter_color ? `Accent color ${fighter.fighter_color}.` : ""}
 Dark dramatic studio lighting.
 Photorealistic detailed 3D character.
 Full body visible from head to toe.
@@ -87,8 +87,8 @@ export async function startMeshy3DGeneration(
 
   if (fighterErr || !fighter) return null;
 
-  const f = fighter as FighterRow;
-  const ids = [f.equipped_gloves, f.equipped_shoes, f.equipped_shorts, f.equipped_headgear].filter(
+  const f = (fighter ?? {}) as FighterRow;
+  const ids = [f?.equipped_gloves, f?.equipped_shoes, f?.equipped_shorts, f?.equipped_headgear].filter(
     Boolean
   ) as string[];
   let equipped_gloves = "default";
@@ -104,22 +104,22 @@ export async function startMeshy3DGeneration(
     const byId = Object.fromEntries(
       ((items ?? []) as { id: string; category: string; name: string }[]).map((i) => [i.id, i])
     );
-    equipped_gloves = f.equipped_gloves
+    equipped_gloves = f?.equipped_gloves
       ? storeItemToGlovesKey(byId[f.equipped_gloves]?.category ?? "", byId[f.equipped_gloves]?.name ?? "")
       : "default";
-    equipped_shoes = f.equipped_shoes
+    equipped_shoes = f?.equipped_shoes
       ? storeItemToShoesKey(byId[f.equipped_shoes]?.category ?? "", byId[f.equipped_shoes]?.name ?? "")
       : "default";
-    equipped_shorts = f.equipped_shorts
+    equipped_shorts = f?.equipped_shorts
       ? storeItemToShortsKey(byId[f.equipped_shorts]?.category ?? "", byId[f.equipped_shorts]?.name ?? "")
       : "default";
-    equipped_headgear = f.equipped_headgear
+    equipped_headgear = f?.equipped_headgear
       ? storeItemToHeadgearKey(byId[f.equipped_headgear]?.category ?? "", byId[f.equipped_headgear]?.name ?? "")
       : "none";
   }
 
   const prompt = buildFighterPrompt({
-    body_type: f.body_type,
+    body_type: f?.body_type ?? undefined,
     personality: f.personality,
     fighter_color: f.fighter_color,
     equipped_shorts,

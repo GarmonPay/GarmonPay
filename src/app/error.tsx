@@ -13,7 +13,11 @@ export default function Error({
     console.error(error);
   }, [error]);
 
-  const safeMessage = typeof error.message === "string" ? error.message.slice(0, 500) : "Unknown error";
+  const rawMessage = error?.message;
+  const safeMessage =
+    typeof rawMessage === "string"
+      ? rawMessage.slice(0, 500)
+      : "Something went wrong. Please try again.";
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0a0e17] text-[#f9fafb]">
       <h1 className="text-xl font-bold mb-2">Something went wrong</h1>

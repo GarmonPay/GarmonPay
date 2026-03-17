@@ -340,24 +340,24 @@ export function getFighterConfig(fighter: any) {
     }
   }
   // equipped_gloves / equipped_shorts / equipped_shoes may be a UUID (from old inventory
-  // system) or a gear key string. Trim first so whitespace can't break the lookup.
-  const bodyTypeKey   = (typeof fighter.body_type       === 'string' ? fighter.body_type.trim()       : '') as keyof typeof BODY_TYPES
-  const skinToneKey   = (typeof fighter.skin_tone        === 'string' ? fighter.skin_tone.trim()        : '') as keyof typeof SKIN_TONES
-  const glovesKey     = (typeof fighter.equipped_gloves  === 'string' ? fighter.equipped_gloves.trim()  : '') as keyof typeof GLOVE_STYLES
-  const shortsKey     = (typeof fighter.equipped_shorts  === 'string' ? fighter.equipped_shorts.trim()  : '') as keyof typeof SHORTS_STYLES
-  const shoesKey      = (typeof fighter.equipped_shoes   === 'string' ? fighter.equipped_shoes.trim()   : '') as keyof typeof SHOE_STYLES
-  const headgearKey   = (typeof fighter.equipped_headgear === 'string' ? fighter.equipped_headgear.trim() : '') as keyof typeof HEADGEAR_STYLES
+  // system) or a gear key string. Use optional chaining — DB columns can be null for existing fighters.
+  const bodyTypeKey   = (typeof fighter?.body_type       === 'string' ? fighter.body_type.trim()       : '') as keyof typeof BODY_TYPES
+  const skinToneKey   = (typeof fighter?.skin_tone      === 'string' ? fighter.skin_tone.trim()       : '') as keyof typeof SKIN_TONES
+  const glovesKey     = (typeof fighter?.equipped_gloves  === 'string' ? fighter.equipped_gloves.trim()  : '') as keyof typeof GLOVE_STYLES
+  const shortsKey     = (typeof fighter?.equipped_shorts  === 'string' ? fighter.equipped_shorts.trim()  : '') as keyof typeof SHORTS_STYLES
+  const shoesKey      = (typeof fighter?.equipped_shoes   === 'string' ? fighter.equipped_shoes.trim()   : '') as keyof typeof SHOE_STYLES
+  const headgearKey   = (typeof fighter?.equipped_headgear === 'string' ? fighter.equipped_headgear.trim() : '') as keyof typeof HEADGEAR_STYLES
 
   return {
-    bodyType:  BODY_TYPES[bodyTypeKey]   ?? BODY_TYPES.middleweight,
-    skinColor: SKIN_TONES[skinToneKey]   ?? SKIN_TONES.tone3,
-    gloves:    GLOVE_STYLES[glovesKey]   ?? GLOVE_STYLES.default,
-    shorts:    SHORTS_STYLES[shortsKey]  ?? SHORTS_STYLES.default,
-    shoes:     SHOE_STYLES[shoesKey]     ?? SHOE_STYLES.default,
+    bodyType:  (BODY_TYPES[bodyTypeKey] ?? BODY_TYPES.middleweight),
+    skinColor: (SKIN_TONES[skinToneKey] ?? SKIN_TONES.tone3),
+    gloves:    (GLOVE_STYLES[glovesKey] ?? GLOVE_STYLES.default),
+    shorts:    (SHORTS_STYLES[shortsKey] ?? SHORTS_STYLES.default),
+    shoes:     (SHOE_STYLES[shoesKey] ?? SHOE_STYLES.default),
     headgear:  (headgearKey && headgearKey !== 'none')
                  ? (HEADGEAR_STYLES[headgearKey] ?? null)
                  : null,
     pose:  FIGHTER_POSES.orthodox_guard,
-    color: fighter.fighter_color || '#f0a500'
+    color: (fighter?.fighter_color && typeof fighter.fighter_color === 'string') ? fighter.fighter_color : '#f0a500'
   }
 }

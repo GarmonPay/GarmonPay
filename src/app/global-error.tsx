@@ -7,7 +7,11 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const safeMessage = typeof error.message === "string" ? error.message.slice(0, 500) : "Unknown error";
+  const rawMessage = error?.message;
+  const safeMessage =
+    typeof rawMessage === "string"
+      ? rawMessage.slice(0, 500)
+      : "Something went wrong. Please try again.";
   return (
     <html lang="en">
       <body style={{ background: "#0a0e17", color: "#f9fafb", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", margin: 0, fontFamily: "system-ui, sans-serif" }}>

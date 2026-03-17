@@ -31,14 +31,22 @@ export class AppErrorBoundary extends React.Component<
     };
   }
 
+  componentDidCatch(error: unknown) {
+    console.error("[AppErrorBoundary]", error);
+  }
+
   render() {
-    if (this.state.hasError) {
+    if (this.state?.hasError) {
+      const message =
+        typeof this.state.message === "string"
+          ? this.state.message.slice(0, 300)
+          : "Something went wrong. Please try again.";
       return (
         <div style={fallbackStyle}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.5rem" }}>
             Something went wrong
           </h1>
-          <p style={{ color: "#9ca3af", marginBottom: "1rem" }}>{this.state.message}</p>
+          <p style={{ color: "#9ca3af", marginBottom: "1rem" }}>{message}</p>
           <a
             href="/"
             style={{

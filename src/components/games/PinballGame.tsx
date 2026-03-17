@@ -618,7 +618,7 @@ export function PinballGame({
     };
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [score, lives, garmonLetters, multiballActive, jackpotLitState, multiplier, rampMultiplierActive, opponentScore, addScore, spawnBall, onGameEnd]);
+  }, [score, lives, combo, garmonLetters, multiballActive, jackpotLitState, multiplier, rampMultiplierActive, opponentScore, addScore, spawnBall, onGameEnd]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {

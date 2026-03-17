@@ -19,7 +19,8 @@ export async function getSessionAsync(): Promise<ClientSession | null> {
   const supabase = createBrowserClient();
   if (supabase) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session ?? null;
       if (session?.user) {
         const u = session.user as { email_confirmed_at?: string | null };
         if (u.email_confirmed_at == null || u.email_confirmed_at === "") {

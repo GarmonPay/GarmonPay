@@ -24,7 +24,8 @@ export async function getAuthUserId(request: Request): Promise<string | null> {
   if (bearerToken) {
     const supabase = createServerClient(bearerToken);
     if (supabase) {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getUser();
+      const user = data?.user ?? null;
       if (!error && user) userId = user.id;
     }
   }
@@ -56,7 +57,8 @@ export async function getAuthUserIdStrict(request: Request): Promise<string | nu
   if (!bearerToken) return null;
   const supabase = createServerClient(bearerToken);
   if (!supabase) return null;
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
+  const user = data?.user ?? null;
   if (error || !user) return null;
   if (await isUserBanned(user.id)) return null;
   return user.id;
