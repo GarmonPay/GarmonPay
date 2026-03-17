@@ -56,21 +56,21 @@ export default function RealisticFighter({
   }), [config.skinColor])
 
   const shortsMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(config.shorts.color),
+    color: new THREE.Color(config.shorts?.color ?? '#1a1a2e'),
     roughness: 0.9
-  }), [config.shorts.color])
+  }), [config.shorts?.color])
 
   const gloveMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(config.gloves.color),
-    roughness: config.gloves.roughness,
-    metalness: config.gloves.metalness,
-    emissive: new THREE.Color(config.gloves.emissive)
+    color: new THREE.Color(config.gloves?.color ?? '#ffffff'),
+    roughness: config.gloves?.roughness ?? 0.8,
+    metalness: config.gloves?.metalness ?? 0.0,
+    emissive: new THREE.Color(config.gloves?.emissive ?? '#000000')
   }), [config.gloves])
 
   const bootMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: new THREE.Color(config.shoes.color),
+    color: new THREE.Color(config.shoes?.color ?? '#111111'),
     roughness: 0.7
-  }), [config.shoes.color])
+  }), [config.shoes?.color])
 
   const bd = config.bodyType
 

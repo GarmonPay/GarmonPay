@@ -6,7 +6,7 @@ import RealisticFighter from './RealisticFighter'
 import type { FighterData } from '@/lib/arena-fighter-types'
 
 interface RealisticFighterCanvasProps {
-  fighter: FighterData
+  fighter: FighterData | null | undefined
   pose?: 'orthodox_guard' | 'victory' | 'defeat'
   animation?: string
   mirrored?: boolean
@@ -22,6 +22,17 @@ export function RealisticFighterCanvas({
   style,
   className,
 }: RealisticFighterCanvasProps) {
+  // Don't mount the Canvas at all if there's no fighter yet — avoids THREE.js
+  // crashing on undefined property access during loading states.
+  if (!fighter) {
+    return (
+      <div
+        style={{ width: '100%', height: '100%', minHeight: '200px', background: '#0d1117', ...style }}
+        className={className}
+      />
+    )
+  }
+
   return (
     <div
       style={{ width: '100%', height: '100%', minHeight: '200px', ...style }}

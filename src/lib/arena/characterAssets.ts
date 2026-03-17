@@ -36,6 +36,7 @@ export const SKIN_TONES = {
 }
 
 // ─── GLOVES ───────────────────────────────────
+// Keys match GearGlovesKey in arena-fighter-types.ts and values returned by storeItemToGlovesKey()
 export const GLOVE_STYLES = {
   default: {
     color: '#ffffff',
@@ -45,7 +46,15 @@ export const GLOVE_STYLES = {
     roughness: 0.8,
     name: 'Basic Wraps'
   },
-  street: {
+  wraps: {
+    color: '#ffffff',
+    emissive: '#000000',
+    scale: [1.0, 0.85, 0.9],
+    metalness: 0.0,
+    roughness: 0.8,
+    name: 'Basic Wraps'
+  },
+  street_gloves: {
     color: '#cc2222',
     emissive: '#110000',
     scale: [1.1, 0.9, 1.0],
@@ -53,7 +62,7 @@ export const GLOVE_STYLES = {
     roughness: 0.6,
     name: 'Street Gloves'
   },
-  pro: {
+  pro_gloves: {
     color: '#1a3a8f',
     emissive: '#000511',
     scale: [1.2, 0.92, 1.05],
@@ -61,7 +70,7 @@ export const GLOVE_STYLES = {
     roughness: 0.5,
     name: 'Pro Fight Gloves'
   },
-  titanium: {
+  titanium_gloves: {
     color: '#9aa0a8',
     emissive: '#050508',
     scale: [1.25, 0.95, 1.1],
@@ -70,7 +79,7 @@ export const GLOVE_STYLES = {
     name: 'Titanium Gloves',
     shimmer: true
   },
-  championship: {
+  championship_gloves: {
     color: '#f0c040',
     emissive: '#201000',
     scale: [1.3, 1.0, 1.15],
@@ -83,30 +92,31 @@ export const GLOVE_STYLES = {
 }
 
 // ─── SHORTS ───────────────────────────────────
+// Keys match GearShortsKey in arena-fighter-types.ts and values returned by storeItemToShortsKey()
 export const SHORTS_STYLES = {
   default: {
     color: '#1a1a2e',
     stripeColor: '#ffffff',
     name: 'Default Trunks'
   },
-  street: {
+  street_shorts: {
     color: '#cc2222',
     stripeColor: '#ffffff',
     name: 'Street Shorts'
   },
-  gold: {
+  gold_trunks: {
     color: '#c8960c',
     stripeColor: '#ffe44d',
     name: 'Gold Trunks',
     shimmer: true
   },
-  diamond: {
+  diamond_shorts: {
     color: '#0a0a0a',
     stripeColor: '#88ccff',
     name: 'Diamond Shorts',
     sparkle: true
   },
-  champion: {
+  champion_trunks: {
     color: '#f5f5f5',
     stripeColor: '#f0a500',
     name: 'Champion Trunks',
@@ -115,8 +125,14 @@ export const SHORTS_STYLES = {
 }
 
 // ─── SHOES ────────────────────────────────────
+// Keys match GearShoesKey in arena-fighter-types.ts and values returned by storeItemToShoesKey()
 export const SHOE_STYLES = {
   default: {
+    color: '#111111',
+    soleColor: '#222222',
+    name: 'Default Shoes'
+  },
+  bare_feet: {
     color: '#111111',
     soleColor: '#222222',
     name: 'Bare Feet'
@@ -142,7 +158,7 @@ export const SHOE_STYLES = {
     name: 'Power Stompers',
     heavy: true
   },
-  legendary: {
+  legendary_kicks: {
     color: '#c8960c',
     soleColor: '#f0c040',
     height: 0.34,
@@ -310,14 +326,29 @@ export const RING_CONFIG = {
 
 // ─── GET FIGHTER CONFIG ───────────────────────
 export function getFighterConfig(fighter: any) {
+  // Guard: if fighter is null/undefined return all defaults
+  if (!fighter) {
+    return {
+      bodyType: BODY_TYPES.middleweight,
+      skinColor: SKIN_TONES.tone3,
+      gloves: GLOVE_STYLES.default,
+      shorts: SHORTS_STYLES.default,
+      shoes: SHOE_STYLES.default,
+      headgear: null,
+      pose: FIGHTER_POSES.orthodox_guard,
+      color: '#f0a500'
+    }
+  }
+  // equipped_gloves / equipped_shorts / equipped_shoes may be a UUID (from old inventory
+  // system) or a gear key string.  Only use it if it matches a known key; otherwise fall back.
   return {
-    bodyType: BODY_TYPES[fighter.body_type as keyof typeof BODY_TYPES] || BODY_TYPES.middleweight,
-    skinColor: SKIN_TONES[fighter.skin_tone as keyof typeof SKIN_TONES] || SKIN_TONES.tone3,
-    gloves: GLOVE_STYLES[fighter.equipped_gloves as keyof typeof GLOVE_STYLES] || GLOVE_STYLES.default,
-    shorts: SHORTS_STYLES[fighter.equipped_shorts as keyof typeof SHORTS_STYLES] || SHORTS_STYLES.default,
-    shoes: SHOE_STYLES[fighter.equipped_shoes as keyof typeof SHOE_STYLES] || SHOE_STYLES.default,
-    headgear: fighter.equipped_headgear !== 'none'
-      ? HEADGEAR_STYLES[fighter.equipped_headgear as keyof typeof HEADGEAR_STYLES]
+    bodyType: BODY_TYPES[fighter.body_type as keyof typeof BODY_TYPES] ?? BODY_TYPES.middleweight,
+    skinColor: SKIN_TONES[fighter.skin_tone as keyof typeof SKIN_TONES] ?? SKIN_TONES.tone3,
+    gloves: GLOVE_STYLES[fighter.equipped_gloves as keyof typeof GLOVE_STYLES] ?? GLOVE_STYLES.default,
+    shorts: SHORTS_STYLES[fighter.equipped_shorts as keyof typeof SHORTS_STYLES] ?? SHORTS_STYLES.default,
+    shoes: SHOE_STYLES[fighter.equipped_shoes as keyof typeof SHOE_STYLES] ?? SHOE_STYLES.default,
+    headgear: (fighter.equipped_headgear && fighter.equipped_headgear !== 'none')
+      ? (HEADGEAR_STYLES[fighter.equipped_headgear as keyof typeof HEADGEAR_STYLES] ?? null)
       : null,
     pose: FIGHTER_POSES.orthodox_guard,
     color: fighter.fighter_color || '#f0a500'
