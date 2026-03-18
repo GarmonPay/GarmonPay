@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 export default function ArenaDailyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
@@ -35,7 +36,8 @@ export default function ArenaDailyPage() {
     if (spinRes.ok) setSpinStatus(await spinRes.json());
     if (jackpotRes.ok) setJackpot(await jackpotRes.json());
     const meData = meRes.ok ? await meRes.json() : null;
-    if (meData?.fighter) setFighter(meData.fighter);
+    const { fighter: f } = parseArenaMeResponse(meData ?? {});
+    if (f) setFighter(f);
   }, []);
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function ArenaDailyPage() {
       {fighter && (
         <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-[#0d1117] border border-white/10">
           <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
-          <span className="text-white font-medium">{fighter.name}</span>
+          <span className="text-white font-medium">{fighter?.name ?? "Fighter"}</span>
         </div>
       )}
       {error && <p className="text-red-400 text-sm mb-2">{error}</p>}

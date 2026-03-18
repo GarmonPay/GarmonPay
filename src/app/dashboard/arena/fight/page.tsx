@@ -118,6 +118,11 @@ export default function FindFightPage() {
         setError(data.message || "Failed to create fight");
         return;
       }
+      if (!data?.fighterA || !data?.fighterB) {
+        console.error("[Arena] Fight create: missing fighterA or fighterB", data);
+        setError("Fight setup incomplete. Try again.");
+        return;
+      }
       if (data.fighterB?.isAi && (data.fighterB?.taunt != null || data.fighterB?.weakness != null)) {
         setPendingAiFight({
           fightId: data.fightId,

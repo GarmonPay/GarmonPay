@@ -9,7 +9,7 @@ import { computeOdds } from "@/lib/arena-economy";
 
 import { getApiRoot } from "@/lib/api";
 import { BoxingRing } from "@/components/arena/BoxingRing";
-import type { FighterData } from "@/lib/arena-fighter-types";
+import { toSafeFighterData } from "@/lib/arena/arenaMeResponse";
 import type { RingAnimationState } from "@/components/arena/BoxingRing";
 
 const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
@@ -53,8 +53,15 @@ export default function SpectateFightPage() {
     const token = s.accessToken ?? s.userId;
     const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}`, { headers, credentials: "include" });
-    const data = res.ok ? await res.json() : null;
-    if (data?.fight) {
+    const data = res.ok ? await res.json().catch(() => null) : null;
+    if (!data || !data.fight) {
+      console.error("[Arena] Spectate: invalid fight response", data);
+    } else if (!data.fighterA || !data.fighterB) {
+      console.error("[Arena] Spectate: fight missing fighterA or fighterB", data);
+      setFight(null);
+      setFighterA(null);
+      setFighterB(null);
+    } else {
       setFight(data.fight);
       setFighterA(data.fighterA);
       setFighterB(data.fighterB);
@@ -151,20 +158,34 @@ export default function SpectateFightPage() {
     );
   }
 
-  const totalA = (fighterA.strength ?? 0) + (fighterA.speed ?? 0) + (fighterA.stamina ?? 0) + (fighterA.defense ?? 0) + (fighterA.chin ?? 0) + (fighterA.special ?? 0);
-  const totalB = (fighterB.strength ?? 0) + (fighterB.speed ?? 0) + (fighterB.stamina ?? 0) + (fighterB.defense ?? 0) + (fighterB.chin ?? 0) + (fighterB.special ?? 0);
+  const totalA =
+    (fighterA?.strength ?? 0) +
+    (fighterA?.speed ?? 0) +
+    (fighterA?.stamina ?? 0) +
+    (fighterA?.defense ?? 0) +
+    (fighterA?.chin ?? 0) +
+    (fighterA?.special ?? 0);
+  const totalB =
+    (fighterB?.strength ?? 0) +
+    (fighterB?.speed ?? 0) +
+    (fighterB?.stamina ?? 0) +
+    (fighterB?.defense ?? 0) +
+    (fighterB?.chin ?? 0) +
+    (fighterB?.special ?? 0);
   const oddsA = totalA + totalB > 0 ? computeOdds(totalA, totalB) : 1.85;
   const oddsB = totalA + totalB > 0 ? computeOdds(totalB, totalA) : 1.85;
 
-  const ringMode = winnerId ? "victory" : fight.bettingOpen && log.length === 0 ? "setup" : "fight";
-  const winnerSide = winnerId === fighterA.id ? "a" : winnerId === fighterB.id ? "b" : null;
+  const ringMode = winnerId ? "victory" : fight?.bettingOpen && log.length === 0 ? "setup" : "fight";
+  const winnerSide = winnerId === fighterA?.id ? "a" : winnerId === fighterB?.id ? "b" : null;
+  const safeA = toSafeFighterData(fighterA as Record<string, unknown>);
+  const safeB = toSafeFighterData(fighterB as Record<string, unknown>);
 
   return (
     <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
       <BoxingRing
         mode={ringMode}
-        fighterA={fighterA as FighterData}
-        fighterB={fighterB as FighterData}
+        fighterA={safeA}
+        fighterB={safeB}
         winner={winnerSide}
         currentRound={1}
         animation={ringAnimation}
@@ -177,10 +198,10 @@ export default function SpectateFightPage() {
         </div>
         {winnerId && (
           <p className="text-lg font-bold text-white mb-3">
-            Winner: {winnerId === fighterA.id ? fighterA.name : fighterB.name}
+            Winner: {winnerId === fighterA?.id ? fighterA?.name ?? "A" : fighterB?.name ?? "B"}
           </p>
         )}
-        {fight.bettingOpen && !winnerId && (
+        {fight?.bettingOpen && !winnerId && (
           <div className="mb-4 p-4 rounded-lg bg-[#0d1117] border border-white/10">
             <p className="text-white font-medium mb-2">Place spectator bet (before first punch)</p>
             {betError && <p className="text-red-400 text-sm mb-2">{betError}</p>}
@@ -196,17 +217,17 @@ export default function SpectateFightPage() {
               />
               <button
                 type="button"
-                onClick={() => setBetOn(fighterA.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterA.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
+                onClick={() => fighterA?.id && setBetOn(fighterA.id)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterA?.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
               >
-                {fighterA.name} ({(oddsA).toFixed(2)}x)
+                {fighterA?.name ?? "A"} ({(oddsA).toFixed(2)}x)
               </button>
               <button
                 type="button"
-                onClick={() => setBetOn(fighterB.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterB.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
+                onClick={() => fighterB?.id && setBetOn(fighterB.id)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterB?.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
               >
-                {fighterB.name} ({(oddsB).toFixed(2)}x)
+                {fighterB?.name ?? "B"} ({(oddsB).toFixed(2)}x)
               </button>
               <button
                 type="button"

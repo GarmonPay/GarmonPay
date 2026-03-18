@@ -50,7 +50,7 @@ export function BoxingRing({
               </div>
             )}
             <FighterDisplay fighter={fa} size={isProfile ? "large" : "medium"} animation={fighterAAnimation || animation} showGear />
-            {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fa.name}</span>}
+            {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fa?.name ?? "Fighter"}</span>}
           </div>
           {!isProfile && <span className="text-[#f0a500] font-medium pb-8">vs</span>}
           {fb && (
@@ -61,7 +61,7 @@ export function BoxingRing({
                 </div>
               )}
               <FighterDisplay fighter={fb} size={isProfile ? "large" : "medium"} animation={fighterBAnimation || animation} showGear mirrored />
-              {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fb.name}</span>}
+              {!isProfile && <span className="text-xs text-[#9ca3af] mt-1">{fb?.name ?? "Fighter"}</span>}
             </div>
           )}
         </div>

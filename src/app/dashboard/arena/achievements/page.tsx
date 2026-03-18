@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 type Def = { key: string; name: string; coins: number; unlocked: boolean };
 
@@ -34,7 +35,8 @@ export default function ArenaAchievementsPage() {
       setWeightClass(data.weightClass ?? null);
       setDefinitions(data.definitions ?? []);
     }
-    if (meData?.fighter) setFighter(meData.fighter);
+    const { fighter: f } = parseArenaMeResponse(meData ?? {});
+    if (f) setFighter(f);
     setLoading(false);
   }, []);
 
@@ -67,7 +69,7 @@ export default function ArenaAchievementsPage() {
           <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
           <div>
             {weightClass && <p className="text-[#9ca3af] text-sm">Weight class: <span className="text-white">{weightClass}</span> (matchmaking)</p>}
-            <p className="text-white font-medium">{fighter.name}</p>
+            <p className="text-white font-medium">{fighter?.name ?? "Fighter"}</p>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 type FighterReveal = {
   id: string;
@@ -59,7 +60,8 @@ export default function CreateFighterRevealPage() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (cancelled) return;
-          if (data?.fighter) setFighter(data.fighter);
+          const { fighter: f } = parseArenaMeResponse(data ?? {});
+          if (f) setFighter(f as FighterReveal);
           else setError("Fighter not found");
         })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -98,9 +100,16 @@ export default function CreateFighterRevealPage() {
     );
   }
 
-  if (!fighter) return null;
+  if (!fighter) {
+    return (
+      <div className="max-w-lg mx-auto rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
+        <p className="text-[#9ca3af]">No fighter data. Return to create flow.</p>
+        <Link href="/dashboard/arena/create" className="inline-block mt-4 text-[#f0a500] hover:underline">Back</Link>
+      </div>
+    );
+  }
 
-  const color = fighter.fighter_color || "#f0a500";
+  const color = fighter?.fighter_color || "#f0a500";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0f172a]">
@@ -115,7 +124,7 @@ export default function CreateFighterRevealPage() {
       {phase === "silhouette" && (
         <div className="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-10">
           <div className="w-48 h-48 rounded-full bg-black/60 border-4 border-white/20 flex items-center justify-center">
-            <span className="text-6xl opacity-80">{fighter.avatar}</span>
+            <span className="text-6xl opacity-80">{fighter?.avatar ?? "🥊"}</span>
           </div>
           <div className="w-32 h-2 mt-6 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: "60%" }} />
@@ -128,20 +137,20 @@ export default function CreateFighterRevealPage() {
         <div className="rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl" style={{ borderColor: phaseIndex >= 3 ? `${color}40` : undefined }}>
           {/* Portrait */}
           <div className="relative bg-[#161b22] p-6 flex flex-col items-center">
-            {fighter.portrait_svg ? (
+            {fighter?.portrait_svg ? (
               <div
                 className="w-40 h-52 rounded-lg overflow-hidden bg-[#0d1117] [&_svg]:w-full [&_svg]:h-full [&_svg]:object-contain"
                 dangerouslySetInnerHTML={{ __html: fighter.portrait_svg }}
               />
             ) : (
               <div className="w-40 h-52 rounded-lg bg-[#0d1117] flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
-                <span className="text-6xl">{fighter.avatar}</span>
+                <span className="text-6xl">{fighter?.avatar ?? "🥊"}</span>
               </div>
             )}
             {phaseIndex >= 3 && (
               <>
-                <h1 className="text-2xl md:text-3xl font-bold text-white mt-4">{fighter.name}</h1>
-                {fighter.nickname && <p className="text-lg font-medium mt-1" style={{ color }}>{fighter.nickname}</p>}
+                <h1 className="text-2xl md:text-3xl font-bold text-white mt-4">{fighter?.name ?? "Fighter"}</h1>
+                {fighter?.nickname && <p className="text-lg font-medium mt-1" style={{ color }}>{fighter.nickname}</p>}
               </>
             )}
           </div>
@@ -163,15 +172,15 @@ export default function CreateFighterRevealPage() {
                   );
                 })}
               </div>
-              <p className="text-[#9ca3af] text-sm">{fighter.style}</p>
+              <p className="text-[#9ca3af] text-sm">{fighter?.style ?? "—"}</p>
             </div>
           )}
 
           {/* Backstory */}
-          {phaseIndex >= 5 && fighter.backstory && (
+          {phaseIndex >= 5 && fighter?.backstory && (
             <div className="px-6 pb-4 border-t border-white/10 pt-4">
               <p className="text-[#9ca3af] text-xs uppercase mb-1">Origin</p>
-              <p className="text-white text-sm">{fighter.origin || "—"}</p>
+              <p className="text-white text-sm">{fighter?.origin || "—"}</p>
               <p className="text-[#9ca3af] text-xs uppercase mt-2 mb-1">Backstory</p>
               <p className="text-white/90 text-sm italic">&ldquo;{typedBackstory}&rdquo;</p>
             </div>
@@ -181,8 +190,8 @@ export default function CreateFighterRevealPage() {
           {phaseIndex >= 6 && (
             <div className="px-6 pb-6 border-t border-white/10 pt-4">
               <p className="text-[#f0a500] font-bold text-sm mb-1">SIGNATURE MOVE UNLOCKED</p>
-              <p className="text-white font-bold" style={{ color }}>{fighter.signature_move_name || "Finishing Blow"}</p>
-              <p className="text-[#9ca3af] text-sm mt-1">{fighter.signature_move_desc || ""}</p>
+              <p className="text-white font-bold" style={{ color }}>{fighter?.signature_move_name || "Finishing Blow"}</p>
+              <p className="text-[#9ca3af] text-sm mt-1">{fighter?.signature_move_desc || ""}</p>
             </div>
           )}
         </div>

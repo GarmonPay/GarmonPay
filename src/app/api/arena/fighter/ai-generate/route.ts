@@ -185,12 +185,12 @@ export async function POST(request: Request) {
         skin_tone: "tone3",
         face_style: "determined",
         hair_style: "short_fade",
-        strength: character.stats.strength,
-        speed: character.stats.speed,
-        stamina: character.stats.stamina,
-        defense: character.stats.defense,
-        chin: character.stats.chin,
-        special: character.stats.special,
+        strength: Number(character?.stats?.strength ?? 50),
+        speed: Number(character?.stats?.speed ?? 50),
+        stamina: Number(character?.stats?.stamina ?? 50),
+        defense: Number(character?.stats?.defense ?? 50),
+        chin: Number(character?.stats?.chin ?? 50),
+        special: Number(character?.stats?.special ?? 50),
         nickname: character.nickname,
         origin: character.origin,
         backstory: character.backstory,
@@ -219,6 +219,9 @@ export async function POST(request: Request) {
     }
 
     // Start 3D generation in background (do not await)
+    if (!fighter?.id) {
+      return NextResponse.json({ error: "Fighter record missing" }, { status: 500 });
+    }
     startMeshy3DGeneration(fighter.id, userId).catch((e) =>
       console.error("[ai-generate] 3D generation start failed:", e)
     );

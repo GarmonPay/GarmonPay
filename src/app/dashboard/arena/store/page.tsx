@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import ProBoxer from "@/components/arena/ProBoxerClient";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 type StoreItem = {
   id: string;
@@ -67,7 +68,8 @@ export default function ArenaStorePage() {
     if (invData?.inventory) setInventory(invData.inventory);
     if (invData?.equipped) setEquipped(invData.equipped || {});
     if (typeof invData?.arenaCoins === "number") setArenaCoins(invData.arenaCoins);
-    if (meData?.fighter) setFighter(meData.fighter);
+    const { fighter: fMe } = parseArenaMeResponse(meData ?? {});
+    if (fMe) setFighter(fMe);
     } catch {
       setError("Unable to load store.");
     } finally {
@@ -155,7 +157,8 @@ export default function ArenaStorePage() {
       fetchData();
       const meRes = await fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" });
       const meData = meRes.ok ? await meRes.json() : null;
-      if (meData?.fighter) setFighter(meData.fighter);
+      const { fighter: f2 } = parseArenaMeResponse(meData ?? {});
+      if (f2) setFighter(f2);
     }
   };
 
@@ -197,7 +200,7 @@ export default function ArenaStorePage() {
       {fighter && (
         <div className="min-h-[200px] mb-6 rounded-lg overflow-hidden border border-white/10">
           <p className="text-[#9ca3af] text-sm text-center py-2 bg-[#0d1117] border-b border-white/10">Your fighter — gear updates when you equip</p>
-          <ProBoxer fighterColor={fighter.fighter_color || "#f0a500"} size="medium" />
+          <ProBoxer fighterColor={fighter?.fighter_color || "#f0a500"} size="medium" />
         </div>
       )}
       <div className="flex flex-wrap gap-2 mb-4">

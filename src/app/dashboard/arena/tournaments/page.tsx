@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { FighterDisplay } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 type Tournament = {
   id: string;
@@ -41,7 +42,8 @@ export default function ArenaTournamentsPage() {
     const data = tournamentsRes.ok ? await tournamentsRes.json() : null;
     if (data?.tournaments) setTournaments(data.tournaments);
     const meData = meRes.ok ? await meRes.json() : null;
-    if (meData?.fighter) setFighter(meData.fighter);
+    const { fighter: f } = parseArenaMeResponse(meData ?? {});
+    if (f) setFighter(f);
     setLoading(false);
   }, []);
 
@@ -87,7 +89,7 @@ export default function ArenaTournamentsPage() {
         <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-[#0d1117] border border-white/10">
           <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
           <div>
-            <p className="text-white font-medium">{fighter.name}</p>
+            <p className="text-white font-medium">{fighter?.name ?? "Fighter"}</p>
             <p className="text-[#9ca3af] text-sm">Enter with your fighter</p>
           </div>
         </div>

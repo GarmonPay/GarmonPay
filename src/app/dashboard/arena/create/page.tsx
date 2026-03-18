@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 const REGEN_COST = 500;
 
@@ -32,10 +33,11 @@ export default function CreateFighterEntryPage() {
         return fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
-            if (cancelled || !data) return;
-            if (data.fighter) setFighter(data.fighter);
-            if (typeof data.arenaCoins === "number") setArenaCoins(data.arenaCoins);
-            if (data.freeGenerationUsed === true) setFreeGenerationUsed(true);
+            if (cancelled || data == null) return;
+            const { fighter: f, arenaCoins: ac, freeGenerationUsed: fgu } = parseArenaMeResponse(data);
+            if (f) setFighter(f);
+            if (typeof ac === "number") setArenaCoins(ac);
+            if (fgu === true) setFreeGenerationUsed(true);
           })
           .finally(() => { if (!cancelled) setLoading(false); });
       })

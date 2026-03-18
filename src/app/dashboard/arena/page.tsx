@@ -1,20 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { getFightServerHealthUrl } from "@/lib/keepAlive";
-/** Same as importing ProBoxer from @/components/arena/ProBoxer — dynamic avoids Three.js during static prerender. */
-const ProBoxer = dynamic(() => import("@/components/arena/ProBoxer"), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full rounded-lg bg-black" style={{ height: 400 }} aria-hidden />
-  ),
-});
+import ProBoxer from "@/components/arena/ProBoxerClient";
 import ArenaLogo from "@/components/arena/ArenaLogo";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 type FightServerStatus = "connecting" | "connected" | "offline";
@@ -72,7 +66,8 @@ export default function ArenaHubPage() {
           })
           .then((data) => {
             if (cancelled) return;
-            if (data?.fighter) setFighter(data.fighter);
+            const { fighter: f } = parseArenaMeResponse(data ?? {});
+            if (f) setFighter(f);
           })
           .catch(() => {})
           .finally(() => {
@@ -166,16 +161,16 @@ export default function ArenaHubPage() {
             <div className="flex flex-col md:flex-row md:items-stretch gap-6">
               <div className="min-h-[220px] md:min-w-[280px] md:max-w-[340px] rounded-lg overflow-hidden border border-white/10">
                 <ProBoxer
-                  fighterColor={fighter.fighter_color || "#f0a500"}
+                  fighterColor={fighter?.fighter_color || "#f0a500"}
                   size="medium"
                 />
               </div>
               <div className="flex-1 flex flex-col justify-center gap-4">
                 <div>
                   <p className="text-[#9ca3af] text-sm">Your fighter</p>
-                  <p className="text-xl font-bold text-white">{fighter.name}</p>
-                  <p className="text-[#f0a500]">{fighter.style}</p>
-                  <p className="text-sm text-white mt-1">Record: {fighter.wins ?? 0}W – {fighter.losses ?? 0}L</p>
+                  <p className="text-xl font-bold text-white">{fighter?.name ?? "Fighter"}</p>
+                  <p className="text-[#f0a500]">{fighter?.style ?? "—"}</p>
+                  <p className="text-sm text-white mt-1">Record: {fighter?.wins ?? 0}W – {fighter?.losses ?? 0}L</p>
                 </div>
               <div className="flex flex-wrap gap-3">
                 <Link

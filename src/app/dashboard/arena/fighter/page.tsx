@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import ProBoxer from "@/components/arena/ProBoxerClient";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 const REGEN_COST = 500;
 const POLL_3D_INTERVAL_MS = 15_000;
@@ -45,8 +46,9 @@ export default function MyFighterPage() {
         return;
       }
       const data = res.ok ? await res.json().catch(() => null) : null;
-      if (data?.fighter) setFighter(data.fighter);
-      if (typeof data?.arenaCoins === "number") setArenaCoins(data.arenaCoins);
+      const { fighter: f, arenaCoins: coins } = parseArenaMeResponse(data ?? {});
+      if (f) setFighter(f);
+      if (typeof coins === "number") setArenaCoins(coins);
     } catch {
       // ignore
     } finally {
@@ -157,7 +159,7 @@ export default function MyFighterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         credentials: "include",
-        body: JSON.stringify({ fighterId: fighter.id }),
+        body: JSON.stringify({ fighterId: fighter?.id }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -242,9 +244,15 @@ export default function MyFighterPage() {
     );
   }
 
-  const totalStats = (fighter.strength ?? 0) + (fighter.speed ?? 0) + (fighter.stamina ?? 0) + (fighter.defense ?? 0) + (fighter.chin ?? 0) + (fighter.special ?? 0);
-  const wins = fighter.wins ?? 0;
-  const losses = fighter.losses ?? 0;
+  const totalStats =
+    (fighter?.strength ?? 0) +
+    (fighter?.speed ?? 0) +
+    (fighter?.stamina ?? 0) +
+    (fighter?.defense ?? 0) +
+    (fighter?.chin ?? 0) +
+    (fighter?.special ?? 0);
+  const wins = fighter?.wins ?? 0;
+  const losses = fighter?.losses ?? 0;
   const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) : "—";
 
   const model3dStatus = (fighter as { model_3d_status?: string }).model_3d_status ?? "not_started";
@@ -290,20 +298,20 @@ export default function MyFighterPage() {
             {renderFighterVisual()}
           </div>
           <div className="flex-1 p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-white/10">
-            <span className="text-5xl">{fighter.avatar}</span>
-            <h1 className="text-2xl font-bold text-white mt-2">{fighter.name}</h1>
+            <span className="text-5xl">{fighter?.avatar ?? "🥊"}</span>
+            <h1 className="text-2xl font-bold text-white mt-2">{fighter?.name ?? "Fighter"}</h1>
             {(fighter as { nickname?: string | null }).nickname && (
               <p className="text-lg font-medium mt-0.5" style={{ color: (fighter as { fighter_color?: string }).fighter_color || "#f0a500" }}>
                 {(fighter as { nickname?: string }).nickname}
               </p>
             )}
-            {fighter.title && <p className="text-[#f0a500]">{fighter.title}</p>}
-            <p className="text-[#9ca3af]">{fighter.style}</p>
+            {fighter?.title && <p className="text-[#f0a500]">{fighter.title}</p>}
+            <p className="text-[#9ca3af]">{fighter?.style ?? "—"}</p>
             {(fighter as { origin?: string | null }).origin && (
               <p className="text-sm text-[#9ca3af]">Fighting out of {(fighter as { origin?: string }).origin}</p>
             )}
-            <p className="text-white mt-1">Record: {wins}W – {losses}L ({winRate}% win rate) · Streak: {fighter.win_streak ?? 0}</p>
-            <p className="text-sm text-[#9ca3af]">Condition: {fighter.condition ?? "—"} · Training sessions: {fighter.training_sessions ?? 0}</p>
+            <p className="text-white mt-1">Record: {wins}W – {losses}L ({winRate}% win rate) · Streak: {fighter?.win_streak ?? 0}</p>
+            <p className="text-sm text-[#9ca3af]">Condition: {fighter?.condition ?? "—"} · Training sessions: {fighter?.training_sessions ?? 0}</p>
             {(fighter as { backstory?: string | null }).backstory && (
               <div className="mt-3 p-3 rounded-lg bg-[#0d1117] border border-white/10">
                 <p className="text-[#9ca3af] text-xs uppercase mb-1">Backstory</p>
@@ -322,9 +330,9 @@ export default function MyFighterPage() {
               {(["strength", "speed", "stamina", "defense", "chin", "special"] as const).map((stat) => (
                 <div key={stat} className="bg-[#0d1117] rounded-lg p-3">
                   <p className="text-[#9ca3af] text-xs capitalize">{stat}</p>
-                  <p className="text-lg font-bold text-white">{fighter[stat] ?? 0}</p>
+                  <p className="text-lg font-bold text-white">{fighter?.[stat] ?? 0}</p>
                   <div className="h-1.5 mt-1 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${Math.min(100, ((fighter[stat] ?? 0) / 99) * 100)}%` }} />
+                    <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${Math.min(100, ((fighter?.[stat] ?? 0) / 99) * 100)}%` }} />
                   </div>
                 </div>
               ))}

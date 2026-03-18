@@ -16,6 +16,7 @@ import { getApiRoot } from "@/lib/api";
 import { getHasWebGL } from "@/lib/webgl-detect";
 import ProBoxer from "@/components/arena/ProBoxerClient";
 import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 const BoxingRing3D = dynamic(
   () => import("@/components/arena/BoxingRing3D").then((m) => m.BoxingRing3D),
@@ -112,16 +113,15 @@ export default function TrainingGymPage() {
         balanceCents: data.balanceCents,
       });
       if (data.balanceCents != null) setBalanceCents(data.balanceCents);
-      if (Array.isArray(data.fighter)) {
-        setFighter((f) => (f ? { ...f, ...data.fighter } : f));
+      if (data.fighter && typeof data.fighter === "object" && !Array.isArray(data.fighter)) {
+        setFighter((prev) => (prev ? { ...prev, ...(data.fighter as FighterStats) } : prev));
       } else {
         setFighter((f) => {
           if (!f) return f;
-          return {
-            ...f,
-            [data.stat]: data.newValue,
-            training_sessions: data.trainingSessions,
-          };
+          const statKey = data.stat as keyof FighterStats | undefined;
+          const next = { ...f, training_sessions: data.trainingSessions ?? f.training_sessions };
+          if (statKey && typeof data.newValue === "number") (next as Record<string, unknown>)[statKey as string] = data.newValue;
+          return next;
         });
       }
       if (Array.isArray(data.unlockedMoves) && data.unlockedMoves.length > 0) {
@@ -170,7 +170,7 @@ export default function TrainingGymPage() {
         <div className={`relative z-10 flex items-center justify-center min-h-[280px] ${getHasWebGL() ? "pointer-events-none" : ""}`}>
           <div className="rounded-xl border border-white/10 bg-[#0d1117]/85 px-6 py-4 backdrop-blur-[2px] w-full max-w-lg">
             <ProBoxer
-              fighterColor={(fighter as FighterData).fighter_color || "#f0a500"}
+              fighterColor={(fighter as FighterData)?.fighter_color || "#f0a500"}
               size="large"
             />
           </div>
@@ -216,8 +216,8 @@ export default function TrainingGymPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {TRAINING_SESSIONS.map((s) => {
-          const unlocked = isSessionUnlocked(s.requiredSessions, fighter.training_sessions);
-          const currentStat = fighter[s.stat];
+          const unlocked = isSessionUnlocked(s.requiredSessions, fighter?.training_sessions ?? 0);
+          const currentStat = Number(fighter?.[s.stat] ?? 0);
           const atCap = currentStat >= STAT_CAP;
           const canAfford = balanceCents != null && balanceCents >= s.priceCents;
           const disabled = !unlocked || atCap || !canAfford || trainingSessionKey !== null;
