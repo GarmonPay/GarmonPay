@@ -98,8 +98,29 @@ export default function ArenaHubPage() {
 
   if (loading) {
     return (
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
-        <p className="text-[#9ca3af]">Loading GarmonPay Arena…</p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "60vh",
+          flexDirection: "column",
+          gap: 16,
+          background: "#0d1117",
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ fontSize: 64 }}>🥊</div>
+        <div
+          style={{
+            color: "#f0a500",
+            fontFamily: "system-ui, 'Bebas Neue', sans-serif",
+            fontSize: 24,
+            letterSpacing: 3,
+          }}
+        >
+          LOADING ARENA...
+        </div>
       </div>
     );
   }

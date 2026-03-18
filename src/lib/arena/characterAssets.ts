@@ -1,4 +1,12 @@
-import * as THREE from 'three'
+// Safe lookup helper - never crashes on bad keys
+export function safeLookup<T>(obj: Record<string, T>, key: string | null | undefined, fallback: T): T {
+  if (key == null || typeof key !== "string") return fallback;
+  const k = key.trim();
+  if (!k) return fallback;
+  return obj[k] ?? fallback;
+}
+
+import * as THREE from "three";
 
 // ─── BODY TYPES ───────────────────────────────
 export const BODY_TYPES = {
@@ -341,22 +349,30 @@ export function getFighterConfig(fighter: any) {
   }
   // equipped_gloves / equipped_shorts / equipped_shoes may be a UUID (from old inventory
   // system) or a gear key string. Use optional chaining — DB columns can be null for existing fighters.
-  const bodyTypeKey   = (typeof fighter?.body_type       === 'string' ? fighter.body_type.trim()       : '') as keyof typeof BODY_TYPES
-  const skinToneKey   = (typeof fighter?.skin_tone      === 'string' ? fighter.skin_tone.trim()       : '') as keyof typeof SKIN_TONES
-  const glovesKey     = (typeof fighter?.equipped_gloves  === 'string' ? fighter.equipped_gloves.trim()  : '') as keyof typeof GLOVE_STYLES
-  const shortsKey     = (typeof fighter?.equipped_shorts  === 'string' ? fighter.equipped_shorts.trim()  : '') as keyof typeof SHORTS_STYLES
-  const shoesKey      = (typeof fighter?.equipped_shoes   === 'string' ? fighter.equipped_shoes.trim()   : '') as keyof typeof SHOE_STYLES
-  const headgearKey   = (typeof fighter?.equipped_headgear === 'string' ? fighter.equipped_headgear.trim() : '') as keyof typeof HEADGEAR_STYLES
+  const bodyTypeKey =
+    typeof fighter?.body_type === "string" ? fighter.body_type.trim() : "";
+  const skinToneKey = typeof fighter?.skin_tone === "string" ? fighter.skin_tone.trim() : "";
+  const glovesKey =
+    typeof fighter?.equipped_gloves === "string" ? fighter.equipped_gloves.trim() : "";
+  const shortsKey =
+    typeof fighter?.equipped_shorts === "string" ? fighter.equipped_shorts.trim() : "";
+  const shoesKey =
+    typeof fighter?.equipped_shoes === "string" ? fighter.equipped_shoes.trim() : "";
+  const headgearKey =
+    typeof fighter?.equipped_headgear === "string" ? fighter.equipped_headgear.trim() : "";
+
+  const headgearResolved =
+    headgearKey && headgearKey !== "none"
+      ? safeLookup(HEADGEAR_STYLES as Record<string, (typeof HEADGEAR_STYLES)["basic"] | null>, headgearKey, null)
+      : null;
 
   return {
-    bodyType:  (BODY_TYPES[bodyTypeKey] ?? BODY_TYPES.middleweight),
-    skinColor: (SKIN_TONES[skinToneKey] ?? SKIN_TONES.tone3),
-    gloves:    (GLOVE_STYLES[glovesKey] ?? GLOVE_STYLES.default),
-    shorts:    (SHORTS_STYLES[shortsKey] ?? SHORTS_STYLES.default),
-    shoes:     (SHOE_STYLES[shoesKey] ?? SHOE_STYLES.default),
-    headgear:  (headgearKey && headgearKey !== 'none')
-                 ? (HEADGEAR_STYLES[headgearKey] ?? null)
-                 : null,
+    bodyType: safeLookup(BODY_TYPES as Record<string, (typeof BODY_TYPES)["middleweight"]>, bodyTypeKey, BODY_TYPES.middleweight),
+    skinColor: safeLookup(SKIN_TONES as Record<string, string>, skinToneKey, SKIN_TONES.tone3),
+    gloves: safeLookup(GLOVE_STYLES as Record<string, (typeof GLOVE_STYLES)["default"]>, glovesKey, GLOVE_STYLES.default),
+    shorts: safeLookup(SHORTS_STYLES as Record<string, (typeof SHORTS_STYLES)["default"]>, shortsKey, SHORTS_STYLES.default),
+    shoes: safeLookup(SHOE_STYLES as Record<string, (typeof SHOE_STYLES)["default"]>, shoesKey, SHOE_STYLES.default),
+    headgear: headgearResolved && typeof headgearResolved === "object" ? headgearResolved : null,
     pose:  FIGHTER_POSES.orthodox_guard,
     color: (fighter?.fighter_color && typeof fighter.fighter_color === 'string') ? fighter.fighter_color : '#f0a500'
   }
