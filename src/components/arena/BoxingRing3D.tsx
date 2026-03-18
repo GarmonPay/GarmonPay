@@ -232,7 +232,7 @@ function SpotLights({ winnerSide = null }: { winnerSide?: "left" | "right" | nul
 type BoxingRing3DProps = {
   fighterASlot?: React.ReactNode;
   fighterBSlot?: React.ReactNode;
-  mode?: "fight" | "setup" | "victory";
+  mode?: "fight" | "setup" | "victory" | "profile";
   koIntensity?: number;
   cameraShakeRef?: React.MutableRefObject<(() => void) | null>;
   refereeState?: RefereeState;
@@ -249,6 +249,7 @@ function SceneContent({
   refereeState = "watching",
   winnerSide = null,
   knockdownCount = 0,
+  ringMode = "fight",
 }: {
   fighterASlot?: React.ReactNode;
   fighterBSlot?: React.ReactNode;
@@ -257,6 +258,7 @@ function SceneContent({
   refereeState?: RefereeState;
   winnerSide?: "left" | "right" | null;
   knockdownCount?: number;
+  ringMode?: "fight" | "setup" | "victory" | "profile";
 }) {
   const sceneRef = useRef<THREE.Group>(null);
   const shakeTime = useRef(0);
@@ -298,7 +300,9 @@ function SceneContent({
       <ConfettiParticles active={confettiActive} />
       {fighterASlot && <group position={[-1.2, 0, 0]}>{fighterASlot}</group>}
       {fighterBSlot && <group position={[1.2, 0, 0]}>{fighterBSlot}</group>}
-      <Referee3D state={refereeState} winnerSide={winnerSide} knockdownCount={knockdownCount} position={[0, 0, 0]} />
+      {ringMode !== "profile" && (
+        <Referee3D state={refereeState} winnerSide={winnerSide} knockdownCount={knockdownCount} position={[0, 0, 0]} />
+      )}
     </group>
   );
 }
@@ -389,6 +393,9 @@ export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>
   ) {
     const cameraShakeRef = useRef<(() => void) | null>(null);
     useImperativeHandle(ref, () => ({ shake: () => cameraShakeRef.current?.() }));
+    const isProfile = mode === "profile";
+    const camPos = isProfile ? ([0, 5.8, 11.5] as const) : ([0, 6, 12] as const);
+    const fov = isProfile ? 42 : 40;
 
     return (
       <div
@@ -397,7 +404,7 @@ export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>
       >
         <Canvas
           shadows
-          camera={{ position: [0, 6, 12], fov: 40 }}
+          camera={{ position: camPos, fov }}
           gl={{ antialias: true, alpha: false }}
           style={{ background: "#000000" }}
         >
@@ -409,6 +416,7 @@ export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>
             refereeState={refereeState}
             winnerSide={winnerSide}
             knockdownCount={knockdownCount}
+            ringMode={mode}
           />
         </Canvas>
         {modelGenerating && (

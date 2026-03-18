@@ -8,7 +8,8 @@ import { getFighterConfig } from "@/lib/arena/characterAssets";
 
 const VIEWBOX = "0 0 100 150";
 
-/** Body silhouette — side profile, boxing stance (left jab, right guard). */
+/** Body silhouette — side profile, boxing stance (left jab forward, right guard at chin).
+ *  rotation.y ≈ -0.3 rad applied via SVG rotate; legs crouched (~0.05 unit drop). */
 export function LayerBody({
   bodyType,
   skinTone,
@@ -23,59 +24,60 @@ export function LayerBody({
   const isHeavy = bodyType === "heavyweight";
   const headY = 12;
   const headR = isLight ? 8 : isHeavy ? 10 : 9;
-  const shoulderW = isLight ? 22 : isHeavy ? 28 : 25;
+  const shoulderW = isLight ? 20 : isHeavy ? 26 : 23;
   const chestY = 35;
   const waistY = 75;
   const hipW = isLight ? 18 : isHeavy ? 24 : 21;
   const armW = 5;
   const sl = 50 - shoulderW / 2;
-  const sr = 50 + shoulderW / 2 - 4;
+  const sr = 50 + shoulderW / 2 - 3;
   const shoulderY = chestY + 5;
-  const leftElbowX = 35;
-  const leftElbowY = 32;
-  const leftGloveX = 36;
-  const leftGloveY = 25;
-  const rightElbowX = 52;
-  const rightElbowY = 34;
-  const rightGloveX = 58;
-  const rightGloveY = 31;
-  const kneeBend = 4;
-  const waistYAdj = waistY + kneeBend;
+  const legDrop = Math.round(0.05 * 150);
+  const waistYAdj = waistY + legDrop;
+  const kneeY = waistYAdj + 38;
+  const footY = 150;
+  const leftGloveX = 34;
+  const leftGloveY = 24;
+  const rightGloveX = 54;
+  const rightGloveY = 30;
+  const leftElbowX = 32;
+  const leftElbowY = 30;
+  const rightElbowX = 51;
+  const rightElbowY = 33;
   return (
     <g className={className}>
-      {/* Legs (back then front) — knees bent slightly */}
+      {/* Legs — bent knees (hip -> knee -> ankle) */}
       <path
         fill={hex}
-        d={`M ${50 - hipW / 2} ${waistYAdj} L ${48 - 6} ${150} L ${52 - 6} ${150} Z`}
+        d={`M ${50 - hipW / 2} ${waistYAdj} L ${46} ${kneeY} L ${48} ${footY} L ${54} ${footY} L ${52} ${kneeY} Z`}
       />
       <path
         fill={hex}
-        d={`M ${50 + hipW / 2 - 4} ${waistYAdj} L ${50 + 8} ${150} L ${50 + 16} ${150} Z`}
+        d={`M ${50 + hipW / 2 - 3} ${waistYAdj} L ${56} ${kneeY} L ${58} ${footY} L ${68} ${footY} L ${64} ${kneeY} Z`}
       />
       {/* Torso */}
       <path
         fill={hex}
         d={`M ${sl} ${chestY} L ${50 - hipW / 2} ${waistYAdj} L ${50 + hipW / 2} ${waistYAdj} L ${sr} ${chestY} Z`}
       />
-      {/* Left arm: shoulder -> elbow -> jab (in front of face) */}
+      {/* Left: upper arm forward, forearm to jab (in front of face) */}
       <path
         fill={hex}
-        d={`M ${sl} ${shoulderY} L ${leftElbowX - armW / 2} ${leftElbowY + 1} L ${leftElbowX + armW / 2} ${leftElbowY - 1} L ${sl + 2} ${shoulderY + 2} Z`}
+        d={`M ${sl} ${shoulderY} L ${sl - 1} ${shoulderY + 5} L ${leftElbowX - 2} ${leftElbowY + 2} L ${leftElbowX + 3} ${leftElbowY - 2} L ${sl + 3} ${shoulderY + 1} Z`}
       />
       <path
         fill={hex}
-        d={`M ${leftElbowX} ${leftElbowY} L ${leftGloveX - 4} ${leftGloveY + 2} L ${leftGloveX + 4} ${leftGloveY + 2} L ${leftElbowX + armW / 2} ${leftElbowY - 1} Z`}
+        d={`M ${leftElbowX} ${leftElbowY} Q ${leftGloveX - 2} ${leftGloveY + 4} ${leftGloveX} ${leftGloveY + 5} Q ${leftGloveX + 5} ${leftGloveY + 2} ${leftElbowX + 3} ${leftElbowY - 2} Z`}
       />
-      {/* Right arm: shoulder -> elbow -> guard (near chin) */}
+      {/* Right: upper arm tucked, forearm up to chin guard */}
       <path
         fill={hex}
-        d={`M ${sr} ${shoulderY} L ${rightElbowX + armW / 2} ${rightElbowY - 1} L ${rightElbowX - armW / 2} ${rightElbowY + 1} L ${sr - 2} ${shoulderY + 2} Z`}
+        d={`M ${sr} ${shoulderY} L ${rightElbowX + 3} ${rightElbowY - 1} L ${rightElbowX - 2} ${rightElbowY + 2} L ${sr - 2} ${shoulderY + 3} Z`}
       />
       <path
         fill={hex}
-        d={`M ${rightElbowX} ${rightElbowY} L ${rightGloveX + 4} ${rightGloveY + 2} L ${rightGloveX + 4} ${rightGloveY - 4} L ${rightElbowX + armW / 2} ${rightElbowY - 1} Z`}
+        d={`M ${rightElbowX} ${rightElbowY} L ${rightGloveX + 6} ${rightGloveY - 2} L ${rightGloveX + 2} ${rightGloveY + 6} L ${rightElbowX - 1} ${rightElbowY + 2} Z`}
       />
-      {/* Head */}
       <ellipse cx={50} cy={headY + headR} rx={headR} ry={headR + 2} fill={hex} />
     </g>
   );
@@ -138,16 +140,12 @@ export function LayerShoes({
   );
 }
 
-/** Torso/chest overlay (optional) — same as body, can add detail later */ 
+/** Narrow chest highlight only — must NOT span full shoulder width (avoids T-pose look). */
 export function LayerTorso({ skinTone, className = "" }: { skinTone: string; className?: string }) {
   const hex = getSkinHex(skinTone);
   return (
     <g className={className}>
-      <path
-        fill={hex}
-        fillOpacity={0.3}
-        d="M 28 38 L 72 38 L 68 72 L 32 72 Z"
-      />
+      <path fill={hex} fillOpacity={0.28} d="M 42 40 L 58 40 L 56 70 L 44 70 Z" />
     </g>
   );
 }
@@ -171,10 +169,10 @@ export function LayerGloves({
     championship_gloves: "#eab308",
   };
   const fill = colors[gearKey] ?? colors.default;
-  const leftGloveX = 36;
-  const leftGloveY = 25;
-  const rightGloveX = 58;
-  const rightGloveY = 31;
+  const leftGloveX = 34;
+  const leftGloveY = 24;
+  const rightGloveX = 54;
+  const rightGloveY = 30;
   return (
     <g className={className}>
       <ellipse cx={leftGloveX} cy={leftGloveY} rx={10} ry={12} fill={fill} />

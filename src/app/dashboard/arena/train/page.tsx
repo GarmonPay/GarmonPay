@@ -164,7 +164,7 @@ export default function TrainingGymPage() {
       <div className="min-h-[280px] px-4 relative">
         {getHasWebGL() && (
           <div className="absolute inset-0 min-h-[280px] rounded-xl overflow-hidden">
-            <BoxingRing3D mode="setup" />
+            <BoxingRing3D mode="profile" />
           </div>
         )}
         <div className={`relative z-10 flex items-center justify-center min-h-[280px] ${getHasWebGL() ? "pointer-events-none" : ""}`}>
