@@ -1,28 +1,27 @@
-# Boxer GLB for Fight Arena
+# Arena 3D models (committed for Vercel)
 
-Place a boxer character model here to replace the placeholder fighters in the 3D fight arena.
+These **`.glb` files are tracked in Git** so `garmonpay.com` can serve them as static assets (e.g. `https://garmonpay.com/models/default-boxer.glb`).
 
-## File
+| File | Purpose |
+|------|---------|
+| `default-boxer.glb` | **ProBoxer** — photorealistic boxer (`/models/default-boxer.glb`) |
+| `boxing-ring.glb` | Optional ring asset |
+| `boxing-ring_.glb` | Alternate/large ring variant |
 
-- **Path:** `boxer.glb` (or `boxer.gltf`) in this folder (`public/models/`).
-- The app loads: `/models/boxer.glb`.
+Do **not** add `*.glb` to `.gitignore` if you need production 3D to load.
 
-## Animation names
+---
 
-The GLB should include **animation groups** (or clips) with these names (case-insensitive):
+## Legacy: animated boxer for fight arena
 
-| Name         | Use              | Loop |
-|-------------|------------------|------|
-| `idle`      | Standing still   | Yes  |
-| `jab`      | Jab button       | No   |
-| `powerPunch`| Power punch      | No   |
-| `block`     | Blocking         | No   |
-| `knockout`  | When health = 0  | No   |
+If you use a skinned `boxer.glb` with clips:
 
-If the file is missing or fails to load, no fighter geometry is shown (add `boxer.glb` to this folder).
+| Name | Use | Loop |
+|------|-----|------|
+| `idle` | Standing | Yes |
+| `jab` | Jab | No |
+| `powerPunch` | Power punch | No |
+| `block` | Block | No |
+| `knockout` | KO | No |
 
-## Tips
-
-- Use a single skinned character; the scene instantiates it twice (Red Corner Fighter, Blue Corner Fighter).
-- Scale is applied automatically (~1.2). Position: red corner at (-3, 0, 0), blue at (3, 0, 0).
-- Materials are tinted red (player) and blue (enemy) when they support `diffuseColor` or `albedoColor`.
+Red corner ~(-3,0,0), blue ~(3,0,0).
