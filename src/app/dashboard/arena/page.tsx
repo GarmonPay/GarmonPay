@@ -1,254 +1,265 @@
-"use client";
+'use client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { getSessionAsync } from "@/lib/session";
-import { getApiRoot } from "@/lib/api";
-import { getFightServerHealthUrl } from "@/lib/keepAlive";
-import ProBoxer from "@/components/arena/ProBoxerClient";
-import ArenaLogo from "@/components/arena/ArenaLogo";
-import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
-import type { FighterData } from "@/lib/arena-fighter-types";
-
-type FightServerStatus = "connecting" | "connected" | "offline";
-
-export default function ArenaHubPage() {
-  const router = useRouter();
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
-  const [fighter, setFighter] = useState<FighterData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fightServerStatus, setFightServerStatus] = useState<FightServerStatus>("connecting");
+export default function ArenaPage() {
+  const router = useRouter()
+  const [fighter, setFighter] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const base = getFightServerHealthUrl();
-    if (!base) {
-      setFightServerStatus("offline");
-      return;
-    }
-    setFightServerStatus("connecting");
-    fetch(`${base}/health`, { method: "GET" })
-      .then((r) => (r.ok ? "connected" : "offline") as FightServerStatus)
-      .catch(() => "offline" as FightServerStatus)
-      .then((status) => setFightServerStatus(status));
-  }, []);
+    fetch('/api/arena/me', {
+      credentials: 'include'
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data?.fighter) setFighter(data.fighter)
+    })
+    .catch(() => {})
+    .finally(() => setLoading(false))
+  }, [])
 
-  useEffect(() => {
-    let cancelled = false;
-    const timeout = setTimeout(() => {
-      if (cancelled) return;
-      setLoading(false);
-    }, 12000);
-
-    getSessionAsync()
-      .then((s) => {
-        if (cancelled) return;
-        if (!s) {
-          setLoading(false);
-          router.replace("/login?next=/dashboard/arena");
-          return;
-        }
-        setSession(s);
-        const token = s.accessToken ?? s.userId;
-        const isToken = !!s.accessToken;
-        const root = getApiRoot();
-        return fetch(`${root}/arena/me`, {
-          headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
-          credentials: "include",
-        })
-          .then((r) => {
-            if (cancelled) return null;
-            if (r.status === 401) {
-              router.replace("/login?next=/dashboard/arena");
-              return null;
-            }
-            return r.ok ? r.json() : null;
-          })
-          .then((data) => {
-            if (cancelled) return;
-            const { fighter: f } = parseArenaMeResponse(data ?? {});
-            if (f) setFighter(f);
-          })
-          .catch(() => {})
-          .finally(() => {
-            if (!cancelled) {
-              clearTimeout(timeout);
-              setLoading(false);
-            }
-          });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          clearTimeout(timeout);
-          setLoading(false);
-        }
-      })
-      .finally(() => clearTimeout(timeout));
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "60vh",
-          flexDirection: "column",
-          gap: 16,
-          background: "#0d1117",
-          borderRadius: 12,
-        }}
-      >
-        <div style={{ fontSize: 64 }}>🥊</div>
-        <div
-          style={{
-            color: "#f0a500",
-            fontFamily: "system-ui, 'Bebas Neue', sans-serif",
-            fontSize: 24,
-            letterSpacing: 3,
-          }}
-        >
-          LOADING ARENA...
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
-        <p className="text-[#9ca3af]">Redirecting to login…</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{
+      minHeight: '80vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#0d1117'
+    }}>
+      <div style={{ color: '#f0a500', fontSize: 48 }}>🥊</div>
+    </div>
+  )
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
-        <div className="bg-gradient-to-r from-[#f0a500]/20 to-transparent border-b border-white/10 px-6 py-6">
-          <h1 className="text-3xl font-bold text-white flex flex-wrap items-center gap-4">
-            <ArenaLogo size="large" variant="full" className="shrink-0" />
-            <span
-              className="inline-block w-3 h-3 rounded-full shrink-0"
-              title={
-                fightServerStatus === "connected"
-                  ? "Fight server connected"
-                  : fightServerStatus === "connecting"
-                    ? "Connecting…"
-                    : "Fight server offline"
-              }
-              style={{
-                backgroundColor:
-                  fightServerStatus === "connected"
-                    ? "#22c55e"
-                    : fightServerStatus === "connecting"
-                      ? "#eab308"
-                      : "#ef4444",
-              }}
-              aria-hidden
-            />
+    <div style={{
+      minHeight: '100vh',
+      background: '#0d1117',
+      color: '#ffffff',
+      padding: '24px 16px',
+      fontFamily: 'sans-serif'
+    }}>
+      
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 24
+      }}>
+        <span style={{ fontSize: 32 }}>🥊</span>
+        <div>
+          <h1 style={{ 
+            margin: 0, 
+            fontSize: 24, 
+            color: '#ffffff',
+            fontWeight: 800
+          }}>
+            GARMONPAY ARENA
           </h1>
-          <p className="text-[#9ca3af] mt-2">One fighter per account. Train, fight, earn.</p>
-        </div>
-        <div className="p-6">
-          {fighter ? (
-            <div className="flex flex-col md:flex-row md:items-stretch gap-6">
-              <div className="min-h-[220px] md:min-w-[280px] md:max-w-[340px] rounded-lg overflow-hidden border border-white/10">
-                <ProBoxer
-                  fighterColor={fighter?.fighter_color || "#f0a500"}
-                  size="medium"
-                />
-              </div>
-              <div className="flex-1 flex flex-col justify-center gap-4">
-                <div>
-                  <p className="text-[#9ca3af] text-sm">Your fighter</p>
-                  <p className="text-xl font-bold text-white">{fighter?.name ?? "Fighter"}</p>
-                  <p className="text-[#f0a500]">{fighter?.style ?? "—"}</p>
-                  <p className="text-sm text-white mt-1">Record: {fighter?.wins ?? 0}W – {fighter?.losses ?? 0}L</p>
-                </div>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/dashboard/arena/fighter"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-[#3b82f6] text-white font-semibold hover:bg-[#2563eb]"
-                >
-                  My Fighter
-                </Link>
-                <Link
-                  href="/dashboard/arena/train"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-[#161b22] border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Training Gym
-                </Link>
-                <Link
-                  href="/dashboard/arena/fight"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-[#f0a500] text-black font-semibold hover:bg-[#e09500]"
-                >
-                  Find Fight
-                </Link>
-                <Link
-                  href="/dashboard/arena/store"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Store
-                </Link>
-                <Link
-                  href="/dashboard/arena/spectate"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Watch Live
-                </Link>
-                <Link
-                  href="/dashboard/arena/tournaments"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Tournaments
-                </Link>
-                <Link
-                  href="/dashboard/arena/season-pass"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Season Pass
-                </Link>
-                <Link
-                  href="/dashboard/arena/daily"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Daily
-                </Link>
-                <Link
-                  href="/dashboard/arena/achievements"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-white font-semibold hover:bg-white/5"
-                >
-                  Achievements
-                </Link>
-                <Link
-                  href="/dashboard/arena/legal"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-white/20 text-[#9ca3af] font-medium hover:bg-white/5 text-sm"
-                >
-                  Fair Play & Legal
-                </Link>
-              </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <p className="text-[#9ca3af] mb-4">You don’t have a fighter yet. Create one to enter the Arena.</p>
-              <Link
-                href="/dashboard/arena/create"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-[#f0a500] text-black font-bold hover:bg-[#e09500]"
-              >
-                Create Fighter — Enter the Arena
-              </Link>
-            </div>
-          )}
+          <p style={{ 
+            margin: 0, 
+            fontSize: 13, 
+            color: '#666' 
+          }}>
+            Train. Fight. Earn.
+          </p>
         </div>
       </div>
+
+      {!fighter ? (
+        /* No fighter yet */
+        <div style={{
+          background: '#161b22',
+          borderRadius: 12,
+          padding: 32,
+          textAlign: 'center',
+          border: '1px solid #30363d'
+        }}>
+          <div style={{ fontSize: 64, marginBottom: 16 }}>👊</div>
+          <h2 style={{ color: '#f0a500', marginBottom: 8 }}>
+            Create Your Fighter
+          </h2>
+          <p style={{ color: '#666', marginBottom: 24 }}>
+            One fighter per account. Train, fight, earn real money.
+          </p>
+          <button
+            onClick={() => router.push('/dashboard/arena/create/manual')}
+            style={{
+              padding: '14px 32px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: 'pointer',
+              width: '100%'
+            }}
+          >
+            Create Fighter
+          </button>
+        </div>
+      ) : (
+        /* Fighter exists */
+        <div>
+          {/* Fighter card */}
+          <div style={{
+            background: '#161b22',
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 16,
+            border: '1px solid #30363d'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 16,
+              marginBottom: 16
+            }}>
+              <div style={{ fontSize: 48 }}>
+                {fighter.avatar || '🥊'}
+              </div>
+              <div>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: 22,
+                  color: fighter.fighter_color || '#f0a500'
+                }}>
+                  {fighter.name || 'Fighter'}
+                </h2>
+                <p style={{ margin: 0, color: '#666', fontSize: 14 }}>
+                  {fighter.style || 'Boxer'} • {fighter.wins || 0}W - {fighter.losses || 0}L
+                </p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { label: 'STR', value: fighter.stats?.strength ?? fighter.strength ?? 48 },
+                { label: 'SPD', value: fighter.stats?.speed ?? fighter.speed ?? 48 },
+                { label: 'STA', value: fighter.stats?.stamina ?? fighter.stamina ?? 48 },
+                { label: 'DEF', value: fighter.stats?.defense ?? fighter.defense ?? 48 },
+                { label: 'CHN', value: fighter.stats?.chin ?? fighter.chin ?? 48 },
+                { label: 'SPC', value: fighter.stats?.special ?? fighter.special ?? 20 },
+              ].map(stat => (
+                <div key={stat.label}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    fontSize: 12,
+                    marginBottom: 3,
+                    color: '#888'
+                  }}>
+                    <span>{stat.label}</span>
+                    <span style={{ color: '#f0a500' }}>{stat.value}</span>
+                  </div>
+                  <div style={{ 
+                    height: 5, 
+                    background: '#0d1117', 
+                    borderRadius: 3,
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: Math.min(100, stat.value) + '%',
+                      height: '100%',
+                      background: stat.value >= 70 ? '#f0a500' : '#3b82f6',
+                      borderRadius: 3
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr 1fr',
+            gap: 12,
+            marginBottom: 12
+          }}>
+            <button
+              onClick={() => router.push('/dashboard/arena/fight')}
+              style={{
+                padding: '16px',
+                background: '#c1272d',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              🥊 FIGHT
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/arena/train')}
+              style={{
+                padding: '16px',
+                background: '#161b22',
+                color: 'white',
+                border: '1px solid #30363d',
+                borderRadius: 8,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              💪 TRAIN
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/arena/store')}
+              style={{
+                padding: '16px',
+                background: '#161b22',
+                color: 'white',
+                border: '1px solid #30363d',
+                borderRadius: 8,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              🛍️ STORE
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/arena/leaderboard')}
+              style={{
+                padding: '16px',
+                background: '#161b22',
+                color: 'white',
+                border: '1px solid #30363d',
+                borderRadius: 8,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              🏆 RANKS
+            </button>
+          </div>
+
+          <button
+            onClick={() => router.push('/dashboard/arena/corner')}
+            style={{
+              width: '100%',
+              padding: '14px',
+              background: '#161b22',
+              color: '#f0a500',
+              border: '1px solid #f0a500',
+              borderRadius: 8,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            🧠 CORNER MAN AI
+          </button>
+        </div>
+      )}
     </div>
-  );
+  )
 }
