@@ -14,7 +14,7 @@ import {
 
 import { getApiRoot } from "@/lib/api";
 import { getHasWebGL } from "@/lib/webgl-detect";
-import { BoxingRing } from "@/components/arena/BoxingRing";
+import { FighterLayers } from "@/components/arena/FighterLayers";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 const BoxingRing3D = dynamic(
@@ -168,12 +168,14 @@ export default function TrainingGymPage() {
           </div>
         )}
         <div className={`relative z-10 flex items-center justify-center min-h-[280px] ${getHasWebGL() ? "pointer-events-none" : ""}`}>
-          <BoxingRing
-            mode="profile"
-            fighterA={fighter as FighterData}
-            fighterAAnimation={trainingSessionKey ? "training" : "idle"}
-            animation="idle"
-          />
+          <div className="rounded-xl border border-white/10 bg-[#0d1117]/85 px-6 py-4 backdrop-blur-[2px]">
+            <FighterLayers
+              fighter={fighter as FighterData}
+              size="large"
+              animation={trainingSessionKey ? "training" : "idle"}
+              showGear
+            />
+          </div>
         </div>
       </div>
       <div className="p-6 pt-2">

@@ -15,8 +15,8 @@ export function fighterWaistY(): number {
 export const FIGHTER_BODY_LEAN_DEG = (-0.3 * 180) / Math.PI;
 
 /**
- * Side-view boxing stance: narrow shoulders (not T-pose). Left jab extended toward camera-left
- * in front of face; right hand tucked at chin. Body lean ~rotation.y -0.3 via skew; legs crouched.
+ * Boxing stance in side view: arms as bent strokes (no wide quads). Jab forward/left of face;
+ * rear hand at chin. Feet narrow (no wide stance).
  */
 export function LayerBody({
   bodyType,
@@ -34,54 +34,45 @@ export function LayerBody({
   const headR = isLight ? 8 : isHeavy ? 10 : 9;
   const hipW = isLight ? 18 : isHeavy ? 24 : 21;
   const waistYAdj = fighterWaistY();
-  const kneeY = waistYAdj + 36;
+  const kneeY = waistYAdj + 34;
   const footY = 150;
-  const shoulderY = 40;
-  const lsX = 44;
-  const rsX = 54;
-  const chinY = 28;
+  const shoulderY = 39;
+  const lsX = 46;
+  const rsX = 52;
   const faceX = 50;
-  const leftGloveX = 28;
-  const leftGloveY = 22;
-  const leftElbowX = 34;
-  const leftElbowY = 28;
-  const rightGloveX = 52;
-  const rightGloveY = chinY;
-  const rightElbowX = 53;
-  const rightElbowY = 34;
+  const armStroke = isHeavy ? 11 : isLight ? 9 : 10;
   return (
     <g className={className}>
-      {/* Legs — bent knees, crouch */}
+      {/* Legs — narrow stance, both feet ~under hips */}
       <path
         fill={hex}
-        d={`M ${50 - hipW / 2} ${waistYAdj} L ${46} ${kneeY} L ${48} ${footY} L ${54} ${footY} L ${52} ${kneeY} Z`}
+        d={`M ${50 - hipW / 2} ${waistYAdj} L ${47} ${kneeY} L ${49} ${footY} L ${54} ${footY} L ${52} ${kneeY} Z`}
       />
       <path
         fill={hex}
-        d={`M ${50 + hipW / 2 - 3} ${waistYAdj} L ${56} ${kneeY} L ${58} ${footY} L ${68} ${footY} L ${64} ${kneeY} Z`}
+        d={`M ${50 + hipW / 2 - 2} ${waistYAdj} L ${54} ${kneeY} L ${52} ${footY} L ${58} ${footY} L ${56} ${kneeY} Z`}
       />
-      {/* Torso: narrow shoulders 44–54 (not T-pose width) */}
       <path
         fill={hex}
         d={`M ${lsX} ${shoulderY - 5} L ${rsX} ${shoulderY - 5} L ${50 + hipW / 2} ${waistYAdj} L ${50 - hipW / 2} ${waistYAdj} Z`}
       />
-      {/* Left: jab — glove in front of face */}
+      {/* Left arm: shoulder→elbow→jab (stroke = clear L-shape, not spread) */}
       <path
-        fill={hex}
-        d={`M ${lsX} ${shoulderY} L ${lsX - 2} ${shoulderY + 4} L ${leftElbowX} ${leftElbowY + 3} L ${leftElbowX + 4} ${leftElbowY - 2} L ${lsX + 3} ${shoulderY} Z`}
+        d={`M ${lsX + 1} ${shoulderY} L 33 27 L 25 21`}
+        fill="none"
+        stroke={hex}
+        strokeWidth={armStroke}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
+      {/* Right arm: tucked, forearm up to chin */}
       <path
-        fill={hex}
-        d={`M ${leftElbowX + 1} ${leftElbowY} L ${leftGloveX - 2} ${leftGloveY + 6} L ${leftGloveX + 5} ${leftGloveY + 4} L ${leftElbowX + 5} ${leftElbowY - 3} Z`}
-      />
-      {/* Right: guard at chin */}
-      <path
-        fill={hex}
-        d={`M ${rsX} ${shoulderY} L ${rightElbowX + 2} ${rightElbowY - 2} L ${rightElbowX - 3} ${rightElbowY + 3} L ${rsX - 2} ${shoulderY + 3} Z`}
-      />
-      <path
-        fill={hex}
-        d={`M ${rightElbowX} ${rightElbowY} L ${rightGloveX + 5} ${rightGloveY - 4} L ${rightGloveX - 2} ${rightGloveY + 8} L ${rightElbowX - 2} ${rightElbowY + 2} Z`}
+        d={`M ${rsX - 1} ${shoulderY} L 51 32 L 49 27`}
+        fill="none"
+        stroke={hex}
+        strokeWidth={armStroke}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
       <ellipse cx={faceX} cy={headY + headR} rx={headR} ry={headR + 2} fill={hex} />
     </g>
@@ -174,10 +165,10 @@ export function LayerGloves({
     championship_gloves: "#eab308",
   };
   const fill = colors[gearKey] ?? colors.default;
-  const leftGloveX = 28;
-  const leftGloveY = 22;
-  const rightGloveX = 52;
-  const rightGloveY = 28;
+  const leftGloveX = 25;
+  const leftGloveY = 21;
+  const rightGloveX = 49;
+  const rightGloveY = 27;
   return (
     <g className={className}>
       <ellipse cx={leftGloveX} cy={leftGloveY} rx={10} ry={12} fill={fill} />
@@ -371,5 +362,24 @@ export function FighterDisplay({
         </g>
       </g>
     </svg>
+  );
+}
+
+/** Alias for pages that expect `<FighterLayers fighter={...} />` — same as FighterDisplay. */
+export function FighterLayers({
+  fighter,
+  size = "medium",
+  animation = "idle",
+  showGear = true,
+  className = "",
+}: {
+  fighter: FighterData;
+  size?: "small" | "medium" | "large";
+  animation?: string;
+  showGear?: boolean;
+  className?: string;
+}) {
+  return (
+    <FighterDisplay fighter={fighter} size={size} animation={animation} showGear={showGear} className={className} />
   );
 }
