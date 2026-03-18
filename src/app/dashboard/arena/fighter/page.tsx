@@ -1,382 +1,124 @@
-"use client";
+'use client'
 
-import { useCallback, useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { getSessionAsync } from "@/lib/session";
-import { getApiRoot } from "@/lib/api";
-import ProBoxer from "@/components/arena/ProBoxerClient";
-import type { FighterData } from "@/lib/arena-fighter-types";
-import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-const REGEN_COST = 500;
-const POLL_3D_INTERVAL_MS = 15_000;
+const STAT_KEYS = ['strength', 'speed', 'stamina', 'defense', 'chin', 'special'] as const
 
-export default function MyFighterPage() {
-  const router = useRouter();
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
-  const [fighter, setFighter] = useState<FighterData | null>(null);
-  const [arenaCoins, setArenaCoins] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [regenModal, setRegenModal] = useState(false);
-  const [regenLoading, setRegenLoading] = useState(false);
-  const [regenError, setRegenError] = useState("");
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [threeDProgress, setThreeDProgress] = useState<number>(0);
-  const poll3dRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const fetchMe = useCallback(async () => {
-    try {
-      const s = await getSessionAsync();
-      if (!s) {
-        setLoading(false);
-        router.replace("/login?next=/dashboard/arena/fighter");
-        return;
-      }
-      setSession(s);
-      const token = s.accessToken ?? s.userId;
-      const isToken = !!s.accessToken;
-      const res = await fetch(`${getApiRoot()}/arena/me`, {
-        headers: isToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token },
-        credentials: "include",
-      });
-      if (res.status === 401) {
-        setLoading(false);
-        router.replace("/login?next=/dashboard/arena/fighter");
-        return;
-      }
-      const data = res.ok ? await res.json().catch(() => null) : null;
-      const { fighter: f, arenaCoins: coins } = parseArenaMeResponse(data ?? {});
-      if (f) setFighter(f);
-      if (typeof coins === "number") setArenaCoins(coins);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
+export default function ArenaFighterPage() {
+  const router = useRouter()
+  const [fighter, setFighter] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 10000);
-    fetchMe();
-    return () => clearTimeout(t);
-  }, [fetchMe]);
-
-  const poll3dStatus = useCallback(() => {
-    const f = fighter as (FighterData & { model_3d_task_id?: string | null }) | null;
-    const taskId = f?.model_3d_task_id;
-    if (!taskId || !session) return;
-    const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    fetch(`${getApiRoot()}/arena/fighter/3d-status?taskId=${encodeURIComponent(taskId)}`, { headers, credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then(
-        (
-          data: {
-            status?: string;
-            progress?: number;
-            modelUrl?: string;
-            thumbnail?: string;
-            nextTaskId?: string;
-          } | null
-        ) => {
-        if (!data) return;
-        if (typeof data.nextTaskId === "string" && data.nextTaskId.length > 0) {
-          setFighter((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  model_3d_task_id: data.nextTaskId,
-                  model_3d_status: "generating_refine",
-                }
-              : null
-          );
-        }
-        if (data.status === "complete") {
-          setFighter((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  model_3d_url: data.modelUrl ?? (prev as { model_3d_url?: string }).model_3d_url,
-                  model_3d_status: "complete",
-                  model_thumbnail_url: data.thumbnail ?? (prev as { model_thumbnail_url?: string }).model_thumbnail_url,
-                  model_3d_task_id: null,
-                }
-              : null
-          );
-          if (poll3dRef.current) {
-            clearInterval(poll3dRef.current);
-            poll3dRef.current = null;
-          }
-          fetchMe();
-          return;
-        }
-        if (data.status === "failed") {
-          setFighter((prev) => (prev ? { ...prev, model_3d_status: "failed" } : null));
-          if (poll3dRef.current) {
-            clearInterval(poll3dRef.current);
-            poll3dRef.current = null;
-          }
-          fetchMe();
-          return;
-        }
-        if (data.status === "generating" && typeof data.progress === "number") {
-          setThreeDProgress(data.progress);
-        }
-      }
-      )
-      .catch(() => {});
-  }, [fighter, session, fetchMe]);
-
-  useEffect(() => {
-    const f = fighter as (FighterData & { model_3d_status?: string; model_3d_task_id?: string | null }) | null;
-    const shouldPoll =
-      f?.model_3d_task_id != null &&
-      f?.model_3d_status !== "succeeded" &&
-      f?.model_3d_status !== "failed" &&
-      f?.model_3d_status !== "complete";
-    if (!shouldPoll) {
-      if (poll3dRef.current) {
-        clearInterval(poll3dRef.current);
-        poll3dRef.current = null;
-      }
-      return;
-    }
-    poll3dStatus();
-    poll3dRef.current = setInterval(poll3dStatus, POLL_3D_INTERVAL_MS);
-    return () => {
-      if (poll3dRef.current) clearInterval(poll3dRef.current);
-    };
-  }, [fighter?.id, fighter?.model_3d_status, fighter?.model_3d_task_id, poll3dStatus]); // eslint-disable-line react-hooks/exhaustive-deps -- poll when generating
-
-  const handleGenerate3D = async () => {
-    if (!session || !fighter) return;
-    setGenerationError(null);
-    const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    try {
-      const res = await fetch(`${getApiRoot()}/arena/fighter/generate-3d`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        credentials: "include",
-        body: JSON.stringify({ fighterId: fighter?.id }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setGenerationError(data.message || "3D generation is currently unavailable. Please try again later.");
-        return;
-      }
-      if (data.taskId) {
-        setFighter((prev) =>
-          prev
-            ? {
-                ...prev,
-                model_3d_task_id: data.taskId,
-                model_3d_status: "generating",
-              }
-            : null
-        );
-        setThreeDProgress(0);
-      } else {
-        setGenerationError("3D generation is currently unavailable. Please try again later.");
-      }
-    } catch {
-      setGenerationError("3D generation is currently unavailable. Please try again later.");
-    }
-  };
-
-  const handleRegenerate = async () => {
-    if (!session || !fighter) return;
-    setRegenError("");
-    setRegenLoading(true);
-    const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    try {
-      const res = await fetch(`${getApiRoot()}/arena/fighter/ai-generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        credentials: "include",
-        body: JSON.stringify({
-          method: "auto",
-          username: fighter.name || "Fighter",
-          regeneration: true,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 402) {
-        setRegenError("You need 500 coins. Get more in the Store.");
-        setRegenLoading(false);
-        return;
-      }
-      if (!res.ok) {
-        setRegenError(data.error || "Try again in a moment.");
-        setRegenLoading(false);
-        return;
-      }
-      setRegenModal(false);
-      router.push("/dashboard/arena/create/reveal");
-    } catch {
-      setRegenError("Something went wrong.");
-      setRegenLoading(false);
-    }
-  };
+    fetch('/api/arena/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.fighter) setFighter(data.fighter)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   if (loading) {
     return (
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
-        <p className="text-[#9ca3af]">Loading…</p>
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117' }}>
+        <div style={{ color: '#f0a500', fontSize: 48 }}>🥊</div>
       </div>
-    );
+    )
   }
-  if (!session) {
-    return (
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-8 text-center">
-        <p className="text-[#9ca3af]">Redirecting to login…</p>
-      </div>
-    );
-  }
+
   if (!fighter) {
     return (
-      <div className="p-6">
-        <p className="text-[#9ca3af] mb-4">You don’t have a fighter yet.</p>
-        <Link href="/dashboard/arena/create" className="text-[#f0a500] hover:underline">Create fighter</Link>
+      <div style={{ padding: 24, background: '#0d1117', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' }}>
+        <p style={{ color: '#666', marginBottom: 16 }}>You don&apos;t have a fighter yet.</p>
+        <button
+          onClick={() => router.push('/dashboard/arena/create/manual')}
+          style={{ padding: '12px 24px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Create Fighter
+        </button>
+        <br />
+        <button
+          onClick={() => router.push('/dashboard/arena')}
+          style={{ marginTop: 12, padding: '10px 20px', background: 'transparent', color: '#f0a500', border: '1px solid #f0a500', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}
+        >
+          Back to Arena
+        </button>
       </div>
-    );
+    )
   }
 
-  const totalStats =
-    (fighter?.strength ?? 0) +
-    (fighter?.speed ?? 0) +
-    (fighter?.stamina ?? 0) +
-    (fighter?.defense ?? 0) +
-    (fighter?.chin ?? 0) +
-    (fighter?.special ?? 0);
-  const wins = fighter?.wins ?? 0;
-  const losses = fighter?.losses ?? 0;
-  const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) : "—";
-
-  const model3dStatus = (fighter as { model_3d_status?: string }).model_3d_status ?? "not_started";
-  const fighterColor = (fighter as { fighter_color?: string }).fighter_color ?? "#f0a500";
-
-  const renderFighterVisual = () => {
-    return (
-      <div className="flex-1 min-h-[260px] md:min-h-[320px] relative">
-        <ProBoxer fighterColor={fighterColor} size="medium" />
-        {(model3dStatus === "generating" || model3dStatus === "generating_refine" || model3dStatus === "refine_lock") && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg pointer-events-none">
-            <div className="generating-3d-banner flex items-center gap-4 p-4 rounded-xl bg-[#161b22] border border-white/10 max-w-md pointer-events-auto">
-              <div className="w-10 h-10 border-2 border-[#f0a500] border-t-transparent rounded-full animate-spin" />
-              <div>
-                <p className="text-white font-medium">⚡ Your 3D fighter is being forged...</p>
-                <p className="text-[#f0a500] text-sm">{threeDProgress}% complete</p>
-                <p className="text-[#9ca3af] text-xs">Usually takes 1-3 minutes</p>
-              </div>
-            </div>
-          </div>
-        )}
-        {model3dStatus === "not_started" && (
-          <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
-            <button
-              type="button"
-              onClick={handleGenerate3D}
-              className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]"
-            >
-              Generate My 3D Fighter
-            </button>
-            {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const wins = fighter.wins ?? 0
+  const losses = fighter.losses ?? 0
+  const gear: string[] = []
+  if (fighter.equipped_gloves) gear.push(String(fighter.equipped_gloves).replace(/_/g, ' '))
+  if (fighter.equipped_shorts) gear.push(String(fighter.equipped_shorts).replace(/_/g, ' '))
+  if (fighter.equipped_shoes) gear.push(String(fighter.equipped_shoes).replace(/_/g, ' '))
+  if (fighter.equipped_headgear && fighter.equipped_headgear !== 'none') gear.push(String(fighter.equipped_headgear).replace(/_/g, ' '))
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-stretch gap-0">
-          <div className="flex-1 relative">
-            {renderFighterVisual()}
-          </div>
-          <div className="flex-1 p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-white/10">
-            <span className="text-5xl">{fighter?.avatar ?? "🥊"}</span>
-            <h1 className="text-2xl font-bold text-white mt-2">{fighter?.name ?? "Fighter"}</h1>
-            {(fighter as { nickname?: string | null }).nickname && (
-              <p className="text-lg font-medium mt-0.5" style={{ color: (fighter as { fighter_color?: string }).fighter_color || "#f0a500" }}>
-                {(fighter as { nickname?: string }).nickname}
-              </p>
-            )}
-            {fighter?.title && <p className="text-[#f0a500]">{fighter.title}</p>}
-            <p className="text-[#9ca3af]">{fighter?.style ?? "—"}</p>
-            {(fighter as { origin?: string | null }).origin && (
-              <p className="text-sm text-[#9ca3af]">Fighting out of {(fighter as { origin?: string }).origin}</p>
-            )}
-            <p className="text-white mt-1">Record: {wins}W – {losses}L ({winRate}% win rate) · Streak: {fighter?.win_streak ?? 0}</p>
-            <p className="text-sm text-[#9ca3af]">Condition: {fighter?.condition ?? "—"} · Training sessions: {fighter?.training_sessions ?? 0}</p>
-            {(fighter as { backstory?: string | null }).backstory && (
-              <div className="mt-3 p-3 rounded-lg bg-[#0d1117] border border-white/10">
-                <p className="text-[#9ca3af] text-xs uppercase mb-1">Backstory</p>
-                <p className="text-white/90 text-sm italic">&ldquo;{(fighter as { backstory?: string }).backstory}&rdquo;</p>
-              </div>
-            )}
-            {(fighter as { signature_move_name?: string | null }).signature_move_name && (
-              <div className="mt-2 p-3 rounded-lg bg-[#0d1117] border border-white/10">
-                <p className="text-[#f0a500] font-bold text-sm">{(fighter as { signature_move_name?: string }).signature_move_name}</p>
-                {(fighter as { signature_move_desc?: string | null }).signature_move_desc && (
-                  <p className="text-[#9ca3af] text-xs mt-1">{(fighter as { signature_move_desc?: string }).signature_move_desc}</p>
-                )}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              {(["strength", "speed", "stamina", "defense", "chin", "special"] as const).map((stat) => (
-                <div key={stat} className="bg-[#0d1117] rounded-lg p-3">
-                  <p className="text-[#9ca3af] text-xs capitalize">{stat}</p>
-                  <p className="text-lg font-bold text-white">{fighter?.[stat] ?? 0}</p>
-                  <div className="h-1.5 mt-1 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${Math.min(100, ((fighter?.[stat] ?? 0) / 99) * 100)}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-[#9ca3af] text-sm mt-2">Total stats: {totalStats} (weight class by total)</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/dashboard/arena/train" className="px-4 py-2 rounded-lg bg-[#3b82f6] text-white font-medium">Training Gym</Link>
-              <Link href="/dashboard/arena" className="px-4 py-2 rounded-lg border border-white/20 text-white">Back to Arena</Link>
-              <button
-                type="button"
-                onClick={() => setRegenModal(true)}
-                className="px-4 py-2 rounded-lg border border-white/20 text-[#9ca3af] hover:text-white hover:bg-white/5 text-sm"
-              >
-                Regenerate with AI (500 coins)
-              </button>
-            </div>
-            {regenModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !regenLoading && setRegenModal(false)}>
-                <div className="rounded-xl bg-[#161b22] border border-white/10 p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="text-lg font-bold text-white mb-2">Regenerate with AI?</h3>
-                  <p className="text-[#9ca3af] text-sm mb-4">
-                    This will replace your fighter&apos;s appearance, name, and backstory. Stats and record are kept. Costs 500 coins. You have {arenaCoins} coins.
-                  </p>
-                  {regenError && <p className="text-red-400 text-sm mb-2">{regenError}</p>}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      disabled={regenLoading || arenaCoins < REGEN_COST}
-                      onClick={handleRegenerate}
-                      className="flex-1 py-2 rounded-lg bg-[#f0a500] text-black font-medium disabled:opacity-50"
-                    >
-                      {regenLoading ? "Generating…" : "Continue"}
-                    </button>
-                    <button type="button" onClick={() => setRegenModal(false)} disabled={regenLoading} className="px-4 py-2 rounded-lg border border-white/20 text-white">
-                      Cancel
-                    </button>
-                  </div>
-                  {arenaCoins < REGEN_COST && <Link href="/dashboard/arena/store" className="block text-center text-[#f0a500] text-sm mt-2 hover:underline">Buy coins</Link>}
-                </div>
-              </div>
-            )}
+    <div style={{ minHeight: '100vh', background: '#0d1117', color: '#fff', padding: '24px 16px', fontFamily: 'sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={() => router.push('/dashboard/arena')} style={{ background: 'transparent', border: 'none', color: '#f0a500', fontSize: 18, cursor: 'pointer' }}>←</button>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>My Fighter</h1>
+      </div>
+
+      <div style={{ background: '#161b22', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #30363d' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 48 }}>{fighter.avatar || '🥊'}</div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, color: fighter.fighter_color || '#f0a500' }}>{fighter.name || 'Fighter'}</h2>
+            <p style={{ margin: 0, color: '#666', fontSize: 14 }}>{fighter.style || 'Boxer'}</p>
+            <p style={{ margin: '4px 0 0', color: '#888', fontSize: 13 }}>Record: {wins}W – {losses}L</p>
           </div>
         </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Stats</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {STAT_KEYS.map(key => {
+              const val = fighter?.stats?.[key] ?? fighter?.[key] ?? 48
+              return (
+                <div key={key}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3, color: '#888' }}>
+                    <span>{key.slice(0, 3).toUpperCase()}</span>
+                    <span style={{ color: '#f0a500' }}>{val}</span>
+                  </div>
+                  <div style={{ height: 6, background: '#0d1117', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: Math.min(100, val) + '%', height: '100%', background: '#3b82f6', borderRadius: 3 }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {gear.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Equipped</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {gear.map((g, i) => (
+                <span key={i} style={{ padding: '4px 10px', background: '#0d1117', borderRadius: 6, fontSize: 12, color: '#f0a500', border: '1px solid #30363d' }}>{g}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => router.push('/dashboard/arena/create/manual')}
+          style={{ width: '100%', padding: 14, background: '#f0a500', color: '#000', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Edit / Customize
+        </button>
       </div>
+
+      <button
+        onClick={() => router.push('/dashboard/arena')}
+        style={{ width: '100%', padding: 12, background: '#161b22', color: '#888', border: '1px solid #30363d', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}
+      >
+        Back to Arena
+      </button>
     </div>
-  );
+  )
 }
