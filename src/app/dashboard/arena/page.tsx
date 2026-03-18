@@ -1,6 +1,13 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+
+const ProBoxer = dynamic(
+  () => import('@/components/arena/ProBoxer'),
+  { ssr: false }
+)
 
 export default function ArenaPage() {
   const router = useRouter()
@@ -111,15 +118,13 @@ export default function ArenaPage() {
             marginBottom: 16,
             border: '1px solid #30363d'
           }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 16,
-              marginBottom: 16
-            }}>
-              <div style={{ fontSize: 48 }}>
-                {fighter.avatar || '🥊'}
-              </div>
+            <div style={{ marginBottom: 16, minHeight: 280, borderRadius: 8, overflow: 'hidden' }}>
+              <ProBoxer
+                fighterColor={fighter?.fighter_color || '#f0a500'}
+                size="medium"
+              />
+            </div>
+            <div style={{ marginBottom: 16 }}>
               <div>
                 <h2 style={{ 
                   margin: 0, 

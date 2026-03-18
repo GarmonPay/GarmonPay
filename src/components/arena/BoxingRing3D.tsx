@@ -34,6 +34,22 @@ function RingFloor() {
   );
 }
 
+/** Ring from GLB; used as visual background. */
+function RingGLB() {
+  const gltf = useGLTF("/models/boxing-ring.glb") as { scene?: THREE.Group };
+  const scene = gltf?.scene;
+  if (!scene || typeof scene.clone !== "function") return null;
+  const clone = scene.clone();
+  return (
+    <primitive
+      object={clone}
+      position={[0, 0, 0]}
+      scale={[1, 1, 1]}
+      rotation={[0, 0, 0]}
+    />
+  );
+}
+
 function CornerPost({ position, padColor }: { position: [number, number, number]; padColor: string }) {
   return (
     <group position={position}>
@@ -278,6 +294,9 @@ function SceneContent({
       <spotLight position={[0, 12, 0]} angle={0.3} penumbra={0.7} intensity={4} color="#ffffff" castShadow shadow-mapSize={[2048, 2048]} />
       <SpotLights winnerSide={confettiActive ? winnerSide : null} />
       <RingFloor />
+      <Suspense fallback={null}>
+        <RingGLB />
+      </Suspense>
       <ContactShadows position={[0, 0.01, 0]} opacity={0.65} scale={12} blur={2.5} color="#000000" />
       <Ropes />
       <Apron />
@@ -428,3 +447,5 @@ export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>
     );
   }
 );
+
+useGLTF.preload("/models/boxing-ring.glb");

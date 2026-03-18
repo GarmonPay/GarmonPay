@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+
+const BoxingRing3D = dynamic(
+  () => import('@/components/arena/BoxingRing3D').then((m) => m.BoxingRing3D),
+  { ssr: false }
+)
 
 export default function ArenaFightPage() {
   const router = useRouter()
@@ -55,6 +61,10 @@ export default function ArenaFightPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={() => router.push('/dashboard/arena')} style={{ background: 'transparent', border: 'none', color: '#f0a500', fontSize: 18, cursor: 'pointer' }}>←</button>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Find Fight</h1>
+      </div>
+
+      <div style={{ width: '100%', height: 320, minHeight: 320, marginBottom: 24, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d' }}>
+        <BoxingRing3D mode="setup" />
       </div>
 
       {error && <div style={{ padding: 12, marginBottom: 16, background: 'rgba(239,68,68,0.2)', borderRadius: 8, color: '#fca5a5', fontSize: 14 }}>{error}</div>}
