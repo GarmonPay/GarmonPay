@@ -1,9 +1,15 @@
 /**
  * Arena fighter visual and gear types. Used by FighterLayers and pages.
- * Gear keys align with characterAssets (GLOVE_STYLES, SHORTS_STYLES, etc.).
  */
 
-import { SKIN_TONES as SKIN_TONES_MAP } from "@/lib/arena/characterAssets";
+const SKIN_TONES_MAP = {
+  tone1: "#f5d5b8",
+  tone2: "#e8b89a",
+  tone3: "#d4956a",
+  tone4: "#b8723d",
+  tone5: "#8d4a1f",
+  tone6: "#5c2e0e",
+} as const;
 
 export type BodyType = "lightweight" | "middleweight" | "heavyweight";
 export type SkinTone = "tone1" | "tone2" | "tone3" | "tone4" | "tone5" | "tone6";
@@ -93,7 +99,7 @@ export const DEFAULT_FIGHTER_VISUAL: Pick<
   equipped_headgear: "none",
 };
 
-/** Resolve skin tone string to hex. Uses characterAssets SKIN_TONES. */
+/** Resolve skin tone string to hex. */
 export function getSkinHex(skinTone: string): string {
   const key = skinTone in SKIN_TONES_MAP ? (skinTone as keyof typeof SKIN_TONES_MAP) : "tone3";
   return SKIN_TONES_MAP[key] ?? SKIN_TONES_MAP.tone3;

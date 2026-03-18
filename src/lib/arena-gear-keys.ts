@@ -1,5 +1,5 @@
 /**
- * Map arena_store_items (category + name) to visual gear keys used by FighterLayers/characterAssets.
+ * Map arena_store_items (category + name) to visual gear keys used by FighterLayers.
  */
 
 export function storeItemToGlovesKey(category: string, name: string): string {
