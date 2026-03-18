@@ -5,9 +5,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
-import { BoxingRing } from "@/components/arena/BoxingRing";
-import { FighterDisplay } from "@/components/arena/FighterLayers";
-import type { FighterData } from "@/lib/arena-fighter-types";
+import ProBoxer from "@/components/arena/ProBoxerClient";
 
 type LiveFight = {
   id: string;
@@ -55,14 +53,15 @@ export default function SpectateLobbyPage() {
         <Link href="/dashboard/arena" className="text-[#f0a500] hover:underline">Back to Arena</Link>
       </div>
       {fights.length > 0 && hasFighters && (
-        <div className="min-h-[200px] px-4 mb-2">
-          <BoxingRing
-            mode="setup"
-            fighterA={firstFight.fighterA as FighterData}
-            fighterB={firstFight.fighterB as FighterData}
-            currentRound={1}
-            animation="idle"
-          />
+        <div className="min-h-[200px] px-4 mb-2 rounded-lg border border-white/10 overflow-hidden" style={{ background: "linear-gradient(180deg, #1a1008 0%, #0d1117 100%)" }}>
+          <div style={{ display: "flex", justifyContent: "space-around", alignItems: "flex-end" }}>
+            <div className="flex-1 min-w-0 max-w-[48%]">
+              <ProBoxer facingRight={true} fighterColor="#f0a500" size="medium" />
+            </div>
+            <div className="flex-1 min-w-0 max-w-[48%]">
+              <ProBoxer facingRight={false} fighterColor="#c1272d" size="medium" />
+            </div>
+          </div>
         </div>
       )}
       <div className="p-6 pt-0">
@@ -73,12 +72,16 @@ export default function SpectateLobbyPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {fights.map((f) => (
             <div key={f.id} className="rounded-lg bg-[#0d1117] border border-white/10 p-4 flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                <FighterDisplay fighter={(f.fighterA ?? { name: "—" }) as FighterData} size="small" animation="idle" showGear />
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-[100px] shrink-0">
+                  <ProBoxer facingRight={true} fighterColor="#f0a500" size="small" />
+                </div>
                 <span className="text-white font-medium">{f.fighterA?.name ?? "—"}</span>
                 <span className="text-[#9ca3af]">vs</span>
                 <span className="text-white font-medium">{f.fighterB?.name ?? "—"}</span>
-                <FighterDisplay fighter={(f.fighterB ?? { name: "—" }) as FighterData} size="small" animation="idle" showGear mirrored />
+                <div className="w-[100px] shrink-0">
+                  <ProBoxer facingRight={false} fighterColor="#c1272d" size="small" />
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {f.bettingOpen && <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded">Betting open</span>}

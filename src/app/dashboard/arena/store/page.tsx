@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
-import { BoxingRing } from "@/components/arena/BoxingRing";
+import ProBoxer from "@/components/arena/ProBoxerClient";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 type StoreItem = {
@@ -197,7 +197,7 @@ export default function ArenaStorePage() {
       {fighter && (
         <div className="min-h-[200px] mb-6 rounded-lg overflow-hidden border border-white/10">
           <p className="text-[#9ca3af] text-sm text-center py-2 bg-[#0d1117] border-b border-white/10">Your fighter — gear updates when you equip</p>
-          <BoxingRing mode="profile" fighterA={fighter} animation="idle" />
+          <ProBoxer fighterColor={fighter.fighter_color || "#f0a500"} size="medium" />
         </div>
       )}
       <div className="flex flex-wrap gap-2 mb-4">

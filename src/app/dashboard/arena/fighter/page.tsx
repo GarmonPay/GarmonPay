@@ -3,17 +3,10 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
-import { getHasWebGL } from "@/lib/webgl-detect";
-import { BoxingRing } from "@/components/arena/BoxingRing";
+import ProBoxer from "@/components/arena/ProBoxerClient";
 import type { FighterData } from "@/lib/arena-fighter-types";
-
-const Fighter3D = dynamic(
-  () => import("@/components/arena/BoxingRing3D").then((m) => m.Fighter3D),
-  { ssr: false }
-);
 
 const REGEN_COST = 500;
 const POLL_3D_INTERVAL_MS = 15_000;
@@ -254,96 +247,24 @@ export default function MyFighterPage() {
   const losses = fighter.losses ?? 0;
   const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) : "—";
 
-  const fighterData: FighterData = {
-    ...fighter,
-    name: fighter?.name ?? "Fighter",
-    style: fighter?.style ?? "Boxer",
-    avatar: fighter?.avatar ?? "🥊",
-    strength: fighter?.strength ?? 48,
-    speed: fighter?.speed ?? 48,
-    stamina: fighter?.stamina ?? 48,
-    defense: fighter?.defense ?? 48,
-    chin: fighter?.chin ?? 48,
-    special: fighter?.special ?? 20,
-    wins: fighter?.wins ?? 0,
-    losses: fighter?.losses ?? 0,
-    body_type: (fighter?.body_type as FighterData["body_type"]) ?? "middleweight",
-    skin_tone: (fighter?.skin_tone as FighterData["skin_tone"]) ?? "tone3",
-    face_style: (fighter?.face_style as FighterData["face_style"]) ?? "determined",
-    hair_style: (fighter?.hair_style as FighterData["hair_style"]) ?? "short_fade",
-    equipped_gloves: (fighter?.equipped_gloves as FighterData["equipped_gloves"]) ?? "default",
-    equipped_shoes: (fighter?.equipped_shoes as FighterData["equipped_shoes"]) ?? "default",
-    equipped_shorts: (fighter?.equipped_shorts as FighterData["equipped_shorts"]) ?? "default",
-    equipped_headgear: (fighter?.equipped_headgear as FighterData["equipped_headgear"]) ?? "none",
-  };
-
   const model3dStatus = (fighter as { model_3d_status?: string }).model_3d_status ?? "not_started";
-  const model3dUrl = (fighter as { model_3d_url?: string | null }).model_3d_url;
-  const modelThumbnailUrl = (fighter as { model_thumbnail_url?: string | null }).model_thumbnail_url;
   const fighterColor = (fighter as { fighter_color?: string }).fighter_color ?? "#f0a500";
-  const useWebGL = getHasWebGL();
 
   const renderFighterVisual = () => {
-    if (!useWebGL) {
-      return (
-        <div className="flex-1 min-h-[260px] md:min-h-[320px] relative">
-          <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
-          {model3dStatus === "not_started" && (
-            <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
-              <button type="button" onClick={handleGenerate3D} className="w-full py-2 rounded-lg bg-[#f0a500] text-black font-medium text-sm hover:bg-[#e09500]">
-                Generate My 3D Fighter
-              </button>
-              {generationError && <p className="text-red-400 text-xs mt-1">{generationError}</p>}
-            </div>
-          )}
-        </div>
-      );
-    }
-    if (model3dStatus === "complete" && model3dUrl) {
-      return (
-        <Fighter3D
-          modelUrl={model3dUrl}
-          thumbnailUrl={modelThumbnailUrl}
-          fighterColor={fighterColor}
-          size="medium"
-          fallback={
-            <div className="flex-1 min-h-[260px] md:min-h-[320px] flex items-center justify-center bg-[#0d1117]">
-              <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
-            </div>
-          }
-        />
-      );
-    }
-    if (model3dStatus === "generating") {
-      return (
-        <div className="flex-1 min-h-[260px] md:min-h-[320px] flex flex-col items-center justify-center bg-[#0d1117] border-b border-white/10">
-          <div className="generating-3d-banner flex items-center gap-4 p-4 rounded-xl bg-[#161b22] border border-white/10 max-w-md">
-            <div className="w-10 h-10 border-2 border-[#f0a500] border-t-transparent rounded-full animate-spin" />
-            <div>
-              <p className="text-white font-medium">⚡ Your 3D fighter is being forged...</p>
-              <p className="text-[#f0a500] text-sm">{threeDProgress}% complete</p>
-              <p className="text-[#9ca3af] text-xs">Usually takes 1-3 minutes</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
     return (
       <div className="flex-1 min-h-[260px] md:min-h-[320px] relative">
-        {useWebGL ? (
-          <Fighter3D
-            modelUrl={null}
-            thumbnailUrl={null}
-            fighterColor={fighterColor}
-            size="medium"
-            fallback={
-              <div className="flex-1 min-h-[260px] md:min-h-[320px] flex items-center justify-center bg-[#0d1117]">
-                <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+        <ProBoxer fighterColor={fighterColor} size="medium" />
+        {(model3dStatus === "generating" || model3dStatus === "generating_refine" || model3dStatus === "refine_lock") && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg pointer-events-none">
+            <div className="generating-3d-banner flex items-center gap-4 p-4 rounded-xl bg-[#161b22] border border-white/10 max-w-md pointer-events-auto">
+              <div className="w-10 h-10 border-2 border-[#f0a500] border-t-transparent rounded-full animate-spin" />
+              <div>
+                <p className="text-white font-medium">⚡ Your 3D fighter is being forged...</p>
+                <p className="text-[#f0a500] text-sm">{threeDProgress}% complete</p>
+                <p className="text-[#9ca3af] text-xs">Usually takes 1-3 minutes</p>
               </div>
-            }
-          />
-        ) : (
-          <BoxingRing mode="profile" fighterA={fighterData} animation="idle" />
+            </div>
+          </div>
         )}
         {model3dStatus === "not_started" && (
           <div className="absolute bottom-2 left-2 right-2 md:left-auto md:right-2 md:w-48">
