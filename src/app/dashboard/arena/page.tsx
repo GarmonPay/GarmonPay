@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { getFightServerHealthUrl } from "@/lib/keepAlive";
-import ProBoxer from "@/components/arena/ProBoxerClient";
+/** Same as importing ProBoxer from @/components/arena/ProBoxer — dynamic avoids Three.js during static prerender. */
+const ProBoxer = dynamic(() => import("@/components/arena/ProBoxer"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full rounded-lg bg-black" style={{ height: 400 }} aria-hidden />
+  ),
+});
 import ArenaLogo from "@/components/arena/ArenaLogo";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
