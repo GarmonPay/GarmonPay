@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { getFightServerHealthUrl } from "@/lib/keepAlive";
 import ProBoxer from "@/components/arena/ProBoxerClient";
+import ArenaLogo from "@/components/arena/ArenaLogo";
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 type FightServerStatus = "connecting" | "connected" | "offline";
@@ -108,8 +109,8 @@ export default function ArenaHubPage() {
     <div className="space-y-8">
       <div className="rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
         <div className="bg-gradient-to-r from-[#f0a500]/20 to-transparent border-b border-white/10 px-6 py-6">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <span className="text-[#f0a500]">🥊</span> GARMONPAY ARENA
+          <h1 className="text-3xl font-bold text-white flex flex-wrap items-center gap-4">
+            <ArenaLogo size="large" variant="full" className="shrink-0" />
             <span
               className="inline-block w-3 h-3 rounded-full shrink-0"
               title={

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getLeaderboard } from "@/lib/api";
+import ArenaLogo from "@/components/arena/ArenaLogo";
 
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -60,9 +61,12 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
-        <p className="text-sm text-fintech-muted mt-1">Top referrers and earners. Data from database.</p>
+      <div className="flex flex-wrap items-end gap-6">
+        <ArenaLogo size="medium" variant="full" className="shrink-0" />
+        <div>
+          <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
+          <p className="text-sm text-fintech-muted mt-1">Top referrers and earners. Data from database.</p>
+        </div>
       </div>
 
       {error && (

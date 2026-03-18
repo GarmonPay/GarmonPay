@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text, ContactShadows, useGLTF } from "@react-three/drei";
 import { Referee3D, type RefereeState } from "./Referee3D";
+import ArenaLogo from "./ArenaLogo";
 import "./boxing-ring.css";
 
 const GOLD = "#f0a500";
@@ -29,18 +30,6 @@ function RingFloor() {
         <planeGeometry args={[8, 8]} />
         <meshStandardMaterial color={FLOOR_COLOR} roughness={0.95} metalness={0} />
       </mesh>
-      <Text
-        position={[0, 0.01, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.28}
-        color={GOLD}
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={3}
-        fillOpacity={0.35}
-      >
-        GARMONPAY
-      </Text>
     </group>
   );
 }
@@ -419,6 +408,19 @@ export const BoxingRing3D = forwardRef<{ shake: () => void }, BoxingRing3DProps>
             ringMode={mode}
           />
         </Canvas>
+        <div
+          style={{
+            position: "absolute",
+            bottom: "15%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            opacity: 0.25,
+            pointerEvents: "none",
+          }}
+          aria-hidden
+        >
+          <ArenaLogo size="large" variant="full" />
+        </div>
         {modelGenerating && (
           <div className="arena-ring-3d-generating-badge">✨ 3D Model Generating...</div>
         )}

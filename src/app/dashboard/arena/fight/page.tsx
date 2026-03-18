@@ -8,6 +8,7 @@ import { io, Socket } from "socket.io-client";
 import { getApiRoot } from "@/lib/api";
 import type { RefereeState } from "@/components/arena/Referee3D";
 import ProBoxer from "@/components/arena/ProBoxerClient";
+import ArenaLogo from "@/components/arena/ArenaLogo";
 
 const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
@@ -248,6 +249,9 @@ export default function FindFightPage() {
 
     return (
       <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
+        <div className="flex justify-center pt-3 pb-1 border-b border-white/5 bg-[#0d1117]/80">
+          <ArenaLogo size="small" variant="full" />
+        </div>
         <div
           className="min-h-[280px] p-4 border-b border-white/10"
           style={{ background: "linear-gradient(180deg, #1a1008 0%, #0d1117 100%)" }}
