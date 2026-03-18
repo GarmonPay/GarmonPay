@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       skin_tone: rawSkinTone,
       face_style: rawFaceStyle,
       hair_style: rawHairStyle,
+      fighter_color: rawFighterColor,
     } = body;
     const name = typeof rawName === "string" ? rawName.trim().slice(0, 50) : "";
     const style =
@@ -88,6 +89,10 @@ export async function POST(request: Request) {
       typeof rawHairStyle === "string" && HAIR_STYLES.includes(rawHairStyle as (typeof HAIR_STYLES)[number])
         ? rawHairStyle
         : "short_fade";
+    const fighterColorStr =
+      typeof rawFighterColor === "string" && /^#[0-9A-Fa-f]{6}$/.test(rawFighterColor.trim())
+        ? rawFighterColor.trim()
+        : "#f0a500";
 
     if (!name || name.length < 2) {
       return NextResponse.json(
@@ -140,6 +145,7 @@ export async function POST(request: Request) {
         skin_tone,
         face_style,
         hair_style,
+        fighter_color: fighterColorStr,
         strength: 48,
         speed: 48,
         stamina: 48,

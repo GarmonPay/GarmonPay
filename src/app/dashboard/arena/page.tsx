@@ -6,7 +6,22 @@ import dynamic from 'next/dynamic'
 
 const ProBoxer = dynamic(
   () => import('@/components/arena/ProBoxer'),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        width: '100%',
+        height: 380,
+        background: '#000',
+        borderRadius: 8,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    )
+  }
 )
 
 export default function ArenaPage() {

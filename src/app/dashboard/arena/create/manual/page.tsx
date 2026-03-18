@@ -1,11 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
-import { FighterDisplay } from "@/components/arena/FighterLayers";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: 380,
+          background: "#000",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    ),
+  }
+);
 import {
   BODY_TYPES,
   SKIN_TONES,
@@ -41,6 +63,7 @@ export default function CreateFighterManualPage() {
   const [hairStyle, setHairStyle] = useState<HairStyle>("short_fade");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedColor, setSelectedColor] = useState("#f0a500");
 
   const previewFighter: FighterData = {
     name: name || "Fighter",
@@ -103,6 +126,7 @@ export default function CreateFighterManualPage() {
           skin_tone: skinTone,
           face_style: faceStyle,
           hair_style: hairStyle,
+          fighter_color: selectedColor,
         }),
       });
       const text = await res.text();
@@ -221,9 +245,21 @@ export default function CreateFighterManualPage() {
             </button>
           </div>
 
-          <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4">
+          <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4 w-full min-w-0">
             <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
-            <FighterDisplay fighter={previewFighter} size="large" animation="idle" showGear />
+            <div className="w-full max-w-md">
+              <ProBoxer fighterColor={selectedColor || "#f0a500"} size="medium" />
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm text-[#9ca3af]">
+              Trunks color
+              <input
+                type="color"
+                value={selectedColor}
+                onChange={(e) => setSelectedColor(e.target.value)}
+                className="h-8 w-14 cursor-pointer rounded border border-white/20 bg-transparent"
+                disabled={loading}
+              />
+            </label>
           </div>
         </div>
 

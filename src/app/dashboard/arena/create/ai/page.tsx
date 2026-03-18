@@ -1,11 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
-import { FighterDisplay } from "@/components/arena/FighterLayers";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: 380,
+          background: "#000",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    ),
+  }
+);
 import type { FighterData } from "@/lib/arena-fighter-types";
 
 const QUESTIONS: {
@@ -53,6 +75,7 @@ const DEFAULT_PREVIEW: FighterData = {
   skin_tone: "tone3",
   face_style: "determined",
   hair_style: "short_fade",
+  fighter_color: "#f0a500",
   strength: 50,
   speed: 50,
   stamina: 50,
@@ -219,9 +242,14 @@ export default function CreateFighterAIPage() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-6">
+            <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-6 w-full min-w-0">
               <p className="text-[#9ca3af] text-sm mb-2">Preview</p>
-              <FighterDisplay fighter={DEFAULT_PREVIEW} size="large" animation="idle" showGear />
+              <div className="w-full max-w-md">
+                <ProBoxer
+                  fighterColor={DEFAULT_PREVIEW.fighter_color || "#f0a500"}
+                  size="medium"
+                />
+              </div>
             </div>
           </div>
         </div>

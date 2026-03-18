@@ -1,7 +1,28 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+
+const ProBoxer = dynamic(
+  () => import('@/components/arena/ProBoxer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        width: '100%',
+        height: 380,
+        background: '#000',
+        borderRadius: 8,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    )
+  }
+)
 
 export default function ArenaStorePage() {
   const router = useRouter()
@@ -13,12 +34,15 @@ export default function ArenaStorePage() {
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [fighter, setFighter] = useState<any>(null)
 
   const fetchData = () => {
     Promise.all([
       fetch('/api/arena/store/items', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/arena/store/inventory', { credentials: 'include' }).then(r => r.json()),
-    ]).then(([itemsData, invData]) => {
+      fetch('/api/arena/me', { credentials: 'include' }).then(r => r.json()),
+    ]).then(([itemsData, invData, meData]) => {
+      if (meData?.fighter) setFighter(meData.fighter)
       if (itemsData?.items) {
         setItems(itemsData.items)
         setCategories(itemsData.categories ?? [])
@@ -76,6 +100,10 @@ export default function ArenaStorePage() {
       </div>
 
       {error && <div style={{ padding: 12, marginBottom: 16, background: 'rgba(239,68,68,0.2)', borderRadius: 8, color: '#fca5a5', fontSize: 14 }}>{error}</div>}
+
+      <div style={{ marginBottom: 20, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d', minHeight: 260 }}>
+        <ProBoxer fighterColor={fighter?.fighter_color || '#f0a500'} size="medium" />
+      </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
         <button

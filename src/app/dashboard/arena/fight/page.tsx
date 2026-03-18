@@ -9,6 +9,26 @@ const BoxingRing3D = dynamic(
   { ssr: false }
 )
 
+const ProBoxer = dynamic(
+  () => import('@/components/arena/ProBoxer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        width: '100%',
+        height: 380,
+        background: '#000',
+        borderRadius: 8,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    )
+  }
+)
+
 export default function ArenaFightPage() {
   const router = useRouter()
   const [opponents, setOpponents] = useState<any[]>([])
@@ -16,6 +36,14 @@ export default function ArenaFightPage() {
   const [creating, setCreating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aiCreating, setAiCreating] = useState(false)
+  const [myFighter, setMyFighter] = useState<any>(null)
+
+  useEffect(() => {
+    fetch('/api/arena/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => { if (data?.fighter) setMyFighter(data.fighter) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch('/api/arena/cpu-fighters', { credentials: 'include' })
@@ -63,6 +91,11 @@ export default function ArenaFightPage() {
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Find Fight</h1>
       </div>
 
+      {myFighter && (
+        <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d', minHeight: 220 }}>
+          <ProBoxer fighterColor={myFighter?.fighter_color || '#f0a500'} size="small" />
+        </div>
+      )}
       <div style={{ width: '100%', height: 320, minHeight: 320, marginBottom: 24, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d' }}>
         <BoxingRing3D mode="setup" />
       </div>

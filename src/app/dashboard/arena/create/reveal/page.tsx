@@ -1,8 +1,31 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: 380,
+          background: "#000",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    ),
+  }
+);
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
 import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
@@ -123,8 +146,8 @@ export default function CreateFighterRevealPage() {
       {/* Phase 2 — Silhouette */}
       {phase === "silhouette" && (
         <div className="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-10">
-          <div className="w-48 h-48 rounded-full bg-black/60 border-4 border-white/20 flex items-center justify-center">
-            <span className="text-6xl opacity-80">{fighter?.avatar ?? "🥊"}</span>
+          <div className="w-full max-w-xs opacity-40 pointer-events-none">
+            <ProBoxer fighterColor={color} size="medium" />
           </div>
           <div className="w-32 h-2 mt-6 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: "60%" }} />
@@ -136,17 +159,10 @@ export default function CreateFighterRevealPage() {
       <div className={`w-full max-w-2xl transition-opacity duration-700 ${phase === "darkness" || phase === "silhouette" ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
         <div className="rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl" style={{ borderColor: phaseIndex >= 3 ? `${color}40` : undefined }}>
           {/* Portrait */}
-          <div className="relative bg-[#161b22] p-6 flex flex-col items-center">
-            {fighter?.portrait_svg ? (
-              <div
-                className="w-40 h-52 rounded-lg overflow-hidden bg-[#0d1117] [&_svg]:w-full [&_svg]:h-full [&_svg]:object-contain"
-                dangerouslySetInnerHTML={{ __html: fighter.portrait_svg }}
-              />
-            ) : (
-              <div className="w-40 h-52 rounded-lg bg-[#0d1117] flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
-                <span className="text-6xl">{fighter?.avatar ?? "🥊"}</span>
-              </div>
-            )}
+          <div className="relative bg-[#161b22] p-6 flex flex-col items-center w-full">
+            <div className="w-full max-w-md rounded-lg overflow-hidden bg-black">
+              <ProBoxer fighterColor={color} size="medium" />
+            </div>
             {phaseIndex >= 3 && (
               <>
                 <h1 className="text-2xl md:text-3xl font-bold text-white mt-4">{fighter?.name ?? "Fighter"}</h1>

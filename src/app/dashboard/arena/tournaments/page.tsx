@@ -1,11 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
-import { FighterDisplay } from "@/components/arena/FighterLayers";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: 380,
+          background: "#000",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <span style={{ fontSize: 48 }}>🥊</span>
+      </div>
+    ),
+  }
+);
 import type { FighterData } from "@/lib/arena-fighter-types";
 import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
@@ -87,7 +109,9 @@ export default function ArenaTournamentsPage() {
       </div>
       {fighter && (
         <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-[#0d1117] border border-white/10">
-          <FighterDisplay fighter={fighter} size="small" animation="idle" showGear />
+          <div className="w-[100px] h-[120px] shrink-0 rounded-lg overflow-hidden bg-black">
+            <ProBoxer fighterColor={fighter.fighter_color || "#f0a500"} size="small" />
+          </div>
           <div>
             <p className="text-white font-medium">{fighter?.name ?? "Fighter"}</p>
             <p className="text-[#9ca3af] text-sm">Enter with your fighter</p>
