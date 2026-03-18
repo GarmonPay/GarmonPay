@@ -4,7 +4,7 @@ import React from "react";
 import type { BodyType, FaceStyle, HairStyle, GearGlovesKey, GearShoesKey, GearShortsKey, GearHeadgearKey } from "@/lib/arena-fighter-types";
 import type { FighterData } from "@/lib/arena-fighter-types";
 import { getSkinHex } from "@/lib/arena-fighter-types";
-import { getFighterConfig } from "@/lib/arena/characterAssets";
+import { getSafeFighterConfig } from "@/lib/arena/characterAssets";
 
 const VIEWBOX = "0 0 100 150";
 
@@ -331,13 +331,13 @@ export function FighterDisplay({
     equipped_shorts: f?.equipped_shorts_key ?? f?.equipped_shorts ?? "default",
     equipped_headgear: f?.equipped_headgear_key ?? f?.equipped_headgear ?? "none",
   };
-  getFighterConfig(normalized); // ensure defaults applied for display
-  const bodyType = (fighter?.body_type ?? "middleweight") as string;
-  const skinTone = (fighter?.skin_tone ?? "tone3") as string;
-  const glovesKey = (normalized.equipped_gloves ?? "default") as string;
-  const shortsKey = (normalized.equipped_shorts ?? "default") as string;
-  const shoesKey = (normalized.equipped_shoes ?? "default") as string;
-  const headgearKey = (normalized.equipped_headgear ?? "none") as string;
+  const config = getSafeFighterConfig(normalized);
+  const bodyType = config.bodyTypeKey;
+  const skinTone = config.skinToneKey;
+  const glovesKey = config.gloveKey;
+  const shortsKey = config.shortsKey;
+  const shoesKey = config.shoesKey;
+  const headgearKey = config.headgearKey;
   const scale = size === "small" ? 0.5 : size === "large" ? 1.2 : 1;
   const [vb0, vb1, vb2, vb3] = VIEWBOX.split(" ");
   return (
@@ -366,6 +366,18 @@ export function FighterDisplay({
 }
 
 /** Alias for pages that expect `<FighterLayers fighter={...} />` — same as FighterDisplay. */
+function FighterLayersFallback({ color = "#f0a500" }: { color?: string }) {
+  return (
+    <svg viewBox="0 0 100 150" width={100} height={150} role="img" aria-label="Fighter">
+      <rect x="0" y="0" width="100" height="150" fill="#0d1117" rx={8} />
+      <rect x="32" y="48" width="36" height="72" rx={10} fill={color} opacity={0.85} />
+      <text x="50" y="28" textAnchor="middle" fontSize={20}>
+        🥊
+      </text>
+    </svg>
+  );
+}
+
 export function FighterLayers({
   fighter,
   size = "medium",
@@ -379,7 +391,18 @@ export function FighterLayers({
   showGear?: boolean;
   className?: string;
 }) {
-  return (
-    <FighterDisplay fighter={fighter} size={size} animation={animation} showGear={showGear} className={className} />
-  );
+  const config = getSafeFighterConfig(fighter);
+  try {
+    return (
+      <FighterDisplay fighter={fighter} size={size} animation={animation} showGear={showGear} className={className} />
+    );
+  } catch (error) {
+    console.error("FighterLayers render error:", error);
+    const scale = size === "small" ? 0.5 : size === "large" ? 1.2 : 1;
+    return (
+      <div className={className} style={{ width: 100 * scale, height: 150 * scale }}>
+        <FighterLayersFallback color={config.color} />
+      </div>
+    );
+  }
 }
