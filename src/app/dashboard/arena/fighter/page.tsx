@@ -75,8 +75,28 @@ export default function MyFighterPage() {
     const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
     fetch(`${getApiRoot()}/arena/fighter/3d-status?taskId=${encodeURIComponent(taskId)}`, { headers, credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { status?: string; progress?: number; modelUrl?: string; thumbnail?: string } | null) => {
+      .then(
+        (
+          data: {
+            status?: string;
+            progress?: number;
+            modelUrl?: string;
+            thumbnail?: string;
+            nextTaskId?: string;
+          } | null
+        ) => {
         if (!data) return;
+        if (typeof data.nextTaskId === "string" && data.nextTaskId.length > 0) {
+          setFighter((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  model_3d_task_id: data.nextTaskId,
+                  model_3d_status: "generating_refine",
+                }
+              : null
+          );
+        }
         if (data.status === "complete") {
           setFighter((prev) =>
             prev
@@ -108,7 +128,8 @@ export default function MyFighterPage() {
         if (data.status === "generating" && typeof data.progress === "number") {
           setThreeDProgress(data.progress);
         }
-      })
+      }
+      )
       .catch(() => {});
   }, [fighter, session, fetchMe]);
 
