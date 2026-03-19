@@ -30,7 +30,7 @@ export async function GET(
   }
   const { data: fighters } = await supabase
     .from("arena_fighters")
-    .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special")
+    .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, model_3d_url")
     .in("id", [fight.fighter_a_id, fight.fighter_b_id]);
   const fa = fighters?.find((f) => f.id === fight.fighter_a_id);
   const fb = fighters?.find((f) => f.id === fight.fighter_b_id);

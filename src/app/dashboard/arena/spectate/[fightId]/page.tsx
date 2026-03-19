@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -8,9 +9,12 @@ import { io, Socket } from "socket.io-client";
 import { computeOdds } from "@/lib/arena-economy";
 
 import { getApiRoot } from "@/lib/api";
-import { BoxingRing } from "@/components/arena/BoxingRing";
-import { toSafeFighterData } from "@/lib/arena/arenaMeResponse";
-import type { RingAnimationState } from "@/components/arena/BoxingRing";
+
+/** 3D ring + Meshy GLB fighters — never SSR (Three.js). */
+const ArenaFight3DView = dynamic(
+  () => import("@/components/arena/ArenaFight3DView").then((m) => m.ArenaFight3DView),
+  { ssr: false }
+);
 
 const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
 
@@ -25,6 +29,7 @@ type Fighter = {
   defense?: number;
   chin?: number;
   special?: number;
+  model_3d_url?: string | null;
 };
 
 export default function SpectateFightPage() {
@@ -44,7 +49,7 @@ export default function SpectateFightPage() {
   const [betting, setBetting] = useState(false);
   const [betError, setBetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ringAnimation, setRingAnimation] = useState<RingAnimationState>("idle");
+  const [ringAnimation, setRingAnimation] = useState<"idle" | "big_hit" | "ko" | "victory">("idle");
 
   const fetchFight = useCallback(async () => {
     const s = await getSessionAsync();
@@ -176,22 +181,30 @@ export default function SpectateFightPage() {
   const oddsB = totalA + totalB > 0 ? computeOdds(totalB, totalA) : 1.85;
 
   const ringMode = winnerId ? "victory" : fight?.bettingOpen && log.length === 0 ? "setup" : "fight";
-  const winnerSide = winnerId === fighterA?.id ? "a" : winnerId === fighterB?.id ? "b" : null;
-  const safeA = toSafeFighterData(fighterA as Record<string, unknown>);
-  const safeB = toSafeFighterData(fighterB as Record<string, unknown>);
+  const winnerSide3D: "left" | "right" | null =
+    winnerId === fighterA?.id ? "left" : winnerId === fighterB?.id ? "right" : null;
+  const refereeState = winnerId ? "arm_raise" : "watching";
+  const fighterAAnim = ringAnimation === "victory" ? "idle" : ringAnimation;
+  const fighterBAnim = ringAnimation === "victory" ? "idle" : ringAnimation;
 
   return (
     <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
-      <BoxingRing
-        mode={ringMode}
-        fighterA={safeA}
-        fighterB={safeB}
-        winner={winnerSide}
-        currentRound={1}
-        animation={ringAnimation}
-        healthA={healthA}
-        healthB={healthB}
-      >
+      <div className="relative w-full" style={{ minHeight: 320 }}>
+        <ArenaFight3DView
+          mode={ringMode}
+          refereeState={refereeState}
+          winnerSide={winnerSide3D}
+          fighterAModelUrl={fighterA?.model_3d_url ?? null}
+          fighterBModelUrl={fighterB?.model_3d_url ?? null}
+          fighterAAnim={fighterAAnim}
+          fighterBAnim={fighterBAnim}
+          koIntensity={ringAnimation === "ko" ? 1 : 0}
+        />
+      </div>
+      <div className="p-4 border-t border-white/10 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[#9ca3af] text-sm">Health: {Math.max(0, healthA)}% vs {Math.max(0, healthB)}%</span>
+        </div>
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-white">Spectating</h1>
           <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline">Back to lobby</Link>
@@ -250,7 +263,7 @@ export default function SpectateFightPage() {
             ))}
           </div>
         )}
-      </BoxingRing>
+      </div>
     </div>
   );
 }
