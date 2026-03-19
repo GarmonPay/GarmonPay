@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TRAINING_SESSIONS, isSessionUnlocked, type TrainingSessionKey } from '@/lib/arena-training'
 import { getSafeFighterStats } from '@/lib/arena-fighter-types'
+import { parseArenaMeResponse } from '@/lib/arena/arenaMeResponse'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -15,7 +16,7 @@ const STAT_CAP = 99
 
 export default function ArenaTrainPage() {
   const router = useRouter()
-  const [fighter, setFighter] = useState<any>(null)
+  const [fighter, setFighter] = useState<ReturnType<typeof parseArenaMeResponse>['fighter']>(null)
   const [balanceCents, setBalanceCents] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [trainingKey, setTrainingKey] = useState<string | null>(null)
@@ -27,7 +28,8 @@ export default function ArenaTrainPage() {
       fetch('/api/arena/me', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/wallet/get', { credentials: 'include' }).then(r => r.json()),
     ]).then(([meData, walletData]) => {
-      if (meData?.fighter) setFighter(meData.fighter)
+      const { fighter: f } = parseArenaMeResponse(meData ?? {})
+      setFighter(f ?? null)
       if (typeof walletData?.balance_cents === 'number') setBalanceCents(walletData.balance_cents)
     }).catch(() => {}).finally(() => setLoading(false))
   }

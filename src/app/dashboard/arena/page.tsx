@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { getSafeFighterStats } from '@/lib/arena-fighter-types'
+import { parseArenaMeResponse } from '@/lib/arena/arenaMeResponse'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -12,14 +13,15 @@ const BoxerDisplay = dynamic(
 
 export default function ArenaPage() {
   const router = useRouter()
-  const [fighter, setFighter] = useState<any>(null)
+  const [fighter, setFighter] = useState<ReturnType<typeof parseArenaMeResponse>['fighter']>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/arena/me', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (data?.fighter) setFighter(data.fighter)
+        const { fighter: f } = parseArenaMeResponse(data ?? {})
+        setFighter(f ?? null)
       })
       .catch(() => {})
       .finally(() => setLoading(false))

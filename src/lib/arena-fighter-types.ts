@@ -73,21 +73,35 @@ export const DEFAULT_STATS: FighterStats = {
   special: 20,
 };
 
-/** Return a stats object that is always defined. Use everywhere instead of fighter.stats or fighter.strength. */
+/** Return a stats object that is always defined. Never throws; use everywhere instead of fighter.stats. */
 export function getSafeFighterStats(fighter: unknown): FighterStats {
-  if (fighter == null || typeof fighter !== "object") return { ...DEFAULT_STATS };
-  const f = fighter as Record<string, unknown>;
-  const stats = (f.stats != null && typeof f.stats === "object" && !Array.isArray(f.stats))
-    ? (f.stats as Record<string, unknown>)
-    : {};
-  return {
-    speed: Number(stats.speed ?? f.speed ?? DEFAULT_STATS.speed),
-    strength: Number(stats.strength ?? f.strength ?? DEFAULT_STATS.strength),
-    stamina: Number(stats.stamina ?? f.stamina ?? DEFAULT_STATS.stamina),
-    defense: Number(stats.defense ?? f.defense ?? DEFAULT_STATS.defense),
-    chin: Number(stats.chin ?? f.chin ?? DEFAULT_STATS.chin),
-    special: Number(stats.special ?? f.special ?? DEFAULT_STATS.special),
-  };
+  try {
+    if (fighter == null || typeof fighter !== "object" || Array.isArray(fighter)) {
+      return { ...DEFAULT_STATS };
+    }
+    const f = fighter as Record<string, unknown>;
+    const rawStats = f["stats"];
+    const statsObj =
+      typeof rawStats === "object" && rawStats != null && !Array.isArray(rawStats)
+        ? (rawStats as Record<string, unknown>)
+        : Object.create(null);
+    const get = (key: keyof FighterStats): number => {
+      const fromStats = statsObj[key];
+      const fromF = (f as Record<string, unknown>)[key];
+      const val = fromStats ?? fromF ?? (DEFAULT_STATS as unknown as Record<string, number>)[key];
+      return Number(val);
+    };
+    return {
+      speed: get("speed"),
+      strength: get("strength"),
+      stamina: get("stamina"),
+      defense: get("defense"),
+      chin: get("chin"),
+      special: get("special"),
+    };
+  } catch {
+    return { ...DEFAULT_STATS };
+  }
 }
 
 /** Normalize partial fighter so it always has .stats and top-level stat keys. Prevents undefined stat access. */

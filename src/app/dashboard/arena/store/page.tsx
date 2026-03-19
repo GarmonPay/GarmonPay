@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { parseArenaMeResponse } from '@/lib/arena/arenaMeResponse'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -19,7 +20,7 @@ export default function ArenaStorePage() {
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [fighter, setFighter] = useState<any>(null)
+  const [fighter, setFighter] = useState<ReturnType<typeof parseArenaMeResponse>['fighter']>(null)
 
   const fetchData = () => {
     Promise.all([
@@ -27,7 +28,8 @@ export default function ArenaStorePage() {
       fetch('/api/arena/store/inventory', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/arena/me', { credentials: 'include' }).then(r => r.json()),
     ]).then(([itemsData, invData, meData]) => {
-      if (meData?.fighter) setFighter(meData.fighter)
+      const { fighter: f } = parseArenaMeResponse(meData ?? {})
+      setFighter(f ?? null)
       if (itemsData?.items) {
         setItems(itemsData.items)
         setCategories(itemsData.categories ?? [])

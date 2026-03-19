@@ -34,7 +34,7 @@ const BoxerCanvas = dynamic(
 )
 
 interface BoxerDisplayProps {
-  fighter?: { fighter_color?: string; model_3d_url?: string | null; stats?: Record<string, number> } | null
+  fighter?: { fighter_color?: string | null; model_3d_url?: string | null; stats?: Record<string, number> } | null
   facingRight?: boolean
   size?: 'small' | 'medium' | 'large'
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { parseArenaMeResponse } from '@/lib/arena/arenaMeResponse'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -16,12 +17,15 @@ export default function ArenaFightPage() {
   const [creating, setCreating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aiCreating, setAiCreating] = useState(false)
-  const [myFighter, setMyFighter] = useState<any>(null)
+  const [myFighter, setMyFighter] = useState<ReturnType<typeof parseArenaMeResponse>['fighter']>(null)
 
   useEffect(() => {
     fetch('/api/arena/me', { credentials: 'include' })
       .then(r => r.json())
-      .then(data => { if (data?.fighter) setMyFighter(data.fighter) })
+      .then(data => {
+        const { fighter: f } = parseArenaMeResponse(data ?? {})
+        setMyFighter(f ?? null)
+      })
       .catch(() => {})
   }, [])
 

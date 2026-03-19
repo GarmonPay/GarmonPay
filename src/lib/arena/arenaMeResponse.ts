@@ -21,9 +21,13 @@ export function parseArenaMeResponse(data: unknown): {
   if (d.freeGenerationUsed === true) base.freeGenerationUsed = true;
   const f = d.fighter;
   if (f != null && typeof f === "object" && !Array.isArray(f)) {
-    const normalized = normalizeFighterStats(f as Record<string, unknown>) as unknown as FighterData;
-    base.fighter = normalized;
-    if (process.env.NODE_ENV === "development") console.log("[Arena] fighter (normalized):", normalized?.name, normalized?.stats);
+    try {
+      const normalized = normalizeFighterStats(f as Record<string, unknown>) as unknown as FighterData;
+      base.fighter = normalized;
+      if (process.env.NODE_ENV === "development") console.log("[Arena] fighter (normalized):", normalized?.name, normalized?.stats);
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") console.warn("[Arena] normalize fighter failed", e);
+    }
     return base;
   }
   if (process.env.NODE_ENV === "development") console.warn("[Arena] Fighter not found in API response");
