@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.garmon_notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.garmon_notifications ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS garmon_notifications_user_id ON public.garmon_notifications(user_id);
 CREATE INDEX IF NOT EXISTS garmon_notifications_created_at ON public.garmon_notifications(created_at DESC);
 
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.garmon_ad_streak (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.garmon_ad_streak ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
 ALTER TABLE public.garmon_ad_streak ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users read own streak" ON public.garmon_ad_streak;
 CREATE POLICY "Users read own streak"

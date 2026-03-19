@@ -1,4 +1,5 @@
 -- Server-side engagement sessions for anti-fraud duration validation.
+-- Depends on: 20250328000000_garmonpay_ad_system.sql (public.garmon_ads must exist).
 CREATE TABLE IF NOT EXISTS public.garmon_engagement_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,

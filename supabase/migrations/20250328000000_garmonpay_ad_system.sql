@@ -3,6 +3,18 @@
 -- Tables use garmon_ prefix where "ads" would conflict with existing public.ads (legacy reward ads).
 -- All user_id FKs reference public.users(id).
 
+-- Ensure public.users has id (required for FKs). Some setups use auth.users only until later.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'id') THEN
+    RAISE EXCEPTION 'public.users must exist with column id before running this migration. Run earlier migrations first.';
+  END IF;
+END $$;
+
+-- Immutable UTC-date helper for index expressions (timestamptz::date is not immutable).
+CREATE OR REPLACE FUNCTION public.garmon_date_utc(ts timestamptz) RETURNS date
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT (ts AT TIME ZONE 'UTC')::date $$;
+
 -- Advertiser profiles
 CREATE TABLE IF NOT EXISTS public.advertisers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -18,6 +30,9 @@ CREATE TABLE IF NOT EXISTS public.advertisers (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Repair: add columns if table existed without them (e.g. partial run)
+ALTER TABLE public.advertisers ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.advertisers ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS advertisers_user_id ON public.advertisers(user_id);
 CREATE INDEX IF NOT EXISTS advertisers_is_active ON public.advertisers(is_active);
 
@@ -81,6 +96,9 @@ CREATE TABLE IF NOT EXISTS public.garmon_ads (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Repair: add columns if table existed without them
+ALTER TABLE public.garmon_ads ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.garmon_ads ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT false;
 CREATE INDEX IF NOT EXISTS garmon_ads_advertiser_id ON public.garmon_ads(advertiser_id);
 CREATE INDEX IF NOT EXISTS garmon_ads_user_id ON public.garmon_ads(user_id);
 CREATE INDEX IF NOT EXISTS garmon_ads_status_active ON public.garmon_ads(status) WHERE status = 'active';
@@ -101,10 +119,12 @@ CREATE TABLE IF NOT EXISTS public.garmon_ad_engagements (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Repair: add user_id if table existed without it
+ALTER TABLE public.garmon_ad_engagements ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS garmon_ad_engagements_ad_id ON public.garmon_ad_engagements(ad_id);
 CREATE INDEX IF NOT EXISTS garmon_ad_engagements_user_id ON public.garmon_ad_engagements(user_id);
 CREATE INDEX IF NOT EXISTS garmon_ad_engagements_created_at ON public.garmon_ad_engagements(created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS garmon_ad_engagements_user_ad_day ON public.garmon_ad_engagements(ad_id, user_id, (created_at::date));
+CREATE UNIQUE INDEX IF NOT EXISTS garmon_ad_engagements_user_ad_day ON public.garmon_ad_engagements(ad_id, user_id, public.garmon_date_utc(created_at));
 
 -- User earnings from ads (ledger for display; wallet credit via wallet_ledger)
 CREATE TABLE IF NOT EXISTS public.garmon_user_ad_earnings (
@@ -119,6 +139,8 @@ CREATE TABLE IF NOT EXISTS public.garmon_user_ad_earnings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Repair: add user_id if table existed without it
+ALTER TABLE public.garmon_user_ad_earnings ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS garmon_user_ad_earnings_user_id ON public.garmon_user_ad_earnings(user_id);
 CREATE INDEX IF NOT EXISTS garmon_user_ad_earnings_created_at ON public.garmon_user_ad_earnings(created_at DESC);
 
@@ -145,6 +167,8 @@ CREATE TABLE IF NOT EXISTS public.garmon_ad_fraud_flags (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Repair: add user_id if table existed without it
+ALTER TABLE public.garmon_ad_fraud_flags ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS garmon_ad_fraud_flags_user ON public.garmon_ad_fraud_flags(user_id);
 
 -- Blocked keywords for content moderation (store in config table)
