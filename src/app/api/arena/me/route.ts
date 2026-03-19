@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getTotalStats, getWeightClass } from "@/lib/arena-achievements";
+import { normalizeFighterStats } from "@/lib/arena-fighter-types";
 import {
   storeItemToGlovesKey,
   storeItemToShoesKey,
@@ -107,8 +108,13 @@ export async function GET(req: Request) {
     }
   }
 
+  const fighterOut =
+    resolvedFighter != null
+      ? normalizeFighterStats(resolvedFighter as Record<string, unknown>)
+      : null;
+
   return NextResponse.json({
-    fighter: resolvedFighter ?? null,
+    fighter: fighterOut,
     weightClass,
     totalStats,
     arenaCoins,

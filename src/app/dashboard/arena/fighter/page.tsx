@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getSafeFighterStats } from '@/lib/arena-fighter-types'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -89,7 +90,8 @@ export default function ArenaFighterPage() {
           <p style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Stats</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {STAT_KEYS.map(key => {
-              const val = fighter?.stats?.[key] ?? fighter?.[key] ?? 48
+              const safeStats = getSafeFighterStats(fighter)
+              const val = safeStats[key]
               return (
                 <div key={key}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3, color: '#888' }}>

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TRAINING_SESSIONS, isSessionUnlocked, type TrainingSessionKey } from '@/lib/arena-training'
+import { getSafeFighterStats } from '@/lib/arena-fighter-types'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -100,8 +101,9 @@ export default function ArenaTrainPage() {
 
       <div style={{ display: 'grid', gap: 12 }}>
         {TRAINING_SESSIONS.map(s => {
+          const safeStats = getSafeFighterStats(fighter)
           const unlocked = isSessionUnlocked(s.requiredSessions, sessions)
-          const currentVal = Number(fighter?.stats?.[s.stat] ?? fighter?.[s.stat] ?? 0)
+          const currentVal = Number(safeStats[s.stat as keyof typeof safeStats] ?? 0)
           const atCap = currentVal >= STAT_CAP
           const canAfford = balanceCents != null && balanceCents >= s.priceCents
           const disabled = !unlocked || atCap || !canAfford || trainingKey !== null

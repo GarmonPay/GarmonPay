@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { getSafeFighterStats } from '@/lib/arena-fighter-types'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
@@ -15,15 +16,13 @@ export default function ArenaPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/arena/me', {
-      credentials: 'include'
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data?.fighter) setFighter(data.fighter)
-    })
-    .catch(() => {})
-    .finally(() => setLoading(false))
+    fetch('/api/arena/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.fighter) setFighter(data.fighter)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   if (loading) return (
@@ -109,6 +108,9 @@ export default function ArenaPage() {
         </div>
       ) : (
         /* Fighter exists */
+        (() => {
+          const safeStats = getSafeFighterStats(fighter)
+          return (
         <div>
           {/* Fighter card */}
           <div style={{
@@ -126,28 +128,28 @@ export default function ArenaPage() {
             </div>
             <div style={{ marginBottom: 16 }}>
               <div>
-                <h2 style={{ 
-                  margin: 0, 
+                <h2 style={{
+                  margin: 0,
                   fontSize: 22,
                   color: fighter.fighter_color || '#f0a500'
                 }}>
                   {fighter.name || 'Fighter'}
                 </h2>
                 <p style={{ margin: 0, color: '#666', fontSize: 14 }}>
-                  {fighter.style || 'Boxer'} • {fighter.wins || 0}W - {fighter.losses || 0}L
+                  {fighter.style || 'Boxer'} • {fighter.wins ?? 0}W - {fighter.losses ?? 0}L
                 </p>
               </div>
             </div>
 
-            {/* Stats */}
+            {/* Stats — always use safeStats to prevent undefined access */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { label: 'STR', value: fighter.stats?.strength ?? fighter.strength ?? 48 },
-                { label: 'SPD', value: fighter.stats?.speed ?? fighter.speed ?? 48 },
-                { label: 'STA', value: fighter.stats?.stamina ?? fighter.stamina ?? 48 },
-                { label: 'DEF', value: fighter.stats?.defense ?? fighter.defense ?? 48 },
-                { label: 'CHN', value: fighter.stats?.chin ?? fighter.chin ?? 48 },
-                { label: 'SPC', value: fighter.stats?.special ?? fighter.special ?? 20 },
+                { label: 'STR', value: safeStats.strength },
+                { label: 'SPD', value: safeStats.speed },
+                { label: 'STA', value: safeStats.stamina },
+                { label: 'DEF', value: safeStats.defense },
+                { label: 'CHN', value: safeStats.chin },
+                { label: 'SPC', value: safeStats.special },
               ].map(stat => (
                 <div key={stat.label}>
                   <div style={{ 
@@ -264,6 +266,8 @@ export default function ArenaPage() {
             🧠 CORNER MAN AI
           </button>
         </div>
+          )
+        })()
       )}
     </div>
   )

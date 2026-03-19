@@ -1,29 +1,37 @@
 'use client'
+
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { 
+import {
   useGLTF,
   ContactShadows,
   Environment,
   PresentationControls
 } from '@react-three/drei'
 
-function Model({ 
+function Model({
   modelUrl,
-  facingRight 
-}: { 
+  facingRight
+}: {
   modelUrl: string
-  facingRight: boolean 
+  facingRight: boolean
 }) {
-  const { scene } = useGLTF(modelUrl)
-  return (
-    <primitive
-      object={scene.clone()}
-      scale={1.8}
-      position={[0, -1.2, 0]}
-      rotation={[0, facingRight ? Math.PI : 0, 0]}
-    />
-  )
+  const gltf = useGLTF(modelUrl)
+  const scene = gltf?.scene
+  if (!scene || typeof scene.clone !== 'function') return null
+  try {
+    const clone = scene.clone()
+    return (
+      <primitive
+        object={clone}
+        scale={1.8}
+        position={[0, -1.2, 0]}
+        rotation={[0, facingRight ? Math.PI : 0, 0]}
+      />
+    )
+  } catch {
+    return null
+  }
 }
 
 export default function BoxerCanvas({
@@ -37,6 +45,8 @@ export default function BoxerCanvas({
   fighterColor?: string
   size?: 'small' | 'medium' | 'large'
 }) {
+  if (typeof window === 'undefined') return null
+
   const heights = { small: 220, medium: 380, large: 560 }
 
   return (

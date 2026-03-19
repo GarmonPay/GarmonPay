@@ -62,7 +62,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const currentStat = fighter[config.stat] as number;
+  const rawStat = fighter[config.stat as keyof typeof fighter];
+  const currentStat = typeof rawStat === "number" ? rawStat : Number(fighter.strength ?? 50);
   if (currentStat >= STAT_CAP) {
     return NextResponse.json(
       { message: `${config.stat} is already at max (${STAT_CAP})` },

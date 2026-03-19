@@ -54,6 +54,57 @@ export type GearShortsKey =
   | "champion_trunks";
 export type GearHeadgearKey = "none" | "basic" | "pro" | "iron_skull";
 
+export interface FighterStats {
+  speed: number;
+  strength: number;
+  stamina: number;
+  defense: number;
+  chin: number;
+  special: number;
+}
+
+/** Default stats so fighter never has undefined stat access (prevents "reading 'S'" / minified crashes). */
+export const DEFAULT_STATS: FighterStats = {
+  speed: 50,
+  strength: 50,
+  stamina: 50,
+  defense: 50,
+  chin: 50,
+  special: 20,
+};
+
+/** Return a stats object that is always defined. Use everywhere instead of fighter.stats or fighter.strength. */
+export function getSafeFighterStats(fighter: unknown): FighterStats {
+  if (fighter == null || typeof fighter !== "object") return { ...DEFAULT_STATS };
+  const f = fighter as Record<string, unknown>;
+  const stats = (f.stats != null && typeof f.stats === "object" && !Array.isArray(f.stats))
+    ? (f.stats as Record<string, unknown>)
+    : {};
+  return {
+    speed: Number(stats.speed ?? f.speed ?? DEFAULT_STATS.speed),
+    strength: Number(stats.strength ?? f.strength ?? DEFAULT_STATS.strength),
+    stamina: Number(stats.stamina ?? f.stamina ?? DEFAULT_STATS.stamina),
+    defense: Number(stats.defense ?? f.defense ?? DEFAULT_STATS.defense),
+    chin: Number(stats.chin ?? f.chin ?? DEFAULT_STATS.chin),
+    special: Number(stats.special ?? f.special ?? DEFAULT_STATS.special),
+  };
+}
+
+/** Normalize partial fighter so it always has .stats and top-level stat keys. Prevents undefined stat access. */
+export function normalizeFighterStats<T extends Record<string, unknown>>(fighter: T): T & { stats: FighterStats } {
+  const safe = getSafeFighterStats(fighter);
+  return {
+    ...fighter,
+    strength: safe.strength,
+    speed: safe.speed,
+    stamina: safe.stamina,
+    defense: safe.defense,
+    chin: safe.chin,
+    special: safe.special,
+    stats: safe,
+  } as T & { stats: FighterStats };
+}
+
 export interface FighterData {
   id?: string;
   name: string;
