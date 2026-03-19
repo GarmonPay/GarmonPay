@@ -6,7 +6,6 @@ import {
   checkAdContentModeration,
 } from "@/lib/garmon-ads-db";
 
-const MIN_BUDGET = 5;
 const TITLE_MAX = 50;
 const DESC_MAX = 200;
 
@@ -68,8 +67,8 @@ export async function POST(request: Request) {
   if (!ad_type || !validTypes.includes(ad_type)) {
     return NextResponse.json({ message: "ad_type must be video, banner, social, or product" }, { status: 400 });
   }
-  if (total_budget < MIN_BUDGET) {
-    return NextResponse.json({ message: `Minimum budget is $${MIN_BUDGET}` }, { status: 400 });
+  if (typeof total_budget !== "number" || total_budget < 0) {
+    return NextResponse.json({ message: "total_budget must be a non-negative number" }, { status: 400 });
   }
 
   const moderation = await checkAdContentModeration(title, desc);

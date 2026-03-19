@@ -24,14 +24,32 @@ type GarmonAd = {
   advertisers?: { business_name: string; user_id: string } | null;
 };
 
+type AdvertiserRow = {
+  id: string;
+  user_id: string;
+  business_name: string;
+  category: string | null;
+  is_verified: boolean;
+  is_active: boolean;
+  total_spent: number;
+  created_at: string;
+};
+
+type TopEarner = { user_id: string; total: number };
+type FraudFlag = { id: string; user_id: string; ad_id: string | null; reason: string; created_at: string };
+
 export default function AdminGarmonAdsPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [pending, setPending] = useState<GarmonAd[]>([]);
   const [allAds, setAllAds] = useState<GarmonAd[]>([]);
+  const [advertisers, setAdvertisers] = useState<AdvertiserRow[]>([]);
+  const [topEarners, setTopEarners] = useState<TopEarner[]>([]);
+  const [fraudFlags, setFraudFlags] = useState<FraudFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [activeTab, setActiveTab] = useState<"queue" | "ads" | "advertisers" | "earners" | "fraud">("queue");
 
   const load = useCallback(() => {
     if (!session) return;
@@ -39,10 +57,16 @@ export default function AdminGarmonAdsPage() {
     Promise.all([
       fetch(`${API_BASE}/admin/garmon-ads?status=pending`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
       fetch(`${API_BASE}/admin/garmon-ads`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/advertisers`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/top-earners`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
     ])
-      .then(([pendingRes, allRes]) => {
+      .then(([pendingRes, allRes, advRes, earnRes, fraudRes]) => {
         setPending(pendingRes.ads ?? []);
         setAllAds(allRes.ads ?? []);
+        setAdvertisers(advRes.advertisers ?? []);
+        setTopEarners(earnRes.topEarners ?? []);
+        setFraudFlags(fraudRes.flags ?? []);
         setError(null);
       })
       .catch(() => setError("Failed to load"))
@@ -92,6 +116,23 @@ export default function AdminGarmonAdsPage() {
     }
   }
 
+  async function advertiserAction(advertiserId: string, action: string) {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/advertisers`, {
+        method: "PATCH",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ advertiserId, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Action failed");
+    }
+  }
+
   const totalSpend = allAds.reduce((s, a) => s + (Number(a.total_budget) - Number(a.remaining_budget)), 0);
   const totalAdminCut = allAds.reduce((s, a) => s + Number(a.total_admin_cut ?? 0), 0);
   const totalPaidToUsers = allAds.reduce((s, a) => s + Number(a.total_paid_to_users ?? 0), 0);
@@ -100,7 +141,19 @@ export default function AdminGarmonAdsPage() {
     <div className="p-6 space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white mb-2">GarmonPay Ads</h1>
-        <p className="text-[#9ca3af]">Moderate advertiser ads, revenue overview.</p>
+        <p className="text-[#9ca3af]">Moderate ads, revenue overview, advertisers, fraud.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(["queue", "ads", "advertisers", "earners", "fraud"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`px-3 py-1.5 rounded-lg text-sm capitalize ${activeTab === tab ? "bg-fintech-accent text-white" : "bg-white/10 text-[#9ca3af] hover:bg-white/15"}`}
+          >
+            {tab === "queue" ? "Moderation" : tab === "ads" ? "All ads" : tab === "earners" ? "Top earners" : tab}
+          </button>
+        ))}
       </div>
 
       {actionError && (
@@ -124,6 +177,7 @@ export default function AdminGarmonAdsPage() {
       </div>
 
       {/* Moderation queue */}
+      {activeTab === "queue" && (
       <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Moderation queue (pending)</h2>
         {loading ? (
@@ -171,8 +225,10 @@ export default function AdminGarmonAdsPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* All ads table */}
+      {activeTab === "ads" && (
       <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">All ads</h2>
         {error && <div className="p-4 text-red-400 text-sm">{error}</div>}
@@ -213,6 +269,109 @@ export default function AdminGarmonAdsPage() {
           </div>
         )}
       </div>
+      )}
+
+      {/* Advertisers */}
+      {activeTab === "advertisers" && (
+      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Advertisers</h2>
+        {advertisers.length === 0 ? (
+          <div className="p-6 text-[#9ca3af]">No advertisers.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="p-3 text-[#9ca3af]">Business</th>
+                  <th className="p-3 text-[#9ca3af]">User ID</th>
+                  <th className="p-3 text-[#9ca3af]">Total spent</th>
+                  <th className="p-3 text-[#9ca3af]">Verified</th>
+                  <th className="p-3 text-[#9ca3af]">Active</th>
+                  <th className="p-3 text-[#9ca3af]">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {advertisers.map((a) => (
+                  <tr key={a.id} className="border-b border-white/5">
+                    <td className="p-3 text-white">{a.business_name}</td>
+                    <td className="p-3 text-[#9ca3af] font-mono text-xs">{a.user_id?.slice(0, 8)}…</td>
+                    <td className="p-3 text-[#9ca3af]">${Number(a.total_spent).toFixed(2)}</td>
+                    <td className="p-3">{a.is_verified ? <span className="text-green-400">Yes</span> : <span className="text-[#9ca3af]">No</span>}</td>
+                    <td className="p-3">{a.is_active ? <span className="text-green-400">Yes</span> : <span className="text-red-400">Suspended</span>}</td>
+                    <td className="p-3 flex gap-1">
+                      <button type="button" onClick={() => advertiserAction(a.id, a.is_verified ? "unverify" : "verify")} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">{a.is_verified ? "Unverify" : "Verify"}</button>
+                      <button type="button" onClick={() => advertiserAction(a.id, a.is_active ? "suspend" : "activate")} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">{a.is_active ? "Suspend" : "Activate"}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Top earners */}
+      {activeTab === "earners" && (
+      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Top earners (this week)</h2>
+        {topEarners.length === 0 ? (
+          <div className="p-6 text-[#9ca3af]">No earnings this week.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="p-3 text-[#9ca3af]">#</th>
+                  <th className="p-3 text-[#9ca3af]">User ID</th>
+                  <th className="p-3 text-[#9ca3af]">Earned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topEarners.map((e, i) => (
+                  <tr key={e.user_id} className="border-b border-white/5">
+                    <td className="p-3 text-[#9ca3af]">{i + 1}</td>
+                    <td className="p-3 font-mono text-xs text-white">{e.user_id}</td>
+                    <td className="p-3 text-green-400">${e.total.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Fraud flags */}
+      {activeTab === "fraud" && (
+      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Fraud flags</h2>
+        {fraudFlags.length === 0 ? (
+          <div className="p-6 text-[#9ca3af]">No fraud flags.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="p-3 text-[#9ca3af]">User ID</th>
+                  <th className="p-3 text-[#9ca3af]">Reason</th>
+                  <th className="p-3 text-[#9ca3af]">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fraudFlags.map((f) => (
+                  <tr key={f.id} className="border-b border-white/5">
+                    <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
+                    <td className="p-3 text-[#9ca3af]">{f.reason}</td>
+                    <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      )}
     </div>
   );
 }

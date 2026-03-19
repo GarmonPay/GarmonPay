@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { grantDepositBonus } from "@/lib/viral-referral-db";
+import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
 
 /**
@@ -198,6 +199,46 @@ export async function POST(req: Request) {
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
   const product_type = (session.metadata?.product_type as string) || "payment";
+
+  if (product_type === "ad_deposit") {
+    const ad_id = session.metadata?.ad_id as string | undefined;
+    const amount_dollars_meta = parseFloat((session.metadata?.amount_dollars as string) ?? "0");
+    const deposit_amount = Number.isFinite(amount_dollars_meta) && amount_dollars_meta > 0 ? amount_dollars_meta : amount_dollars;
+    if (ad_id && supabase && deposit_amount >= 5) {
+      const { data: adRow } = await supabase.from("garmon_ads").select("id, user_id, remaining_budget, total_budget, status").eq("id", ad_id).maybeSingle();
+      if (adRow && (adRow as { user_id: string }).user_id === user_id) {
+        const ad = adRow as { remaining_budget: number; total_budget: number; status: string };
+        const newRemaining = Number(ad.remaining_budget) + deposit_amount;
+        const newTotal = Number(ad.total_budget) + deposit_amount;
+        const updates: { remaining_budget: number; total_budget: number; updated_at: string; status?: string; is_active?: boolean } = {
+          remaining_budget: newRemaining,
+          total_budget: newTotal,
+          updated_at: new Date().toISOString(),
+        };
+        if (ad.status === "pending" && newRemaining >= 5) {
+          updates.status = "active";
+          updates.is_active = true;
+        }
+        await supabase.from("garmon_ads").update(updates).eq("id", ad_id);
+        await supabase.from("stripe_payments").insert({
+          user_id,
+          email: customer_email || "unknown",
+          amount: deposit_amount,
+          currency: "usd",
+          product_type: "ad_deposit",
+          stripe_session_id: session_id,
+          session_id: session_id,
+          status: "completed",
+        }).then(({ error }) => { if (error) console.error("[Stripe webhook] stripe_payments ad_deposit:", error.message); });
+        recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+        if (updates.status === "active") {
+          createGarmonNotification(user_id, "ad_approved", "Your ad is now live!", "Your ad has been approved and is now running.").catch(() => {});
+        }
+        console.log("[Stripe webhook] ad_deposit credited", { ad_id, user_id, amount: deposit_amount });
+        return new Response("OK", { status: 200 });
+      }
+    }
+  }
 
   if (product_type === "arena_store") {
     const store_item_id = session.metadata?.store_item_id as string | undefined;

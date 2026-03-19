@@ -4,6 +4,7 @@ import {
   getActiveGarmonAds,
   getEngagedAdIdsToday,
 } from "@/lib/garmon-ads-db";
+import { GARMON_AD_RATES } from "@/lib/garmon-ad-rates";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const FEED_LIMIT = 10;
@@ -27,32 +28,45 @@ export async function GET(request: Request) {
     ]);
     const filtered = ads.filter((a) => !engagedIds.has(a.id)).slice(0, FEED_LIMIT);
     return NextResponse.json({
-      ads: filtered.map((ad) => ({
-        id: ad.id,
-        advertiserId: ad.advertiser_id,
-        advertiserName: (ad.advertisers as { business_name?: string } | null)?.business_name ?? "",
-        advertiserLogo: (ad.advertisers as { logo_url?: string } | null)?.logo_url ?? null,
-        title: ad.title,
-        description: ad.description,
-        adType: ad.ad_type,
-        mediaUrl: ad.media_url,
-        thumbnailUrl: ad.thumbnail_url,
-        destinationUrl: ad.destination_url,
-        instagramUrl: ad.instagram_url,
-        tiktokUrl: ad.tiktok_url,
-        youtubeUrl: ad.youtube_url,
-        twitterUrl: ad.twitter_url,
-        facebookUrl: ad.facebook_url,
-        twitchUrl: ad.twitch_url,
-        costPerView: Number(ad.cost_per_view),
-        costPerClick: Number(ad.cost_per_click),
-        costPerFollow: Number(ad.cost_per_follow),
-        costPerShare: Number(ad.cost_per_share),
-        userEarnsView: Number(ad.cost_per_view) * 0.5,
-        userEarnsClick: Number(ad.cost_per_click) * 0.5,
-        userEarnsFollow: Number(ad.cost_per_follow) * 0.5,
-        userEarnsShare: Number(ad.cost_per_share) * 0.5,
-      })),
+      ads: filtered.map((ad) => {
+        const adType = ad.ad_type;
+        const userEarnsView =
+          adType === "banner"
+            ? GARMON_AD_RATES.banner_view.userEarns
+            : GARMON_AD_RATES.view_30.userEarns;
+        const userEarnsClick = GARMON_AD_RATES.click.userEarns;
+        const userEarnsFollow = GARMON_AD_RATES.follow.userEarns;
+        const userEarnsShare = GARMON_AD_RATES.share.userEarns;
+        return {
+          id: ad.id,
+          advertiserId: ad.advertiser_id,
+          advertiserName: (ad.advertisers as { business_name?: string } | null)?.business_name ?? "",
+          advertiserLogo: (ad.advertisers as { logo_url?: string } | null)?.logo_url ?? null,
+          title: ad.title,
+          description: ad.description,
+          adType: ad.ad_type,
+          mediaUrl: ad.media_url,
+          thumbnailUrl: ad.thumbnail_url,
+          destinationUrl: ad.destination_url,
+          instagramUrl: ad.instagram_url,
+          tiktokUrl: ad.tiktok_url,
+          youtubeUrl: ad.youtube_url,
+          twitterUrl: ad.twitter_url,
+          facebookUrl: ad.facebook_url,
+          twitchUrl: ad.twitch_url,
+          costPerView: Number(ad.cost_per_view),
+          costPerClick: Number(ad.cost_per_click),
+          costPerFollow: Number(ad.cost_per_follow),
+          costPerShare: Number(ad.cost_per_share),
+          userEarnsView,
+          userEarnsClick,
+          userEarnsFollow,
+          userEarnsShare,
+          userEarnsView15: GARMON_AD_RATES.view_15.userEarns,
+          userEarnsView30: GARMON_AD_RATES.view_30.userEarns,
+          userEarnsView60: GARMON_AD_RATES.view_60.userEarns,
+        };
+      }),
     });
   } catch (e) {
     console.error("Ads feed error:", e);

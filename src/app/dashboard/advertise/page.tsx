@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import {
   createAdvertiserProfile,
   createAd,
+  createAdDepositCheckout,
   getMyAds,
   getAdvertiserMe,
 } from "@/lib/api";
@@ -34,6 +35,7 @@ type Step = 1 | 2 | 3 | 4;
 
 export default function AdvertisePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [hasAdvertiser, setHasAdvertiser] = useState(false);
   const [myAds, setMyAds] = useState<Array<{
@@ -70,6 +72,7 @@ export default function AdvertisePage() {
   const [website, setWebsite] = useState("");
   const [advertiserDesc, setAdvertiserDesc] = useState("");
   const [creatingAdvertiser, setCreatingAdvertiser] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     getSessionAsync().then(async (s) => {
@@ -85,13 +88,22 @@ export default function AdvertisePage() {
         setHasAdvertiser(!!advRes?.advertiserId);
         const res = await getMyAds(tokenOrId, isToken);
         setMyAds(res?.ads ?? []);
+        const success = searchParams.get("success");
+        const canceled = searchParams.get("canceled");
+        if (success === "1") {
+          setSuccess("Payment received! Your ad will go live after approval.");
+          window.history.replaceState({}, "", "/dashboard/advertise");
+        } else if (canceled === "1") {
+          setError("Payment canceled. You can add funds to your ad from My Ads.");
+          window.history.replaceState({}, "", "/dashboard/advertise");
+        }
       } catch {
         setMyAds([]);
       } finally {
         setLoading(false);
       }
     });
-  }, [router]);
+  }, [router, searchParams]);
 
   const handleCreateAdvertiser = async () => {
     if (!session || !businessName.trim()) return;
@@ -113,7 +125,7 @@ export default function AdvertisePage() {
     }
   };
 
-  const handleSubmitAd = async () => {
+  const handlePayWithStripe = async () => {
     if (!session || !hasAdvertiser) return;
     if (title.length > TITLE_MAX || description.length > DESC_MAX) {
       setError("Title or description too long");
@@ -121,18 +133,19 @@ export default function AdvertisePage() {
     }
     const amount = customBudget ? parseFloat(customBudget) : budget;
     if (isNaN(amount) || amount < MIN_BUDGET) {
-      setError(`Minimum budget is $${MIN_BUDGET}`);
+      setError(`Minimum budget is $${MIN_BUDGET} to run an ad`);
       return;
     }
     setError(null);
+    setPaying(true);
     try {
-      await createAd(session.tokenOrId, session.isToken, {
+      const createRes = await createAd(session.tokenOrId, session.isToken, {
         title: title.trim(),
         description: description.trim() || undefined,
         ad_type: adType,
         media_url: mediaUrl.trim() || undefined,
         destination_url: destinationUrl.trim() || undefined,
-        total_budget: amount,
+        total_budget: 0,
         ...(adType === "social" && {
           instagram_url: socialUrls.instagram || undefined,
           tiktok_url: socialUrls.tiktok || undefined,
@@ -142,19 +155,18 @@ export default function AdvertisePage() {
           twitch_url: socialUrls.twitch || undefined,
         }),
       });
-      setSuccess("Ad submitted for review. Add funds to go live.");
-      setStep(1);
-      setTitle("");
-      setDescription("");
-      setMediaUrl("");
-      setDestinationUrl("");
-      setSocialUrls({});
-      setBudget(MIN_BUDGET);
-      setCustomBudget("");
-      const res = await getMyAds(session.tokenOrId, session.isToken);
-      setMyAds(res?.ads ?? []);
+      const adId = (createRes as { adId?: string }).adId;
+      if (!adId) throw new Error("Ad created but no ID returned");
+      const checkoutRes = await createAdDepositCheckout(session.tokenOrId, session.isToken, { adId, amount });
+      const url = (checkoutRes as { url?: string }).url;
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      throw new Error("Could not start checkout");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create ad");
+      setError(e instanceof Error ? e.message : "Failed to create ad or start payment");
+      setPaying(false);
     }
   };
 
@@ -379,25 +391,26 @@ export default function AdvertisePage() {
           )}
           {step === 4 && (
             <>
-              <p className="text-sm text-fintech-muted mb-4">Review and submit</p>
+              <p className="text-sm text-fintech-muted mb-4">Review and pay</p>
               <div className="max-w-lg space-y-2 text-sm">
                 <p><span className="text-fintech-muted">Type:</span> {adType}</p>
                 <p><span className="text-fintech-muted">Title:</span> {title || "—"}</p>
                 <p><span className="text-fintech-muted">Budget:</span> ${customBudget ? parseFloat(customBudget) || MIN_BUDGET : budget}</p>
               </div>
               <p className="text-xs text-fintech-muted mt-4">
-                After approval, add funds via Stripe to activate your ad. Minimum $5 to run.
+                Pay with Stripe to fund your ad. Minimum $5. After payment your ad will be submitted for review and go live when approved.
               </p>
               <div className="flex gap-2 mt-4">
-                <button type="button" onClick={() => setStep(3)} className="rounded-xl border border-white/20 px-4 py-2 text-sm">
+                <button type="button" onClick={() => setStep(3)} className="rounded-xl border border-white/20 px-4 py-2 text-sm" disabled={paying}>
                   Back
                 </button>
                 <button
                   type="button"
-                  onClick={handleSubmitAd}
-                  className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white"
+                  onClick={handlePayWithStripe}
+                  disabled={paying}
+                  className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  Submit for review
+                  {paying ? "Redirecting to Stripe…" : `Pay $${(customBudget ? parseFloat(customBudget) : budget) || MIN_BUDGET} with Stripe`}
                 </button>
               </div>
             </>

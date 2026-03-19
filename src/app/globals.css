@@ -82,6 +82,13 @@ input, button, select, textarea {
   }
 }
 
+@keyframes confettiFall {
+  to {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
 /* Mobile: safe area for notches / home indicator */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }

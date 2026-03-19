@@ -382,6 +382,31 @@ export async function checkAdContentModeration(
   return { blocked: false };
 }
 
+/** Update or insert ad streak for user (call after successful engagement). */
+export async function updateAdStreak(userId: string): Promise<{ streakDays: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const { data: row } = await supabase()
+    .from("garmon_ad_streak")
+    .select("last_activity_date, streak_days")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const r = row as { last_activity_date: string; streak_days: number } | null;
+  let newDays = 1;
+  if (r) {
+    const last = r.last_activity_date?.slice(0, 10);
+    if (last === today) return { streakDays: r.streak_days };
+    if (last === yesterday) newDays = r.streak_days + 1;
+  }
+  await supabase()
+    .from("garmon_ad_streak")
+    .upsert(
+      { user_id: userId, last_activity_date: today, streak_days: newDays, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  return { streakDays: newDays };
+}
+
 /** Create ad (status pending for review). */
 export async function createGarmonAd(params: {
   advertiser_id: string;

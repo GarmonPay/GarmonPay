@@ -142,6 +142,28 @@ export async function getAdEarnings(accessTokenOrUserId: string, isToken: boolea
   }>("/ads/earnings", { headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
+/** Ad leaderboard (top 10 this week). */
+export async function getAdsLeaderboard(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ leaderboard: Array<{ user_id: string; total: number }> }>("/ads/leaderboard", {
+    headers: authHeaders(accessTokenOrUserId, isToken),
+  });
+}
+
+/** Ad streak (consecutive days). */
+export async function getAdsStreak(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ streakDays: number; lastActivityDate: string | null }>("/ads/streak", {
+    headers: authHeaders(accessTokenOrUserId, isToken),
+  });
+}
+
+/** Notifications list. */
+export async function getNotifications(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ notifications: Array<{ id: string; type: string; title: string; body: string | null; read_at: string | null; created_at: string }> }>(
+    "/notifications",
+    { headers: authHeaders(accessTokenOrUserId, isToken) }
+  );
+}
+
 /** Advertiser: my ads. */
 export async function getMyAds(accessTokenOrUserId: string, isToken: boolean) {
   return api<{ ads: Array<{
@@ -187,6 +209,19 @@ export async function createAd(
   body: Record<string, unknown>
 ) {
   return api<{ adId: string; status: string }>("/ads/create", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify(body),
+  });
+}
+
+/** Advertiser: create Stripe Checkout session for ad budget deposit. */
+export async function createAdDepositCheckout(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: { adId: string; amount: number }
+) {
+  return api<{ url: string; sessionId: string }>("/ads/deposit/checkout", {
     method: "POST",
     headers: authHeaders(accessTokenOrUserId, isToken),
     body: JSON.stringify(body),

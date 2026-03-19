@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getSessionAsync } from "@/lib/session";
-import { getAdsFeed, engageAd, getAdEarnings, getDashboard } from "@/lib/api";
+import { getAdsFeed, engageAd, getAdEarnings, getDashboard, getAdsStreak, getAdsLeaderboard } from "@/lib/api";
 import { AdvertiserSocialLinks } from "@/components/ads/SocialPlatformLink";
+import { Confetti } from "@/components/ads/Confetti";
 
 const MAX_DAILY_EARNINGS = 2.0;
 
@@ -30,6 +31,9 @@ type FeedAd = {
   userEarnsClick: number;
   userEarnsFollow: number;
   userEarnsShare: number;
+  userEarnsView15?: number;
+  userEarnsView30?: number;
+  userEarnsView60?: number;
 };
 
 export default function EarnPage() {
@@ -42,6 +46,9 @@ export default function EarnPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string } | null>(null);
   const [engagedToday, setEngagedToday] = useState<Set<string>>(new Set());
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [streakDays, setStreakDays] = useState(0);
+  const [leaderboard, setLeaderboard] = useState<Array<{ user_id: string; total: number }>>([]);
   const [activeModal, setActiveModal] = useState<
     | null
     | { type: "video"; ad: FeedAd }
@@ -65,15 +72,19 @@ export default function EarnPage() {
     const isToken = !!s.accessToken;
     setSession({ tokenOrId, isToken });
     try {
-      const [feedRes, earningsRes, dashRes] = await Promise.all([
+      const [feedRes, earningsRes, dashRes, streakRes, leaderRes] = await Promise.all([
         getAdsFeed(tokenOrId, isToken),
         getAdEarnings(tokenOrId, isToken),
         getDashboard(tokenOrId, isToken),
+        getAdsStreak(tokenOrId, isToken).catch(() => ({ streakDays: 0 })),
+        getAdsLeaderboard(tokenOrId, isToken).catch(() => ({ leaderboard: [] })),
       ]);
       setAds(feedRes?.ads ?? []);
       setTodayDollars(earningsRes?.todayDollars ?? 0);
       setTotalDollars(earningsRes?.totalDollars ?? 0);
       setBalanceCents(dashRes?.balanceCents ?? 0);
+      setStreakDays(streakRes?.streakDays ?? 0);
+      setLeaderboard(leaderRes?.leaderboard ?? []);
     } catch {
       setAds([]);
     } finally {
@@ -99,6 +110,8 @@ export default function EarnPage() {
         setTotalDollars((t) => t + (res.userEarnedDollars ?? 0));
         setBalanceCents((c) => c + (res.userEarnedCents ?? 0));
         showToast(`+$${(res.userEarnedDollars ?? 0).toFixed(3)} earned! 💰`);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
         setActiveModal(null);
         load();
       } catch (e) {
@@ -134,6 +147,8 @@ export default function EarnPage() {
 
   const dailyLimitReached = todayDollars >= MAX_DAILY_EARNINGS;
   const progressPct = Math.min(100, (todayDollars / MAX_DAILY_EARNINGS) * 100);
+  const level =
+    totalDollars >= 500 ? "Diamond" : totalDollars >= 200 ? "Platinum" : totalDollars >= 50 ? "Gold" : totalDollars >= 10 ? "Silver" : "Bronze";
 
   return (
     <div className="space-y-4 tablet:space-y-6">
@@ -173,8 +188,30 @@ export default function EarnPage() {
             <p className="text-sm text-fintech-muted mt-1">Come back tomorrow!</p>
           )}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-fintech-muted">Level: <span className="text-white font-medium">{level}</span></span>
+          {streakDays > 0 && (
+            <span className="text-amber-400">🔥 {streakDays} day streak</span>
+          )}
+        </div>
       </div>
 
+      {/* Leaderboard */}
+      {leaderboard.length > 0 && (
+        <div className="card-lux p-4">
+          <h2 className="text-sm font-medium text-fintech-muted mb-2">Top earners this week</h2>
+          <ul className="space-y-1">
+            {leaderboard.slice(0, 5).map((e, i) => (
+              <li key={e.user_id} className="flex justify-between text-sm">
+                <span className="text-fintech-muted">#{i + 1}</span>
+                <span className="text-fintech-money">${e.total.toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showConfetti && <Confetti />}
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-fintech-success/95 text-white px-4 py-2 shadow-lg animate-fade-in">
@@ -246,7 +283,7 @@ export default function EarnPage() {
                             onClick={() => setActiveModal({ type: "video", ad })}
                             className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                           >
-                            Watch & Earn ${ad.userEarnsView.toFixed(3)} 🎬
+                            Watch & Earn up to ${(ad.userEarnsView60 ?? ad.userEarnsView).toFixed(3)} 🎬
                           </button>
                         ) : ad.adType === "banner" && ad.mediaUrl ? (
                           <button
@@ -322,6 +359,16 @@ export default function EarnPage() {
   );
 }
 
+function videoEarnForSeconds(sec: number, ad: FeedAd): number {
+  const v15 = ad.userEarnsView15 ?? 0.005;
+  const v30 = ad.userEarnsView30 ?? 0.008;
+  const v60 = ad.userEarnsView60 ?? 0.012;
+  if (sec >= 60) return v60;
+  if (sec >= 30) return v30;
+  if (sec >= 15) return v15;
+  return 0;
+}
+
 function VideoAdModal({
   ad,
   onComplete,
@@ -339,7 +386,7 @@ function VideoAdModal({
     const t = setInterval(() => {
       setSeconds((s) => {
         if (s >= 14) setCanSkip(true);
-        if (s >= 15) return s;
+        if (s >= 60) return 60;
         return s + 1;
       });
     }, 1000);
@@ -349,8 +396,10 @@ function VideoAdModal({
   const handleComplete = () => {
     if (completed) return;
     setCompleted(true);
-    onComplete(Math.max(15, seconds));
+    onComplete(Math.min(60, Math.max(15, seconds)));
   };
+
+  const earningSoFar = videoEarnForSeconds(seconds, ad);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -385,12 +434,12 @@ function VideoAdModal({
       <div className="p-4 bg-black/60">
         <div className="flex justify-between text-sm text-white/80 mb-2">
           <span>Progress: {seconds}s</span>
-          <span>Earn ${ad.userEarnsView.toFixed(3)}</span>
+          <span className="text-fintech-success font-medium">Earned: ${earningSoFar.toFixed(3)}</span>
         </div>
         <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
           <div
             className="h-full bg-fintech-accent transition-all"
-            style={{ width: `${Math.min(100, (seconds / 15) * 100)}%` }}
+            style={{ width: `${Math.min(100, (seconds / 60) * 100)}%` }}
           />
         </div>
       </div>

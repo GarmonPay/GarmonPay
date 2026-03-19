@@ -7,7 +7,9 @@ import {
   getEngagementsSameAdLast24h,
   getEngagementsSameAdvertiserToday,
   getUserAdEarningsTodayDollars,
+  updateAdStreak,
 } from "@/lib/garmon-ads-db";
+import { createGarmonNotification } from "@/lib/garmon-notifications";
 import {
   GARMON_AD_RATES,
   MAX_USER_EARNINGS_PER_DAY,
@@ -29,13 +31,12 @@ type EngageBody = {
 
 /** POST /api/ads/engage — record engagement, credit user, deduct ad budget. */
 export async function POST(request: Request) {
-  const rl = rateLimitEngage(request);
-  if (rl) return rl;
-
   const userId = await getAuthUserId(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+  const rl = rateLimitEngage(request, userId);
+  if (rl) return rl;
 
   let body: EngageBody;
   try {
@@ -192,9 +193,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const userEarnedDollars = result.userEarnedDollars ?? userEarns;
+    createGarmonNotification(
+      userId,
+      "ad_earned",
+      `+$${userEarnedDollars.toFixed(3)} earned! 💰`,
+      `You earned from an ad engagement.`
+    ).catch(() => {});
+    updateAdStreak(userId).catch(() => {});
+
     return NextResponse.json({
       success: true,
-      userEarnedDollars: result.userEarnedDollars ?? userEarns,
+      userEarnedDollars,
       userEarnedCents: result.userEarnedCents ?? Math.round(userEarns * 100),
     });
   } catch (e) {
@@ -203,20 +213,23 @@ export async function POST(request: Request) {
   }
 }
 
-function rateLimitEngage(request: Request): Response | null {
+function rateLimitEngage(request: Request, userId: string | null): Response | null {
   const ip = getClientIp(request);
-  const result = checkRateLimit(ip, "ads:engage", RATE_LIMIT_PER_HOUR, WINDOW_MS);
-  if (!result.allowed) {
+  const ipResult = checkRateLimit(ip, "ads:engage:ip", RATE_LIMIT_PER_HOUR, WINDOW_MS);
+  if (!ipResult.allowed) {
     return new Response(
-      JSON.stringify({ message: "Too Many Requests", retryAfter: result.retryAfterSec }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          "Retry-After": String(result.retryAfterSec),
-        },
-      }
+      JSON.stringify({ message: "Too Many Requests", retryAfter: ipResult.retryAfterSec }),
+      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(ipResult.retryAfterSec) } }
     );
+  }
+  if (userId) {
+    const userResult = checkRateLimit(userId, "ads:engage:user", RATE_LIMIT_PER_HOUR, WINDOW_MS);
+    if (!userResult.allowed) {
+      return new Response(
+        JSON.stringify({ message: "Too many engagements. Try again later.", retryAfter: userResult.retryAfterSec }),
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(userResult.retryAfterSec) } }
+      );
+    }
   }
   return null;
 }
