@@ -10,6 +10,7 @@ import {
   updateAdStreak,
 } from "@/lib/garmon-ads-db";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
+import { grantAdReferralCommission } from "@/lib/viral-referral-db";
 import {
   GARMON_AD_RATES,
   MAX_USER_EARNINGS_PER_DAY,
@@ -145,7 +146,11 @@ export async function POST(request: Request) {
       userEarns = rate.userEarns;
     }
 
-    const adminEarns = advertiserCharged - userEarns;
+    const levelMultiplier = await getLevelMultiplier(supabase, userId);
+    const streakMultiplier = await getStreakMultiplier(supabase, userId);
+    userEarns = round6(userEarns * levelMultiplier * streakMultiplier);
+    advertiserCharged = round6(userEarns * 2);
+    const adminEarns = userEarns;
     if (Number(ad.remaining_budget) < advertiserCharged) {
       return NextResponse.json({ message: "Ad budget exhausted" }, { status: 400 });
     }
@@ -194,6 +199,8 @@ export async function POST(request: Request) {
     }
 
     const userEarnedDollars = result.userEarnedDollars ?? userEarns;
+    const userEarnedCents = result.userEarnedCents ?? Math.round(userEarns * 100);
+    grantAdReferralCommission(userId, userEarnedCents, `${adId}_${Date.now()}`).catch(() => {});
     createGarmonNotification(
       userId,
       "ad_earned",
@@ -201,16 +208,73 @@ export async function POST(request: Request) {
       `You earned from an ad engagement.`
     ).catch(() => {});
     updateAdStreak(userId).catch(() => {});
+    const { data: adAfter } = await supabase
+      .from("garmon_ads")
+      .select("remaining_budget, user_id")
+      .eq("id", adId)
+      .maybeSingle();
+    const remaining = Number((adAfter as { remaining_budget?: number } | null)?.remaining_budget ?? 0);
+    const advertiserUserId = (adAfter as { user_id?: string } | null)?.user_id;
+    if (advertiserUserId && remaining <= 0) {
+      createGarmonNotification(
+        advertiserUserId,
+        "ad_budget_out",
+        "Your ad budget has run out",
+        "Add funds to continue running your ad."
+      ).catch(() => {});
+    } else if (advertiserUserId && remaining > 0 && remaining <= 10) {
+      createGarmonNotification(
+        advertiserUserId,
+        "ad_budget_low",
+        "Your ad budget is running low",
+        `$${remaining.toFixed(2)} remaining.`
+      ).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
       userEarnedDollars,
-      userEarnedCents: result.userEarnedCents ?? Math.round(userEarns * 100),
+      userEarnedCents,
     });
   } catch (e) {
     console.error("Ads engage error:", e);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
+}
+
+function round6(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+async function getLevelMultiplier(supabase: NonNullable<ReturnType<typeof createAdminClient>>, userId: string): Promise<number> {
+  const { data } = await supabase
+    .from("garmon_user_ad_earnings")
+    .select("amount")
+    .eq("user_id", userId)
+    .eq("status", "credited");
+  const total = (data ?? []).reduce((s: number, r: { amount: number }) => s + Number(r.amount), 0);
+  if (total >= 500) return 1.2;
+  if (total >= 200) return 1.15;
+  if (total >= 50) return 1.1;
+  if (total >= 10) return 1.05;
+  return 1.0;
+}
+
+async function getStreakMultiplier(supabase: NonNullable<ReturnType<typeof createAdminClient>>, userId: string): Promise<number> {
+  const { data } = await supabase
+    .from("garmon_ad_streak")
+    .select("last_activity_date, streak_days")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const row = data as { last_activity_date?: string; streak_days?: number } | null;
+  if (!row?.streak_days) return 1.0;
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const last = row.last_activity_date?.slice(0, 10);
+  const projected = last === today ? row.streak_days : last === yesterday ? row.streak_days + 1 : 1;
+  if (projected >= 30) return 3.0;
+  if (projected >= 7) return 2.0;
+  return 1.0;
 }
 
 function rateLimitEngage(request: Request, userId: string | null): Response | null {

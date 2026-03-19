@@ -148,6 +148,40 @@ export async function grantDepositBonus(referredUserId: string): Promise<{ grant
   }
 }
 
+/** Grant recurring 10% ad earnings commission to referrer (funded from admin cut). */
+export async function grantAdReferralCommission(
+  referredUserId: string,
+  adEarningCents: number,
+  referenceId: string
+): Promise<{ granted: boolean; referrerId?: string; amountCents?: number }> {
+  try {
+    if (!Number.isFinite(adEarningCents) || adEarningCents <= 0) return { granted: false };
+    const commissionCents = Math.round(adEarningCents * 0.1);
+    if (commissionCents <= 0) return { granted: false };
+
+    const { data: ref } = await supabase()
+      .from("viral_referrals")
+      .select("referrer_user_id")
+      .eq("referred_user_id", referredUserId)
+      .in("status", ["joined", "deposited", "subscribed"])
+      .maybeSingle();
+    const referrerId = (ref as { referrer_user_id?: string } | null)?.referrer_user_id;
+    if (!referrerId) return { granted: false };
+    if (referrerId === referredUserId) return { granted: false };
+
+    const { error: ledgerErr } = await supabase().rpc("wallet_ledger_entry", {
+      p_user_id: referrerId,
+      p_type: "referral_bonus",
+      p_amount_cents: commissionCents,
+      p_reference: `ad_referral_${referenceId}`,
+    });
+    if (ledgerErr) return { granted: false };
+    return { granted: true, referrerId, amountCents: commissionCents };
+  } catch {
+    return { granted: false };
+  }
+}
+
 /** Grant 1 free spin + 1 free pinball to referrer for a successful referral. */
 async function grantReferrerGamification(referrerUserId: string, referralId: string): Promise<void> {
   try {
