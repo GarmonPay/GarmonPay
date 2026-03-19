@@ -6,28 +6,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
-
-const ProBoxer = dynamic(
-  () => import("@/components/arena/ProBoxer"),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        style={{
-          width: "100%",
-          height: 380,
-          background: "#000",
-          borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    ),
-  }
-);
 import {
   BODY_TYPES,
   SKIN_TONES,
@@ -39,6 +17,11 @@ import {
   type HairStyle,
   type FighterData,
 } from "@/lib/arena-fighter-types";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  { ssr: false }
+);
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];

@@ -23,6 +23,13 @@ const nextConfig = {
     const csp = cspParts.join("; ");
 
     return [
+      {
+        source: "/models/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Cache-Control", value: "public, max-age=31536000" },
+        ],
+      },
       // API routes: full security headers including nosniff (JSON only)
       {
         source: "/api/:path*",
