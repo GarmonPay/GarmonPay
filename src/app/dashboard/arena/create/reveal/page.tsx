@@ -51,8 +51,8 @@ type FighterReveal = {
   special?: number;
 };
 
-const PHASES = ["darkness", "silhouette", "reveal", "stats", "backstory", "signature", "final"] as const;
-const PHASE_DURATIONS: Record<(typeof PHASES)[number], number> = {
+const phases = ["darkness", "silhouette", "reveal", "stats", "backstory", "signature", "final"] as const;
+const phaseDurations: Record<(typeof phases)[number], number> = {
   darkness: 500,
   silhouette: 1000,
   reveal: 1500,
@@ -70,8 +70,8 @@ export default function CreateFighterRevealPage() {
   const [typedBackstory, setTypedBackstory] = useState("");
   const [error, setError] = useState("");
 
-  const phase = PHASES[phaseIndex];
-  const isLast = phaseIndex >= PHASES.length - 1;
+  const phase = phases[phaseIndex];
+  const isLast = phaseIndex >= phases.length - 1;
 
   useEffect(() => {
     let cancelled = false;
@@ -94,8 +94,8 @@ export default function CreateFighterRevealPage() {
 
   useEffect(() => {
     if (!fighter || loading) return;
-    if (phaseIndex >= PHASES.length - 1) return;
-    const duration = PHASE_DURATIONS[phase];
+    if (phaseIndex >= phases.length - 1) return;
+    const duration = phaseDurations[phase];
     const t = setTimeout(() => setPhaseIndex((i) => i + 1), duration);
     return () => clearTimeout(t);
   }, [fighter, loading, phaseIndex, phase]);

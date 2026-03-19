@@ -3,11 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const ROUND_MS = 30000;
+const roundMs = 30000;
 
 function TapGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [count, setCount] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(ROUND_MS / 1000);
+  const [timeLeft, setTimeLeft] = useState(roundMs / 1000);
   const [running, setRunning] = useState(true);
   const countRef = useRef(0);
   countRef.current = count;

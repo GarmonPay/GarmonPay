@@ -12,7 +12,7 @@ const BoxerDisplay = dynamic(
   { ssr: false }
 )
 
-const STAT_CAP = 99
+const statCap = 99
 
 export default function ArenaTrainPage() {
   const router = useRouter()
@@ -99,14 +99,14 @@ export default function ArenaTrainPage() {
         />
       </div>
 
-      <p style={{ color: '#666', fontSize: 13, marginBottom: 20 }}>Stats cap at {STAT_CAP}. Real wallet deduction.</p>
+      <p style={{ color: '#666', fontSize: 13, marginBottom: 20 }}>Stats cap at {statCap}. Real wallet deduction.</p>
 
       <div style={{ display: 'grid', gap: 12 }}>
         {TRAINING_SESSIONS.map(s => {
           const safeStats = getSafeFighterStats(fighter)
           const unlocked = isSessionUnlocked(s.requiredSessions, sessions)
           const currentVal = Number(safeStats[s.stat as keyof typeof safeStats] ?? 0)
-          const atCap = currentVal >= STAT_CAP
+          const atCap = currentVal >= statCap
           const canAfford = balanceCents != null && balanceCents >= s.priceCents
           const disabled = !unlocked || atCap || !canAfford || trainingKey !== null
           const priceDollars = (s.priceCents / 100).toFixed(2)
@@ -125,7 +125,7 @@ export default function ArenaTrainPage() {
                 <h3 style={{ margin: 0, fontSize: 16, color: '#fff' }}>{s.name}</h3>
                 <span style={{ color: '#f0a500', fontSize: 14 }}>${priceDollars}</span>
               </div>
-              <p style={{ margin: '0 0 8px', color: '#666', fontSize: 12 }}>+{s.minGain}–{s.maxGain} {s.stat} · Current: {currentVal}/{STAT_CAP}</p>
+              <p style={{ margin: '0 0 8px', color: '#666', fontSize: 12 }}>+{s.minGain}–{s.maxGain} {s.stat} · Current: {currentVal}/{statCap}</p>
               {!unlocked && <p style={{ margin: '0 0 8px', color: '#f59e0b', fontSize: 11 }}>Unlocks after {s.requiredSessions} sessions</p>}
               <button
                 disabled={disabled}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
   return isToken
@@ -40,7 +40,7 @@ export default function GameStationPage() {
 
   const fetchStats = useCallback(() => {
     if (!tokenOrId) return;
-    fetch(`${API_BASE}/games/station/stats`, {
+    fetch(`${apiBase}/games/station/stats`, {
       headers: authHeaders(tokenOrId, isToken),
       credentials: "include",
     })
@@ -56,7 +56,7 @@ export default function GameStationPage() {
   }, [tokenOrId, isToken]);
 
   const fetchLeaderboard = useCallback(() => {
-    fetch(`${API_BASE}/games/station/leaderboard`, { credentials: "include" })
+    fetch(`${apiBase}/games/station/leaderboard`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { global: [], weekly: [] }))
       .then(setLeaderboard)
       .catch(() => setLeaderboard({ global: [], weekly: [] }));

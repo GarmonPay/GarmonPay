@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { gamesSpin } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
   return isToken ? { Authorization: `Bearer ${accessTokenOrUserId}` } : { "X-User-Id": accessTokenOrUserId };
@@ -37,7 +37,7 @@ export default function SpinPage() {
 
   useEffect(() => {
     if (!tokenOrId) return;
-    fetch(`${API_BASE}/wallet/get`, { headers: authHeaders(tokenOrId, isToken), credentials: "include" })
+    fetch(`${apiBase}/wallet/get`, { headers: authHeaders(tokenOrId, isToken), credentials: "include" })
       .then((r) => (r.ok ? r.json() : { balance_cents: 0 }))
       .then((d: { balance_cents?: number }) => setBalanceCents(d.balance_cents ?? 0))
       .catch(() => setBalanceCents(0));
@@ -51,7 +51,7 @@ export default function SpinPage() {
     gamesSpin(tokenOrId, isToken)
       .then((r) => {
         setResult(r.amountCents);
-        fetch(`${API_BASE}/wallet/get`, { headers: authHeaders(tokenOrId, isToken), credentials: "include" })
+        fetch(`${apiBase}/wallet/get`, { headers: authHeaders(tokenOrId, isToken), credentials: "include" })
           .then((res) => (res.ok ? res.json() : {}))
           .then((d: { balance_cents?: number }) => setBalanceCents(d.balance_cents ?? 0));
       })

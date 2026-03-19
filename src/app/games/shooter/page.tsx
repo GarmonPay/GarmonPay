@@ -3,14 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const DURATION_MS = 20000;
-const TARGET_SIZE = 60;
+const durationMs = 20000;
+const targetSize = 60;
 
 function ShooterGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [targets, setTargets] = useState<{ id: number; x: number; y: number }[]>([]);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(DURATION_MS / 1000);
+  const [timeLeft, setTimeLeft] = useState(durationMs / 1000);
   const [running, setRunning] = useState(true);
   const idRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,8 +76,8 @@ function ShooterGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
             onClick={(e) => { e.stopPropagation(); hit(t.id); }}
             className="absolute rounded-full bg-[#ffaa00] border-2 border-yellow-300 flex items-center justify-center text-white font-bold text-lg"
             style={{
-              width: TARGET_SIZE,
-              height: TARGET_SIZE,
+              width: targetSize,
+              height: targetSize,
               left: `${t.x}%`,
               top: `${t.y}%`,
               transform: "translate(-50%, -50%)",

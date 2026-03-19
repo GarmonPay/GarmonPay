@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const ROW = 4;
-const COLS = 6;
-const RUNNER_HEIGHT = 80;
+const gridRows = 4;
+const gridCols = 6;
+const runnerHeight = 80;
 
 function RunnerGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [playerY, setPlayerY] = useState(0);
@@ -22,9 +22,9 @@ function RunnerGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
     if (gameOver) return;
     const spawn = () => {
       if (Math.random() < 0.5) {
-        setObstacles((o) => [...o, { id: ++idRef.current, x: 400, row: Math.floor(Math.random() * ROW) }]);
+        setObstacles((o) => [...o, { id: ++idRef.current, x: 400, row: Math.floor(Math.random() * gridRows) }]);
       } else {
-        setCoins((c) => [...c, { id: ++idRef.current, x: 400, row: Math.floor(Math.random() * ROW) }]);
+        setCoins((c) => [...c, { id: ++idRef.current, x: 400, row: Math.floor(Math.random() * gridRows) }]);
       }
     };
     const spawnId = setInterval(spawn, 900);
@@ -64,14 +64,14 @@ function RunnerGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
       <p className="text-[#39ff14] text-center mb-2">Distance: {distance} · Coins: {score}</p>
       <div className="relative w-full h-48 bg-black/60 rounded-xl overflow-hidden">
         {obstacles.map((o) => (
-          <div key={o.id} className="absolute w-8 h-12 bg-red-500 rounded" style={{ left: o.x, top: o.row * (120 / ROW) + 10 }} />
+          <div key={o.id} className="absolute w-8 h-12 bg-red-500 rounded" style={{ left: o.x, top: o.row * (120 / gridRows) + 10 }} />
         ))}
         {coins.map((c) => (
-          <div key={c.id} className="absolute w-6 h-6 rounded-full bg-yellow-400" style={{ left: c.x, top: c.row * (120 / ROW) + 15 }} />
+          <div key={c.id} className="absolute w-6 h-6 rounded-full bg-yellow-400" style={{ left: c.x, top: c.row * (120 / gridRows) + 15 }} />
         ))}
         <div
           className="absolute left-8 w-10 h-10 bg-[#00f0ff] rounded-full flex items-center justify-center"
-          style={{ top: playerY * (120 / ROW) + 15, boxShadow: "0 0 15px rgba(0,240,255,0.6)" }}
+          style={{ top: playerY * (120 / gridRows) + 15, boxShadow: "0 0 15px rgba(0,240,255,0.6)" }}
         >
           ▶
         </div>

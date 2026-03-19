@@ -23,8 +23,8 @@ const BoxerDisplay = dynamic(
   { ssr: false }
 );
 
-const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
-const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
+const styleList = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
+const avatarList = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
 
 function isHtmlResponse(str: string): boolean {
   const trimmed = str.trimStart();
@@ -38,8 +38,8 @@ function randomChoice<T>(arr: readonly T[]): T {
 export default function CreateFighterManualPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [style, setStyle] = useState<(typeof STYLES)[number]>("Brawler");
-  const [avatar, setAvatar] = useState(AVATARS[0]);
+  const [style, setStyle] = useState<(typeof styleList)[number]>("Brawler");
+  const [avatar, setAvatar] = useState(avatarList[0]);
   const [bodyType, setBodyType] = useState<BodyType>("middleweight");
   const [skinTone, setSkinTone] = useState<SkinTone>("tone3");
   const [faceStyle, setFaceStyle] = useState<FaceStyle>("determined");
@@ -69,8 +69,8 @@ export default function CreateFighterManualPage() {
     setSkinTone(randomChoice(SKIN_TONES).value);
     setFaceStyle(randomChoice(FACE_STYLES).value);
     setHairStyle(randomChoice(HAIR_STYLES).value);
-    setStyle(randomChoice(STYLES));
-    setAvatar(randomChoice(AVATARS));
+    setStyle(randomChoice(styleList));
+    setAvatar(randomChoice(avatarList));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -266,7 +266,7 @@ export default function CreateFighterManualPage() {
           <div>
             <label className="block text-sm font-medium text-[#9ca3af] mb-2">Style</label>
             <div className="flex flex-wrap gap-2">
-              {STYLES.map((s) => (
+              {styleList.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -283,7 +283,7 @@ export default function CreateFighterManualPage() {
           <div>
             <label className="block text-sm font-medium text-[#9ca3af] mb-2">Avatar</label>
             <div className="flex flex-wrap gap-2">
-              {AVATARS.map((a) => (
+              {avatarList.map((a) => (
                 <button
                   key={a}
                   type="button"

@@ -3,8 +3,8 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const EMOJIS = ["🎮", "🌟", "💎", "🔥", "⚡", "🎯", "👾", "🃏"];
-const SIZE = 4; // 4x4 = 8 pairs
+const emojiList = ["🎮", "🌟", "💎", "🔥", "⚡", "🎯", "👾", "🃏"];
+const gridSize = 4; // 4x4 = 8 pairs
 
 function shuffle<T>(a: T[]): T[] {
   const out = [...a];
@@ -17,7 +17,7 @@ function shuffle<T>(a: T[]): T[] {
 
 function MemoryGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [cards] = useState(() => {
-    const pairs = [...EMOJIS.slice(0, (SIZE * SIZE) / 2), ...EMOJIS.slice(0, (SIZE * SIZE) / 2)];
+    const pairs = [...emojiList.slice(0, (gridSize * gridSize) / 2), ...emojiList.slice(0, (gridSize * gridSize) / 2)];
     return shuffle(pairs).map((emoji, id) => ({ id, emoji }));
   });
   const [flipped, setFlipped] = useState<number[]>([]);

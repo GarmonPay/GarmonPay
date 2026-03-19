@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const GRID = 12;
-const CELL = 24;
+const gridSize = 12;
+const cellPx = 24;
 
 function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [snake, setSnake] = useState<{ x: number; y: number }[]>([{ x: 6, y: 6 }]);
@@ -15,7 +15,7 @@ function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const dirRef = useRef(dir);
   dirRef.current = dir;
 
-  const newFood = useCallback(() => ({ x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) }), []);
+  const newFood = useCallback(() => ({ x: Math.floor(Math.random() * gridSize), y: Math.floor(Math.random() * gridSize) }), []);
 
   useEffect(() => {
     if (dead) return;
@@ -29,7 +29,7 @@ function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
         if (d === "D") ny++;
         if (d === "L") nx--;
         if (d === "R") nx++;
-        if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) {
+        if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) {
           setDead(true);
           onGameEnd(score + s.length);
           return s;
@@ -70,17 +70,17 @@ function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
       <div className="flex justify-center">
         <div
           className="relative rounded-lg overflow-hidden"
-          style={{ width: GRID * CELL, height: GRID * CELL, background: "#0a0a12" }}
+          style={{ width: gridSize * cellPx, height: gridSize * cellPx, background: "#0a0a12" }}
         >
           {snake.map((s, i) => (
             <div
               key={i}
               className="absolute rounded-sm"
               style={{
-                left: s.x * CELL,
-                top: s.y * CELL,
-                width: CELL - 2,
-                height: CELL - 2,
+                left: s.x * cellPx,
+                top: s.y * cellPx,
+                width: cellPx - 2,
+                height: cellPx - 2,
                 background: i === 0 ? "#39ff14" : "#bf00ff",
                 boxShadow: "0 0 8px currentColor",
               }}
@@ -88,7 +88,7 @@ function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
           ))}
           <div
             className="absolute rounded-full bg-[#ffd700]"
-            style={{ left: food.x * CELL + 4, top: food.y * CELL + 4, width: CELL - 8, height: CELL - 8 }}
+            style={{ left: food.x * cellPx + 4, top: food.y * cellPx + 4, width: cellPx - 8, height: cellPx - 8 }}
           />
         </div>
       </div>

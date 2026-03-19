@@ -7,7 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getApiRoot } from "@/lib/api";
 import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
-const REGEN_COST = 500;
+const regenCost = 500;
 
 export default function CreateFighterEntryPage() {
   const router = useRouter();
@@ -67,8 +67,8 @@ export default function CreateFighterEntryPage() {
     );
   }
 
-  const canAffordAI = arenaCoins >= REGEN_COST;
-  const aiCostLabel = freeGenerationUsed ? `${REGEN_COST} coins to regenerate` : "FREE — One time only";
+  const canAffordAI = arenaCoins >= regenCost;
+  const aiCostLabel = freeGenerationUsed ? `${regenCost} coins to regenerate` : "FREE — One time only";
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -77,7 +77,7 @@ export default function CreateFighterEntryPage() {
         <p className="text-[#9ca3af] text-center mb-6">Choose how you want to begin</p>
 
         {freeGenerationUsed && (
-          <p className="text-center text-[#f0a500] text-sm mb-4">You have {arenaCoins} coins. Regenerating costs {REGEN_COST} coins.</p>
+          <p className="text-center text-[#f0a500] text-sm mb-4">You have {arenaCoins} coins. Regenerating costs {regenCost} coins.</p>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

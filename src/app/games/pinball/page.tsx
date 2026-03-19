@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { PinballGame } from "@/components/games/PinballGame";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 function authHeaders(accessToken: string): Record<string, string> {
   return { Authorization: `Bearer ${accessToken}` };
@@ -53,14 +53,14 @@ export default function PinballPage() {
   const token = session?.accessToken ?? "";
 
   const fetchLeaderboard = useCallback(() => {
-    fetch(`${API_BASE}/api/pinball/leaderboard`, { credentials: "include" })
+    fetch(`${apiBase}/api/pinball/leaderboard`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { leaderboard: [] }))
       .then((d: { leaderboard?: LeaderboardEntry[] }) => setLeaderboard(d.leaderboard ?? []))
       .catch(() => setLeaderboard([]));
   }, []);
 
   const fetchJackpot = useCallback(() => {
-    fetch(`${API_BASE}/api/pinball/jackpot/current`, { credentials: "include" })
+    fetch(`${apiBase}/api/pinball/jackpot/current`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : {}))
       .then((d: { current_amount_cents?: number }) => setJackpotCents(d.current_amount_cents ?? 500))
       .catch(() => {});
@@ -101,7 +101,7 @@ export default function PinballPage() {
     setError(null);
     setPostResult(null);
     setStarting(true);
-    fetch(`${API_BASE}/api/pinball/game/start`, {
+    fetch(`${apiBase}/api/pinball/game/start`, {
       method: "POST",
       headers: { ...authHeaders(token), "Content-Type": "application/json" },
       credentials: "include",
@@ -126,7 +126,7 @@ export default function PinballPage() {
       if (!sessionId || !token) return;
       const durationSeconds = statsArg?.durationMs != null ? Math.round(statsArg.durationMs / 1000) : 0;
       const ballsUsed = statsArg?.ballsUsed ?? 3;
-      fetch(`${API_BASE}/api/pinball/game/end`, {
+      fetch(`${apiBase}/api/pinball/game/end`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
         credentials: "include",

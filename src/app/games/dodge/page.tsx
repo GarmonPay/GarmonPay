@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { GameStationPlay } from "@/components/games/GameStationPlay";
 
-const LANES = 3;
-const FALL_SPEED = 4;
-const SPAWN_INTERVAL = 1200;
+const laneCount = 3;
+const fallSpeed = 4;
+const spawnIntervalMs = 1200;
 
 function DodgeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   const [playerX, setPlayerX] = useState(1);
@@ -20,8 +20,8 @@ function DodgeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
   useEffect(() => {
     if (!running) return;
     spawnRef.current = setInterval(() => {
-      setObstacles((o) => [...o, { id: ++idRef.current, lane: Math.floor(Math.random() * LANES), y: 0 }]);
-    }, SPAWN_INTERVAL);
+      setObstacles((o) => [...o, { id: ++idRef.current, lane: Math.floor(Math.random() * laneCount), y: 0 }]);
+    }, spawnIntervalMs);
     return () => {
       if (spawnRef.current) clearInterval(spawnRef.current);
     };
@@ -32,7 +32,7 @@ function DodgeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
     const loop = () => {
       setObstacles((prev) => {
         const next = prev
-          .map((o) => ({ ...o, y: o.y + FALL_SPEED }))
+          .map((o) => ({ ...o, y: o.y + fallSpeed }))
           .filter((o) => o.y < 320);
         const hit = next.some((o) => o.lane === playerX && o.y >= 240 && o.y <= 280);
         if (hit) {
@@ -62,12 +62,12 @@ function DodgeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
           <div
             key={o.id}
             className="absolute w-1/3 h-10 bg-red-500/80 rounded"
-            style={{ left: `${(o.lane / LANES) * 100}%`, top: o.y }}
+            style={{ left: `${(o.lane / laneCount) * 100}%`, top: o.y }}
           />
         ))}
         <div
           className="absolute bottom-4 left-0 w-1/3 h-12 bg-[#00f0ff] rounded flex items-center justify-center transition-all duration-100"
-          style={{ left: `${(playerX / LANES) * 100}%`, boxShadow: "0 0 20px rgba(0,240,255,0.6)" }}
+          style={{ left: `${(playerX / laneCount) * 100}%`, boxShadow: "0 0 20px rgba(0,240,255,0.6)" }}
         >
           ▲
         </div>

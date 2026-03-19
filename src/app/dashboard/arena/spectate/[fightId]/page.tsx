@@ -16,7 +16,7 @@ const ArenaFight3DView = dynamic(
   { ssr: false }
 );
 
-const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
+const wsUrl = process.env.NEXT_PUBLIC_BOXING_wsUrl || "http://localhost:3001";
 
 type Fighter = {
   id: string;
@@ -82,7 +82,7 @@ export default function SpectateFightPage() {
   const isLive = fight && !fight.winnerId;
   useEffect(() => {
     if (!fightId || !isLive) return;
-    const s = io(WS_URL, { transports: ["websocket"], autoConnect: true });
+    const s = io(wsUrl, { transports: ["websocket"], autoConnect: true });
     s.on("connect", () => {
       s.emit("watch_fight", { fightId }, (ack: { ok?: boolean; message?: string }) => {
         if (!ack?.ok) console.warn("Watch failed:", ack?.message);

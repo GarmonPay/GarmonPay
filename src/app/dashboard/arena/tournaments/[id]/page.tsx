@@ -7,7 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { io, Socket } from "socket.io-client";
 
 import { getApiRoot } from "@/lib/api";
-const WS_URL = process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001";
+const wsUrl = process.env.NEXT_PUBLIC_BOXING_wsUrl || "http://localhost:3001";
 
 type TournamentBracket = { rounds?: Array<{ matches: Array<{ fightId?: string; fighterAId?: string; fighterBId?: string; winnerId?: string }> }> };
 
@@ -39,7 +39,7 @@ export default function ArenaTournamentBracketPage() {
 
   useEffect(() => {
     if (!id || !session) return;
-    const s = io(WS_URL, { transports: ["websocket"], autoConnect: true });
+    const s = io(wsUrl, { transports: ["websocket"], autoConnect: true });
     s.on("connect", () => {
       s.emit("join_tournament_room", { tournamentId: id });
     });
