@@ -1,11 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
-import ProBoxer from "@/components/arena/ProBoxerClient";
+
+const ProBoxer = dynamic(
+  () => import("@/components/arena/ProBoxer"),
+  { ssr: false }
+);
 
 type LiveFight = {
   id: string;

@@ -2,6 +2,21 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  experimental: {
+    optimizePackageImports: ["three"],
+  },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      const ext = config.externals;
+      config.externals = [
+        ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
+        "three",
+        "@react-three/fiber",
+        "@react-three/drei",
+      ];
+    }
+    return config;
+  },
   async headers() {
     // Content-Security-Policy: allow self, Supabase, Stripe; block framing and restrict sources
     const cspParts = [
