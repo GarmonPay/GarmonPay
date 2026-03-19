@@ -119,7 +119,12 @@ export async function getAdsFeed(accessTokenOrUserId: string, isToken: boolean) 
 export async function engageAd(
   accessTokenOrUserId: string,
   isToken: boolean,
-  body: { adId: string; engagementType: "view" | "click" | "follow" | "share" | "banner_view"; durationSeconds?: number }
+  body: {
+    adId: string;
+    engagementType: "view" | "click" | "follow" | "share" | "banner_view";
+    durationSeconds?: number;
+    sessionId?: string;
+  }
 ) {
   return api<{ success: boolean; userEarnedDollars: number; userEarnedCents: number }>(
     "/ads/engage",
@@ -129,6 +134,19 @@ export async function engageAd(
       body: JSON.stringify(body),
     }
   );
+}
+
+/** Start server-side engagement session (for duration validation). */
+export async function startAdEngagementSession(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: { adId: string; engagementType: "view" | "click" | "follow" | "share" | "banner_view" }
+) {
+  return api<{ sessionId: string; startedAt: string; expiresAt: string }>("/ads/engage/start", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify(body),
+  });
 }
 
 /** GarmonPay ad earnings summary. */

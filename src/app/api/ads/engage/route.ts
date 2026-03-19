@@ -28,6 +28,7 @@ type EngageBody = {
   adId: string;
   engagementType: "view" | "click" | "follow" | "share" | "banner_view";
   durationSeconds?: number;
+  sessionId?: string;
 };
 
 /** POST /api/ads/engage — record engagement, credit user, deduct ad budget. */
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
   }
 
-  const { adId, engagementType, durationSeconds = 0 } = body;
+  const { adId, engagementType, durationSeconds = 0, sessionId } = body;
   if (!adId || !engagementType) {
     return NextResponse.json(
       { message: "adId and engagementType required" },
@@ -77,6 +78,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Account flagged" }, { status: 403 });
     }
 
+    const ip = getClientIp(request);
+    const deviceType = request.headers.get("user-agent") ?? null;
+    const ipFraud = await validateIpFraud(supabase, userId, ip);
+    if (!ipFraud.ok) {
+      return NextResponse.json({ message: ipFraud.message }, { status: 403 });
+    }
+    const timingFraud = await validateBotTiming(supabase, userId, adId);
+    if (!timingFraud.ok) {
+      return NextResponse.json({ message: timingFraud.message }, { status: 403 });
+    }
+
     const sameAd24h = await getEngagementsSameAdLast24h(userId, adId);
     if (sameAd24h >= MAX_ENGAGEMENTS_SAME_AD_PER_DAY) {
       return NextResponse.json(
@@ -105,8 +117,23 @@ export async function POST(request: Request) {
     let advertiserCharged: number;
     let userEarns: number;
 
+    let serverDuration = Math.round(durationSeconds ?? 0);
+    if (sessionId) {
+      const sessionValidation = await validateAndConsumeSession(
+        supabase,
+        sessionId,
+        userId,
+        adId,
+        engagementType
+      );
+      if (!sessionValidation.ok) {
+        return NextResponse.json({ message: sessionValidation.message }, { status: 400 });
+      }
+      serverDuration = sessionValidation.elapsedSeconds;
+    }
+
     if (engagementType === "view") {
-      const dur = durationSeconds ?? 0;
+      const dur = serverDuration;
       if (dur >= VIDEO_MIN_SECONDS.view_60) {
         rateKey = "view_60";
       } else if (dur >= VIDEO_MIN_SECONDS.view_30) {
@@ -123,7 +150,7 @@ export async function POST(request: Request) {
       advertiserCharged = rate.advertiserCharged;
       userEarns = rate.userEarns;
     } else if (engagementType === "banner_view") {
-      if ((durationSeconds ?? 0) < BANNER_VIEW_SECONDS) {
+      if (serverDuration < BANNER_VIEW_SECONDS) {
         return NextResponse.json(
           { message: "View banner for at least 30 seconds" },
           { status: 400 }
@@ -162,14 +189,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const ip = getClientIp(request);
-    const deviceType = request.headers.get("user-agent") ?? null;
-
     const { data, error } = await supabase.rpc("garmon_ad_engage", {
       p_user_id: userId,
       p_ad_id: adId,
       p_engagement_type: engagementType,
-      p_duration_seconds: Math.round(durationSeconds ?? 0),
+      p_duration_seconds: serverDuration,
       p_user_earned_dollars: userEarns,
       p_admin_earned_dollars: adminEarns,
       p_advertiser_charged_dollars: advertiserCharged,
@@ -296,4 +320,95 @@ function rateLimitEngage(request: Request, userId: string | null): Response | nu
     }
   }
   return null;
+}
+
+async function validateIpFraud(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  ip: string
+): Promise<{ ok: boolean; message?: string }> {
+  if (!ip || ip === "unknown") return { ok: true };
+  const { data } = await supabase
+    .from("garmon_ad_engagements")
+    .select("user_id")
+    .eq("ip_address", ip)
+    .limit(300);
+  const users = new Set<string>((data ?? []).map((r: { user_id: string }) => r.user_id));
+  users.add(userId);
+  if (users.size > 3) {
+    await supabase.from("garmon_ad_fraud_flags").insert({
+      user_id: userId,
+      reason: "IP linked to more than 3 ad-earning accounts",
+    });
+    return { ok: false, message: "Suspicious IP activity detected" };
+  }
+  return { ok: true };
+}
+
+async function validateBotTiming(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  adId: string
+): Promise<{ ok: boolean; message?: string }> {
+  const { data } = await supabase
+    .from("garmon_ad_engagements")
+    .select("created_at, ad_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = data as { created_at?: string; ad_id?: string } | null;
+  if (!row?.created_at) return { ok: true };
+  const ms = Date.now() - new Date(row.created_at).getTime();
+  if (ms < 2000) {
+    await supabase.from("garmon_ad_fraud_flags").insert({
+      user_id: userId,
+      ad_id: adId,
+      reason: "Engagement submitted too quickly (<2s)",
+    });
+    return { ok: false, message: "Engagement rejected (timing validation failed)" };
+  }
+  return { ok: true };
+}
+
+async function validateAndConsumeSession(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  sessionId: string,
+  userId: string,
+  adId: string,
+  engagementType: string
+): Promise<{ ok: boolean; message?: string; elapsedSeconds: number }> {
+  const { data, error } = await supabase
+    .from("garmon_engagement_sessions")
+    .select("id, started_at, expires_at, consumed_at, user_id, ad_id, engagement_type")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error || !data) return { ok: false, message: "Invalid engagement session", elapsedSeconds: 0 };
+  const row = data as {
+    id: string;
+    started_at: string;
+    expires_at: string;
+    consumed_at: string | null;
+    user_id: string;
+    ad_id: string;
+    engagement_type: string;
+  };
+  if (row.user_id !== userId || row.ad_id !== adId || row.engagement_type !== engagementType) {
+    return { ok: false, message: "Session does not match engagement", elapsedSeconds: 0 };
+  }
+  if (row.consumed_at) return { ok: false, message: "Session already used", elapsedSeconds: 0 };
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    return { ok: false, message: "Session expired, start again", elapsedSeconds: 0 };
+  }
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000));
+  const minSeconds = engagementType === "follow" ? 5 : engagementType === "banner_view" ? 30 : 0;
+  if (elapsedSeconds < minSeconds) {
+    return { ok: false, message: "Engagement duration too short", elapsedSeconds };
+  }
+  await supabase
+    .from("garmon_engagement_sessions")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .is("consumed_at", null);
+  return { ok: true, elapsedSeconds };
 }

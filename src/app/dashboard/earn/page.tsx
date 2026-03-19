@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getSessionAsync } from "@/lib/session";
-import { getAdsFeed, engageAd, getAdEarnings, getDashboard, getAdsStreak, getAdsLeaderboard } from "@/lib/api";
+import { getAdsFeed, engageAd, getAdEarnings, getDashboard, getAdsStreak, getAdsLeaderboard, startAdEngagementSession } from "@/lib/api";
 import { AdvertiserSocialLinks } from "@/components/ads/SocialPlatformLink";
 import { Confetti } from "@/components/ads/Confetti";
 
@@ -36,6 +36,8 @@ type FeedAd = {
   userEarnsView60?: number;
 };
 
+type EngagementType = "view" | "click" | "follow" | "share" | "banner_view";
+
 export default function EarnPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
@@ -51,10 +53,10 @@ export default function EarnPage() {
   const [leaderboard, setLeaderboard] = useState<Array<{ user_id: string; total: number }>>([]);
   const [activeModal, setActiveModal] = useState<
     | null
-    | { type: "video"; ad: FeedAd }
-    | { type: "banner"; ad: FeedAd }
-    | { type: "social"; ad: FeedAd }
-    | { type: "click"; ad: FeedAd }
+    | { type: "video"; ad: FeedAd; sessionId: string }
+    | { type: "banner"; ad: FeedAd; sessionId: string }
+    | { type: "social"; ad: FeedAd; sessionId: string }
+    | { type: "click"; ad: FeedAd; sessionId: string }
   >(null);
 
   const showToast = useCallback((message: string) => {
@@ -97,13 +99,14 @@ export default function EarnPage() {
   }, [load]);
 
   const handleEngage = useCallback(
-    async (adId: string, engagementType: "view" | "click" | "follow" | "share" | "banner_view", durationSeconds?: number) => {
+    async (adId: string, engagementType: EngagementType, durationSeconds?: number, sessionId?: string) => {
       if (!session) return;
       try {
         const res = await engageAd(session.tokenOrId, session.isToken, {
           adId,
           engagementType,
           durationSeconds,
+          sessionId,
         });
         setEngagedToday((prev) => new Set(prev).add(adId));
         setTodayDollars((t) => t + (res.userEarnedDollars ?? 0));
@@ -121,14 +124,27 @@ export default function EarnPage() {
     [session, showToast, load]
   );
 
+  const openModalWithSession = useCallback(
+    async (type: "video" | "banner" | "social" | "click", ad: FeedAd, engagementType: EngagementType) => {
+      if (!session) return;
+      try {
+        const s = await startAdEngagementSession(session.tokenOrId, session.isToken, { adId: ad.id, engagementType });
+        setActiveModal({ type, ad, sessionId: s.sessionId });
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Could not start engagement");
+      }
+    },
+    [session, showToast]
+  );
+
   const handleSocialFollow = useCallback(
-    async (ad: FeedAd) => {
+    async (ad: FeedAd, sessionId?: string) => {
       if (!session) return;
       showToast("Confirm after 5 seconds on the platform to earn.");
-      setActiveModal(null);
       setTimeout(async () => {
         try {
-          await handleEngage(ad.id, "follow");
+          await handleEngage(ad.id, "follow", undefined, sessionId);
+          setActiveModal(null);
         } catch {
           // already shown in handleEngage
         }
@@ -269,7 +285,7 @@ export default function EarnPage() {
                           twitch: ad.twitchUrl,
                         }}
                         userEarnsFollow={ad.userEarnsFollow}
-                        onFollow={() => setActiveModal({ type: "social", ad })}
+                        onFollow={() => openModalWithSession("social", ad, "follow")}
                         disabled={alreadyEarned || dailyLimitReached}
                       />
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -280,7 +296,7 @@ export default function EarnPage() {
                         ) : ad.adType === "video" && ad.mediaUrl ? (
                           <button
                             type="button"
-                            onClick={() => setActiveModal({ type: "video", ad })}
+                            onClick={() => openModalWithSession("video", ad, "view")}
                             className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                           >
                             Watch & Earn up to ${(ad.userEarnsView60 ?? ad.userEarnsView).toFixed(3)} 🎬
@@ -288,7 +304,7 @@ export default function EarnPage() {
                         ) : ad.adType === "banner" && ad.mediaUrl ? (
                           <button
                             type="button"
-                            onClick={() => setActiveModal({ type: "banner", ad })}
+                            onClick={() => openModalWithSession("banner", ad, "banner_view")}
                             className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                           >
                             View & Earn ${ad.userEarnsView.toFixed(3)} 👁
@@ -296,7 +312,7 @@ export default function EarnPage() {
                         ) : ad.adType === "social" ? (
                           <button
                             type="button"
-                            onClick={() => setActiveModal({ type: "social", ad })}
+                            onClick={() => openModalWithSession("social", ad, "follow")}
                             className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                           >
                             Follow & Earn ${ad.userEarnsFollow.toFixed(3)} ➕
@@ -304,7 +320,7 @@ export default function EarnPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => setActiveModal({ type: "click", ad })}
+                            onClick={() => openModalWithSession("click", ad, "click")}
                             className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                           >
                             Visit & Earn ${ad.userEarnsClick.toFixed(3)} 🔗
@@ -324,7 +340,7 @@ export default function EarnPage() {
       {activeModal?.type === "video" && activeModal.ad.mediaUrl && (
         <VideoAdModal
           ad={activeModal.ad}
-          onComplete={(durationSeconds) => handleEngage(activeModal.ad.id, "view", durationSeconds)}
+          onComplete={(durationSeconds) => handleEngage(activeModal.ad.id, "view", durationSeconds, activeModal.sessionId)}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -333,7 +349,7 @@ export default function EarnPage() {
       {activeModal?.type === "banner" && activeModal.ad.mediaUrl && (
         <BannerAdModal
           ad={activeModal.ad}
-          onComplete={() => handleEngage(activeModal.ad.id, "banner_view", 30)}
+          onComplete={() => handleEngage(activeModal.ad.id, "banner_view", 30, activeModal.sessionId)}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -342,7 +358,7 @@ export default function EarnPage() {
       {activeModal?.type === "social" && (
         <SocialFollowModal
           ad={activeModal.ad}
-          onConfirm={() => handleSocialFollow(activeModal.ad)}
+          onConfirm={() => handleSocialFollow(activeModal.ad, activeModal.sessionId)}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -351,7 +367,7 @@ export default function EarnPage() {
       {activeModal?.type === "click" && (
         <ClickAdModal
           ad={activeModal.ad}
-          onConfirm={() => handleEngage(activeModal.ad.id, "click")}
+          onConfirm={() => handleEngage(activeModal.ad.id, "click", undefined, activeModal.sessionId)}
           onClose={() => setActiveModal(null)}
         />
       )}
