@@ -200,6 +200,28 @@ export async function hasUserFraudFlag(userId: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+/** Check if user is banned from ad earnings. */
+export async function isUserBannedFromAds(userId: string): Promise<boolean> {
+  const { data, error } = await supabase()
+    .from("garmon_ad_banned_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+/** Check if IP is in blocklist (prefix match). */
+export async function isIpBlocked(ip: string): Promise<boolean> {
+  if (!ip || ip === "unknown") return false;
+  const { data, error } = await supabase()
+    .from("garmon_blocked_ips")
+    .select("ip_prefix");
+  if (error) throw error;
+  const prefixes = (data ?? []) as { ip_prefix: string }[];
+  return prefixes.some((p) => p.ip_prefix && ip.startsWith(p.ip_prefix));
+}
+
 /** Get engagements count for same ad by user in last 24 hours. */
 export async function getEngagementsSameAdLast24h(userId: string, adId: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

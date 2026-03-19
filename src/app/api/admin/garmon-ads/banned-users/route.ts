@@ -2,35 +2,29 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { isAdmin } from "@/lib/admin-auth";
 
-/** GET /api/admin/garmon-ads/fraud-flags — list fraud-flagged users. */
+/** GET /api/admin/garmon-ads/banned-users — list users banned from ad earnings. */
 export async function GET(request: Request) {
-  if (!(await isAdmin(request))) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+  if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   const supabase = createAdminClient();
   if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   const { data, error } = await supabase
-    .from("garmon_ad_fraud_flags")
-    .select("id, user_id, ad_id, reason, created_at")
+    .from("garmon_ad_banned_users")
+    .select("user_id, reason, created_at")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
-  return NextResponse.json({ flags: data ?? [] });
+  return NextResponse.json({ bannedUsers: data ?? [] });
 }
 
-/** PATCH /api/admin/garmon-ads/fraud-flags — remove a fraud flag. Body: { flagId } */
-export async function PATCH(request: Request) {
+/** DELETE /api/admin/garmon-ads/banned-users?userId= — unban user. */
+export async function DELETE(request: Request) {
   if (!(await isAdmin(request))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  let body: { flagId?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
-  }
-  if (!body.flagId) return NextResponse.json({ message: "flagId required" }, { status: 400 });
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
+  if (!userId) return NextResponse.json({ message: "userId required" }, { status: 400 });
   const supabase = createAdminClient();
   if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-  const { error } = await supabase.from("garmon_ad_fraud_flags").delete().eq("id", body.flagId);
+  const { error } = await supabase.from("garmon_ad_banned_users").delete().eq("user_id", userId);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

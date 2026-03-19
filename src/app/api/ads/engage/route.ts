@@ -4,11 +4,14 @@ import { createAdminClient } from "@/lib/supabase";
 import {
   getGarmonAdById,
   hasUserFraudFlag,
+  isUserBannedFromAds,
+  isIpBlocked,
   getEngagementsSameAdLast24h,
   getEngagementsSameAdvertiserToday,
   getUserAdEarningsTodayDollars,
   updateAdStreak,
 } from "@/lib/garmon-ads-db";
+import { checkIpReputation } from "@/lib/ip-reputation";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import { grantAdReferralCommission } from "@/lib/viral-referral-db";
 import {
@@ -77,8 +80,14 @@ export async function POST(request: Request) {
     if (await hasUserFraudFlag(userId)) {
       return NextResponse.json({ message: "Account flagged" }, { status: 403 });
     }
+    if (await isUserBannedFromAds(userId)) {
+      return NextResponse.json({ message: "Account cannot earn from ads" }, { status: 403 });
+    }
 
     const ip = getClientIp(request);
+    if (await isIpBlocked(ip)) {
+      return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    }
     const deviceType = request.headers.get("user-agent") ?? null;
     const ipFraud = await validateIpFraud(supabase, userId, ip);
     if (!ipFraud.ok) {
@@ -87,6 +96,17 @@ export async function POST(request: Request) {
     const timingFraud = await validateBotTiming(supabase, userId, adId);
     if (!timingFraud.ok) {
       return NextResponse.json({ message: timingFraud.message }, { status: 403 });
+    }
+    const vpnCheck = await checkIpReputation(ip);
+    if (vpnCheck.suspicious) {
+      await supabase.from("garmon_ad_fraud_flags").insert({
+        user_id: userId,
+        reason: `Suspicious IP (proxy=${vpnCheck.proxy ?? false}, hosting=${vpnCheck.hosting ?? false})`,
+      });
+      return NextResponse.json(
+        { message: "Suspicious IP (VPN/proxy). Contact support if this is a mistake." },
+        { status: 403 }
+      );
     }
 
     const sameAd24h = await getEngagementsSameAdLast24h(userId, adId);
@@ -401,7 +421,14 @@ async function validateAndConsumeSession(
     return { ok: false, message: "Session expired, start again", elapsedSeconds: 0 };
   }
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000));
-  const minSeconds = engagementType === "follow" ? 5 : engagementType === "banner_view" ? 30 : 0;
+  const minSeconds =
+    engagementType === "follow"
+      ? 5
+      : engagementType === "banner_view"
+        ? 30
+        : engagementType === "click"
+          ? 2
+          : 0;
   if (elapsedSeconds < minSeconds) {
     return { ok: false, message: "Engagement duration too short", elapsedSeconds };
   }

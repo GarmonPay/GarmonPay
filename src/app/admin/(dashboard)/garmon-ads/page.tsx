@@ -37,6 +37,8 @@ type AdvertiserRow = {
 
 type TopEarner = { user_id: string; total: number };
 type FraudFlag = { id: string; user_id: string; ad_id: string | null; reason: string; created_at: string };
+type BlockedIp = { id: string; ip_prefix: string; reason: string | null; created_at: string };
+type BannedUser = { user_id: string; reason: string | null; created_at: string };
 
 export default function AdminGarmonAdsPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -45,7 +47,12 @@ export default function AdminGarmonAdsPage() {
   const [advertisers, setAdvertisers] = useState<AdvertiserRow[]>([]);
   const [topEarners, setTopEarners] = useState<TopEarner[]>([]);
   const [fraudFlags, setFraudFlags] = useState<FraudFlag[]>([]);
+  const [blockedIps, setBlockedIps] = useState<BlockedIp[]>([]);
+  const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [blockedIpInput, setBlockedIpInput] = useState("");
+  const [banReason, setBanReason] = useState("");
+  const [engagementsForUser, setEngagementsForUser] = useState<Array<{ id: string; ad_id: string; engagement_type: string; duration_seconds: number; user_earned: number; created_at: string; ip_address: string | null }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -60,13 +67,17 @@ export default function AdminGarmonAdsPage() {
       fetch(`${API_BASE}/admin/garmon-ads/advertisers`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
       fetch(`${API_BASE}/admin/garmon-ads/top-earners`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
       fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/banned-users`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
     ])
-      .then(([pendingRes, allRes, advRes, earnRes, fraudRes]) => {
+      .then(([pendingRes, allRes, advRes, earnRes, fraudRes, blockedRes, bannedRes]) => {
         setPending(pendingRes.ads ?? []);
         setAllAds(allRes.ads ?? []);
         setAdvertisers(advRes.advertisers ?? []);
         setTopEarners(earnRes.topEarners ?? []);
         setFraudFlags(fraudRes.flags ?? []);
+        setBlockedIps(blockedRes.blockedIps ?? []);
+        setBannedUsers(bannedRes.bannedUsers ?? []);
         setError(null);
       })
       .catch(() => setError("Failed to load"))
@@ -113,6 +124,96 @@ export default function AdminGarmonAdsPage() {
       load();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Reject failed");
+    }
+  }
+
+  async function removeFraudFlag(flagId: string) {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, {
+        method: "PATCH",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ flagId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Remove flag failed");
+    }
+  }
+
+  async function banUser(userId: string) {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags/ban`, {
+        method: "POST",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, reason: banReason || "Banned from ad earnings" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      setBanReason("");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Ban failed");
+    }
+  }
+
+  async function viewEngagements(userId: string) {
+    if (!session) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/user-engagements?userId=${encodeURIComponent(userId)}`, { headers: adminApiHeaders(session) });
+      const data = await res.json().catch(() => ({}));
+      setEngagementsForUser(res.ok ? (data.engagements ?? []) : []);
+    } catch {
+      setEngagementsForUser([]);
+    }
+  }
+
+  async function addBlockedIp() {
+    if (!session || !blockedIpInput.trim()) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, {
+        method: "POST",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ ipPrefix: blockedIpInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      setBlockedIpInput("");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Add blocked IP failed");
+    }
+  }
+
+  async function removeBlockedIp(id: string) {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: adminApiHeaders(session) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
+  async function unbanUser(userId: string) {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/banned-users?userId=${encodeURIComponent(userId)}`, { method: "DELETE", headers: adminApiHeaders(session) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data.message as string) || "Failed");
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Unban failed");
     }
   }
 
@@ -342,34 +443,162 @@ export default function AdminGarmonAdsPage() {
       </div>
       )}
 
-      {/* Fraud flags */}
+      {/* Fraud flags + Blocked IPs + Banned users */}
       {activeTab === "fraud" && (
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
-        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Fraud flags</h2>
-        {fraudFlags.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No fraud flags.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-3 text-[#9ca3af]">User ID</th>
-                  <th className="p-3 text-[#9ca3af]">Reason</th>
-                  <th className="p-3 text-[#9ca3af]">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fraudFlags.map((f) => (
-                  <tr key={f.id} className="border-b border-white/5">
-                    <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
-                    <td className="p-3 text-[#9ca3af]">{f.reason}</td>
-                    <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
+      <div className="space-y-6">
+        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+          <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Fraud flags</h2>
+          {fraudFlags.length === 0 ? (
+            <div className="p-6 text-[#9ca3af]">No fraud flags.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af]">User ID</th>
+                    <th className="p-3 text-[#9ca3af]">Reason</th>
+                    <th className="p-3 text-[#9ca3af]">Date</th>
+                    <th className="p-3 text-[#9ca3af]">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {fraudFlags.map((f) => (
+                    <tr key={f.id} className="border-b border-white/5">
+                      <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
+                      <td className="p-3 text-[#9ca3af]">{f.reason}</td>
+                      <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
+                      <td className="p-3 flex flex-wrap gap-1">
+                        <button type="button" onClick={() => removeFraudFlag(f.id)} className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-400 hover:bg-amber-500/30">Remove flag</button>
+                        <button type="button" onClick={() => banUser(f.user_id)} className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30">Ban from ads</button>
+                        <button type="button" onClick={() => viewEngagements(f.user_id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">View engagements</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {engagementsForUser !== null && (
+          <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+            <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">User engagements (last 50)</h2>
+            <div className="p-2 flex justify-end">
+              <button type="button" onClick={() => setEngagementsForUser(null)} className="text-xs text-[#9ca3af] hover:text-white">Close</button>
+            </div>
+            {engagementsForUser.length === 0 ? (
+              <div className="p-6 text-[#9ca3af]">No engagements.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="p-3 text-[#9ca3af]">Type</th>
+                      <th className="p-3 text-[#9ca3af]">Duration</th>
+                      <th className="p-3 text-[#9ca3af]">Earned</th>
+                      <th className="p-3 text-[#9ca3af]">IP</th>
+                      <th className="p-3 text-[#9ca3af]">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engagementsForUser.map((e) => (
+                      <tr key={e.id} className="border-b border-white/5">
+                        <td className="p-3 text-white">{e.engagement_type}</td>
+                        <td className="p-3 text-[#9ca3af]">{e.duration_seconds}s</td>
+                        <td className="p-3 text-green-400">${Number(e.user_earned).toFixed(4)}</td>
+                        <td className="p-3 font-mono text-xs text-[#9ca3af]">{e.ip_address ?? "—"}</td>
+                        <td className="p-3 text-[#9ca3af]">{new Date(e.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
+
+        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+          <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Blocked IPs</h2>
+          <div className="p-4 flex gap-2 flex-wrap">
+            <input
+              type="text"
+              value={blockedIpInput}
+              onChange={(e) => setBlockedIpInput(e.target.value)}
+              placeholder="IP or prefix (e.g. 192.168. or full IP)"
+              className="px-3 py-2 rounded bg-black/30 border border-white/10 text-white text-sm min-w-[200px]"
+            />
+            <button type="button" onClick={addBlockedIp} className="px-3 py-2 rounded bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30">Add block</button>
+          </div>
+          {blockedIps.length === 0 ? (
+            <div className="p-6 text-[#9ca3af]">No blocked IPs.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af]">IP / Prefix</th>
+                    <th className="p-3 text-[#9ca3af]">Reason</th>
+                    <th className="p-3 text-[#9ca3af]">Added</th>
+                    <th className="p-3 text-[#9ca3af]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blockedIps.map((b) => (
+                    <tr key={b.id} className="border-b border-white/5">
+                      <td className="p-3 font-mono text-white">{b.ip_prefix}</td>
+                      <td className="p-3 text-[#9ca3af]">{b.reason ?? "—"}</td>
+                      <td className="p-3 text-[#9ca3af]">{new Date(b.created_at).toLocaleString()}</td>
+                      <td className="p-3">
+                        <button type="button" onClick={() => removeBlockedIp(b.id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+          <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Banned users (ad earnings)</h2>
+          <div className="p-4 border-b border-white/5">
+            <input
+              type="text"
+              value={banReason}
+              onChange={(e) => setBanReason(e.target.value)}
+              placeholder="Reason for new ban (used when you click Ban from ads)"
+              className="w-full max-w-md px-3 py-2 rounded bg-black/30 border border-white/10 text-white text-sm"
+            />
+          </div>
+          {bannedUsers.length === 0 ? (
+            <div className="p-6 text-[#9ca3af]">No banned users.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af]">User ID</th>
+                    <th className="p-3 text-[#9ca3af]">Reason</th>
+                    <th className="p-3 text-[#9ca3af]">Banned</th>
+                    <th className="p-3 text-[#9ca3af]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bannedUsers.map((b) => (
+                    <tr key={b.user_id} className="border-b border-white/5">
+                      <td className="p-3 font-mono text-xs text-white">{b.user_id}</td>
+                      <td className="p-3 text-[#9ca3af]">{b.reason ?? "—"}</td>
+                      <td className="p-3 text-[#9ca3af]">{new Date(b.created_at).toLocaleString()}</td>
+                      <td className="p-3">
+                        <button type="button" onClick={() => unbanUser(b.user_id)} className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30">Unban</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
       )}
     </div>
