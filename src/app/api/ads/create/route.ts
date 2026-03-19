@@ -1,91 +1,116 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
-import { createClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase";
+import {
+  getAdvertiserByUserId,
+  createGarmonAd,
+  checkAdContentModeration,
+} from "@/lib/garmon-ads-db";
 
-const BUCKET = "ads";
+const MIN_BUDGET = 5;
+const TITLE_MAX = 50;
+const DESC_MAX = 200;
 
-/** POST /api/ads/create — advertiser upload: create ad with title, description, budget, optional video/image. Auth required. */
+/** POST /api/ads/create — advertiser creates a new ad (status pending for review). */
 export async function POST(request: Request) {
   const userId = await getAuthUserId(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-  }
-  const supabase = createClient(url, serviceKey);
-
-  let title = "";
-  let description = "";
-  let budget = 0;
-  let videoUrl: string | null = null;
-  let imageUrl: string | null = null;
-
-  const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.includes("multipart/form-data")) {
-    const formData = await request.formData();
-    title = (formData.get("title") as string)?.trim() ?? "";
-    description = (formData.get("description") as string)?.trim() ?? "";
-    const budgetNum = formData.get("budget");
-    budget = typeof budgetNum === "string" ? parseFloat(budgetNum) : Number(budgetNum);
-    const videoFile = formData.get("video") as File | null;
-    const imageFile = formData.get("image") as File | null;
-    if (videoFile && videoFile instanceof File && videoFile.size > 0) {
-      const path = `${userId}/${Date.now()}-${videoFile.name.replace(/\s/g, "_")}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, videoFile, { contentType: videoFile.type, upsert: false });
-      if (!error) {
-        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        videoUrl = data.publicUrl;
-      }
-    }
-    if (imageFile && imageFile instanceof File && imageFile.size > 0) {
-      const path = `${userId}/${Date.now()}-${imageFile.name.replace(/\s/g, "_")}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, imageFile, { contentType: imageFile.type, upsert: false });
-      if (!error) {
-        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        imageUrl = data.publicUrl;
-      }
-    }
-  } else {
-    const body = await request.json().catch(() => ({}));
-    title = (body.title ?? "").trim();
-    description = (body.description ?? "").trim();
-    budget = Number(body.budget) || 0;
-    videoUrl = typeof body.video_url === "string" ? body.video_url.trim() || null : null;
-    imageUrl = typeof body.image_url === "string" ? body.image_url.trim() || null : null;
-  }
-
-  if (!title) {
-    return NextResponse.json({ message: "Title is required" }, { status: 400 });
-  }
-
-  const mediaUrl = videoUrl ?? imageUrl;
-  const insertRow: Record<string, unknown> = {
-    title,
-    description: description || "",
-    type: videoUrl ? "video" : imageUrl ? "image" : "text",
-    media_url: mediaUrl,
-    status: "inactive",
-    advertiser_price: 0,
-    user_reward: 0,
-    profit_amount: 0,
-    duration_seconds: 5,
+  let body: {
+    title: string;
+    description?: string;
+    ad_type: "video" | "banner" | "social" | "product";
+    media_url?: string;
+    thumbnail_url?: string;
+    destination_url?: string;
+    instagram_url?: string;
+    tiktok_url?: string;
+    youtube_url?: string;
+    twitter_url?: string;
+    facebook_url?: string;
+    twitch_url?: string;
+    total_budget?: number;
   };
-  insertRow.user_id = userId;
-  insertRow.budget = Math.max(0, budget);
-  const { data: row, error } = await supabase
-    .from("ads")
-    .insert(insertRow)
-    .select("id, title, description, media_url, budget, status, created_at")
-    .single();
-
-  if (error) {
-    console.error("Ads create error:", error);
-    return NextResponse.json({ message: error.message || "Failed to create ad" }, { status: 500 });
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
   }
-  return NextResponse.json({ ad: row, message: "Ad created (pending approval)" });
+
+  const {
+    title,
+    description,
+    ad_type,
+    media_url,
+    thumbnail_url,
+    destination_url,
+    instagram_url,
+    tiktok_url,
+    youtube_url,
+    twitter_url,
+    facebook_url,
+    twitch_url,
+    total_budget = 0,
+  } = body;
+
+  if (!title || typeof title !== "string" || !title.trim()) {
+    return NextResponse.json({ message: "title is required" }, { status: 400 });
+  }
+  if (title.length > TITLE_MAX) {
+    return NextResponse.json({ message: `title max ${TITLE_MAX} characters` }, { status: 400 });
+  }
+  const desc = (description ?? "").trim();
+  if (desc.length > DESC_MAX) {
+    return NextResponse.json({ message: `description max ${DESC_MAX} characters` }, { status: 400 });
+  }
+  const validTypes = ["video", "banner", "social", "product"];
+  if (!ad_type || !validTypes.includes(ad_type)) {
+    return NextResponse.json({ message: "ad_type must be video, banner, social, or product" }, { status: 400 });
+  }
+  if (total_budget < MIN_BUDGET) {
+    return NextResponse.json({ message: `Minimum budget is $${MIN_BUDGET}` }, { status: 400 });
+  }
+
+  const moderation = await checkAdContentModeration(title, desc);
+  if (moderation.blocked) {
+    return NextResponse.json(
+      { message: moderation.reason ?? "Content not allowed" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const advertiser = await getAdvertiserByUserId(userId);
+    if (!advertiser) {
+      return NextResponse.json(
+        { message: "Create an advertiser profile first" },
+        { status: 400 }
+      );
+    }
+
+    const ad = await createGarmonAd({
+      advertiser_id: advertiser.id,
+      user_id: userId,
+      title: title.trim(),
+      description: desc || null,
+      ad_type,
+      media_url: media_url?.trim() || null,
+      thumbnail_url: thumbnail_url?.trim() || null,
+      destination_url: destination_url?.trim() || null,
+      instagram_url: instagram_url?.trim() || null,
+      tiktok_url: tiktok_url?.trim() || null,
+      youtube_url: youtube_url?.trim() || null,
+      twitter_url: twitter_url?.trim() || null,
+      facebook_url: facebook_url?.trim() || null,
+      twitch_url: twitch_url?.trim() || null,
+      total_budget: Number(total_budget),
+      remaining_budget: 0,
+      status: "pending",
+    });
+    return NextResponse.json({ adId: ad.id, status: ad.status });
+  } catch (e) {
+    console.error("Ad create error:", e);
+    return NextResponse.json({ message: "Failed to create ad" }, { status: 500 });
+  }
 }

@@ -13,7 +13,8 @@ export type WalletLedgerType =
   | "referral_bonus"
   | "subscription_payment"
   | "commission_payout"
-  | "admin_adjustment";
+  | "admin_adjustment"
+  | "ad_earning";
 
 function supabase() {
   const c = createAdminClient();

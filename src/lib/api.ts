@@ -90,6 +90,122 @@ export async function completeAdSession(accessTokenOrUserId: string, isToken: bo
   );
 }
 
+/** GarmonPay ad feed (earn page). */
+export async function getAdsFeed(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ ads: Array<{
+    id: string;
+    advertiserName: string;
+    advertiserLogo: string | null;
+    title: string;
+    description: string | null;
+    adType: string;
+    mediaUrl: string | null;
+    thumbnailUrl: string | null;
+    destinationUrl: string | null;
+    instagramUrl: string | null;
+    tiktokUrl: string | null;
+    youtubeUrl: string | null;
+    twitterUrl: string | null;
+    facebookUrl: string | null;
+    twitchUrl: string | null;
+    userEarnsView: number;
+    userEarnsClick: number;
+    userEarnsFollow: number;
+    userEarnsShare: number;
+  }> }>("/ads/feed", { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+/** GarmonPay ad engagement (record view/click/follow/share and credit user). */
+export async function engageAd(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: { adId: string; engagementType: "view" | "click" | "follow" | "share" | "banner_view"; durationSeconds?: number }
+) {
+  return api<{ success: boolean; userEarnedDollars: number; userEarnedCents: number }>(
+    "/ads/engage",
+    {
+      method: "POST",
+      headers: authHeaders(accessTokenOrUserId, isToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+/** GarmonPay ad earnings summary. */
+export async function getAdEarnings(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{
+    todayDollars: number;
+    weekDollars: number;
+    monthDollars: number;
+    totalDollars: number;
+    byType: Record<string, number>;
+  }>("/ads/earnings", { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+/** Advertiser: my ads. */
+export async function getMyAds(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ ads: Array<{
+    id: string;
+    title: string;
+    status: string;
+    isActive: boolean;
+    totalBudget: number;
+    remainingBudget: number;
+    spent: number;
+    views: number;
+    clicks: number;
+    follows: number;
+    shares: number;
+  }> }>("/ads/my-ads", { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+/** Advertiser: get my profile. */
+export async function getAdvertiserMe(accessTokenOrUserId: string, isToken: boolean) {
+  return api<{ advertiserId: string | null; advertiser: Record<string, unknown> | null }>(
+    "/ads/advertiser/me",
+    { headers: authHeaders(accessTokenOrUserId, isToken) }
+  );
+}
+
+/** Advertiser: create profile. */
+export async function createAdvertiserProfile(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: { business_name: string; category?: string; website?: string; description?: string; logo_url?: string }
+) {
+  return api<{ advertiserId: string }>("/ads/advertiser/create", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify(body),
+  });
+}
+
+/** Advertiser: create ad. */
+export async function createAd(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: Record<string, unknown>
+) {
+  return api<{ adId: string; status: string }>("/ads/create", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify(body),
+  });
+}
+
+/** Advertiser: add social link. */
+export async function addAdSocialLink(
+  accessTokenOrUserId: string,
+  isToken: boolean,
+  body: { platform: string; profile_url: string; handle?: string }
+) {
+  return api<{ id: string }>("/ads/social/add", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify(body),
+  });
+}
+
 export async function getWithdrawals(accessTokenOrUserId: string, isToken: boolean) {
   return api<{
     withdrawals: Array<{ id: string; amount: number; status: string; method: string; wallet_address: string; created_at: string }>;

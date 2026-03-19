@@ -10,6 +10,7 @@ const links = [
   { href: "/admin/rewards", label: "Rewards" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/ads", label: "Ads" },
+  { href: "/admin/garmon-ads", label: "Garmon Ads" },
   { href: "/admin/banners", label: "Banners" },
   { href: "/admin/earnings", label: "Earnings" },
   { href: "/admin/profit", label: "Profit" },
