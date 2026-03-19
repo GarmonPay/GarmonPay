@@ -1,5 +1,5 @@
 /**
- * Arena fighter visual and gear types. Used by FighterLayers and pages.
+ * Arena fighter visual and gear types. Used by pages.
  */
 
 const SKIN_TONES_MAP = {

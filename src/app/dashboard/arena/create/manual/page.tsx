@@ -18,8 +18,8 @@ import {
   type FighterData,
 } from "@/lib/arena-fighter-types";
 
-const ProBoxer = dynamic(
-  () => import("@/components/arena/ProBoxer"),
+const BoxerDisplay = dynamic(
+  () => import("@/components/arena/BoxerDisplay"),
   { ssr: false }
 );
 
@@ -231,7 +231,10 @@ export default function CreateFighterManualPage() {
           <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4 w-full min-w-0">
             <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
             <div className="w-full max-w-md">
-              <ProBoxer fighterColor={selectedColor || "#f0a500"} size="medium" />
+              <BoxerDisplay
+                fighter={{ fighter_color: selectedColor || "#f0a500" }}
+                size="medium"
+              />
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm text-[#9ca3af]">
               Trunks color

@@ -1,8 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { forwardRef, useRef, useImperativeHandle } from "react";
-import { BoxingRing3D, FighterModelInRing } from "@/components/arena/BoxingRing3D";
 import type { RefereeState } from "@/components/arena/Referee3D";
+
+const BoxerDisplay = dynamic(
+  () => import("@/components/arena/BoxerDisplay"),
+  { ssr: false }
+);
 
 type ArenaFight3DViewProps = {
   fighterAModelUrl?: string | null;
@@ -17,10 +22,6 @@ type ArenaFight3DViewProps = {
   koIntensity?: number;
 };
 
-function animTo3D(a: string): string {
-  return a === "ko" ? "ko" : a === "big_hit" ? "hit" : "idle";
-}
-
 const ArenaFight3DViewClient = forwardRef<
   { shake: () => void },
   ArenaFight3DViewProps
@@ -28,46 +29,29 @@ const ArenaFight3DViewClient = forwardRef<
   {
     fighterAModelUrl,
     fighterBModelUrl,
-    fighterAAnim = "idle",
-    fighterBAnim = "idle",
-    refereeState = "watching",
-    winnerSide = null,
-    knockdownCount = 0,
-    modelGenerating = false,
-    mode = "fight",
-    koIntensity = 0,
   },
   ref
 ) {
-  const ring3dRef = useRef<{ shake: () => void } | null>(null);
-  useImperativeHandle(ref, () => ({
-    shake: () => ring3dRef.current?.shake?.(),
-  }));
+  useImperativeHandle(ref, () => ({ shake: () => {} }));
 
   return (
-    <BoxingRing3D
-      ref={ring3dRef}
-      mode={mode as "fight" | "setup" | "victory"}
-      koIntensity={koIntensity}
-      refereeState={refereeState}
-      winnerSide={winnerSide}
-      knockdownCount={knockdownCount}
-      modelGenerating={modelGenerating}
-      fighterASlot={
-        <FighterModelInRing
-          modelUrl={fighterAModelUrl}
-          color="#f0a500"
-          animation={animTo3D(fighterAAnim)}
+    <div style={{ display: "flex", gap: 24, justifyContent: "center", alignItems: "center", minHeight: 320, padding: 24, background: "radial-gradient(ellipse at 50% 0%, #1a0808, #000)" }}>
+      <div style={{ flex: 1, maxWidth: 280 }}>
+        <BoxerDisplay
+          fighter={{ model_3d_url: fighterAModelUrl ?? undefined, fighter_color: "#f0a500" }}
+          size="medium"
+          facingRight={false}
         />
-      }
-      fighterBSlot={
-        <FighterModelInRing
-          modelUrl={fighterBModelUrl}
-          color="#c1272d"
-          animation={animTo3D(fighterBAnim)}
+      </div>
+      <span style={{ color: "#f0a500", fontWeight: 800, fontSize: 18 }}>VS</span>
+      <div style={{ flex: 1, maxWidth: 280 }}>
+        <BoxerDisplay
+          fighter={{ model_3d_url: fighterBModelUrl ?? undefined, fighter_color: "#c1272d" }}
+          size="medium"
+          facingRight
         />
-      }
-    />
+      </div>
+    </div>
   );
 });
 

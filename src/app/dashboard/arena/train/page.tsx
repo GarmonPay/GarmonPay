@@ -5,24 +5,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TRAINING_SESSIONS, isSessionUnlocked, type TrainingSessionKey } from '@/lib/arena-training'
 
-const ProBoxer = dynamic(
-  () => import('@/components/arena/ProBoxer'),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{
-        width: '100%',
-        height: 380,
-        background: '#000',
-        borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    )
-  }
+const BoxerDisplay = dynamic(
+  () => import('@/components/arena/BoxerDisplay'),
+  { ssr: false }
 )
 
 const STAT_CAP = 99
@@ -105,7 +90,10 @@ export default function ArenaTrainPage() {
       {message && <div style={{ padding: 12, marginBottom: 16, background: 'rgba(34,197,94,0.2)', borderRadius: 8, color: '#86efac', fontSize: 14 }}>{message}</div>}
 
       <div style={{ marginBottom: 20, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d', minHeight: 280 }}>
-        <ProBoxer fighterColor={fighter?.fighter_color || '#f0a500'} size="medium" />
+        <BoxerDisplay
+          fighter={fighter}
+          size="medium"
+        />
       </div>
 
       <p style={{ color: '#666', fontSize: 13, marginBottom: 20 }}>Stats cap at {STAT_CAP}. Real wallet deduction.</p>

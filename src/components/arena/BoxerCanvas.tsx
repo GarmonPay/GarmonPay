@@ -1,21 +1,21 @@
-"use client";
-
-import { Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
-import {
+'use client'
+import { Suspense } from 'react'
+import { Canvas } from '@react-three/fiber'
+import { 
   useGLTF,
   ContactShadows,
   Environment,
-  PresentationControls,
-} from "@react-three/drei";
+  PresentationControls
+} from '@react-three/drei'
 
-function BoxerModel({
-  facingRight = false,
-}: {
-  facingRight?: boolean;
+function Model({ 
+  modelUrl,
+  facingRight 
+}: { 
+  modelUrl: string
+  facingRight: boolean 
 }) {
-  const { scene } = useGLTF("/models/default-boxer.glb");
-  if (!scene || typeof scene.clone !== "function") return null;
+  const { scene } = useGLTF(modelUrl)
   return (
     <primitive
       object={scene.clone()}
@@ -23,43 +23,33 @@ function BoxerModel({
       position={[0, -1.2, 0]}
       rotation={[0, facingRight ? Math.PI : 0, 0]}
     />
-  );
-}
-
-function LoadingBox({ color }: { color: string }) {
-  return (
-    <mesh>
-      <boxGeometry args={[0.8, 2, 0.4]} />
-      <meshStandardMaterial color={color} />
-    </mesh>
-  );
+  )
 }
 
 export default function BoxerCanvas({
+  modelUrl = '/models/default-boxer.glb',
   facingRight = false,
-  fighterColor = "#f0a500",
-  size = "medium",
+  fighterColor = '#f0a500',
+  size = 'medium'
 }: {
-  facingRight?: boolean;
-  fighterColor?: string;
-  size?: "small" | "medium" | "large";
+  modelUrl?: string
+  facingRight?: boolean
+  fighterColor?: string
+  size?: 'small' | 'medium' | 'large'
 }) {
-  const heights = { small: 220, medium: 380, large: 560 };
+  const heights = { small: 220, medium: 380, large: 560 }
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: heights[size],
-        background: "radial-gradient(ellipse at 50% 0%, #1a0808, #000000)",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}
-    >
+    <div style={{
+      width: '100%',
+      height: heights[size],
+      background: 'radial-gradient(ellipse at 50% 0%, #1a0808, #000000)',
+      borderRadius: 8,
+      overflow: 'hidden'
+    }}>
       <Canvas
         shadows
         camera={{ position: [0, 0.5, 4], fov: 42 }}
-        gl={{ antialias: true }}
       >
         <ambientLight intensity={0.04} />
         <spotLight
@@ -83,16 +73,17 @@ export default function BoxerCanvas({
           color={fighterColor}
           distance={5}
         />
-        <Suspense
-          fallback={<LoadingBox color={fighterColor} />}
-        >
+        <Suspense fallback={null}>
           <PresentationControls
             global
             polar={[-0.1, 0.1]}
             azimuth={[-0.4, 0.4]}
             snap
           >
-            <BoxerModel facingRight={facingRight} />
+            <Model 
+              modelUrl={modelUrl}
+              facingRight={facingRight} 
+            />
           </PresentationControls>
           <ContactShadows
             position={[0, -1.4, 0]}
@@ -105,7 +96,7 @@ export default function BoxerCanvas({
         </Suspense>
       </Canvas>
     </div>
-  );
+  )
 }
 
-useGLTF.preload("/models/default-boxer.glb");
+useGLTF.preload('/models/default-boxer.glb')

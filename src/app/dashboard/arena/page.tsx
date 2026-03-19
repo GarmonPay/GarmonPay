@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
-const ProBoxer = dynamic(
-  () => import('@/components/arena/ProBoxer'),
+const BoxerDisplay = dynamic(
+  () => import('@/components/arena/BoxerDisplay'),
   { ssr: false }
 )
 
@@ -119,8 +119,8 @@ export default function ArenaPage() {
             border: '1px solid #30363d'
           }}>
             <div style={{ marginBottom: 16, minHeight: 280, borderRadius: 8, overflow: 'hidden' }}>
-              <ProBoxer
-                fighterColor={fighter?.fighter_color || '#f0a500'}
+              <BoxerDisplay
+                fighter={fighter}
                 size="medium"
               />
             </div>

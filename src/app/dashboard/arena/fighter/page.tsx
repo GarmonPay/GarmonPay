@@ -4,24 +4,9 @@ import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-const ProBoxer = dynamic(
-  () => import('@/components/arena/ProBoxer'),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{
-        width: '100%',
-        height: 380,
-        background: '#000',
-        borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    )
-  }
+const BoxerDisplay = dynamic(
+  () => import('@/components/arena/BoxerDisplay'),
+  { ssr: false }
 )
 
 const STAT_KEYS = ['strength', 'speed', 'stamina', 'defense', 'chin', 'special'] as const
@@ -87,7 +72,10 @@ export default function ArenaFighterPage() {
 
       <div style={{ background: '#161b22', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #30363d' }}>
         <div style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden', minHeight: 280 }}>
-          <ProBoxer fighterColor={fighter?.fighter_color || '#f0a500'} size="medium" />
+          <BoxerDisplay
+            fighter={fighter}
+            size="medium"
+          />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           <div>

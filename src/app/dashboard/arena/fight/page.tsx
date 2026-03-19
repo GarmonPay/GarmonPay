@@ -4,29 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
-const BoxingRing3D = dynamic(
-  () => import('@/components/arena/BoxingRing3D').then((m) => m.BoxingRing3D),
+const BoxerDisplay = dynamic(
+  () => import('@/components/arena/BoxerDisplay'),
   { ssr: false }
-)
-
-const ProBoxer = dynamic(
-  () => import('@/components/arena/ProBoxer'),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{
-        width: '100%',
-        height: 380,
-        background: '#000',
-        borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    )
-  }
 )
 
 export default function ArenaFightPage() {
@@ -91,13 +71,11 @@ export default function ArenaFightPage() {
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Find Fight</h1>
       </div>
 
-      {myFighter && (
-        <div style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d', minHeight: 220 }}>
-          <ProBoxer fighterColor={myFighter?.fighter_color || '#f0a500'} size="small" />
-        </div>
-      )}
-      <div style={{ width: '100%', height: 320, minHeight: 320, marginBottom: 24, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d' }}>
-        <BoxingRing3D mode="setup" />
+      <div style={{ marginBottom: 24, borderRadius: 12, overflow: 'hidden', border: '1px solid #30363d', minHeight: 280 }}>
+        <BoxerDisplay
+          fighter={myFighter}
+          size="medium"
+        />
       </div>
 
       {error && <div style={{ padding: 12, marginBottom: 16, background: 'rgba(239,68,68,0.2)', borderRadius: 8, color: '#fca5a5', fontSize: 14 }}>{error}</div>}
