@@ -1,6 +1,6 @@
 -- Arena: 6 system users and 6 CPU fighters for tap-to-punch (one fighter per user).
 -- public.users.id must exist in auth.users (users_auth_id_fkey).
--- Use auth upsert (ON CONFLICT) so existing auth rows are updated instead of failing.
+-- Insert auth.users one row at a time so handle_new_user fires once per new row (multi-row INSERT caused duplicate public.users_pkey).
 
 do $arena_cpu$
 declare
@@ -16,43 +16,34 @@ declare
   pw text := extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf'));
 begin
   perform set_config('row_security', 'off', true);
-  -- Skip triggers on auth.users (handle_new_user) — multi-row auth insert would duplicate public.users_pkey.
-  perform set_config('session_replication_role', 'replica', true);
 
   delete from public.arena_fighters where user_id = any (cpu_ids);
   delete from public.wallets where user_id = any (cpu_ids);
   delete from public.users where id = any (cpu_ids);
 
-  insert into auth.users (
-    id,
-    instance_id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at
-  )
-  values
-    ('a0000000-0000-0000-0000-000000000001', inst, 'authenticated', 'authenticated', 'arena-cpu-1@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-    ('a0000000-0000-0000-0000-000000000002', inst, 'authenticated', 'authenticated', 'arena-cpu-2@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-    ('a0000000-0000-0000-0000-000000000003', inst, 'authenticated', 'authenticated', 'arena-cpu-3@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-    ('a0000000-0000-0000-0000-000000000004', inst, 'authenticated', 'authenticated', 'arena-cpu-4@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-    ('a0000000-0000-0000-0000-000000000005', inst, 'authenticated', 'authenticated', 'arena-cpu-5@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-    ('a0000000-0000-0000-0000-000000000006', inst, 'authenticated', 'authenticated', 'arena-cpu-6@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
-  on conflict (id) do update set
-    instance_id = excluded.instance_id,
-    email = excluded.email,
-    encrypted_password = excluded.encrypted_password,
-    email_confirmed_at = excluded.email_confirmed_at,
-    raw_app_meta_data = excluded.raw_app_meta_data,
-    raw_user_meta_data = excluded.raw_user_meta_data,
-    updated_at = excluded.updated_at;
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000001', inst, 'authenticated', 'authenticated', 'arena-cpu-1@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
 
-  perform set_config('session_replication_role', 'origin', true);
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000002', inst, 'authenticated', 'authenticated', 'arena-cpu-2@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
+
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000003', inst, 'authenticated', 'authenticated', 'arena-cpu-3@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
+
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000004', inst, 'authenticated', 'authenticated', 'arena-cpu-4@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
+
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000005', inst, 'authenticated', 'authenticated', 'arena-cpu-5@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
+
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values ('a0000000-0000-0000-0000-000000000006', inst, 'authenticated', 'authenticated', 'arena-cpu-6@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
+  on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
 end
 $arena_cpu$;
 
