@@ -21,6 +21,9 @@ begin
   delete from public.wallets where user_id = any (cpu_ids);
   delete from public.users where id = any (cpu_ids);
 
+  -- Avoid handle_new_user inserting public.users during this batch (duplicate users_pkey on public).
+  alter table auth.users disable trigger all;
+
   insert into auth.users (
     id,
     instance_id,
@@ -49,6 +52,8 @@ begin
     raw_app_meta_data = excluded.raw_app_meta_data,
     raw_user_meta_data = excluded.raw_user_meta_data,
     updated_at = excluded.updated_at;
+
+  alter table auth.users enable trigger all;
 end
 $arena_cpu$;
 
