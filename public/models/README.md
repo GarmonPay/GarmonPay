@@ -2,6 +2,8 @@
 
 These **`.glb` files are tracked in Git** so `garmonpay.com` can serve them as static assets (e.g. `https://garmonpay.com/models/default-boxer.glb`).
 
+**Meshy pipeline:** drop additional exports under `public/assets/meshy/` (see `public/assets/meshy/README.md`). Optional ring: set `NEXT_PUBLIC_MESHY_RING_GLB=/assets/meshy/rings/your-ring.glb`. Draco-compressed fighters: set `NEXT_PUBLIC_MESHY_DRACO=1`.
+
 | File | Purpose |
 |------|---------|
 | `default-boxer.glb` | **ProBoxer** — photorealistic boxer (`/models/default-boxer.glb`) |

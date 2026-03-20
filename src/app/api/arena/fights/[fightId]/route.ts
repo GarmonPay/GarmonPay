@@ -22,28 +22,54 @@ export async function GET(
   }
   const { data: fight, error: fightErr } = await supabase
     .from("arena_fights")
-    .select("id, fighter_a_id, fighter_b_id, winner_id, betting_open, fight_type, created_at")
+    .select(
+      "id, fighter_a_id, fighter_b_id, cpu_fighter_id, winner_id, winner_cpu_fighter_id, betting_open, fight_type, created_at"
+    )
     .eq("id", fightId)
     .single();
   if (fightErr || !fight) {
     return NextResponse.json({ message: "Fight not found" }, { status: 404 });
   }
-  const { data: fighters } = await supabase
+
+  const { data: fa } = await supabase
     .from("arena_fighters")
     .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, model_3d_url")
-    .in("id", [fight.fighter_a_id, fight.fighter_b_id]);
-  const fa = fighters?.find((f) => f.id === fight.fighter_a_id);
-  const fb = fighters?.find((f) => f.id === fight.fighter_b_id);
+    .eq("id", fight.fighter_a_id)
+    .maybeSingle();
+
+  let fb = null;
+  if (fight.fighter_b_id) {
+    const { data: arenaB } = await supabase
+      .from("arena_fighters")
+      .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, model_3d_url")
+      .eq("id", fight.fighter_b_id)
+      .maybeSingle();
+    fb = arenaB ?? null;
+  } else if ((fight as { cpu_fighter_id?: string }).cpu_fighter_id) {
+    const { data: cpu } = await supabase
+      .from("cpu_fighters")
+      .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, difficulty")
+      .eq("id", (fight as { cpu_fighter_id: string }).cpu_fighter_id)
+      .maybeSingle();
+    if (cpu) {
+      fb = {
+        ...cpu,
+        model_3d_url: null as string | null,
+      };
+    }
+  }
+
   return NextResponse.json({
     fight: {
       id: fight.id,
       fightType: fight.fight_type,
       bettingOpen: (fight as { betting_open?: boolean }).betting_open !== false,
       winnerId: (fight as { winner_id?: string }).winner_id ?? null,
+      winnerCpuFighterId: (fight as { winner_cpu_fighter_id?: string }).winner_cpu_fighter_id ?? null,
       createdAt: (fight as { created_at?: string }).created_at,
     },
     fighterA: fa ?? null,
-    fighterB: fb ?? null,
+    fighterB: fb,
   });
 }
 
@@ -76,11 +102,13 @@ export async function PATCH(
     return NextResponse.json({ message: "winnerId required" }, { status: 400 });
   }
 
-  // Record fight result (arena_fights has no ended_at column)
-  const { error: updateErr } = await supabase
-    .from("arena_fights")
-    .update({ winner_id: winnerId, betting_open: false })
-    .eq("id", fightId);
+  const { data: cpuWin } = await supabase.from("cpu_fighters").select("id").eq("id", winnerId).maybeSingle();
+  const patch =
+    cpuWin != null
+      ? { winner_id: null as string | null, winner_cpu_fighter_id: winnerId, betting_open: false }
+      : { winner_id: winnerId, winner_cpu_fighter_id: null as string | null, betting_open: false };
+
+  const { error: updateErr } = await supabase.from("arena_fights").update(patch).eq("id", fightId);
   if (updateErr) {
     return NextResponse.json({ message: updateErr.message }, { status: 500 });
   }
@@ -94,7 +122,8 @@ export async function PATCH(
 
   if (bets && bets.length > 0) {
     for (const bet of bets) {
-      if ((bet as { bet_on: string }).bet_on === winnerId) {
+      const betOn = (bet as { bet_on: string }).bet_on;
+      if (betOn === winnerId) {
         const betAmount = Number((bet as { amount: number }).amount);
         const odds = Number((bet as { odds?: number }).odds ?? 1.9);
         const payout = Math.max(1, Math.floor(betAmount * odds));

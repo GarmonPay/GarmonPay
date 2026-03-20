@@ -1,103 +1,136 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { getFighterModelUrl } from "@/lib/meshy-assets";
+import { FighterCard2D } from "@/components/arena/FighterCard2D";
 
-const BoxerCanvas = dynamic(
-  () => import('./BoxerCanvas'),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{
-        width: '100%',
+const Fighter3D = dynamic(() => import("@/components/arena/Fighter3D"), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        width: "100%",
         height: 380,
-        background: '#000',
+        background: "#0a0a0f",
         borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 12
-      }}>
-        <div style={{ fontSize: 48 }}>🥊</div>
-        <div style={{
-          color: '#f0a500',
-          fontSize: 12,
-          letterSpacing: 2,
-          fontFamily: 'monospace'
-        }}>
-          LOADING FIGHTER...
-        </div>
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          border: "2px solid rgba(240,165,0,0.35)",
+          borderTopColor: "#f0a500",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          color: "#94a3b8",
+          fontSize: 11,
+          letterSpacing: "0.2em",
+          fontFamily: "system-ui, sans-serif",
+        }}
+      >
+        LOADING 3D MODEL…
       </div>
-    )
-  }
-)
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  ),
+});
 
 interface BoxerDisplayProps {
-  fighter?: { fighter_color?: string | null; model_3d_url?: string | null; stats?: Record<string, number> } | null
-  facingRight?: boolean
-  size?: 'small' | 'medium' | 'large'
+  fighter?: {
+    name?: string | null;
+    style?: string | null;
+    avatar?: string | null;
+    fighter_color?: string | null;
+    model_3d_url?: string | null;
+    model_url?: string | null;
+    glb_url?: string | null;
+    meshy_glb_url?: string | null;
+    stats?: Record<string, number>;
+  } | null;
+  facingRight?: boolean;
+  size?: "small" | "medium" | "large";
 }
 
-export default function BoxerDisplay({
-  fighter,
-  facingRight = false,
-  size = 'medium'
-}: BoxerDisplayProps) {
-  const [mounted, setMounted] = useState(false)
+export default function BoxerDisplay({ fighter, facingRight = false, size = "medium" }: BoxerDisplayProps) {
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
-  const heights = { small: 220, medium: 380, large: 560 }
+  const heights = { small: 220, medium: 380, large: 560 };
 
   if (fighter == null) {
     return (
-      <div style={{
-        width: '100%',
-        height: heights[size],
-        background: '#000',
-        borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 12
-      }}>
-        <div style={{ fontSize: 48 }}>🥊</div>
-        <div style={{ color: '#f0a500', fontSize: 12, letterSpacing: 2, fontFamily: 'monospace' }}>Loading fighter...</div>
+      <div
+        style={{
+          width: "100%",
+          height: heights[size],
+          background: "#0a0a0f",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}>NO FIGHTER DATA</div>
       </div>
-    )
+    );
   }
 
-  const color = fighter.fighter_color || '#f0a500'
-  const modelUrl = fighter.model_3d_url && String(fighter.model_3d_url).trim()
-    ? String(fighter.model_3d_url)
-    : '/models/default-boxer.glb'
+  const modelUrl = getFighterModelUrl(fighter as Record<string, unknown>);
+  const color = (typeof fighter.fighter_color === "string" && fighter.fighter_color) || "#f0a500";
 
   if (!mounted) {
     return (
-      <div style={{
-        width: '100%',
-        height: heights[size],
-        background: '#000',
-        borderRadius: 8,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ fontSize: 48 }}>🥊</div>
+      <div
+        style={{
+          width: "100%",
+          height: heights[size],
+          background: "#0a0a0f",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ color: "#64748b", fontSize: 11, letterSpacing: "0.2em" }}>INITIALIZING…</div>
       </div>
-    )
+    );
+  }
+
+  if (!modelUrl) {
+    return (
+      <FighterCard2D
+        name={fighter?.name ?? undefined}
+        style={fighter?.style ?? undefined}
+        avatar={fighter?.avatar ?? undefined}
+        accentColor={color}
+        size={size}
+      />
+    );
   }
 
   return (
-    <BoxerCanvas
-      modelUrl={modelUrl}
+    <Fighter3D
+      fighter={fighter as Record<string, unknown>}
+      position={facingRight ? "right" : "left"}
       facingRight={facingRight}
-      fighterColor={color}
       size={size}
+      fighterColor={color}
     />
-  )
+  );
 }

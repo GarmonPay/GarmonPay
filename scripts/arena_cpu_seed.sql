@@ -1,3 +1,5 @@
+-- DEPRECATED for new deployments: catalog CPU opponents live in public.cpu_fighters (see migration 20250331000000_cpu_fighters.sql).
+-- This script was for the old model (arena_fighters rows tied to synthetic auth.users).
 -- Run in Supabase SQL Editor (postgres role) after creating 6 auth users with these exact UUIDs
 -- (or use Auth Admin API). Emails should match arena-cpu-1@… through arena-cpu-6@garmonpay.internal.
 --

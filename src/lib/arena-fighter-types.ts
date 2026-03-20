@@ -141,6 +141,11 @@ export interface FighterData {
   special?: number;
   wins?: number;
   losses?: number;
+  /** Meshy / GLB — see `getFighterModelUrl` in `@/lib/meshy-assets`. */
+  model_3d_url?: string | null;
+  model_url?: string | null;
+  glb_url?: string | null;
+  meshy_glb_url?: string | null;
   title?: string | null;
   origin?: string | null;
   win_streak?: number;

@@ -50,10 +50,16 @@ function verifyJoinToken(token) {
   }
 }
 
-function pickCpuAction(style) {
+/** difficulty 1–10: higher = slightly more aggressive / heavier punches */
+function pickCpuAction(style, difficulty = 5) {
   const weights = STYLE_TENDENCIES[style] || {};
+  const diffBoost = 0.85 + (Math.min(10, Math.max(1, difficulty)) - 1) * (1.25 / 9);
   const entries = ARENA_ACTIONS.filter((a) => PUNCH_ACTIONS.includes(a) || a === "BLOCK" || a === "DODGE_LEFT" || a === "DODGE_RIGHT").map(
-    (action) => [action, weights[action] ?? 1]
+    (action) => {
+      let w = weights[action] ?? 1;
+      if (PUNCH_ACTIONS.includes(action)) w *= diffBoost;
+      return [action, w];
+    }
   );
   let total = 0;
   for (const [, w] of entries) total += w;
@@ -99,19 +105,68 @@ function applyGearBonuses(fighter, bonusesByItemId) {
 async function loadFight(supabase, fightId) {
   const { data: fight, error: fightErr } = await supabase
     .from("arena_fights")
-    .select("id, fighter_a_id, fighter_b_id, fight_type")
+    .select("id, fighter_a_id, fighter_b_id, cpu_fighter_id, fight_type")
     .eq("id", fightId)
     .single();
   const fightType = fight?.fight_type || "cpu";
   if (fightErr || !fight) return null;
-  const { data: fighters, error: fErr } = await supabase
+
+  const { data: fa, error: faErr } = await supabase
     .from("arena_fighters")
-    .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, user_id, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear")
-    .in("id", [fight.fighter_a_id, fight.fighter_b_id]);
-  if (fErr || !fighters || fighters.length !== 2) return null;
-  const fa = fighters.find((f) => f.id === fight.fighter_a_id);
-  const fb = fighters.find((f) => f.id === fight.fighter_b_id);
-  if (!fa || !fb) return null;
+    .select(
+      "id, name, style, avatar, strength, speed, stamina, defense, chin, special, user_id, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear, model_3d_url"
+    )
+    .eq("id", fight.fighter_a_id)
+    .single();
+  if (faErr || !fa) return null;
+
+  let fb;
+  let isCpu = false;
+  let cpuDifficulty = 5;
+
+  if (fight.cpu_fighter_id) {
+    const { data: cpu, error: cpuErr } = await supabase
+      .from("cpu_fighters")
+      .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, difficulty")
+      .eq("id", fight.cpu_fighter_id)
+      .single();
+    if (cpuErr || !cpu) return null;
+    cpuDifficulty = Number(cpu.difficulty) || 5;
+    fb = {
+      id: cpu.id,
+      name: cpu.name,
+      style: cpu.style,
+      avatar: cpu.avatar ?? "🥊",
+      strength: cpu.strength,
+      speed: cpu.speed,
+      stamina: cpu.stamina,
+      defense: cpu.defense,
+      chin: cpu.chin,
+      special: cpu.special,
+      user_id: null,
+      equipped_gloves: null,
+      equipped_shoes: null,
+      equipped_shorts: null,
+      equipped_headgear: null,
+      model_3d_url: null,
+      difficulty: cpuDifficulty,
+    };
+    isCpu = true;
+  } else if (fight.fighter_b_id) {
+    const { data: arenaB, error: fbErr } = await supabase
+      .from("arena_fighters")
+      .select(
+        "id, name, style, avatar, strength, speed, stamina, defense, chin, special, user_id, equipped_gloves, equipped_shoes, equipped_shorts, equipped_headgear, model_3d_url"
+      )
+      .eq("id", fight.fighter_b_id)
+      .single();
+    if (fbErr || !arenaB) return null;
+    fb = arenaB;
+    isCpu = CPU_USER_IDS.includes(fb.user_id);
+  } else {
+    return null;
+  }
+
   const equippedIds = [...new Set([
     fa.equipped_gloves, fa.equipped_shoes, fa.equipped_shorts, fa.equipped_headgear,
     fb.equipped_gloves, fb.equipped_shoes, fb.equipped_shorts, fb.equipped_headgear,
@@ -123,8 +178,7 @@ async function loadFight(supabase, fightId) {
   }
   const fighterA = applyGearBonuses(fa, bonusesByItemId);
   const fighterB = applyGearBonuses(fb, bonusesByItemId);
-  const isCpu = CPU_USER_IDS.includes(fb.user_id);
-  return { fight: { ...fight, fight_type: fightType }, fighterA, fighterB, isCpu };
+  return { fight: { ...fight, fight_type: fightType }, fighterA, fighterB, isCpu, cpuDifficulty };
 }
 
 const ADMIN_CUT_PCT = 0.10;
@@ -148,19 +202,33 @@ function getWeekRange() {
   return { weekStart: friday.toISOString().slice(0, 10), weekEnd: weekEnd.toISOString().slice(0, 10) };
 }
 
-async function saveFightResult(supabase, fightId, winnerId, fightLog, fightType) {
+/**
+ * @param {string|null} winnerArenaFighterId — arena_fighters.id when human or PvP arena fighter wins
+ * @param {string|null} winnerCpuFighterId — cpu_fighters.id when catalog CPU wins
+ */
+async function saveFightResult(supabase, fightId, winnerArenaFighterId, winnerCpuFighterId, fightLog, fightType) {
   await supabase
     .from("arena_fights")
-    .update({ winner_id: winnerId, fight_log: fightLog, betting_open: false })
+    .update({
+      winner_id: winnerArenaFighterId ?? null,
+      winner_cpu_fighter_id: winnerCpuFighterId ?? null,
+      fight_log: fightLog,
+      betting_open: false,
+    })
     .eq("id", fightId);
-  const { data: fightRow } = await supabase.from("arena_fights").select("fighter_a_id, fighter_b_id").eq("id", fightId).single();
-  const loserId = fightRow && fightRow.fighter_a_id === winnerId ? fightRow.fighter_b_id : (fightRow && fightRow.fighter_b_id);
-  if (winnerId) {
-    const { data: w } = await supabase.from("arena_fighters").select("wins, win_streak, user_id").eq("id", winnerId).single();
+
+  const { data: fightRow } = await supabase
+    .from("arena_fights")
+    .select("fighter_a_id, fighter_b_id, cpu_fighter_id")
+    .eq("id", fightId)
+    .single();
+
+  if (winnerArenaFighterId) {
+    const { data: w } = await supabase.from("arena_fighters").select("wins, win_streak, user_id").eq("id", winnerArenaFighterId).single();
     if (w) {
       const newWins = (w.wins || 0) + 1;
       const newStreak = (w.win_streak || 0) + 1;
-      await supabase.from("arena_fighters").update({ wins: newWins, win_streak: newStreak, updated_at: new Date().toISOString() }).eq("id", winnerId);
+      await supabase.from("arena_fighters").update({ wins: newWins, win_streak: newStreak, updated_at: new Date().toISOString() }).eq("id", winnerArenaFighterId);
       const bonus = STREAK_BONUS_COINS[newStreak];
       if (bonus && w.user_id) {
         const { data: u } = await supabase.from("users").select("arena_coins").eq("id", w.user_id).single();
@@ -170,14 +238,27 @@ async function saveFightResult(supabase, fightId, winnerId, fightLog, fightType)
       }
     }
   }
-  if (loserId) {
-    const { data: loserRow } = await supabase.from("arena_fighters").select("losses").eq("id", loserId).single();
+
+  let loserArenaId = null;
+  if (fightRow) {
+    if (winnerArenaFighterId === fightRow.fighter_a_id) {
+      loserArenaId = fightRow.fighter_b_id || null;
+    } else if (winnerCpuFighterId && fightRow.cpu_fighter_id) {
+      loserArenaId = fightRow.fighter_a_id;
+    } else if (winnerArenaFighterId === fightRow.fighter_b_id) {
+      loserArenaId = fightRow.fighter_a_id;
+    }
+  }
+  if (loserArenaId) {
+    const { data: loserRow } = await supabase.from("arena_fighters").select("losses").eq("id", loserArenaId).single();
     const newLosses = (loserRow?.losses ?? 0) + 1;
-    await supabase.from("arena_fighters").update({ losses: newLosses, win_streak: 0, updated_at: new Date().toISOString() }).eq("id", loserId);
+    await supabase.from("arena_fighters").update({ losses: newLosses, win_streak: 0, updated_at: new Date().toISOString() }).eq("id", loserArenaId);
   }
-  if (fightType === "tournament") {
-    advanceTournamentBracket(supabase, fightId, winnerId).catch((err) => console.error("Tournament advance:", err));
+
+  if (fightType === "tournament" && winnerArenaFighterId) {
+    advanceTournamentBracket(supabase, fightId, winnerArenaFighterId).catch((err) => console.error("Tournament advance:", err));
   }
+
   const { data: bets, error: betsErr } = await supabase
     .from("arena_spectator_bets")
     .select("id, user_id, amount, bet_on, odds")
@@ -188,7 +269,9 @@ async function saveFightResult(supabase, fightId, winnerId, fightLog, fightType)
     const adminCut = totalPot * ADMIN_CUT_PCT;
     const jackpotContrib = totalPot * JACKPOT_PCT;
     const winnerPot = totalPot - adminCut - jackpotContrib;
-    const winningBets = bets.filter((b) => b.bet_on === winnerId);
+    const winningBets = bets.filter(
+      (b) => b.bet_on === winnerArenaFighterId || b.bet_on === winnerCpuFighterId
+    );
     const totalWinnerStake = winningBets.reduce((s, b) => s + Number(b.amount || 0), 0);
     if (adminCut > 0) {
       await supabase.from("arena_admin_earnings").insert({ source_type: "spectator", source_id: fightId, amount: adminCut });
@@ -203,7 +286,7 @@ async function saveFightResult(supabase, fightId, winnerId, fightLog, fightType)
       }
     }
     for (const b of bets) {
-      const isWin = b.bet_on === winnerId;
+      const isWin = b.bet_on === winnerArenaFighterId || b.bet_on === winnerCpuFighterId;
       let payout = 0;
       if (isWin && totalWinnerStake > 0) {
         const share = Number(b.amount || 0) / totalWinnerStake;
@@ -269,10 +352,10 @@ io.on("connection", (socket) => {
     }
     const { data: fight, error } = await supabase
       .from("arena_fights")
-      .select("id, winner_id")
+      .select("id, winner_id, winner_cpu_fighter_id")
       .eq("id", fightId)
       .single();
-    if (error || !fight || fight.winner_id) {
+    if (error || !fight || fight.winner_id || fight.winner_cpu_fighter_id) {
       ack?.({ ok: false, message: "Fight not found or already ended" });
       return;
     }
@@ -316,7 +399,7 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, message: "Fight not found" });
       return;
     }
-    const { fight, fighterA, fighterB, isCpu } = loaded;
+    const { fight, fighterA, fighterB, isCpu, cpuDifficulty } = loaded;
     if (parsed.fighterAId !== fighterA.id) {
       ack?.({ ok: false, message: "Fighter mismatch" });
       return;
@@ -327,6 +410,7 @@ io.on("connection", (socket) => {
     socket.fighterBId = fighterB.id;
     socket.isCpu = isCpu;
 
+    const diff = cpuDifficulty ?? fighterB.difficulty ?? 5;
     const state = {
       healthA: 100,
       healthB: 100,
@@ -334,8 +418,35 @@ io.on("connection", (socket) => {
       log: [],
       resolved: false,
       fightType: fight.fight_type || "cpu",
-      fighterA: { id: fighterA.id, name: fighterA.name, style: fighterA.style, avatar: fighterA.avatar, strength: fighterA.strength, speed: fighterA.speed, stamina: fighterA.stamina, defense: fighterA.defense, chin: fighterA.chin, special: fighterA.special ?? 20 },
-      fighterB: { id: fighterB.id, name: fighterB.name, style: fighterB.style, avatar: fighterB.avatar, strength: fighterB.strength, speed: fighterB.speed, stamina: fighterB.stamina, defense: fighterB.defense, chin: fighterB.chin, special: fighterB.special ?? 20 },
+      cpuCatalogB: !!fight.cpu_fighter_id,
+      cpuDifficulty: diff,
+      fighterA: {
+        id: fighterA.id,
+        name: fighterA.name,
+        style: fighterA.style,
+        avatar: fighterA.avatar ?? "🥊",
+        strength: fighterA.strength,
+        speed: fighterA.speed,
+        stamina: fighterA.stamina,
+        defense: fighterA.defense,
+        chin: fighterA.chin,
+        special: fighterA.special ?? 20,
+        model_3d_url: fighterA.model_3d_url ?? null,
+      },
+      fighterB: {
+        id: fighterB.id,
+        name: fighterB.name,
+        style: fighterB.style,
+        avatar: fighterB.avatar ?? "🥊",
+        strength: fighterB.strength,
+        speed: fighterB.speed,
+        stamina: fighterB.stamina,
+        defense: fighterB.defense,
+        chin: fighterB.chin,
+        special: fighterB.special ?? 20,
+        model_3d_url: fighterB.model_3d_url ?? null,
+        difficulty: diff,
+      },
     };
     fightState.set(fightId, state);
 
@@ -369,7 +480,7 @@ io.on("connection", (socket) => {
       const s = fightState.get(fightId);
       if (!s || s.resolved) return;
       const actionA = s.playerAction || "JAB";
-      const actionB = s.isCpu ? pickCpuAction(s.fighterB.style) : (s.cpuAction ?? "JAB");
+      const actionB = s.isCpu ? pickCpuAction(s.fighterB.style, s.cpuDifficulty ?? 5) : (s.cpuAction ?? "JAB");
       if (!s.isCpu && s.cpuAction == null) return;
 
       const damageAtoB = computeDamage(actionA, actionB, s.fighterA, s.fighterB);
@@ -399,10 +510,24 @@ io.on("connection", (socket) => {
 
       if (s.healthA <= 0 || s.healthB <= 0) {
         s.resolved = true;
-        const winnerId = s.healthA <= 0 ? s.fighterB.id : s.fighterA.id;
+        let winnerArenaFighterId = null;
+        let winnerCpuFighterId = null;
+        if (s.healthA <= 0) {
+          if (s.cpuCatalogB) winnerCpuFighterId = s.fighterB.id;
+          else winnerArenaFighterId = s.fighterB.id;
+        } else {
+          winnerArenaFighterId = s.fighterA.id;
+        }
         fightState.delete(fightId);
-        io.to(`fight:${fightId}`).emit("fight_over", { winnerId, log: s.log });
-        saveFightResult(supabase, fightId, winnerId, s.log, s.fightType).catch((err) => console.error("Save fight result:", err));
+        io.to(`fight:${fightId}`).emit("fight_over", {
+          winnerArenaFighterId,
+          winnerCpuFighterId,
+          winnerId: winnerArenaFighterId || winnerCpuFighterId,
+          log: s.log,
+        });
+        saveFightResult(supabase, fightId, winnerArenaFighterId, winnerCpuFighterId, s.log, s.fightType).catch((err) =>
+          console.error("Save fight result:", err)
+        );
       } else {
         if (s.isCpu) {
           scheduleAutoJab();
@@ -435,10 +560,21 @@ io.on("connection", (socket) => {
       const s = fightState.get(fid);
       if (s && !s.resolved) {
         s.resolved = true;
-        const winnerId = s.fighterB.id;
+        let winnerArenaFighterId = null;
+        let winnerCpuFighterId = null;
+        if (s.cpuCatalogB) winnerCpuFighterId = s.fighterB.id;
+        else winnerArenaFighterId = s.fighterB.id;
         fightState.delete(fid);
-        io.to(`fight:${fid}`).emit("fight_over", { winnerId, log: s.log, disconnected: true });
-        saveFightResult(supabase, fid, winnerId, s.log, s.fightType).catch((err) => console.error("Save fight result:", err));
+        io.to(`fight:${fid}`).emit("fight_over", {
+          winnerArenaFighterId,
+          winnerCpuFighterId,
+          winnerId: winnerArenaFighterId || winnerCpuFighterId,
+          log: s.log,
+          disconnected: true,
+        });
+        saveFightResult(supabase, fid, winnerArenaFighterId, winnerCpuFighterId, s.log, s.fightType).catch((err) =>
+          console.error("Save fight result:", err)
+        );
       }
     });
   });

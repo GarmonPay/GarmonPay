@@ -5,7 +5,10 @@ import { createAdminClient } from "@/lib/supabase";
 import { generateAIFighter, type AIGeneratedFighter } from "@/lib/arena-ai-generate";
 import { arenaRateLimitFightCreate, getClientIpArena } from "@/lib/arena-security";
 
-const CPU_USER_IDS = [
+const JOIN_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min
+
+/** Legacy arena_fighters tied to synthetic auth users (AI opponent creation fallback). */
+const LEGACY_CPU_USER_IDS = [
   "a0000000-0000-0000-0000-000000000001",
   "a0000000-0000-0000-0000-000000000002",
   "a0000000-0000-0000-0000-000000000003",
@@ -13,8 +16,6 @@ const CPU_USER_IDS = [
   "a0000000-0000-0000-0000-000000000005",
   "a0000000-0000-0000-0000-000000000006",
 ];
-
-const JOIN_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 min
 
 /** Fallback when Anthropic fails — never show AI error to user. */
 const FALLBACK_AI_FIGHTERS: AIGeneratedFighter[] = [
@@ -119,13 +120,8 @@ export async function POST(req: Request) {
       const fallback = FALLBACK_AI_FIGHTERS[Math.floor(Math.random() * FALLBACK_AI_FIGHTERS.length)];
       generated = fallback;
     }
-    // Use an existing CPU fighter's user_id instead of inserting a ghost user row
-    const { data: cpuUserRow } = await supabase
-      .from("arena_cpu_fighters")
-      .select("user_id")
-      .limit(1)
-      .single();
-    const aiUserId = cpuUserRow?.user_id ?? CPU_USER_IDS[Math.floor(Math.random() * CPU_USER_IDS.length)];
+    // Use a legacy synthetic auth user row for ephemeral AI arena_fighters (still requires auth.users).
+    const aiUserId = LEGACY_CPU_USER_IDS[Math.floor(Math.random() * LEGACY_CPU_USER_IDS.length)];
     const { data: aiFighter, error: aiFighterErr } = await supabase
       .from("arena_fighters")
       .insert({
@@ -157,20 +153,57 @@ export async function POST(req: Request) {
     if (!cpuFighterId || typeof cpuFighterId !== "string") {
       return NextResponse.json({ message: "cpuFighterId or opponentType required" }, { status: 400 });
     }
-    const { data: cpuFighter, error: cpuErr } = await supabase
-      .from("arena_fighters")
-      .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, user_id")
+    const { data: cpuRow, error: cpuErr } = await supabase
+      .from("cpu_fighters")
+      .select("id, name, style, avatar, strength, speed, stamina, defense, chin, special, difficulty")
       .eq("id", cpuFighterId)
       .maybeSingle();
-    if (cpuErr || !cpuFighter) {
+    if (cpuErr || !cpuRow) {
       return NextResponse.json({ message: "CPU fighter not found" }, { status: 404 });
     }
-    if (!CPU_USER_IDS.includes((cpuFighter as { user_id: string }).user_id)) {
-      return NextResponse.json({ message: "Not a CPU fighter" }, { status: 400 });
+    fighterBPayload = {
+      id: cpuRow.id,
+      name: cpuRow.name,
+      style: cpuRow.style,
+      avatar: cpuRow.avatar,
+      strength: cpuRow.strength,
+      speed: cpuRow.speed,
+      stamina: cpuRow.stamina,
+      defense: cpuRow.defense,
+      chin: cpuRow.chin,
+      special: cpuRow.special,
+      difficulty: cpuRow.difficulty,
+      isAi: false,
+      isCpuCatalog: true,
+    };
+    const { data: fight, error: fightErr } = await supabase
+      .from("arena_fights")
+      .insert({
+        fighter_a_id: myFighter.id,
+        fighter_b_id: null,
+        cpu_fighter_id: cpuRow.id,
+        fight_type: "cpu",
+      })
+      .select("id")
+      .single();
+    if (fightErr || !fight) {
+      return NextResponse.json({ message: fightErr?.message ?? "Failed to create fight" }, { status: 500 });
     }
-    fighterBId = cpuFighter.id;
-    const { user_id: _u, ...cpuSafe } = cpuFighter as { user_id: string; [k: string]: unknown };
-    fighterBPayload = { ...cpuSafe, isAi: false };
+    const fightId = (fight as { id: string }).id;
+    const exp = Date.now() + JOIN_TOKEN_TTL_MS;
+    const joinToken = signJoinToken({
+      fightId,
+      userId,
+      fighterAId: myFighter.id,
+      exp,
+    });
+    return NextResponse.json({
+      fightId,
+      fighterA: myFighter,
+      fighterB: fighterBPayload,
+      joinToken,
+      wsUrl: process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001",
+    });
   }
 
   const { data: fight, error: fightErr } = await supabase
@@ -178,7 +211,7 @@ export async function POST(req: Request) {
     .insert({
       fighter_a_id: myFighter.id,
       fighter_b_id: fighterBId,
-      fight_type: isAi ? "ai" : "cpu",
+      fight_type: "ai",
     })
     .select("id")
     .single();

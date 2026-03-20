@@ -130,7 +130,10 @@ export default function ArenaFightPage() {
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>{cpu.name || 'CPU'}</div>
                 <div style={{ fontSize: 13, color: '#f0a500' }}>{cpu.style || 'Boxer'}</div>
-                <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>STR {str} SPD {spd} DEF {def}</div>
+                <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
+                  STR {str} SPD {spd} DEF {def}
+                  {typeof cpu.difficulty === 'number' ? ` · Difficulty ${cpu.difficulty}/10` : ''}
+                </div>
               </div>
               <button
                 disabled={creating !== null || aiCreating}

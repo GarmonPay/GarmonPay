@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
@@ -9,6 +9,9 @@ import { io, Socket } from "socket.io-client";
 import { computeOdds } from "@/lib/arena-economy";
 
 import { getApiRoot } from "@/lib/api";
+import { ArenaErrorBoundary } from "@/components/arena/ArenaErrorBoundary";
+import { getFighterModelUrl } from "@/lib/meshy-assets";
+import { logArenaFighterPayload, mergeArenaFighterPayload } from "@/lib/arena-merge-fighter";
 
 /** 3D ring + Meshy GLB fighters — never SSR (Three.js). */
 const ArenaFight3DView = dynamic(
@@ -18,11 +21,19 @@ const ArenaFight3DView = dynamic(
 
 const wsUrl = process.env.NEXT_PUBLIC_BOXING_wsUrl || "http://localhost:3001";
 
+const PUNCH_ACTIONS = ["JAB", "RIGHT_HAND", "HOOK", "BODY_SHOT", "SPECIAL"];
+
+function mapActionToAnimLabel(action: string): string {
+  if (action === "BLOCK") return "block";
+  if (PUNCH_ACTIONS.includes(action)) return "punch";
+  return "idle";
+}
+
 type Fighter = {
-  id: string;
-  name: string;
-  style: string;
-  avatar: string;
+  id?: string;
+  name?: string | null;
+  style?: string | null;
+  avatar?: string | null;
   strength?: number;
   speed?: number;
   stamina?: number;
@@ -30,13 +41,21 @@ type Fighter = {
   chin?: number;
   special?: number;
   model_3d_url?: string | null;
+  model_url?: string | null;
+  glb_url?: string | null;
+  meshy_glb_url?: string | null;
 };
 
 export default function SpectateFightPage() {
   const params = useParams();
   const fightId = params.fightId as string;
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
-  const [fight, setFight] = useState<{ id: string; bettingOpen: boolean; winnerId: string | null } | null>(null);
+  const [fight, setFight] = useState<{
+    id: string;
+    bettingOpen: boolean;
+    winnerId: string | null;
+    winnerCpuFighterId?: string | null;
+  } | null>(null);
   const [fighterA, setFighterA] = useState<Fighter | null>(null);
   const [fighterB, setFighterB] = useState<Fighter | null>(null);
   const [healthA, setHealthA] = useState(100);
@@ -50,6 +69,9 @@ export default function SpectateFightPage() {
   const [betError, setBetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [ringAnimation, setRingAnimation] = useState<"idle" | "big_hit" | "ko" | "victory">("idle");
+  const [lastExchange, setLastExchange] = useState<{ actionA: string; actionB: string } | null>(null);
+  const [exchangeKey, setExchangeKey] = useState(0);
+  const [lastHitSide, setLastHitSide] = useState<"left" | "right" | null>(null);
 
   const fetchFight = useCallback(async () => {
     const s = await getSessionAsync();
@@ -68,9 +90,12 @@ export default function SpectateFightPage() {
       setFighterB(null);
     } else {
       setFight(data.fight);
+      logArenaFighterPayload("spectate GET fighterA", data.fighterA);
+      logArenaFighterPayload("spectate GET fighterB", data.fighterB);
       setFighterA(data.fighterA);
       setFighterB(data.fighterB);
-      setWinnerId(data.fight.winnerId ?? null);
+      const w = (data.fight.winnerId ?? data.fight.winnerCpuFighterId ?? null) as string | null;
+      setWinnerId(w);
     }
     setLoading(false);
   }, [fightId]);
@@ -79,7 +104,7 @@ export default function SpectateFightPage() {
     fetchFight();
   }, [fetchFight]);
 
-  const isLive = fight && !fight.winnerId;
+  const isLive = fight && !fight.winnerId && !fight.winnerCpuFighterId;
   useEffect(() => {
     if (!fightId || !isLive) return;
     const s = io(wsUrl, { transports: ["websocket"], autoConnect: true });
@@ -92,23 +117,51 @@ export default function SpectateFightPage() {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
       setLog(payload.log ?? []);
-      if (payload.fighterA) setFighterA(payload.fighterA);
-      if (payload.fighterB) setFighterB(payload.fighterB);
+      if (payload.fighterA) {
+        logArenaFighterPayload("socket fight_state fighterA", payload.fighterA);
+        setFighterA((prev) => mergeArenaFighterPayload(prev as Record<string, unknown> | null, payload.fighterA as Record<string, unknown>) as Fighter | null);
+      }
+      if (payload.fighterB) {
+        logArenaFighterPayload("socket fight_state fighterB", payload.fighterB);
+        setFighterB((prev) => mergeArenaFighterPayload(prev as Record<string, unknown> | null, payload.fighterB as Record<string, unknown>) as Fighter | null);
+      }
     });
     s.on("exchange_result", (payload: { healthA: number; healthB: number; actionA: string; actionB: string; damageAtoB: number; damageBtoA: number }) => {
       setHealthA(payload.healthA);
       setHealthB(payload.healthB);
+      setLastExchange({ actionA: payload.actionA, actionB: payload.actionB });
+      setExchangeKey((k) => k + 1);
+      if (payload.damageAtoB > payload.damageBtoA) setLastHitSide("right");
+      else if (payload.damageBtoA > payload.damageAtoB) setLastHitSide("left");
+      else setLastHitSide(null);
       setRingAnimation("big_hit");
       setTimeout(() => setRingAnimation("idle"), 350);
       setLog((prev) => [...prev, { actionA: payload.actionA, actionB: payload.actionB, damageAtoB: payload.damageAtoB, damageBtoA: payload.damageBtoA }]);
     });
-    s.on("fight_over", (payload: { winnerId: string }) => {
-      setWinnerId(payload.winnerId);
-      setRingAnimation("ko");
-      setTimeout(() => setRingAnimation("victory"), 800);
-      setFight((f) => (f ? { ...f, winnerId: payload.winnerId, bettingOpen: false } : f));
-      s.disconnect();
-    });
+    s.on(
+      "fight_over",
+      (payload: {
+        winnerId: string;
+        winnerArenaFighterId?: string | null;
+        winnerCpuFighterId?: string | null;
+      }) => {
+        const wid = payload.winnerId;
+        setWinnerId(wid);
+        setRingAnimation("ko");
+        setTimeout(() => setRingAnimation("victory"), 800);
+        setFight((f) =>
+          f
+            ? {
+                ...f,
+                winnerId: payload.winnerArenaFighterId ?? null,
+                winnerCpuFighterId: payload.winnerCpuFighterId ?? null,
+                bettingOpen: false,
+              }
+            : f
+        );
+        s.disconnect();
+      }
+    );
     setSocket(s);
     return () => {
       s.disconnect();
@@ -180,26 +233,62 @@ export default function SpectateFightPage() {
   const oddsA = totalA + totalB > 0 ? computeOdds(totalA, totalB) : 1.85;
   const oddsB = totalA + totalB > 0 ? computeOdds(totalB, totalA) : 1.85;
 
-  const ringMode = winnerId ? "victory" : fight?.bettingOpen && log.length === 0 ? "setup" : "fight";
+  const ringMode =
+    winnerId ? "victory" : ringAnimation === "ko" ? "ko" : fight?.bettingOpen && log.length === 0 ? "setup" : "fight";
   const winnerSide3D: "left" | "right" | null =
-    winnerId === fighterA?.id ? "left" : winnerId === fighterB?.id ? "right" : null;
+    winnerId != null && winnerId === fighterA?.id ? "left" : winnerId != null && winnerId === fighterB?.id ? "right" : null;
   const refereeState = winnerId ? "arm_raise" : "watching";
-  const fighterAAnim = ringAnimation === "victory" ? "idle" : ringAnimation;
-  const fighterBAnim = ringAnimation === "victory" ? "idle" : ringAnimation;
+
+  const staminaA = Math.max(0, healthA - Math.min(45, log.length * 3));
+  const staminaB = Math.max(0, healthB - Math.min(45, log.length * 3));
+
+  const fighterAAnim = useMemo(() => {
+    if (winnerId && fighterA && fighterB) {
+      if (winnerId === fighterA?.id) return "victory";
+      if (winnerId === fighterB?.id) return "knockout";
+    }
+    if (ringAnimation === "ko") return "knockout";
+    if (ringAnimation === "big_hit" && lastExchange) {
+      return mapActionToAnimLabel(lastExchange.actionA);
+    }
+    return "idle";
+  }, [winnerId, fighterA, fighterB, ringAnimation, lastExchange]);
+
+  const fighterBAnim = useMemo(() => {
+    if (winnerId && fighterA && fighterB) {
+      if (winnerId === fighterB?.id) return "victory";
+      if (winnerId === fighterA?.id) return "knockout";
+    }
+    if (ringAnimation === "ko") return "knockout";
+    if (ringAnimation === "big_hit" && lastExchange) {
+      return mapActionToAnimLabel(lastExchange.actionB);
+    }
+    return "idle";
+  }, [winnerId, fighterA, fighterB, ringAnimation, lastExchange]);
 
   return (
     <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
       <div className="relative w-full" style={{ minHeight: 320 }}>
+        <ArenaErrorBoundary>
         <ArenaFight3DView
           mode={ringMode}
           refereeState={refereeState}
           winnerSide={winnerSide3D}
-          fighterAModelUrl={fighterA?.model_3d_url ?? null}
-          fighterBModelUrl={fighterB?.model_3d_url ?? null}
+          fighterAName={fighterA?.name ?? "A"}
+          fighterBName={fighterB?.name ?? "B"}
+          fighterAModelUrl={getFighterModelUrl(fighterA) ?? null}
+          fighterBModelUrl={getFighterModelUrl(fighterB) ?? null}
           fighterAAnim={fighterAAnim}
           fighterBAnim={fighterBAnim}
+          healthA={healthA}
+          healthB={healthB}
+          staminaA={staminaA}
+          staminaB={staminaB}
           koIntensity={ringAnimation === "ko" ? 1 : 0}
+          exchangeKey={exchangeKey}
+          lastHitSide={lastHitSide}
         />
+        </ArenaErrorBoundary>
       </div>
       <div className="p-4 border-t border-white/10 flex flex-col gap-3">
         <div className="flex items-center justify-between">

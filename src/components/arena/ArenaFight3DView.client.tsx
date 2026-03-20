@@ -1,58 +1,89 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import React, { forwardRef, useRef, useImperativeHandle } from "react";
+import React, { forwardRef, useImperativeHandle } from "react";
 import type { RefereeState } from "@/components/arena/Referee3D";
 
-const BoxerDisplay = dynamic(
-  () => import("@/components/arena/BoxerDisplay"),
-  { ssr: false }
+const ArenaFightPresentation = dynamic(
+  () => import("@/components/arena/arena-presentation/ArenaFightPresentation"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[380px] w-full items-center justify-center rounded-t-xl bg-black text-[10px] tracking-[0.25em] text-amber-400">
+        LOADING ARENA…
+      </div>
+    ),
+  }
 );
 
-type ArenaFight3DViewProps = {
+export type ArenaFight3DViewProps = {
   fighterAModelUrl?: string | null;
   fighterBModelUrl?: string | null;
+  fighterAName?: string;
+  fighterBName?: string;
   fighterAAnim?: string;
   fighterBAnim?: string;
+  healthA?: number;
+  healthB?: number;
+  staminaA?: number;
+  staminaB?: number;
   refereeState?: RefereeState;
   winnerSide?: "left" | "right" | null;
   knockdownCount?: number;
   modelGenerating?: boolean;
   mode?: string;
   koIntensity?: number;
+  exchangeKey?: number;
+  lastHitSide?: "left" | "right" | null;
+  modelLoading?: boolean;
+  meshyRingUrl?: string | null;
 };
 
-const ArenaFight3DViewClient = forwardRef<
-  { shake: () => void },
-  ArenaFight3DViewProps
->(function ArenaFight3DViewClient(
-  {
-    fighterAModelUrl,
-    fighterBModelUrl,
-  },
-  ref
-) {
-  useImperativeHandle(ref, () => ({ shake: () => {} }));
+const ArenaFight3DViewClient = forwardRef<{ shake: () => void }, ArenaFight3DViewProps>(
+  function ArenaFight3DViewClient(
+    {
+      fighterAModelUrl,
+      fighterBModelUrl,
+      fighterAName,
+      fighterBName,
+      fighterAAnim,
+      fighterBAnim,
+      healthA,
+      healthB,
+      staminaA,
+      staminaB,
+      mode,
+      koIntensity,
+      exchangeKey,
+      lastHitSide,
+      modelLoading,
+      meshyRingUrl,
+    },
+    ref
+  ) {
+    useImperativeHandle(ref, () => ({ shake: () => {} }));
 
-  return (
-    <div style={{ display: "flex", gap: 24, justifyContent: "center", alignItems: "center", minHeight: 320, padding: 24, background: "radial-gradient(ellipse at 50% 0%, #1a0808, #000)" }}>
-      <div style={{ flex: 1, maxWidth: 280 }}>
-        <BoxerDisplay
-          fighter={{ model_3d_url: fighterAModelUrl ?? undefined, fighter_color: "#f0a500" }}
-          size="medium"
-          facingRight={false}
-        />
-      </div>
-      <span style={{ color: "#f0a500", fontWeight: 800, fontSize: 18 }}>VS</span>
-      <div style={{ flex: 1, maxWidth: 280 }}>
-        <BoxerDisplay
-          fighter={{ model_3d_url: fighterBModelUrl ?? undefined, fighter_color: "#c1272d" }}
-          size="medium"
-          facingRight
-        />
-      </div>
-    </div>
-  );
-});
+    return (
+      <ArenaFightPresentation
+        fighterAModelUrl={fighterAModelUrl}
+        fighterBModelUrl={fighterBModelUrl}
+        fighterAName={fighterAName}
+        fighterBName={fighterBName}
+        fighterAAnim={fighterAAnim}
+        fighterBAnim={fighterBAnim}
+        healthA={healthA}
+        healthB={healthB}
+        staminaA={staminaA}
+        staminaB={staminaB}
+        mode={mode}
+        koIntensity={koIntensity}
+        exchangeKey={exchangeKey}
+        lastHitSide={lastHitSide}
+        modelLoading={modelLoading}
+        meshyRingUrl={meshyRingUrl}
+      />
+    );
+  }
+);
 
 export default ArenaFight3DViewClient;
