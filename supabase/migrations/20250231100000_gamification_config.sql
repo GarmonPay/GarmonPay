@@ -16,6 +16,19 @@ set
   referral_reward = coalesce(referral_reward, 1),
   spin_reward = coalesce(spin_reward, 0.5);
 
-insert into gamification_config (id, referral_reward, spin_reward)
-values ('default', 1, 0.5)
-on conflict (id) do nothing;
+-- Text PK (this migration): seed 'default'. UUID PK (legacy create_gamification_config): skip.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'gamification_config'
+      and c.column_name = 'id'
+      and c.data_type = 'text'
+  ) then
+    insert into public.gamification_config (id, referral_reward, spin_reward)
+    values ('default', 1, 0.5)
+    on conflict (id) do nothing;
+  end if;
+end $$;
