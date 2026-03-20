@@ -14,6 +14,11 @@ create table if not exists public.profiles (
 
 create index if not exists profiles_email_idx on public.profiles (email);
 
+-- Repair: legacy profiles rows may omit columns (CREATE TABLE IF NOT EXISTS skipped DDL).
+alter table public.profiles add column if not exists ad_credits numeric default 0;
+alter table public.profiles add column if not exists total_earned numeric default 0;
+alter table public.profiles add column if not exists total_withdrawn numeric default 0;
+
 -- Backfill profiles from existing users
 insert into public.profiles (id, email, balance, ad_credits, total_earned, total_withdrawn, created_at)
 select
