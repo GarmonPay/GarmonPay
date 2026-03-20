@@ -9,6 +9,8 @@ create table if not exists public.wallet (
 comment on table public.wallet is 'Wallet balance by email (add funds from Stripe checkout)';
 
 -- Allow membership = 'active' when set by Stripe subscription webhook
+alter table public.users add column if not exists membership text default 'starter';
+update public.users set membership = coalesce(membership, 'starter') where membership is null;
 alter table public.users drop constraint if exists users_membership_check;
 alter table public.users add constraint users_membership_check
   check (membership in ('starter', 'pro', 'elite', 'vip', 'active'));
