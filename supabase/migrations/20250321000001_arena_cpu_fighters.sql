@@ -8,6 +8,9 @@ declare
   pw text := extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf'));
   r record;
 begin
+  -- auth.users may have RLS; migration must see rows for NOT EXISTS / duplicate checks
+  perform set_config('row_security', 'off', true);
+
   for r in
     select * from (
       values
