@@ -15,6 +15,14 @@ create table if not exists public.stripe_payments (
   created_at timestamptz not null default now()
 );
 
+-- Repair: older stripe_payments rows/tables may omit columns (CREATE TABLE IF NOT EXISTS skipped DDL).
+alter table public.stripe_payments add column if not exists transaction_id text;
+alter table public.stripe_payments add column if not exists stripe_session_id text;
+alter table public.stripe_payments add column if not exists stripe_payment_intent_id text;
+alter table public.stripe_payments add column if not exists product_type text default 'payment';
+alter table public.stripe_payments add column if not exists status text default 'completed';
+update public.stripe_payments set transaction_id = coalesce(transaction_id, id::text) where transaction_id is null;
+
 create index if not exists stripe_payments_user_id on public.stripe_payments (user_id);
 create index if not exists stripe_payments_created_at on public.stripe_payments (created_at desc);
 create index if not exists stripe_payments_transaction_id on public.stripe_payments (transaction_id);
