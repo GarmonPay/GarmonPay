@@ -1,41 +1,57 @@
 -- Arena: 6 system users and 6 CPU fighters for tap-to-punch (one fighter per user).
 -- public.users.id must exist in auth.users (users_auth_id_fkey). Seed minimal auth rows first.
+-- Per-row insert + unique_violation: id may already exist in auth (partial runs / replica quirks).
 
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-select
-  v.id,
-  coalesce((select id from auth.instances limit 1), '00000000-0000-0000-0000-000000000000'::uuid),
-  'authenticated',
-  'authenticated',
-  v.email,
-  extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf')),
-  now(),
-  '{"provider":"email","providers":["email"]}',
-  '{}',
-  now(),
-  now()
-from (
-  values
-    ('a0000000-0000-0000-0000-000000000001'::uuid, 'arena-cpu-1@garmonpay.internal'),
-    ('a0000000-0000-0000-0000-000000000002'::uuid, 'arena-cpu-2@garmonpay.internal'),
-    ('a0000000-0000-0000-0000-000000000003'::uuid, 'arena-cpu-3@garmonpay.internal'),
-    ('a0000000-0000-0000-0000-000000000004'::uuid, 'arena-cpu-4@garmonpay.internal'),
-    ('a0000000-0000-0000-0000-000000000005'::uuid, 'arena-cpu-5@garmonpay.internal'),
-    ('a0000000-0000-0000-0000-000000000006'::uuid, 'arena-cpu-6@garmonpay.internal')
-) as v(id, email)
-where not exists (select 1 from auth.users u where u.id = v.id);
+do $$
+declare
+  inst uuid := coalesce((select id from auth.instances limit 1), '00000000-0000-0000-0000-000000000000'::uuid);
+  pw text := extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf'));
+  r record;
+begin
+  for r in
+    select * from (
+      values
+        ('a0000000-0000-0000-0000-000000000001'::uuid, 'arena-cpu-1@garmonpay.internal'),
+        ('a0000000-0000-0000-0000-000000000002'::uuid, 'arena-cpu-2@garmonpay.internal'),
+        ('a0000000-0000-0000-0000-000000000003'::uuid, 'arena-cpu-3@garmonpay.internal'),
+        ('a0000000-0000-0000-0000-000000000004'::uuid, 'arena-cpu-4@garmonpay.internal'),
+        ('a0000000-0000-0000-0000-000000000005'::uuid, 'arena-cpu-5@garmonpay.internal'),
+        ('a0000000-0000-0000-0000-000000000006'::uuid, 'arena-cpu-6@garmonpay.internal')
+    ) as t(id, email)
+  loop
+    begin
+      insert into auth.users (
+        id,
+        instance_id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at
+      )
+      values (
+        r.id,
+        inst,
+        'authenticated',
+        'authenticated',
+        r.email,
+        pw,
+        now(),
+        '{"provider":"email","providers":["email"]}',
+        '{}',
+        now(),
+        now()
+      );
+    exception
+      when unique_violation then
+        null;
+    end;
+  end loop;
+end $$;
 
 -- Trigger handle_new_user may have created public.users; upsert for idempotency / missing trigger.
 insert into public.users (id, email, balance, role, is_super_admin, created_at)
