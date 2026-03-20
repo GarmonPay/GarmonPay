@@ -20,10 +20,13 @@ create index if not exists bets_status on public.bets (status);
 
 alter table public.bets enable row level security;
 
+drop policy if exists "Users read own bets" on public.bets;
 create policy "Users read own bets"
   on public.bets for select using (auth.uid() = user_id);
+drop policy if exists "Users insert own bets" on public.bets;
 create policy "Users insert own bets"
   on public.bets for insert with check (auth.uid() = user_id);
+drop policy if exists "Service role full access bets" on public.bets;
 create policy "Service role full access bets"
   on public.bets for all using (auth.jwt() ->> 'role' = 'service_role');
 

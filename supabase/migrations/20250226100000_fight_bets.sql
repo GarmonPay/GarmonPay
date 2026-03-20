@@ -15,8 +15,10 @@ create index if not exists fight_bets_fight_id on public.fight_bets (fight_id);
 
 alter table public.fight_bets enable row level security;
 
+drop policy if exists "Authenticated can read fight_bets" on public.fight_bets;
 create policy "Authenticated can read fight_bets"
   on public.fight_bets for select to authenticated using (true);
+drop policy if exists "Service role full access fight_bets" on public.fight_bets;
 create policy "Service role full access fight_bets"
   on public.fight_bets for all using (auth.jwt() ->> 'role' = 'service_role');
 

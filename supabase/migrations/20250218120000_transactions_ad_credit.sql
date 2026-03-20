@@ -24,10 +24,12 @@ create index if not exists transactions_type on public.transactions (type);
 
 alter table public.transactions enable row level security;
 
+drop policy if exists "Users can read own transactions" on public.transactions;
 create policy "Users can read own transactions"
   on public.transactions for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Service role full access transactions" on public.transactions;
 create policy "Service role full access transactions"
   on public.transactions for all
   using (auth.jwt() ->> 'role' = 'service_role');

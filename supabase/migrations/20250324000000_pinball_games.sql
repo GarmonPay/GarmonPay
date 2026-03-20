@@ -51,18 +51,24 @@ alter table public.pinball_games enable row level security;
 alter table public.pinball_jackpot enable row level security;
 alter table public.pinball_leaderboard enable row level security;
 
+drop policy if exists "Users read own pinball_games" on public.pinball_games;
 create policy "Users read own pinball_games"
   on public.pinball_games for select using (auth.uid() = user_id);
+drop policy if exists "Service role pinball_games" on public.pinball_games;
 create policy "Service role pinball_games"
   on public.pinball_games for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Anyone read pinball_jackpot" on public.pinball_jackpot;
 create policy "Anyone read pinball_jackpot"
   on public.pinball_jackpot for select using (true);
+drop policy if exists "Service role pinball_jackpot" on public.pinball_jackpot;
 create policy "Service role pinball_jackpot"
   on public.pinball_jackpot for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Anyone read pinball_leaderboard" on public.pinball_leaderboard;
 create policy "Anyone read pinball_leaderboard"
   on public.pinball_leaderboard for select using (true);
+drop policy if exists "Service role pinball_leaderboard" on public.pinball_leaderboard;
 create policy "Service role pinball_leaderboard"
   on public.pinball_leaderboard for all using (auth.jwt() ->> 'role' = 'service_role');
 

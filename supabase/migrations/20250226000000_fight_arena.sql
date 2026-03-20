@@ -60,16 +60,21 @@ alter table public.fights enable row level security;
 alter table public.fight_escrow enable row level security;
 alter table public.platform_revenue enable row level security;
 
+drop policy if exists "Authenticated can read fights" on public.fights;
 create policy "Authenticated can read fights"
   on public.fights for select to authenticated using (true);
+drop policy if exists "Service role full access fights" on public.fights;
 create policy "Service role full access fights"
   on public.fights for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Authenticated can read fight_escrow" on public.fight_escrow;
 create policy "Authenticated can read fight_escrow"
   on public.fight_escrow for select to authenticated using (true);
+drop policy if exists "Service role full access fight_escrow" on public.fight_escrow;
 create policy "Service role full access fight_escrow"
   on public.fight_escrow for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Service role full access platform_revenue" on public.platform_revenue;
 create policy "Service role full access platform_revenue"
   on public.platform_revenue for all using (auth.jwt() ->> 'role' = 'service_role');
 

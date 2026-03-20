@@ -48,15 +48,18 @@ create trigger on_auth_user_created
 -- RLS: users can read/update own row
 alter table public.users enable row level security;
 
+drop policy if exists "Users can read own row" on public.users;
 create policy "Users can read own row"
   on public.users for select
   using (auth.uid() = id);
 
+drop policy if exists "Users can update own row" on public.users;
 create policy "Users can update own row"
   on public.users for update
   using (auth.uid() = id);
 
 -- Service role can do anything (API with service key)
+drop policy if exists "Service role full access" on public.users;
 create policy "Service role full access"
   on public.users for all
   using (auth.jwt() ->> 'role' = 'service_role');

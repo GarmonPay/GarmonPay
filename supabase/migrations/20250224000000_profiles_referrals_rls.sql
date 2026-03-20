@@ -49,12 +49,16 @@ create trigger on_auth_user_created_profile
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select using (auth.uid() = id);
+drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
   on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
+drop policy if exists "Service role full access profiles" on public.profiles;
 create policy "Service role full access profiles"
   on public.profiles for all using (auth.jwt() ->> 'role' = 'service_role');
 
@@ -72,12 +76,16 @@ create index if not exists referrals_referred_user_id_idx on public.referrals (r
 
 alter table public.referrals enable row level security;
 
+drop policy if exists "Users can view own referrals" on public.referrals;
 create policy "Users can view own referrals"
   on public.referrals for select using (auth.uid() = user_id);
+drop policy if exists "Users can insert own referrals" on public.referrals;
 create policy "Users can insert own referrals"
   on public.referrals for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update own referrals" on public.referrals;
 create policy "Users can update own referrals"
   on public.referrals for update using (auth.uid() = user_id);
+drop policy if exists "Service role full access referrals" on public.referrals;
 create policy "Service role full access referrals"
   on public.referrals for all using (auth.jwt() ->> 'role' = 'service_role');
 

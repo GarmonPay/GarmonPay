@@ -14,8 +14,10 @@ create index if not exists ad_clicks_user_id on public.ad_clicks (user_id);
 create index if not exists ad_clicks_created_at on public.ad_clicks (created_at desc);
 
 alter table public.ad_clicks enable row level security;
+drop policy if exists "Users can read own ad_clicks" on public.ad_clicks;
 create policy "Users can read own ad_clicks"
   on public.ad_clicks for select using (auth.uid() = user_id);
+drop policy if exists "Service role full access ad_clicks" on public.ad_clicks;
 create policy "Service role full access ad_clicks"
   on public.ad_clicks for all using (auth.jwt() ->> 'role' = 'service_role');
 

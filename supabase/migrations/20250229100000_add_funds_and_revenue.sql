@@ -33,6 +33,7 @@ create index if not exists revenue_transactions_email on public.revenue_transact
 
 alter table public.revenue_transactions enable row level security;
 
+drop policy if exists "Service role full access revenue_transactions" on public.revenue_transactions;
 create policy "Service role full access revenue_transactions"
   on public.revenue_transactions for all
   using (auth.jwt() ->> 'role' = 'service_role');

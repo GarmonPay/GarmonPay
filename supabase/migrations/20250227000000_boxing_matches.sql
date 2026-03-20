@@ -32,8 +32,10 @@ alter table public.platform_revenue add column if not exists boxing_match_id uui
 create index if not exists platform_revenue_boxing_match_id on public.platform_revenue (boxing_match_id);
 
 alter table public.boxing_matches enable row level security;
+drop policy if exists "Service role full access boxing_matches" on public.boxing_matches;
 create policy "Service role full access boxing_matches"
   on public.boxing_matches for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Users can read boxing_matches they are in" on public.boxing_matches;
 create policy "Users can read boxing_matches they are in"
   on public.boxing_matches for select using (
     auth.uid() = player1_id or auth.uid() = player2_id

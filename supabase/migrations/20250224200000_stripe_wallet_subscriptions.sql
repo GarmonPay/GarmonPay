@@ -22,10 +22,12 @@ create index if not exists stripe_subscriptions_stripe_id on public.stripe_subsc
 
 alter table public.stripe_subscriptions enable row level security;
 
+drop policy if exists "Users can read own stripe_subscriptions" on public.stripe_subscriptions;
 create policy "Users can read own stripe_subscriptions"
   on public.stripe_subscriptions for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Service role full access stripe_subscriptions" on public.stripe_subscriptions;
 create policy "Service role full access stripe_subscriptions"
   on public.stripe_subscriptions for all
   using (auth.jwt() ->> 'role' = 'service_role');

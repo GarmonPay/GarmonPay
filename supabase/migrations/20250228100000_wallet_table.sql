@@ -36,6 +36,7 @@ $$;
 
 alter table public.wallet enable row level security;
 
+drop policy if exists "Service role full access wallet" on public.wallet;
 create policy "Service role full access wallet"
   on public.wallet for all
   using (auth.jwt() ->> 'role' = 'service_role');

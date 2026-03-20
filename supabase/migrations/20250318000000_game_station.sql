@@ -17,8 +17,10 @@ create index if not exists game_station_scores_all_time on public.game_station_s
 
 alter table public.game_station_scores enable row level security;
 
+drop policy if exists "Anyone read game_station_scores" on public.game_station_scores;
 create policy "Anyone read game_station_scores"
   on public.game_station_scores for select using (true);
+drop policy if exists "Service role game_station_scores" on public.game_station_scores;
 create policy "Service role game_station_scores"
   on public.game_station_scores for all using (auth.jwt() ->> 'role' = 'service_role');
 

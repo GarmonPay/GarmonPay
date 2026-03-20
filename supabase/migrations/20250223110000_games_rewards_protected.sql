@@ -35,6 +35,7 @@ on conflict (id) do nothing;
 
 -- Reset daily_used at start of new day (trigger or app logic). App will reset when date changes.
 alter table public.reward_budget enable row level security;
+drop policy if exists "Service role reward_budget" on public.reward_budget;
 create policy "Service role reward_budget" on public.reward_budget for all using (auth.jwt() ->> 'role' = 'service_role');
 
 comment on table public.games_rewards is 'Log of all game payouts for audit and duplicate prevention';

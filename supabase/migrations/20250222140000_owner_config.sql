@@ -10,6 +10,7 @@ create table if not exists public.owner_config (
 insert into public.owner_config (id) values ('default') on conflict (id) do nothing;
 
 alter table public.owner_config enable row level security;
+drop policy if exists "Service role owner_config" on public.owner_config;
 create policy "Service role owner_config"
   on public.owner_config for all
   using (auth.jwt() ->> 'role' = 'service_role');

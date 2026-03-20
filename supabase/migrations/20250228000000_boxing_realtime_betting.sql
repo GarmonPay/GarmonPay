@@ -40,6 +40,7 @@ create index if not exists boxing_escrow_player1 on public.boxing_escrow (player
 create index if not exists boxing_escrow_player2 on public.boxing_escrow (player2_id);
 
 alter table public.boxing_escrow enable row level security;
+drop policy if exists "Service role full access boxing_escrow" on public.boxing_escrow;
 create policy "Service role full access boxing_escrow"
   on public.boxing_escrow for all using (auth.jwt() ->> 'role' = 'service_role');
 
@@ -60,8 +61,10 @@ create index if not exists boxing_bets_user_id on public.boxing_bets (user_id);
 create index if not exists boxing_bets_status on public.boxing_bets (status);
 
 alter table public.boxing_bets enable row level security;
+drop policy if exists "Service role full access boxing_bets" on public.boxing_bets;
 create policy "Service role full access boxing_bets"
   on public.boxing_bets for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Users can read own boxing_bets" on public.boxing_bets;
 create policy "Users can read own boxing_bets"
   on public.boxing_bets for select using (auth.uid() = user_id);
 
@@ -80,8 +83,10 @@ create table if not exists public.boxing_tournaments (
 create index if not exists boxing_tournaments_status on public.boxing_tournaments (status);
 
 alter table public.boxing_tournaments enable row level security;
+drop policy if exists "Anyone can read boxing_tournaments" on public.boxing_tournaments;
 create policy "Anyone can read boxing_tournaments"
   on public.boxing_tournaments for select using (true);
+drop policy if exists "Service role full access boxing_tournaments" on public.boxing_tournaments;
 create policy "Service role full access boxing_tournaments"
   on public.boxing_tournaments for all using (auth.jwt() ->> 'role' = 'service_role');
 
@@ -100,8 +105,10 @@ create table if not exists public.boxing_profiles (
 create index if not exists boxing_profiles_level on public.boxing_profiles (level desc);
 
 alter table public.boxing_profiles enable row level security;
+drop policy if exists "Anyone can read boxing_profiles" on public.boxing_profiles;
 create policy "Anyone can read boxing_profiles"
   on public.boxing_profiles for select using (true);
+drop policy if exists "Service role full access boxing_profiles" on public.boxing_profiles;
 create policy "Service role full access boxing_profiles"
   on public.boxing_profiles for all using (auth.jwt() ->> 'role' = 'service_role');
 

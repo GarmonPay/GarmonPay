@@ -21,10 +21,12 @@ create index if not exists stripe_payments_transaction_id on public.stripe_payme
 
 alter table public.stripe_payments enable row level security;
 
+drop policy if exists "Users can read own stripe_payments" on public.stripe_payments;
 create policy "Users can read own stripe_payments"
   on public.stripe_payments for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Service role full access stripe_payments" on public.stripe_payments;
 create policy "Service role full access stripe_payments"
   on public.stripe_payments for all
   using (auth.jwt() ->> 'role' = 'service_role');

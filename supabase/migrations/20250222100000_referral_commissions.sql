@@ -81,6 +81,10 @@ begin
 end;
 $$;
 
+-- Repair: older DBs may have referral_commissions without subscription_id (CREATE TABLE IF NOT EXISTS skipped full DDL).
+alter table public.referral_commissions
+  add column if not exists subscription_id uuid references public.subscriptions (id) on delete cascade;
+
 create index if not exists referral_commissions_referrer on public.referral_commissions (referrer_user_id);
 create index if not exists referral_commissions_subscription on public.referral_commissions (subscription_id);
 
@@ -98,15 +102,22 @@ alter table public.subscription_payments enable row level security;
 alter table public.referral_commission_config enable row level security;
 alter table public.referral_commissions enable row level security;
 
+drop policy if exists "Users read own subscriptions" on public.subscriptions;
 create policy "Users read own subscriptions" on public.subscriptions for select using (auth.uid() = user_id);
+drop policy if exists "Service role subscriptions" on public.subscriptions;
 create policy "Service role subscriptions" on public.subscriptions for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Service role subscription_payments" on public.subscription_payments;
 create policy "Service role subscription_payments" on public.subscription_payments for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Anyone read commission config" on public.referral_commission_config;
 create policy "Anyone read commission config" on public.referral_commission_config for select using (true);
+drop policy if exists "Service role commission config" on public.referral_commission_config;
 create policy "Service role commission config" on public.referral_commission_config for all using (auth.jwt() ->> 'role' = 'service_role');
 
+drop policy if exists "Referrers read own commissions" on public.referral_commissions;
 create policy "Referrers read own commissions" on public.referral_commissions for select using (auth.uid() = referrer_user_id);
+drop policy if exists "Service role referral_commissions" on public.referral_commissions;
 create policy "Service role referral_commissions" on public.referral_commissions for all using (auth.jwt() ->> 'role' = 'service_role');
 
 -- ========== STOP COMMISSIONS WHEN SUBSCRIPTION CANCELED ==========

@@ -68,12 +68,19 @@ alter table public.daily_rewards enable row level security;
 alter table public.user_badges enable row level security;
 alter table public.platform_activities enable row level security;
 
+drop policy if exists "Service role referral_bonus" on public.referral_bonus;
 create policy "Service role referral_bonus" on public.referral_bonus for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Users read own daily_rewards" on public.daily_rewards;
 create policy "Users read own daily_rewards" on public.daily_rewards for select using (auth.uid() = user_id);
+drop policy if exists "Service role daily_rewards" on public.daily_rewards;
 create policy "Service role daily_rewards" on public.daily_rewards for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Users read own user_badges" on public.user_badges;
 create policy "Users read own user_badges" on public.user_badges for select using (auth.uid() = user_id);
+drop policy if exists "Service role user_badges" on public.user_badges;
 create policy "Service role user_badges" on public.user_badges for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Anyone read platform_activities" on public.platform_activities;
 create policy "Anyone read platform_activities" on public.platform_activities for select using (true);
+drop policy if exists "Service role platform_activities" on public.platform_activities;
 create policy "Service role platform_activities" on public.platform_activities for all using (auth.jwt() ->> 'role' = 'service_role');
 
 -- Record "joined" when new user is created (public.users)

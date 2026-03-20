@@ -34,7 +34,9 @@ create index if not exists team_members_user_id on public.team_members (user_id)
 
 alter table public.teams enable row level security;
 alter table public.team_members enable row level security;
+drop policy if exists "Service role teams" on public.teams;
 create policy "Service role teams" on public.teams for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Service role team_members" on public.team_members;
 create policy "Service role team_members" on public.team_members for all using (auth.jwt() ->> 'role' = 'service_role');
 
 comment on table public.teams is 'Teams; total_score updated when member scores change';

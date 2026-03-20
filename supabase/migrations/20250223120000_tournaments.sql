@@ -37,7 +37,9 @@ create index if not exists tournament_players_score on public.tournament_players
 
 alter table public.tournaments enable row level security;
 alter table public.tournament_players enable row level security;
+drop policy if exists "Service role tournaments" on public.tournaments;
 create policy "Service role tournaments" on public.tournaments for all using (auth.jwt() ->> 'role' = 'service_role');
+drop policy if exists "Service role tournament_players" on public.tournament_players;
 create policy "Service role tournament_players" on public.tournament_players for all using (auth.jwt() ->> 'role' = 'service_role');
 
 comment on table public.tournaments is 'Tournaments; prize_pool from entry fees only (profit-safe)';

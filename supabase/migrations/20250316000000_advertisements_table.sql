@@ -23,11 +23,13 @@ comment on table public.advertisements is 'Display ads: banner/video with placem
 alter table public.advertisements enable row level security;
 
 -- Public read for active ads (used by frontend to display ads)
+drop policy if exists "Anyone can read active advertisements" on public.advertisements;
 create policy "Anyone can read active advertisements"
   on public.advertisements for select
   using (active = true);
 
 -- Only service role can insert/update/delete (admin API uses service role)
+drop policy if exists "Service role full access advertisements" on public.advertisements;
 create policy "Service role full access advertisements"
   on public.advertisements for all
   using (auth.jwt() ->> 'role' = 'service_role')
@@ -50,10 +52,12 @@ on conflict (id) do update set
 
 -- Allow authenticated uploads to ads bucket (admin uploads via API with service role)
 -- Service role bypasses RLS; allow anon/authenticated read for public URLs
+drop policy if exists "Public read ads bucket" on storage.objects;
 create policy "Public read ads bucket"
   on storage.objects for select
   using (bucket_id = 'ads');
 
+drop policy if exists "Service role full access ads bucket" on storage.objects;
 create policy "Service role full access ads bucket"
   on storage.objects for all
   using (bucket_id = 'ads' and (auth.jwt() ->> 'role' = 'service_role'))
