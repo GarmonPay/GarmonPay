@@ -87,8 +87,10 @@ create table if not exists public.spin_wheel_spins (
   created_at timestamptz not null default now()
 );
 
+-- One spin per user per calendar day (created_at::text was not valid for IMMUTABLE index)
+drop index if exists spin_wheel_spins_user_date_ord;
 create unique index if not exists spin_wheel_spins_user_date_ord
-  on public.spin_wheel_spins (user_id, spin_date, (created_at::text));
+  on public.spin_wheel_spins (user_id, spin_date);
 
 create index if not exists spin_wheel_spins_user_date on public.spin_wheel_spins (user_id, spin_date);
 
