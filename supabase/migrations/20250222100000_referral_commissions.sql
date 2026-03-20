@@ -45,6 +45,20 @@ insert into public.referral_commission_config (membership_tier, commission_perce
 on conflict (membership_tier) do nothing;
 
 -- ========== REFERRAL COMMISSIONS (one per referrer/referred/subscription; paid monthly) ==========
+-- Expected columns on public.referral_commissions (app + RPCs rely on these names):
+--   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+--   referrer_user_id    uuid NOT NULL → public.users(id)
+--   referred_user_id    uuid NOT NULL → public.users(id)
+--   subscription_id    uuid NOT NULL → public.subscriptions(id)
+--   commission_amount   bigint NOT NULL
+--   last_paid_date      date NULL
+--   status              text NOT NULL DEFAULT 'active' CHECK (status IN ('active','stopped'))
+--   created_at          timestamptz NOT NULL DEFAULT now()
+--   updated_at          timestamptz NOT NULL DEFAULT now()
+--   UNIQUE (referrer_user_id, referred_user_id, subscription_id)
+--
+-- CREATE TABLE IF NOT EXISTS does NOT add missing columns to an existing table; use the repair block below.
+
 create table if not exists public.referral_commissions (
   id uuid primary key default gen_random_uuid(),
   referrer_user_id uuid not null references public.users (id) on delete cascade,
@@ -58,32 +72,63 @@ create table if not exists public.referral_commissions (
   unique(referrer_user_id, referred_user_id, subscription_id)
 );
 
--- Repair: if table already existed with referrer_id (e.g. from another migration), ensure referrer_user_id exists before index/policy.
+-- Idempotent repair: align legacy / partial tables with the expected schema (additive only).
+alter table public.referral_commissions add column if not exists referrer_user_id uuid references public.users (id) on delete cascade;
+alter table public.referral_commissions add column if not exists referred_user_id uuid references public.users (id) on delete cascade;
+alter table public.referral_commissions add column if not exists subscription_id uuid references public.subscriptions (id) on delete cascade;
+alter table public.referral_commissions add column if not exists commission_amount bigint;
+alter table public.referral_commissions add column if not exists last_paid_date date;
+alter table public.referral_commissions add column if not exists status text default 'active';
+alter table public.referral_commissions add column if not exists created_at timestamptz default now();
+alter table public.referral_commissions add column if not exists updated_at timestamptz default now();
+
+-- Legacy column: copy referrer_id → referrer_user_id then drop (referrer_user_id was added above if missing).
 do $$
 begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'referrer_id'
-  )
-  and not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'referrer_user_id'
   ) then
-    alter table public.referral_commissions add column referrer_user_id uuid references public.users (id) on delete cascade;
-    update public.referral_commissions set referrer_user_id = referrer_id where referrer_id is not null;
-    alter table public.referral_commissions alter column referrer_user_id set not null;
-    alter table public.referral_commissions drop column referrer_id;
-    if not exists (select 1 from pg_constraint where conrelid = 'public.referral_commissions'::regclass and conname = 'referral_commissions_referrer_referred_sub_key')
-       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'referral_commissions' and column_name = 'subscription_id') then
-      alter table public.referral_commissions add constraint referral_commissions_referrer_referred_sub_key unique (referrer_user_id, referred_user_id, subscription_id);
-    end if;
+    update public.referral_commissions set referrer_user_id = coalesce(referrer_user_id, referrer_id) where referrer_id is not null;
+    alter table public.referral_commissions drop column if exists referrer_id;
   end if;
 end;
 $$;
 
--- Repair: older DBs may have referral_commissions without subscription_id (CREATE TABLE IF NOT EXISTS skipped full DDL).
-alter table public.referral_commissions
-  add column if not exists subscription_id uuid references public.subscriptions (id) on delete cascade;
+-- Sensible defaults for rows that were missing columns (keeps indexes/RPCs from failing).
+update public.referral_commissions set commission_amount = 0 where commission_amount is null;
+update public.referral_commissions set status = 'active' where status is null;
+update public.referral_commissions set created_at = now() where created_at is null;
+update public.referral_commissions set updated_at = now() where updated_at is null;
+
+-- UNIQUE(referrer_user_id, referred_user_id, subscription_id) comes from CREATE TABLE for new DBs.
+-- If an old table lacked it, add only when no unique constraint on these columns yet.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on c.conrelid = t.oid
+    join pg_namespace n on t.relnamespace = n.oid
+    where n.nspname = 'public'
+      and t.relname = 'referral_commissions'
+      and c.contype = 'u'
+      and pg_get_constraintdef(c.oid) like '%referrer_user_id%'
+      and pg_get_constraintdef(c.oid) like '%referred_user_id%'
+      and pg_get_constraintdef(c.oid) like '%subscription_id%'
+  ) then
+    begin
+      alter table public.referral_commissions
+        add constraint referral_commissions_referrer_referred_sub_key
+        unique (referrer_user_id, referred_user_id, subscription_id);
+    exception
+      when others then
+        -- Duplicate name, duplicate rows, nulls, or unique index already backing same columns.
+        raise notice 'referral_commissions: unique triple not applied: %', sqlerrm;
+    end;
+  end if;
+end;
+$$;
 
 create index if not exists referral_commissions_referrer on public.referral_commissions (referrer_user_id);
 create index if not exists referral_commissions_subscription on public.referral_commissions (subscription_id);
