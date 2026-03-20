@@ -1,6 +1,25 @@
 -- Arena: 6 system users and 6 CPU fighters for tap-to-punch (one fighter per user).
 -- public.users.id must exist in auth.users (users_auth_id_fkey).
--- Insert auth.users one row at a time so handle_new_user fires once per new row (multi-row INSERT caused duplicate public.users_pkey).
+-- handle_new_user must upsert public.users or arena CPU auth inserts fail with duplicate public.users_pkey when a profile row still exists.
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.users (id, email, role, balance, created_at)
+  values (new.id, new.email, 'user', 0, now())
+  on conflict (id) do update set email = excluded.email;
+
+  insert into public.wallets (user_id, balance)
+  values (new.id, 0)
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
 
 do $arena_cpu$
 declare
