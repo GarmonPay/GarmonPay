@@ -19,14 +19,17 @@ comment on table public.withdrawals is 'User withdrawal requests; balance deduct
 
 alter table public.withdrawals enable row level security;
 
+drop policy if exists "Users can read own withdrawals" on public.withdrawals;
 create policy "Users can read own withdrawals"
   on public.withdrawals for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own withdrawals (via service role in practice)" on public.withdrawals;
 create policy "Users can insert own withdrawals (via service role in practice)"
   on public.withdrawals for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Service role full access withdrawals" on public.withdrawals;
 create policy "Service role full access withdrawals"
   on public.withdrawals for all
   using (auth.jwt() ->> 'role' = 'service_role');
