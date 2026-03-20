@@ -35,7 +35,7 @@ from (
     ('a0000000-0000-0000-0000-000000000005'::uuid, 'arena-cpu-5@garmonpay.internal'),
     ('a0000000-0000-0000-0000-000000000006'::uuid, 'arena-cpu-6@garmonpay.internal')
 ) as v(id, email)
-on conflict (id) do nothing;
+where not exists (select 1 from auth.users u where u.id = v.id);
 
 -- Trigger handle_new_user may have created public.users; upsert for idempotency / missing trigger.
 insert into public.users (id, email, balance, role, is_super_admin, created_at)
