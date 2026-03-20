@@ -36,9 +36,27 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-INSERT INTO public.platform_settings (id, ad_reward_percent)
-VALUES ('default', 40)
-ON CONFLICT (id) DO NOTHING;
+-- Legacy DBs may have platform_settings without these columns
+ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS ad_reward_percent numeric(5,2) NOT NULL DEFAULT 40;
+ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+UPDATE public.platform_settings SET ad_reward_percent = coalesce(ad_reward_percent, 40);
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'platform_settings'
+      and c.column_name = 'id'
+      and c.data_type = 'text'
+  ) then
+    insert into public.platform_settings (id, ad_reward_percent)
+    values ('default', 40)
+    on conflict (id) do nothing;
+  end if;
+end $$;
 
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Service role full access platform_settings" ON public.platform_settings;
