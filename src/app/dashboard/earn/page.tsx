@@ -172,6 +172,24 @@ export default function EarnPage() {
       <div className="animate-slide-up card-lux p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">EARN</h1>
         <p className="text-fintech-muted text-sm mb-4">Get Seen. Get Known. Get Paid.</p>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/earn/calculator")}
+          style={{
+            width: "100%",
+            padding: "16px",
+            background: "linear-gradient(135deg, #f0a500, #ff6b00)",
+            color: "#000",
+            border: "none",
+            borderRadius: 12,
+            fontSize: 16,
+            fontWeight: 900,
+            cursor: "pointer",
+            marginBottom: 16,
+          }}
+        >
+          💰 Calculate Your Potential Earnings
+        </button>
         <div className="flex flex-wrap items-center gap-4 mb-4">
           <div>
             <p className="text-xs text-fintech-muted uppercase">Today</p>

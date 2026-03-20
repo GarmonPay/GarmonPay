@@ -14,6 +14,7 @@ const nav = [
   { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/rewards", label: "Rewards" },
   { href: "/dashboard/earn", label: "Earn" },
+  { href: "/dashboard/earn/calculator", label: "Calculator" },
   { href: "/dashboard/earnings", label: "Earnings" },
   { href: "/dashboard/advertise", label: "Advertise" },
   { href: "/dashboard/ads", label: "Ads" },

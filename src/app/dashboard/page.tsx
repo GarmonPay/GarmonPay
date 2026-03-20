@@ -318,6 +318,44 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* ——— Quick actions ——— */}
+      <section className="animate-slide-up card-lux p-5 tablet:p-6">
+        <h2 className="text-lg font-bold text-white">Quick actions</h2>
+        <div className="mt-4 grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push("/dashboard/earn/calculator")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                router.push("/dashboard/earn/calculator");
+              }
+            }}
+            style={{
+              background: "linear-gradient(135deg, #1a1200, #2a1800)",
+              border: "1px solid #f0a500",
+              borderRadius: 12,
+              padding: 16,
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ fontSize: 28 }}>💰</div>
+            <div
+              style={{
+                color: "#f0a500",
+                fontWeight: 700,
+                fontSize: 14,
+                marginTop: 8,
+              }}
+            >
+              Income Calculator
+            </div>
+            <div style={{ color: "#666", fontSize: 12 }}>See your earning potential</div>
+          </div>
+        </div>
+      </section>
+
       {/* ——— Upgrade Membership & Add Funds ——— */}
       <section className="animate-slide-up card-lux p-5 tablet:p-6" style={{ marginTop: "30px" }}>
         {checkoutError && (
