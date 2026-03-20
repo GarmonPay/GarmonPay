@@ -76,6 +76,11 @@ create table if not exists public.referrals (
   created_at timestamptz default now()
 );
 
+-- Repair: legacy referrals table may use different columns (CREATE TABLE IF NOT EXISTS skipped DDL).
+alter table public.referrals add column if not exists user_id uuid references public.profiles (id) on delete cascade;
+alter table public.referrals add column if not exists referred_user_id uuid references public.profiles (id) on delete cascade;
+alter table public.referrals add column if not exists earnings numeric default 0;
+
 create index if not exists referrals_user_id_idx on public.referrals (user_id);
 create index if not exists referrals_referred_user_id_idx on public.referrals (referred_user_id);
 
