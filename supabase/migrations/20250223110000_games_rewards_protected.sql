@@ -1,12 +1,33 @@
 -- Profit-protected games: games_rewards log + reward_budget (daily cap).
 -- Rewards come from platform reward_budget only.
 
--- Allow scratch_card in transactions
+-- Allow scratch_card in transactions (full type list; avoids narrowing production data)
 alter table public.transactions drop constraint if exists transactions_type_check;
 alter table public.transactions add constraint transactions_type_check
   check (type in (
-    'earning', 'withdrawal', 'ad_credit', 'referral',
-    'spin_wheel', 'scratch_card', 'mystery_box', 'streak', 'mission'
+    'deposit',
+    'withdrawal',
+    'referral',
+    'referral_commission',
+    'earning',
+    'ad_credit',
+    'spin_wheel',
+    'scratch_card',
+    'mystery_box',
+    'streak',
+    'mission',
+    'tournament_entry',
+    'tournament_prize',
+    'team_prize',
+    'fight_entry',
+    'fight_prize',
+    'boxing_entry',
+    'boxing_prize',
+    'boxing_bet',
+    'boxing_bet_payout',
+    'game_win',
+    'game_loss',
+    'admin_adjustment'
   ));
 
 -- Games rewards log (each game payout)

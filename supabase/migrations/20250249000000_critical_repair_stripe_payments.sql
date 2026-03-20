@@ -69,11 +69,29 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS reference_id text;
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_check
   CHECK (type IN (
-    'earning', 'withdrawal', 'ad_credit', 'referral', 'referral_commission',
-    'deposit', 'spin_wheel', 'scratch_card', 'mystery_box', 'streak', 'mission',
-    'tournament_entry', 'tournament_prize', 'team_prize',
-    'fight_entry', 'fight_prize',
-    'boxing_entry', 'boxing_prize', 'boxing_bet', 'boxing_bet_payout'
+    'deposit',
+    'withdrawal',
+    'referral',
+    'referral_commission',
+    'earning',
+    'ad_credit',
+    'spin_wheel',
+    'scratch_card',
+    'mystery_box',
+    'streak',
+    'mission',
+    'tournament_entry',
+    'tournament_prize',
+    'team_prize',
+    'fight_entry',
+    'fight_prize',
+    'boxing_entry',
+    'boxing_prize',
+    'boxing_bet',
+    'boxing_bet_payout',
+    'game_win',
+    'game_loss',
+    'admin_adjustment'
   ));
 
 -- 4) deposits — for webhook and dashboard

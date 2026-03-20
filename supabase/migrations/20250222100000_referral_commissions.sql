@@ -88,12 +88,35 @@ alter table public.referral_commissions
 create index if not exists referral_commissions_referrer on public.referral_commissions (referrer_user_id);
 create index if not exists referral_commissions_subscription on public.referral_commissions (subscription_id);
 
--- Extend transactions type for referral_commission
+-- Extend transactions type for referral_commission.
+-- Use the same broad list as 20250308000000_transactions_type_check.sql so existing production
+-- rows (deposit, fight_*, etc.) do not fail this migration when re-applied.
 alter table public.transactions drop constraint if exists transactions_type_check;
 alter table public.transactions add constraint transactions_type_check
   check (type in (
-    'earning', 'withdrawal', 'ad_credit', 'referral', 'referral_commission',
-    'spin_wheel', 'mystery_box', 'streak', 'mission'
+    'deposit',
+    'withdrawal',
+    'referral',
+    'referral_commission',
+    'earning',
+    'ad_credit',
+    'spin_wheel',
+    'scratch_card',
+    'mystery_box',
+    'streak',
+    'mission',
+    'tournament_entry',
+    'tournament_prize',
+    'team_prize',
+    'fight_entry',
+    'fight_prize',
+    'boxing_entry',
+    'boxing_prize',
+    'boxing_bet',
+    'boxing_bet_payout',
+    'game_win',
+    'game_loss',
+    'admin_adjustment'
   ));
 
 -- ========== RLS ==========
