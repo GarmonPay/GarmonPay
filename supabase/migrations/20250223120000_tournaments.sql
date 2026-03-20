@@ -40,6 +40,12 @@ create table if not exists public.tournaments (
   created_at timestamptz not null default now()
 );
 
+-- Repair: older DBs may have tournaments without start_date/end_date (CREATE TABLE IF NOT EXISTS skipped DDL).
+alter table public.tournaments add column if not exists start_date timestamptz default now();
+alter table public.tournaments add column if not exists end_date timestamptz default now();
+update public.tournaments set start_date = coalesce(start_date, now()) where start_date is null;
+update public.tournaments set end_date = coalesce(end_date, start_date, now()) where end_date is null;
+
 create index if not exists tournaments_status on public.tournaments (status);
 create index if not exists tournaments_end_date on public.tournaments (end_date);
 
