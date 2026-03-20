@@ -57,32 +57,39 @@ create index if not exists earnings_source on public.earnings (source);
 
 -- RLS: ads readable by all authenticated (list active only in app logic)
 alter table public.ads enable row level security;
+drop policy if exists "Ads readable when authenticated" on public.ads;
 create policy "Ads readable when authenticated"
   on public.ads for select
   using (auth.uid() is not null);
 
 -- Only service role can insert/update/delete ads (admin API)
+drop policy if exists "Service role full access ads" on public.ads;
 create policy "Service role full access ads"
   on public.ads for all
   using (auth.jwt() ->> 'role' = 'service_role');
 
 -- ad_sessions: users can insert own (start), select own; service updates (complete)
 alter table public.ad_sessions enable row level security;
+drop policy if exists "Users can insert own ad_sessions" on public.ad_sessions;
 create policy "Users can insert own ad_sessions"
   on public.ad_sessions for insert
   with check (auth.uid() = user_id);
+drop policy if exists "Users can select own ad_sessions" on public.ad_sessions;
 create policy "Users can select own ad_sessions"
   on public.ad_sessions for select
   using (auth.uid() = user_id);
+drop policy if exists "Service role full access ad_sessions" on public.ad_sessions;
 create policy "Service role full access ad_sessions"
   on public.ad_sessions for all
   using (auth.jwt() ->> 'role' = 'service_role');
 
 -- earnings: users can read own; only service role can insert (backend reward)
 alter table public.earnings enable row level security;
+drop policy if exists "Users can read own earnings" on public.earnings;
 create policy "Users can read own earnings"
   on public.earnings for select
   using (auth.uid() = user_id);
+drop policy if exists "Service role full access earnings" on public.earnings;
 create policy "Service role full access earnings"
   on public.earnings for all
   using (auth.jwt() ->> 'role' = 'service_role');
