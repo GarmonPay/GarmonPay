@@ -40,6 +40,10 @@ begin
   delete from public.wallets where user_id = any (cpu_ids);
   delete from public.users where id = any (cpu_ids);
 
+  -- Remove auth rows so INSERT ... ON CONFLICT is not needed for a broken partial state
+  delete from auth.identities where user_id = any (cpu_ids);
+  delete from auth.users where id = any (cpu_ids);
+
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
   values ('a0000000-0000-0000-0000-000000000001', inst, 'authenticated', 'authenticated', 'arena-cpu-1@garmonpay.internal', pw, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())
   on conflict (id) do update set instance_id = excluded.instance_id, email = excluded.email, encrypted_password = excluded.encrypted_password, email_confirmed_at = excluded.email_confirmed_at, raw_app_meta_data = excluded.raw_app_meta_data, raw_user_meta_data = excluded.raw_user_meta_data, updated_at = excluded.updated_at;
