@@ -16,13 +16,12 @@ declare
   pw text := extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf'));
 begin
   perform set_config('row_security', 'off', true);
+  -- Skip triggers on auth.users (handle_new_user) — multi-row auth insert would duplicate public.users_pkey.
+  perform set_config('session_replication_role', 'replica', true);
 
   delete from public.arena_fighters where user_id = any (cpu_ids);
   delete from public.wallets where user_id = any (cpu_ids);
   delete from public.users where id = any (cpu_ids);
-
-  -- Avoid handle_new_user inserting public.users during this batch (duplicate users_pkey on public).
-  alter table auth.users disable trigger all;
 
   insert into auth.users (
     id,
@@ -53,7 +52,7 @@ begin
     raw_user_meta_data = excluded.raw_user_meta_data,
     updated_at = excluded.updated_at;
 
-  alter table auth.users enable trigger all;
+  perform set_config('session_replication_role', 'origin', true);
 end
 $arena_cpu$;
 
