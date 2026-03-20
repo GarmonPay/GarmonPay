@@ -19,37 +19,44 @@ begin
         ('a0000000-0000-0000-0000-000000000006'::uuid, 'arena-cpu-6@garmonpay.internal')
     ) as t(id, email)
   loop
-    begin
-      insert into auth.users (
-        id,
-        instance_id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at
-      )
-      values (
-        r.id,
-        inst,
-        'authenticated',
-        'authenticated',
-        r.email,
-        pw,
-        now(),
-        '{"provider":"email","providers":["email"]}',
-        '{}',
-        now(),
-        now()
-      );
-    exception
-      when unique_violation then
-        null;
-    end;
+    if not exists (select 1 from auth.users u where u.id = r.id) then
+      begin
+        insert into auth.users (
+          id,
+          instance_id,
+          aud,
+          role,
+          email,
+          encrypted_password,
+          email_confirmed_at,
+          raw_app_meta_data,
+          raw_user_meta_data,
+          created_at,
+          updated_at
+        )
+        values (
+          r.id,
+          inst,
+          'authenticated',
+          'authenticated',
+          r.email,
+          pw,
+          now(),
+          '{"provider":"email","providers":["email"]}',
+          '{}',
+          now(),
+          now()
+        );
+      exception
+        when unique_violation then
+          -- Email or other unique conflict: only ignore if this id is already in auth.users
+          if exists (select 1 from auth.users u where u.id = r.id) then
+            null;
+          else
+            raise;
+          end if;
+      end;
+    end if;
   end loop;
 end $$;
 
