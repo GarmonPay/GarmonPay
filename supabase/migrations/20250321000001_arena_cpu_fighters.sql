@@ -1,6 +1,43 @@
 -- Arena: 6 system users and 6 CPU fighters for tap-to-punch (one fighter per user).
--- System users have no auth; used only as owners of CPU arena_fighters.
+-- public.users.id must exist in auth.users (users_auth_id_fkey). Seed minimal auth rows first.
 
+insert into auth.users (
+  id,
+  instance_id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+select
+  v.id,
+  coalesce((select id from auth.instances limit 1), '00000000-0000-0000-0000-000000000000'::uuid),
+  'authenticated',
+  'authenticated',
+  v.email,
+  extensions.crypt('arena-cpu-internal', extensions.gen_salt('bf')),
+  now(),
+  '{"provider":"email","providers":["email"]}',
+  '{}',
+  now(),
+  now()
+from (
+  values
+    ('a0000000-0000-0000-0000-000000000001'::uuid, 'arena-cpu-1@garmonpay.internal'),
+    ('a0000000-0000-0000-0000-000000000002'::uuid, 'arena-cpu-2@garmonpay.internal'),
+    ('a0000000-0000-0000-0000-000000000003'::uuid, 'arena-cpu-3@garmonpay.internal'),
+    ('a0000000-0000-0000-0000-000000000004'::uuid, 'arena-cpu-4@garmonpay.internal'),
+    ('a0000000-0000-0000-0000-000000000005'::uuid, 'arena-cpu-5@garmonpay.internal'),
+    ('a0000000-0000-0000-0000-000000000006'::uuid, 'arena-cpu-6@garmonpay.internal')
+) as v(id, email)
+on conflict (id) do nothing;
+
+-- Trigger handle_new_user may have created public.users; upsert for idempotency / missing trigger.
 insert into public.users (id, email, balance, role, is_super_admin, created_at)
 values
   ('a0000000-0000-0000-0000-000000000001', 'arena-cpu-1@garmonpay.internal', 0, 'user', false, now()),
