@@ -26,6 +26,11 @@ alter table public.users
 alter table public.users
   alter column created_at set default now();
 
+-- Orphan public.users rows (no auth.users row) prevent FK validation; remove them first.
+-- Child tables with ON DELETE CASCADE/SET NULL will follow FK rules where applicable.
+delete from public.users u
+where not exists (select 1 from auth.users a where a.id = u.id);
+
 -- Ensure FK: public.users.id → auth.users.id ON DELETE CASCADE (add only if missing)
 do $$
 begin
