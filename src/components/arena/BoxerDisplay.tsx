@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
-import { FighterCard2D } from "@/components/arena/FighterCard2D";
+import { isArenaDebugEnabled } from "@/lib/arena-debug";
 
 const Fighter3D = dynamic(() => import("@/components/arena/Fighter3D"), {
   ssr: false,
@@ -39,7 +39,7 @@ const Fighter3D = dynamic(() => import("@/components/arena/Fighter3D"), {
           fontFamily: "system-ui, sans-serif",
         }}
       >
-        LOADING 3D MODEL…
+        LOADING FIGHTER…
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -91,7 +91,6 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
     );
   }
 
-  const modelUrl = getFighterModelUrl(fighter as Record<string, unknown>);
   const color = (typeof fighter.fighter_color === "string" && fighter.fighter_color) || "#f0a500";
 
   if (!mounted) {
@@ -112,15 +111,10 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
     );
   }
 
-  if (!modelUrl) {
-    return (
-      <FighterCard2D
-        name={fighter?.name ?? undefined}
-        style={fighter?.style ?? undefined}
-        avatar={fighter?.avatar ?? undefined}
-        accentColor={color}
-        size={size}
-      />
+  if (isArenaDebugEnabled()) {
+    console.log(
+      "RENDER PATH:",
+      getFighterModelUrl(fighter as Record<string, unknown>) ? "Fighter3D" : "FighterCard2D"
     );
   }
 
