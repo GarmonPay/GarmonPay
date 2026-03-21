@@ -8,7 +8,7 @@ type S = { failed: boolean };
  * Catches GLB/network/decode errors so the canvas keeps running with a fallback mesh.
  */
 export class ModelErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
+  { children: React.ReactNode; fallback: React.ReactNode; onCaught?: (error: unknown) => void },
   S
 > {
   state: S = { failed: false };
@@ -19,6 +19,7 @@ export class ModelErrorBoundary extends React.Component<
 
   componentDidCatch(err: unknown) {
     console.error("[Meshy GLB] ModelErrorBoundary caught error — showing fallback mesh", err);
+    this.props.onCaught?.(err);
   }
 
   render() {

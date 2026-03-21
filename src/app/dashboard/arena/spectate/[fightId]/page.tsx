@@ -1,45 +1,34 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getSessionAsync } from "@/lib/session";
-import { io, Socket } from "socket.io-client";
-import { computeOdds } from "@/lib/arena-economy";
-
 import { getApiRoot } from "@/lib/api";
-import { ArenaErrorBoundary } from "@/components/arena/ArenaErrorBoundary";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
-import { logArenaFighterPayload, mergeArenaFighterPayload } from "@/lib/arena-merge-fighter";
+import { logArenaFighterPayload } from "@/lib/arena-merge-fighter";
+import { SPECTATE_MESHY_PROOF_GLB_URL } from "@/lib/spectate-meshy-proof";
 
-/** 3D ring + Meshy GLB fighters — never SSR (Three.js). */
-const ArenaFight3DView = dynamic(
-  () => import("@/components/arena/ArenaFight3DView").then((m) => m.ArenaFight3DView),
-  { ssr: false }
+/** Minimal WebGL proof — no ArenaFight3DView, no ArenaErrorBoundary (🥊 screen). */
+const SpectateMeshyProofCanvas = dynamic(
+  () =>
+    import("@/components/arena/spectate/SpectateMeshyProofCanvas").then((m) => m.SpectateMeshyProofCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="flex w-full items-center justify-center rounded-t-xl bg-black text-xs tracking-[0.2em] text-amber-400"
+        style={{ minHeight: 380, height: "min(52vh, 520px)" }}
+      >
+        LOADING WEBGL…
+      </div>
+    ),
+  }
 );
-
-const wsUrl = process.env.NEXT_PUBLIC_BOXING_wsUrl || "http://localhost:3001";
-
-const PUNCH_ACTIONS = ["JAB", "RIGHT_HAND", "HOOK", "BODY_SHOT", "SPECIAL"];
-
-function mapActionToAnimLabel(action: string): string {
-  if (action === "BLOCK") return "block";
-  if (PUNCH_ACTIONS.includes(action)) return "punch";
-  return "idle";
-}
 
 type Fighter = {
   id?: string;
   name?: string | null;
-  style?: string | null;
-  avatar?: string | null;
-  strength?: number;
-  speed?: number;
-  stamina?: number;
-  defense?: number;
-  chin?: number;
-  special?: number;
   model_3d_url?: string | null;
   model_url?: string | null;
   glb_url?: string | null;
@@ -49,7 +38,6 @@ type Fighter = {
 export default function SpectateFightPage() {
   const params = useParams();
   const fightId = params.fightId as string;
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [fight, setFight] = useState<{
     id: string;
     bettingOpen: boolean;
@@ -58,28 +46,14 @@ export default function SpectateFightPage() {
   } | null>(null);
   const [fighterA, setFighterA] = useState<Fighter | null>(null);
   const [fighterB, setFighterB] = useState<Fighter | null>(null);
-  const [healthA, setHealthA] = useState(100);
-  const [healthB, setHealthB] = useState(100);
-  const [log, setLog] = useState<Array<{ actionA: string; actionB: string; damageAtoB: number; damageBtoA: number }>>([]);
-  const [winnerId, setWinnerId] = useState<string | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [betAmount, setBetAmount] = useState("");
-  const [betOn, setBetOn] = useState<string | null>(null);
-  const [betting, setBetting] = useState(false);
-  const [betError, setBetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ringAnimation, setRingAnimation] = useState<"idle" | "big_hit" | "ko" | "victory">("idle");
-  const [lastExchange, setLastExchange] = useState<{ actionA: string; actionB: string } | null>(null);
-  const [exchangeKey, setExchangeKey] = useState(0);
-  const [lastHitSide, setLastHitSide] = useState<"left" | "right" | null>(null);
+  const [glbStatus, setGlbStatus] = useState<"loading" | "success" | "failed">("loading");
+  const [glbError, setGlbError] = useState<string | null>(null);
+  const loadSuccessOnce = useRef(false);
 
   const fetchFight = useCallback(async () => {
-    const s = await getSessionAsync();
-    if (!s || !fightId) return;
-    setSession(s);
-    const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
-    const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}`, { headers, credentials: "include" });
+    if (!fightId) return;
+    const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}`, { credentials: "include" });
     const data = res.ok ? await res.json().catch(() => null) : null;
     if (!data || !data.fight) {
       console.error("[Arena] Spectate: invalid fight response", data);
@@ -94,8 +68,6 @@ export default function SpectateFightPage() {
       logArenaFighterPayload("spectate GET fighterB", data.fighterB);
       setFighterA(data.fighterA);
       setFighterB(data.fighterB);
-      const w = (data.fight.winnerId ?? data.fight.winnerCpuFighterId ?? null) as string | null;
-      setWinnerId(w);
     }
     setLoading(false);
   }, [fightId]);
@@ -104,155 +76,34 @@ export default function SpectateFightPage() {
     fetchFight();
   }, [fetchFight]);
 
-  const isLive = fight && !fight.winnerId && !fight.winnerCpuFighterId;
+  const apiModelUrl = useMemo(() => {
+    const a = fighterA ? getFighterModelUrl(fighterA) : null;
+    if (a) return a;
+    return fighterB ? getFighterModelUrl(fighterB) : null;
+  }, [fighterA, fighterB]);
+
+  /** Prefer live fighter GLB; otherwise Three.js sample (always loads if network allows). */
+  const meshyUrl = apiModelUrl ?? SPECTATE_MESHY_PROOF_GLB_URL;
+  const sourceLabel = apiModelUrl ? "FIGHTER_API_GLB" : "HARDCODED_PROOF_GLTF";
+
   useEffect(() => {
-    if (!fightId || !isLive) return;
-    const s = io(wsUrl, { transports: ["websocket"], autoConnect: true });
-    s.on("connect", () => {
-      s.emit("watch_fight", { fightId }, (ack: { ok?: boolean; message?: string }) => {
-        if (!ack?.ok) console.warn("Watch failed:", ack?.message);
-      });
-    });
-    s.on("fight_state", (payload: { healthA: number; healthB: number; log: typeof log; fighterA: Fighter; fighterB: Fighter }) => {
-      setHealthA(payload.healthA);
-      setHealthB(payload.healthB);
-      setLog(payload.log ?? []);
-      if (payload.fighterA) {
-        logArenaFighterPayload("socket fight_state fighterA", payload.fighterA);
-        setFighterA((prev) => mergeArenaFighterPayload(prev as Record<string, unknown> | null, payload.fighterA as Record<string, unknown>) as Fighter | null);
-      }
-      if (payload.fighterB) {
-        logArenaFighterPayload("socket fight_state fighterB", payload.fighterB);
-        setFighterB((prev) => mergeArenaFighterPayload(prev as Record<string, unknown> | null, payload.fighterB as Record<string, unknown>) as Fighter | null);
-      }
-    });
-    s.on("exchange_result", (payload: { healthA: number; healthB: number; actionA: string; actionB: string; damageAtoB: number; damageBtoA: number }) => {
-      setHealthA(payload.healthA);
-      setHealthB(payload.healthB);
-      setLastExchange({ actionA: payload.actionA, actionB: payload.actionB });
-      setExchangeKey((k) => k + 1);
-      if (payload.damageAtoB > payload.damageBtoA) setLastHitSide("right");
-      else if (payload.damageBtoA > payload.damageAtoB) setLastHitSide("left");
-      else setLastHitSide(null);
-      setRingAnimation("big_hit");
-      setTimeout(() => setRingAnimation("idle"), 350);
-      setLog((prev) => [...prev, { actionA: payload.actionA, actionB: payload.actionB, damageAtoB: payload.damageAtoB, damageBtoA: payload.damageBtoA }]);
-    });
-    s.on(
-      "fight_over",
-      (payload: {
-        winnerId: string;
-        winnerArenaFighterId?: string | null;
-        winnerCpuFighterId?: string | null;
-      }) => {
-        const wid = payload.winnerId;
-        setWinnerId(wid);
-        setRingAnimation("ko");
-        setTimeout(() => setRingAnimation("victory"), 800);
-        setFight((f) =>
-          f
-            ? {
-                ...f,
-                winnerId: payload.winnerArenaFighterId ?? null,
-                winnerCpuFighterId: payload.winnerCpuFighterId ?? null,
-                bettingOpen: false,
-              }
-            : f
-        );
-        s.disconnect();
-      }
-    );
-    setSocket(s);
-    return () => {
-      s.disconnect();
-      setSocket(null);
-    };
-  }, [fightId, isLive]);
+    loadSuccessOnce.current = false;
+    setGlbStatus("loading");
+    setGlbError(null);
+  }, [meshyUrl]);
 
-  const placeBet = async () => {
-    if (!session || !betOn || !fight?.bettingOpen) return;
-    const amount = parseFloat(betAmount);
-    if (!(amount >= 1)) {
-      setBetError("Minimum bet $1");
-      return;
-    }
-    setBetError(null);
-    setBetting(true);
-    const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
-    };
-    try {
-      const res = await fetch(`${getApiRoot()}/arena/fights/${fightId}/spectator-bet`, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify({ amount, betOn }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setBetError(data.message || "Bet failed");
-        return;
-      }
-      setBetAmount("");
-      setBetOn(null);
-    } catch {
-      setBetError("Network error");
-    } finally {
-      setBetting(false);
-    }
-  };
+  const onLoadSuccess = useCallback(() => {
+    if (loadSuccessOnce.current) return;
+    loadSuccessOnce.current = true;
+    setGlbStatus("success");
+    setGlbError(null);
+  }, []);
 
-  const totalA =
-    (fighterA?.strength ?? 0) +
-    (fighterA?.speed ?? 0) +
-    (fighterA?.stamina ?? 0) +
-    (fighterA?.defense ?? 0) +
-    (fighterA?.chin ?? 0) +
-    (fighterA?.special ?? 0);
-  const totalB =
-    (fighterB?.strength ?? 0) +
-    (fighterB?.speed ?? 0) +
-    (fighterB?.stamina ?? 0) +
-    (fighterB?.defense ?? 0) +
-    (fighterB?.chin ?? 0) +
-    (fighterB?.special ?? 0);
-  const oddsA = totalA + totalB > 0 ? computeOdds(totalA, totalB) : 1.85;
-  const oddsB = totalA + totalB > 0 ? computeOdds(totalB, totalA) : 1.85;
-
-  const ringMode =
-    winnerId ? "victory" : ringAnimation === "ko" ? "ko" : fight?.bettingOpen && log.length === 0 ? "setup" : "fight";
-  const winnerSide3D: "left" | "right" | null =
-    winnerId != null && winnerId === fighterA?.id ? "left" : winnerId != null && winnerId === fighterB?.id ? "right" : null;
-  const refereeState = winnerId ? "arm_raise" : "watching";
-
-  const staminaA = Math.max(0, healthA - Math.min(45, log.length * 3));
-  const staminaB = Math.max(0, healthB - Math.min(45, log.length * 3));
-
-  const fighterAAnim = useMemo(() => {
-    if (winnerId && fighterA && fighterB) {
-      if (winnerId === fighterA?.id) return "victory";
-      if (winnerId === fighterB?.id) return "knockout";
-    }
-    if (ringAnimation === "ko") return "knockout";
-    if (ringAnimation === "big_hit" && lastExchange) {
-      return mapActionToAnimLabel(lastExchange.actionA);
-    }
-    return "idle";
-  }, [winnerId, fighterA, fighterB, ringAnimation, lastExchange]);
-
-  const fighterBAnim = useMemo(() => {
-    if (winnerId && fighterA && fighterB) {
-      if (winnerId === fighterB?.id) return "victory";
-      if (winnerId === fighterA?.id) return "knockout";
-    }
-    if (ringAnimation === "ko") return "knockout";
-    if (ringAnimation === "big_hit" && lastExchange) {
-      return mapActionToAnimLabel(lastExchange.actionB);
-    }
-    return "idle";
-  }, [winnerId, fighterA, fighterB, ringAnimation, lastExchange]);
+  const onLoadFailed = useCallback((message: string, failedUrl: string) => {
+    console.error("[Spectate] GLB FAILED", { failedUrl, message });
+    setGlbStatus("failed");
+    setGlbError(`${message} | URL: ${failedUrl}`);
+  }, []);
 
   if (loading || !fightId) {
     return <div className="p-6 text-[#9ca3af]">Loading…</div>;
@@ -261,97 +112,40 @@ export default function SpectateFightPage() {
     return (
       <div className="p-6">
         <p className="text-[#9ca3af]">Fight not found.</p>
-        <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline mt-2 inline-block">Back to lobby</Link>
+        <Link href="/dashboard/arena/spectate" className="mt-2 inline-block text-[#f0a500] hover:underline">
+          Back to lobby
+        </Link>
       </div>
     );
   }
 
+  const renderMode = glbStatus === "failed" ? "RED_BOX_PLACEHOLDER" : "MESHY_3D";
+  const glbLoadText =
+    glbStatus === "loading" ? "LOADING…" : glbStatus === "success" ? "SUCCESS" : "FAILED";
+
   return (
-    <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
-      <div className="relative w-full" style={{ minHeight: 320 }}>
-        <ArenaErrorBoundary>
-        <ArenaFight3DView
-          mode={ringMode}
-          refereeState={refereeState}
-          winnerSide={winnerSide3D}
-          fighterAName={fighterA?.name ?? "A"}
-          fighterBName={fighterB?.name ?? "B"}
-          fighterAModelUrl={getFighterModelUrl(fighterA) ?? null}
-          fighterBModelUrl={getFighterModelUrl(fighterB) ?? null}
-          fighterAAnim={fighterAAnim}
-          fighterBAnim={fighterBAnim}
-          healthA={healthA}
-          healthB={healthB}
-          staminaA={staminaA}
-          staminaB={staminaB}
-          koIntensity={ringAnimation === "ko" ? 1 : 0}
-          exchangeKey={exchangeKey}
-          lastHitSide={lastHitSide}
-        />
-        </ArenaErrorBoundary>
+    <div className="flex min-h-[85vh] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#161b22]">
+      <div className="border-b border-white/10 p-4 font-mono text-[11px] leading-relaxed text-[#c9d1d9]">
+        <div className="text-sm font-semibold text-white">Spectate — Meshy proof (minimal 3D)</div>
+        <div className="mt-2 text-[#58a6ff]">MODEL URL: {meshyUrl}</div>
+        <div>SOURCE: {sourceLabel}</div>
+        <div>RENDER MODE: {renderMode}</div>
+        <div>GLB LOAD: {glbLoadText}</div>
+        {glbError && <div className="mt-2 max-w-full break-all text-red-400">ERR: {glbError}</div>}
+        <div className="mt-2 text-[#9ca3af]">Fight ID: {fight?.id ?? fightId}</div>
       </div>
-      <div className="p-4 border-t border-white/10 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[#9ca3af] text-sm">Health: {Math.max(0, healthA)}% vs {Math.max(0, healthB)}%</span>
-        </div>
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-xl font-bold text-white">Spectating</h1>
-          <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline">Back to lobby</Link>
-        </div>
-        {winnerId && (
-          <p className="text-lg font-bold text-white mb-3">
-            Winner: {winnerId === fighterA?.id ? fighterA?.name ?? "A" : fighterB?.name ?? "B"}
-          </p>
-        )}
-        {fight?.bettingOpen && !winnerId && (
-          <div className="mb-4 p-4 rounded-lg bg-[#0d1117] border border-white/10">
-            <p className="text-white font-medium mb-2">Place spectator bet (before first punch)</p>
-            {betError && <p className="text-red-400 text-sm mb-2">{betError}</p>}
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={betAmount}
-                onChange={(e) => setBetAmount(e.target.value)}
-                placeholder="Amount ($)"
-                className="rounded-lg bg-[#161b22] border border-white/20 px-3 py-2 text-white w-24"
-              />
-              <button
-                type="button"
-                onClick={() => fighterA?.id && setBetOn(fighterA.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterA?.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
-              >
-                {fighterA?.name ?? "A"} ({(oddsA).toFixed(2)}x)
-              </button>
-              <button
-                type="button"
-                onClick={() => fighterB?.id && setBetOn(fighterB.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${betOn === fighterB?.id ? "bg-[#3b82f6] text-white" : "bg-[#161b22] border border-white/20 text-white"}`}
-              >
-                {fighterB?.name ?? "B"} ({(oddsB).toFixed(2)}x)
-              </button>
-              <button
-                type="button"
-                disabled={betting || !betOn || !betAmount}
-                onClick={placeBet}
-                className="px-4 py-2 rounded-lg bg-[#f0a500] text-black font-medium hover:bg-[#e09500] disabled:opacity-50"
-              >
-                Place bet
-              </button>
-            </div>
-            <p className="text-[#9ca3af] text-xs mt-2">Admin keeps 10% of spectator pot. Winners split 90%.</p>
-          </div>
-        )}
-        {log.length > 0 && (
-          <div className="max-h-32 overflow-y-auto rounded bg-[#0d1117] p-2 text-xs text-[#9ca3af]">
-            {log.slice(-8).map((e, i) => (
-              <div key={i}>
-                {e.actionA} → {e.damageAtoB} dmg · {e.actionB} → {e.damageBtoA} dmg
-              </div>
-            ))}
-          </div>
-        )}
+
+      <div className="relative w-full">
+        <SpectateMeshyProofCanvas modelUrl={meshyUrl} onLoadSuccess={onLoadSuccess} onLoadFailed={onLoadFailed} />
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-white/10 p-4">
+        <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline">
+          Back to lobby
+        </Link>
+        <p className="text-xs text-[#9ca3af]">
+          ArenaFight3DView / ArenaFightPresentation / sockets / betting are off until this GLB path is verified live.
+        </p>
       </div>
     </div>
   );
