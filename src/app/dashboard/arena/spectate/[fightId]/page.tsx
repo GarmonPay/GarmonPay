@@ -204,18 +204,6 @@ export default function SpectateFightPage() {
     }
   };
 
-  if (loading || !fightId) {
-    return <div className="p-6 text-[#9ca3af]">Loading…</div>;
-  }
-  if (!fight || !fighterA || !fighterB) {
-    return (
-      <div className="p-6">
-        <p className="text-[#9ca3af]">Fight not found.</p>
-        <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline mt-2 inline-block">Back to lobby</Link>
-      </div>
-    );
-  }
-
   const totalA =
     (fighterA?.strength ?? 0) +
     (fighterA?.speed ?? 0) +
@@ -265,6 +253,18 @@ export default function SpectateFightPage() {
     }
     return "idle";
   }, [winnerId, fighterA, fighterB, ringAnimation, lastExchange]);
+
+  if (loading || !fightId) {
+    return <div className="p-6 text-[#9ca3af]">Loading…</div>;
+  }
+  if (!fight || !fighterA || !fighterB) {
+    return (
+      <div className="p-6">
+        <p className="text-[#9ca3af]">Fight not found.</p>
+        <Link href="/dashboard/arena/spectate" className="text-[#f0a500] hover:underline mt-2 inline-block">Back to lobby</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[85vh] flex flex-col rounded-xl bg-[#161b22] border border-white/10 overflow-hidden">
