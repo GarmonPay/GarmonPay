@@ -44,29 +44,47 @@ export function ProceduralArenaRing() {
 
 function MeshyRingFromUrl({ url }: { url: string }) {
   const gltf = useGLTF(url);
+
   const scene = useMemo(() => {
-    const c = gltf.scene.clone(true);
-    c.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) {
-        m.castShadow = true;
-        m.receiveShadow = true;
+    try {
+      if (!gltf || !gltf.scene) {
+        console.error("GLTF FAILED TO LOAD (ring)", gltf);
+        return null;
       }
-    });
-    c.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(c);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const max = Math.max(size.x, size.y, size.z, 0.001);
-    const target = 6.2;
-    const s = target / max;
-    c.scale.setScalar(s);
-    c.updateMatrixWorld(true);
-    const b2 = new THREE.Box3().setFromObject(c);
-    c.position.y -= b2.min.y;
-    c.updateMatrixWorld(true);
-    return c;
+      const src = gltf.scene;
+      const c =
+        typeof src.clone === "function" ? src.clone(true) : (src as THREE.Object3D);
+      if (!c) return null;
+      c.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
+      });
+      c.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(c);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const max = Math.max(size.x, size.y, size.z, 0.001);
+      if (!Number.isFinite(max) || max <= 0) return null;
+      const target = 6.2;
+      const s = target / max;
+      c.scale.setScalar(s);
+      c.updateMatrixWorld(true);
+      const b2 = new THREE.Box3().setFromObject(c);
+      c.position.y -= b2.min.y;
+      c.updateMatrixWorld(true);
+      return c;
+    } catch (e) {
+      console.error("[MeshyRingFromUrl] prepare failed", e);
+      return null;
+    }
   }, [gltf]);
+
+  if (!scene) {
+    return <ProceduralArenaRing />;
+  }
 
   return <primitive object={scene} />;
 }

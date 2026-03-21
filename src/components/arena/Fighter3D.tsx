@@ -66,6 +66,12 @@ export default function Fighter3D({
   }, [fighter]);
 
   useEffect(() => {
+    if (url) {
+      console.log("LOADING MODEL:", url);
+    }
+  }, [url]);
+
+  useEffect(() => {
     if (!url || typeof window === "undefined") return;
     try {
       const draco = process.env.NEXT_PUBLIC_MESHY_DRACO === "1";

@@ -1,34 +1,39 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { FightAnim } from "./ProceduralFallbackBoxer";
+import { GltfFallbackMesh } from "./GltfFallbackMesh";
 
 const TARGET_HEIGHT = 1.72;
 
 function normalizeScene(root: THREE.Object3D) {
-  root.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  box.getSize(size);
-  if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z) || size.lengthSq() < 1e-18) {
-    console.warn("[CenteredMeshyModel] Empty or invalid bounds; skipping normalize.");
-    return;
+  try {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z) || size.lengthSq() < 1e-18) {
+      console.warn("[CenteredMeshyModel] Empty or invalid bounds; skipping normalize.");
+      return;
+    }
+    box.getCenter(center);
+    root.position.sub(center);
+    root.updateMatrixWorld(true);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    if (!Number.isFinite(maxDim) || maxDim <= 0) return;
+    const s = TARGET_HEIGHT / maxDim;
+    root.scale.setScalar(s);
+    root.updateMatrixWorld(true);
+    const b2 = new THREE.Box3().setFromObject(root);
+    root.position.y -= b2.min.y;
+    root.updateMatrixWorld(true);
+  } catch (e) {
+    console.error("[CenteredMeshyModel] normalizeScene failed", e);
   }
-  box.getCenter(center);
-  root.position.sub(center);
-  root.updateMatrixWorld(true);
-  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-  if (!Number.isFinite(maxDim) || maxDim <= 0) return;
-  const s = TARGET_HEIGHT / maxDim;
-  root.scale.setScalar(s);
-  root.updateMatrixWorld(true);
-  const b2 = new THREE.Box3().setFromObject(root);
-  root.position.y -= b2.min.y;
-  root.updateMatrixWorld(true);
 }
 
 type Props = {
@@ -37,20 +42,21 @@ type Props = {
   anim?: FightAnim;
 };
 
-/**
- * Loads GLB/GLTF with stable scale, floor pivot, shadows.
- * Set `NEXT_PUBLIC_MESHY_DRACO=1` when assets are Draco-compressed.
- */
-export function CenteredMeshyModel({ url, facingRight = false, anim = "idle" }: Props) {
-  const useDraco = typeof process !== "undefined" && process.env.NEXT_PUBLIC_MESHY_DRACO === "1";
-  const gltf = useGLTF(url, useDraco) as { scene?: THREE.Group };
-  const root = useMemo(() => {
-    const scene = gltf?.scene;
-    if (!scene || typeof scene.clone !== "function") {
-      throw new Error("[CenteredMeshyModel] GLTF scene missing or invalid (undefined is not an object)");
+function prepareRootFromGltf(gltf: { scene?: THREE.Object3D | null } | null | undefined): THREE.Object3D | null {
+  try {
+    if (!gltf || !gltf.scene) {
+      console.error("GLTF FAILED TO LOAD", gltf);
+      return null;
     }
-    const r = scene.clone(true);
-    r.traverse((o) => {
+    const scene = gltf.scene;
+    let base: THREE.Object3D;
+    if (typeof scene.clone === "function") {
+      base = scene.clone(true);
+    } else {
+      console.error("CLONE NOT AVAILABLE", scene);
+      base = scene;
+    }
+    base.traverse((o) => {
       const obj = o as THREE.Mesh;
       if (obj.isMesh) {
         obj.castShadow = true;
@@ -62,9 +68,28 @@ export function CenteredMeshyModel({ url, facingRight = false, anim = "idle" }: 
         }
       }
     });
-    normalizeScene(r);
-    return r;
-  }, [gltf]);
+    normalizeScene(base);
+    return base;
+  } catch (e) {
+    console.error("[CenteredMeshyModel] prepareRootFromGltf failed", e);
+    return null;
+  }
+}
+
+/**
+ * Loads GLB/GLTF with stable scale, floor pivot, shadows.
+ * Never passes undefined to R3F primitive — falls back to a simple box mesh.
+ */
+export function CenteredMeshyModel({ url, facingRight = false, anim = "idle" }: Props) {
+  const useDraco = typeof process !== "undefined" && process.env.NEXT_PUBLIC_MESHY_DRACO === "1";
+
+  useEffect(() => {
+    console.log("LOADING MODEL:", url);
+  }, [url]);
+
+  const gltf = useGLTF(url, useDraco) as { scene?: THREE.Object3D | null };
+
+  const rootPrepared = useMemo(() => prepareRootFromGltf(gltf), [gltf]);
 
   const group = useRef<THREE.Group>(null);
   const punchPhase = useRef(0);
@@ -101,7 +126,11 @@ export function CenteredMeshyModel({ url, facingRight = false, anim = "idle" }: 
 
   return (
     <group ref={group}>
-      <primitive object={root} />
+      {rootPrepared ? (
+        <primitive object={rootPrepared} />
+      ) : (
+        <GltfFallbackMesh facingRight={facingRight} />
+      )}
     </group>
   );
 }

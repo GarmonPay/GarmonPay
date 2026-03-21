@@ -18,7 +18,7 @@ export class ModelErrorBoundary extends React.Component<
   }
 
   componentDidCatch(err: unknown) {
-    console.warn("[Meshy GLB]", err);
+    console.error("[Meshy GLB] ModelErrorBoundary caught error — showing fallback mesh", err);
   }
 
   render() {

@@ -19,7 +19,10 @@ function FighterModel({
 }) {
   const resolved = resolveFighterModelUrl(modelUrl);
   return (
-    <ModelErrorBoundary fallback={<ProceduralFallbackBoxer facingRight={facingRight} anim="idle" />}>
+    <ModelErrorBoundary
+      key={resolved}
+      fallback={<ProceduralFallbackBoxer facingRight={facingRight} anim="idle" />}
+    >
       <Suspense fallback={<ProceduralFallbackBoxer facingRight={facingRight} anim="idle" />}>
         <CenteredMeshyModel key={resolved} url={resolved} facingRight={facingRight} anim="idle" />
       </Suspense>
