@@ -17,7 +17,10 @@ function FighterModel({
   modelUrl: string;
   facingRight: boolean;
 }) {
-  const resolved = resolveFighterModelUrl(modelUrl);
+  if (modelUrl == null || typeof modelUrl !== "string" || !modelUrl.trim()) {
+    console.warn("[BoxerCanvas] Invalid modelUrl — using fallback GLB path");
+  }
+  const resolved = resolveFighterModelUrl(typeof modelUrl === "string" ? modelUrl : "");
   return (
     <ModelErrorBoundary
       key={resolved}

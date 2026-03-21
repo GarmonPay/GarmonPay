@@ -15,9 +15,11 @@ import { ModelErrorBoundary } from "@/components/arena/meshy/ModelErrorBoundary"
 import { ProceduralFallbackBoxer } from "@/components/arena/meshy/ProceduralFallbackBoxer";
 import type { FightAnim } from "@/components/arena/meshy/ProceduralFallbackBoxer";
 import { resolveModelUrlOrNull } from "@/lib/meshy-assets";
+import { safeBarNumber, safeDisplayName } from "@/lib/arena-safe-fighter";
 
 function mapAnim(s: string | undefined): FightAnim {
-  switch (s) {
+  const key = typeof s === "string" ? s : "";
+  switch (key) {
     case "punch":
     case "big_hit":
       return "punch";
@@ -150,6 +152,16 @@ export default function ArenaFightPresentation({
       ? process.env.NEXT_PUBLIC_MESHY_RING_GLB
       : null);
 
+  const nameLeft = safeDisplayName(fighterAName, "Fighter A");
+  const nameRight = safeDisplayName(fighterBName, "Fighter B");
+  const hpA = safeBarNumber(healthA, 100);
+  const hpB = safeBarNumber(healthB, 100);
+  const stA = safeBarNumber(staminaA, 100);
+  const stB = safeBarNumber(staminaB, 100);
+  const safeKo = typeof koIntensity === "number" && Number.isFinite(koIntensity) ? koIntensity : 0;
+  const safeExchange =
+    typeof exchangeKey === "number" && Number.isFinite(exchangeKey) ? Math.max(0, exchangeKey) : 0;
+
   return (
     <div className="relative w-full overflow-hidden rounded-t-xl bg-black" style={{ minHeight: 380, height: "min(52vh, 520px)" }}>
       <div className="absolute inset-0 z-0">
@@ -161,7 +173,7 @@ export default function ArenaFightPresentation({
           camera={{ position: [0, 1.35, 4.4], fov: 38, near: 0.1, far: 80 }}
         >
           <ArenaLighting />
-          <FightCameraRig mode={ringMode} exchangeKey={exchangeKey} koIntensity={koIntensity} />
+          <FightCameraRig mode={ringMode} exchangeKey={safeExchange} koIntensity={safeKo} />
           <Suspense fallback={null}>
             <ArenaRing meshyRingUrl={envRing} />
             <group>
@@ -190,14 +202,14 @@ export default function ArenaFightPresentation({
           </Suspense>
         </Canvas>
       </div>
-      <HitFlash hitKey={exchangeKey} side={lastHitSide} />
+      <HitFlash hitKey={safeExchange} side={lastHitSide} />
       <FightHUD
-        nameLeft={fighterAName}
-        nameRight={fighterBName}
-        healthLeft={healthA}
-        healthRight={healthB}
-        staminaLeft={staminaA}
-        staminaRight={staminaB}
+        nameLeft={nameLeft}
+        nameRight={nameRight}
+        healthLeft={hpA}
+        healthRight={hpB}
+        staminaLeft={stA}
+        staminaRight={stB}
         loading={modelLoading}
       />
     </div>

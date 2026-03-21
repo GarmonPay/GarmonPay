@@ -56,10 +56,10 @@ function MeshyRingFromUrl({ url }: { url: string }) {
         typeof src.clone === "function" ? src.clone(true) : (src as THREE.Object3D);
       if (!c) return null;
       c.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh) {
-          m.castShadow = true;
-          m.receiveShadow = true;
+        if (o == null) return;
+        if (o instanceof THREE.Mesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
         }
       });
       c.updateMatrixWorld(true);

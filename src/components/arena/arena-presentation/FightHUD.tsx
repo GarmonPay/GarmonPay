@@ -1,5 +1,7 @@
 "use client";
 
+import { safeBarNumber, safeDisplayName } from "@/lib/arena-safe-fighter";
+
 export function FightHUD({
   nameLeft,
   nameRight,
@@ -17,6 +19,13 @@ export function FightHUD({
   staminaRight: number;
   loading?: boolean;
 }) {
+  const nl = safeDisplayName(nameLeft, "A");
+  const nr = safeDisplayName(nameRight, "B");
+  const hl = safeBarNumber(healthLeft, 0);
+  const hr = safeBarNumber(healthRight, 0);
+  const sl = safeBarNumber(staminaLeft, 0);
+  const sr = safeBarNumber(staminaRight, 0);
+
   const bar = (pct: number, color: string) => (
     <div className="h-2 rounded-full bg-black/50 overflow-hidden border border-white/10">
       <div
@@ -40,27 +49,27 @@ export function FightHUD({
       <div className="flex justify-between gap-6 max-w-4xl mx-auto">
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-white text-xs font-bold truncate uppercase tracking-wide">{nameLeft}</span>
-            <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(healthLeft)} HP</span>
+            <span className="text-white text-xs font-bold truncate uppercase tracking-wide">{nl}</span>
+            <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(hl)} HP</span>
           </div>
-          {bar(healthLeft, "#3b82f6")}
+          {bar(hl, "#3b82f6")}
           <div className="flex items-center justify-between gap-2 mt-2 mb-0.5">
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Stamina</span>
-            <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round(staminaLeft)}</span>
+            <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round(sl)}</span>
           </div>
-          {bar(staminaLeft, "#22c55e")}
+          {bar(sl, "#22c55e")}
         </div>
         <div className="flex-1 min-w-0 text-right">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(healthRight)} HP</span>
-            <span className="text-white text-xs font-bold truncate uppercase tracking-wide">{nameRight}</span>
+            <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(hr)} HP</span>
+            <span className="text-white text-xs font-bold truncate uppercase tracking-wide">{nr}</span>
           </div>
-          {bar(healthRight, "#ef4444")}
+          {bar(hr, "#ef4444")}
           <div className="flex items-center justify-between gap-2 mt-2 mb-0.5">
-            <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round(staminaRight)}</span>
+            <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round(sr)}</span>
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Stamina</span>
           </div>
-          {bar(staminaRight, "#84cc16")}
+          {bar(sr, "#84cc16")}
         </div>
       </div>
     </div>

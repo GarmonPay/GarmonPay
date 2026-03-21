@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
+import { safeFighterColor } from "@/lib/arena-safe-fighter";
 
 const Fighter3D = dynamic(() => import("@/components/arena/Fighter3D"), {
   ssr: false,
@@ -91,7 +92,7 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
     );
   }
 
-  const color = (typeof fighter.fighter_color === "string" && fighter.fighter_color) || "#f0a500";
+  const color = safeFighterColor(fighter as Record<string, unknown>, "#f0a500");
 
   if (!mounted) {
     return (

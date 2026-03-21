@@ -36,6 +36,7 @@ export function FightCameraRig({
   }, [exchangeKey]);
 
   useFrame((_, delta) => {
+    if (camera == null) return;
     bump.current.lerp(new THREE.Vector3(0, 0, 0), 1 - Math.exp(-delta * 5));
     const g = goal.current.clone().add(bump.current);
     camera.position.lerp(g, 1 - Math.exp(-delta * 4.2));

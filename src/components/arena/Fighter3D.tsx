@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useGLTF } from "@react-three/drei";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
+import { safeFighterColor } from "@/lib/arena-safe-fighter";
 import type { FightAnim } from "@/components/arena/meshy/ProceduralFallbackBoxer";
 import { FighterCard2D } from "@/components/arena/FighterCard2D";
 
@@ -33,6 +34,10 @@ export type Fighter3DProps = {
 
 const heights = { small: 220, medium: 380, large: 560 };
 
+function isValidFighterRecord(f: Fighter3DProps["fighter"]): f is Record<string, unknown> {
+  return f != null && typeof f === "object" && !Array.isArray(f);
+}
+
 /**
  * Meshy / GLB viewer entry: loads Three.js (R3F) when a model URL exists; otherwise shows 2D card fallback.
  * R3F uses an internal `requestAnimationFrame` render loop; GLTFLoader disposes via drei cache on unmount.
@@ -46,15 +51,21 @@ export default function Fighter3D({
   fighterColor,
 }: Fighter3DProps) {
   void _animationState;
-  const url = getFighterModelUrl(fighter);
-  const color =
-    fighterColor ??
-    (typeof fighter?.fighter_color === "string" && fighter.fighter_color ? fighter.fighter_color : "#f0a500");
+
+  const fighterOk = isValidFighterRecord(fighter);
+  const url = fighterOk ? getFighterModelUrl(fighter) : null;
+  const color = fighterColor ?? safeFighterColor(fighter, "#f0a500");
   const faceRight = facingRight ?? position === "right";
   const h = heights[size];
 
   useEffect(() => {
-    if (!isArenaDebugEnabled()) return;
+    if (!fighterOk) {
+      console.warn("[Fighter3D] Fighter is undefined or invalid — showing empty panel");
+    }
+  }, [fighterOk]);
+
+  useEffect(() => {
+    if (!isArenaDebugEnabled() || !fighterOk) return;
     console.log("FIGHTER DATA:", fighter);
     console.log("MODEL URL:", fighter?.model_3d_url);
     console.log("ALL MODEL FIELDS:", {
@@ -63,7 +74,7 @@ export default function Fighter3D({
       glb_url: fighter?.glb_url,
       meshy_glb_url: fighter?.meshy_glb_url,
     });
-  }, [fighter]);
+  }, [fighter, fighterOk]);
 
   useEffect(() => {
     if (url) {
@@ -84,6 +95,27 @@ export default function Fighter3D({
   const showDebug = isArenaDebugEnabled();
   const badgeLabel = url ? "3D URL FOUND" : "NO 3D URL";
   const badgeBg = url ? "rgba(34, 197, 94, 0.92)" : "rgba(239, 68, 68, 0.92)";
+
+  if (!fighterOk) {
+    return (
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          minHeight: h,
+          background: "#0a0a0f",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#64748b",
+          fontSize: 12,
+        }}
+      >
+        No fighter data
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "relative", width: "100%", minHeight: h }}>
@@ -113,9 +145,9 @@ export default function Fighter3D({
         <BoxerCanvas modelUrl={url} facingRight={faceRight} fighterColor={color} size={size} />
       ) : (
         <FighterCard2D
-          name={fighter?.name ?? undefined}
-          style={fighter?.style ?? undefined}
-          avatar={fighter?.avatar ?? undefined}
+          name={typeof fighter?.name === "string" ? fighter.name : undefined}
+          style={typeof fighter?.style === "string" ? fighter.style : undefined}
+          avatar={typeof fighter?.avatar === "string" ? fighter.avatar : undefined}
           accentColor={color}
           size={size}
         />

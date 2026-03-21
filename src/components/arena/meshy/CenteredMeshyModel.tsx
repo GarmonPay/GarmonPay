@@ -57,11 +57,12 @@ function prepareRootFromGltf(gltf: { scene?: THREE.Object3D | null } | null | un
       base = scene;
     }
     base.traverse((o) => {
-      const obj = o as THREE.Mesh;
-      if (obj.isMesh) {
-        obj.castShadow = true;
-        obj.receiveShadow = true;
-        const m = obj.material;
+      if (o == null) return;
+      // Use instanceof — avoid `.isMesh` on non-Mesh objects (minified crashes like `IS.S`).
+      if (o instanceof THREE.Mesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        const m = o.material;
         if (m && !Array.isArray(m) && "envMapIntensity" in m) {
           (m as THREE.MeshStandardMaterial).envMapIntensity =
             (m as THREE.MeshStandardMaterial).envMapIntensity ?? 1;
