@@ -11,6 +11,7 @@ import {
   getAdvertiserMe,
 } from "@/lib/api";
 import { PLATFORMS } from "@/components/ads/SocialPlatformLink";
+import type { AdPackageRow } from "@/lib/ad-packages";
 
 const AD_TYPES = [
   { id: "video", label: "Video Ad", desc: "Upload a video" },
@@ -18,14 +19,6 @@ const AD_TYPES = [
   { id: "social", label: "Social Follow Ad", desc: "Add social links" },
   { id: "product", label: "Link Ad", desc: "Drive traffic to your site" },
 ] as const;
-
-const PACKAGES = [
-  { id: "starter", name: "Starter", price: 19, views: 1000 },
-  { id: "creator", name: "Creator", price: 49, views: 3000 },
-  { id: "pro", name: "Pro", price: 99, views: 8000 },
-  { id: "business", name: "Business", price: 199, views: 20000 },
-  { id: "enterprise", name: "Enterprise", price: 499, views: 60000 },
-];
 
 const MIN_BUDGET = 5;
 const TITLE_MAX = 50;
@@ -73,6 +66,26 @@ export default function AdvertisePage() {
   const [advertiserDesc, setAdvertiserDesc] = useState("");
   const [creatingAdvertiser, setCreatingAdvertiser] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [adPackages, setAdPackages] = useState<AdPackageRow[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ad-packages", { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((data: { packages?: AdPackageRow[] }) => {
+        if (!cancelled) setAdPackages(Array.isArray(data?.packages) ? data.packages : []);
+      })
+      .catch(() => {
+        if (!cancelled) setAdPackages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPackagesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     getSessionAsync().then(async (s) => {
@@ -351,18 +364,43 @@ export default function AdvertisePage() {
             <>
               <p className="text-sm text-fintech-muted mb-4">Set budget (min ${MIN_BUDGET})</p>
               <div className="space-y-3 max-w-lg">
-                <div className="grid grid-cols-2 gap-2">
-                  {PACKAGES.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => { setBudget(p.price); setCustomBudget(""); }}
-                      className={`rounded-lg border px-3 py-2 text-sm ${budget === p.price && !customBudget ? "border-fintech-accent bg-fintech-accent/20" : "border-white/10"}`}
-                    >
-                      {p.name} ${p.price}
-                    </button>
-                  ))}
-                </div>
+                {packagesLoading ? (
+                  <p className="text-sm text-fintech-muted">Loading packages…</p>
+                ) : adPackages.length === 0 ? (
+                  <p className="text-sm text-fintech-muted">No ad packages available</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {adPackages.map((p) => {
+                      const monthly = Number(p.price_monthly);
+                      const safe = Number.isFinite(monthly) ? monthly : MIN_BUDGET;
+                      const views =
+                        typeof p.ad_views === "number"
+                          ? p.ad_views
+                          : parseInt(String(p.ad_views ?? ""), 10);
+                      const viewsLabel = Number.isFinite(views) ? views.toLocaleString() : "—";
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setBudget(safe);
+                            setCustomBudget("");
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                            budget === safe && !customBudget
+                              ? "border-fintech-accent bg-fintech-accent/20"
+                              : "border-white/10"
+                          }`}
+                        >
+                          <span className="block font-medium text-white">{p.name}</span>
+                          <span className="text-fintech-muted">
+                            ${safe.toFixed(2)}/mo · {viewsLabel} views
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm text-fintech-muted">Or custom amount ($)</label>
                   <input
