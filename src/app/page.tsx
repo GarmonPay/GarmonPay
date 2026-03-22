@@ -14,7 +14,7 @@ export default function HomePage() {
         Get Seen. Get Known. Get Paid.
       </p>
 
-      <div className="flex gap-4">
+      <div className="flex flex-wrap justify-center gap-4">
 
         <a
           href="/login"
@@ -30,6 +30,13 @@ export default function HomePage() {
           Register
         </a>
 
+        <a
+          href="/advertise"
+          className="border border-amber-500 text-amber-400 hover:bg-amber-500/10 px-6 py-3 rounded-lg font-semibold"
+        >
+          Advertise
+        </a>
+
       </div>
 
       <a
@@ -37,6 +44,12 @@ export default function HomePage() {
         className="mt-6 text-blue-400 underline"
       >
         Go to Wallet
+      </a>
+      <a
+        href="/pricing"
+        className="mt-2 inline-block text-sm text-fintech-muted hover:text-white"
+      >
+        Plans &amp; ad packages
       </a>
 
       <div className="mt-10 w-full max-w-md">

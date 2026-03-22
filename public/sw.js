@@ -1,4 +1,4 @@
-const CACHE_NAME = "garmonpay-v1";
+const CACHE_NAME = "garmonpay-v2-ad-packages";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

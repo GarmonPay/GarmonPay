@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 
+/** Always fresh — no stale JSON after deploy or DB edits */
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/ad-packages — public list of active ad packages (Supabase `ad_packages`).
  */

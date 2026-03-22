@@ -71,7 +71,7 @@ export default function AdvertisePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ad-packages", { credentials: "same-origin" })
+    fetch(`/api/ad-packages?t=${Date.now()}`, { credentials: "same-origin", cache: "no-store" })
       .then((r) => r.json())
       .then((data: { packages?: AdPackageRow[] }) => {
         if (!cancelled) setAdPackages(Array.isArray(data?.packages) ? data.packages : []);
