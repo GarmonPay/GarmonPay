@@ -7,10 +7,10 @@ import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
 import {
-  BODY_TYPES,
-  SKIN_TONES,
-  FACE_STYLES,
-  HAIR_STYLES,
+  bodyTypeOptions,
+  skinToneOptions,
+  faceStyleOptions,
+  hairStyleOptions,
   type BodyType,
   type SkinTone,
   type FaceStyle,
@@ -69,10 +69,10 @@ export default function CreateFighterManualPage() {
   };
 
   function handleRandomize() {
-    setBodyType(randomChoice(BODY_TYPES).value);
-    setSkinTone(randomChoice(SKIN_TONES).value);
-    setFaceStyle(randomChoice(FACE_STYLES).value);
-    setHairStyle(randomChoice(HAIR_STYLES).value);
+    setBodyType(randomChoice(bodyTypeOptions).value);
+    setSkinTone(randomChoice(skinToneOptions).value);
+    setFaceStyle(randomChoice(faceStyleOptions).value);
+    setHairStyle(randomChoice(hairStyleOptions).value);
     setStyle(randomChoice(styleList));
     setAvatar(randomChoice(avatarList));
   }
@@ -161,7 +161,7 @@ export default function CreateFighterManualPage() {
           <div className="space-y-4">
             <p className="text-[#f0a500] font-medium">STEP 1 — Body type</p>
             <div className="flex flex-wrap gap-2">
-              {BODY_TYPES.map((b) => (
+              {bodyTypeOptions.map((b) => (
                 <button
                   key={b.value}
                   type="button"
@@ -177,7 +177,7 @@ export default function CreateFighterManualPage() {
 
             <p className="text-[#f0a500] font-medium pt-2">STEP 2 — Skin tone</p>
             <div className="flex flex-wrap gap-2">
-              {SKIN_TONES.map((t) => (
+              {skinToneOptions.map((t) => (
                 <button
                   key={t.value}
                   type="button"
@@ -193,7 +193,7 @@ export default function CreateFighterManualPage() {
 
             <p className="text-[#f0a500] font-medium pt-2">STEP 3 — Face</p>
             <div className="flex flex-wrap gap-2">
-              {FACE_STYLES.map((f) => (
+              {faceStyleOptions.map((f) => (
                 <button
                   key={f.value}
                   type="button"
@@ -209,7 +209,7 @@ export default function CreateFighterManualPage() {
 
             <p className="text-[#f0a500] font-medium pt-2">STEP 4 — Hair</p>
             <div className="flex flex-wrap gap-2">
-              {HAIR_STYLES.map((h) => (
+              {hairStyleOptions.map((h) => (
                 <button
                   key={h.value}
                   type="button"
