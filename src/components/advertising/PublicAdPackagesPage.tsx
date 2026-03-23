@@ -2,8 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { AdPackageRow } from "@/lib/ad-packages";
 import { AdPackagesCardGrid } from "@/components/advertising/AdPackagesCardGrid";
+import { getSessionAsync } from "@/lib/session";
 
 type Props = {
   heading?: string;
@@ -19,9 +21,12 @@ export function PublicAdPackagesPage({
   subheading = "Get Seen. Get Known. Get Paid.",
   children,
 }: Props) {
+  const searchParams = useSearchParams();
   const [packages, setPackages] = useState<AdPackageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutLoadingPackageId, setCheckoutLoadingPackageId] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +57,53 @@ export function PublicAdPackagesPage({
     };
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get("canceled") === "1") {
+      setCheckoutError("Checkout was canceled. You can try again anytime.");
+    }
+  }, [searchParams]);
+
+  const handleStartCampaign = async (pkg: AdPackageRow) => {
+    setCheckoutError(null);
+    setCheckoutLoadingPackageId(pkg.id);
+    try {
+      const session = await getSessionAsync();
+      if (!session?.accessToken) {
+        window.location.href = `/login?next=${encodeURIComponent("/advertise")}`;
+        return;
+      }
+
+      const res = await fetch("/api/advertising/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          package_id: pkg.id,
+          package_name: pkg.name,
+          price_monthly: pkg.price_monthly,
+          ad_views: pkg.ad_views,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { url?: string; message?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(
+          typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Could not start checkout. Please try again."
+        );
+      }
+
+      window.location.href = data.url;
+    } catch (e) {
+      setCheckoutLoadingPackageId(null);
+      setCheckoutError(e instanceof Error ? e.message : "Failed to create checkout session");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#0b1727] to-[#020617] px-4 py-12 text-white">
       <div className="mx-auto max-w-6xl">
@@ -74,7 +126,15 @@ export function PublicAdPackagesPage({
           packages={packages}
           loading={loading}
           error={error}
+          onStartCampaign={handleStartCampaign}
+          checkoutLoadingPackageId={checkoutLoadingPackageId}
         />
+
+        {checkoutError && (
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400">
+            {checkoutError}
+          </div>
+        )}
 
         {children}
 

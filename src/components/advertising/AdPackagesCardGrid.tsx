@@ -1,6 +1,4 @@
 "use client";
-
-import Link from "next/link";
 import type { AdPackageRow } from "@/lib/ad-packages";
 import {
   adPackageFeaturesToList,
@@ -14,6 +12,10 @@ export type AdPackagesCardGridProps = {
   error?: string | null;
   /** Public marketing: Link CTAs. Dashboard: selectable buttons + same Supabase data. */
   variant: "marketing" | "dashboard";
+  /** Public marketing: starts ad package checkout */
+  onStartCampaign?: (pkg: AdPackageRow) => void;
+  /** Public marketing: package currently creating checkout session */
+  checkoutLoadingPackageId?: string | null;
   /** Dashboard: which package is highlighted */
   selectedPackageId?: string | null;
   /** Dashboard: user chose a plan — sets budget + selection in parent */
@@ -29,6 +31,8 @@ export function AdPackagesCardGrid({
   loading,
   error,
   variant,
+  onStartCampaign,
+  checkoutLoadingPackageId,
   selectedPackageId,
   onSelectPackage,
   emptyMessage = "No ad packages available",
@@ -83,12 +87,14 @@ export function AdPackagesCardGrid({
               </ul>
             )}
             {variant === "marketing" ? (
-              <Link
-                href={`/login?next=${encodeURIComponent("/dashboard/advertise")}`}
-                className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white hover:opacity-90"
+              <button
+                type="button"
+                onClick={() => onStartCampaign?.(pkg)}
+                disabled={checkoutLoadingPackageId === pkg.id}
+                className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
               >
-                Start Campaign
-              </Link>
+                {checkoutLoadingPackageId === pkg.id ? "Redirecting to checkout..." : "Start Campaign"}
+              </button>
             ) : (
               <button
                 type="button"
