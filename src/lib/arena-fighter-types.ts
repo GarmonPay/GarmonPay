@@ -209,9 +209,3 @@ export const hairStyleOptions = [
   { value: "buzz_cut" as const, label: "Buzz Cut" },
   { value: "long_tied" as const, label: "Long Tied" },
 ];
-
-/** Same arrays as *Options — legacy names for imports expecting BODY_TYPES / SKIN_TONES / … */
-export const BODY_TYPES = bodyTypeOptions;
-export const SKIN_TONES = skinToneOptions;
-export const FACE_STYLES = faceStyleOptions;
-export const HAIR_STYLES = hairStyleOptions;

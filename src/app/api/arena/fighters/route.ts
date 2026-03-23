@@ -6,10 +6,11 @@ import { startMeshy3DGeneration } from "@/lib/arena-meshy-3d";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const AVATARS = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
-const BODY_TYPES = ["lightweight", "middleweight", "heavyweight"] as const;
-const SKIN_TONES = ["tone1", "tone2", "tone3", "tone4", "tone5", "tone6"] as const;
-const FACE_STYLES = ["determined", "fierce", "calm", "angry", "scarred", "young", "veteran", "masked"] as const;
-const HAIR_STYLES = ["bald", "short_fade", "dreads", "cornrows", "afro", "mohawk", "buzz_cut", "long_tied"] as const;
+/** Allowed enum values (keep in sync with `bodyTypeOptions` / etc. in arena-fighter-types) */
+const VALID_BODY_TYPES = ["lightweight", "middleweight", "heavyweight"] as const;
+const VALID_SKIN_TONES = ["tone1", "tone2", "tone3", "tone4", "tone5", "tone6"] as const;
+const VALID_FACE_STYLES = ["determined", "fierce", "calm", "angry", "scarred", "young", "veteran", "masked"] as const;
+const VALID_HAIR_STYLES = ["bald", "short_fade", "dreads", "cornrows", "afro", "mohawk", "buzz_cut", "long_tied"] as const;
 
 /** POST /api/arena/fighters — create fighter (one per user). Auth via cookies (Supabase SSR) or Bearer token fallback. */
 export async function POST(request: Request) {
@@ -74,19 +75,23 @@ export async function POST(request: Request) {
     const avatar =
       typeof rawAvatar === "string" && AVATARS.includes(rawAvatar) ? rawAvatar : AVATARS[0];
     const body_type =
-      typeof rawBodyType === "string" && BODY_TYPES.includes(rawBodyType as (typeof BODY_TYPES)[number])
+      typeof rawBodyType === "string" &&
+      VALID_BODY_TYPES.includes(rawBodyType as (typeof VALID_BODY_TYPES)[number])
         ? rawBodyType
         : "middleweight";
     const skin_tone =
-      typeof rawSkinTone === "string" && SKIN_TONES.includes(rawSkinTone as (typeof SKIN_TONES)[number])
+      typeof rawSkinTone === "string" &&
+      VALID_SKIN_TONES.includes(rawSkinTone as (typeof VALID_SKIN_TONES)[number])
         ? rawSkinTone
         : "tone3";
     const face_style =
-      typeof rawFaceStyle === "string" && FACE_STYLES.includes(rawFaceStyle as (typeof FACE_STYLES)[number])
+      typeof rawFaceStyle === "string" &&
+      VALID_FACE_STYLES.includes(rawFaceStyle as (typeof VALID_FACE_STYLES)[number])
         ? rawFaceStyle
         : "determined";
     const hair_style =
-      typeof rawHairStyle === "string" && HAIR_STYLES.includes(rawHairStyle as (typeof HAIR_STYLES)[number])
+      typeof rawHairStyle === "string" &&
+      VALID_HAIR_STYLES.includes(rawHairStyle as (typeof VALID_HAIR_STYLES)[number])
         ? rawHairStyle
         : "short_fade";
     const fighterColorStr =

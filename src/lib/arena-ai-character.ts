@@ -6,7 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const STYLES = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
-const BODY_TYPES = ["lightweight", "middleweight", "heavyweight"] as const;
+const VALID_BODY_TYPES = ["lightweight", "middleweight", "heavyweight"] as const;
 const PERSONALITIES = ["Cold", "Fierce", "Calculated", "Wild", "Silent", "Arrogant", "Humble", "Hungry"] as const;
 
 export interface AIGeneratedCharacter {
@@ -129,7 +129,8 @@ function parseCharacterResponse(raw: unknown): AIGeneratedCharacter {
       ? o.style
       : STYLES[0];
   const body_type =
-    typeof o.body_type === "string" && BODY_TYPES.includes(o.body_type as (typeof BODY_TYPES)[number])
+    typeof o.body_type === "string" &&
+    VALID_BODY_TYPES.includes(o.body_type as (typeof VALID_BODY_TYPES)[number])
       ? o.body_type
       : "middleweight";
   const personality =
