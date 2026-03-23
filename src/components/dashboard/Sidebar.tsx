@@ -17,7 +17,7 @@ const nav = [
   { href: "/dashboard/earn/calculator", label: "Calculator" },
   { href: "/dashboard/earnings", label: "Earnings" },
   { href: "/dashboard/advertise", label: "Advertise" },
-  { href: "/dashboard/ads", label: "Ads" },
+  { href: "/dashboard/ads", label: "Watch ads" },
   { href: "/dashboard/banners", label: "Banners" },
   { href: "/dashboard/withdraw", label: "Withdraw" },
   { href: "/dashboard/tournaments", label: "Tournaments" },

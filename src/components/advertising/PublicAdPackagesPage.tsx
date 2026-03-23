@@ -3,23 +3,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { AdPackageRow } from "@/lib/ad-packages";
-import {
-  adPackageFeaturesToList,
-  formatAdViews,
-  formatPriceMonthly,
-} from "@/lib/ad-packages";
+import { AdPackagesCardGrid } from "@/components/advertising/AdPackagesCardGrid";
 
 type Props = {
-  /** Page title (e.g. Advertising vs Plans) */
   heading?: string;
   subheading?: string;
-  /** Extra footer content below packages */
   children?: ReactNode;
 };
 
 /**
  * Public ad packages from Supabase `ad_packages` via GET /api/ad-packages.
- * Fetch uses cache: no-store so deploys and DB changes show up immediately.
  */
 export function PublicAdPackagesPage({
   heading = "Advertising",
@@ -69,60 +62,19 @@ export function PublicAdPackagesPage({
           <h1 className="mt-4 text-4xl font-bold">{heading}</h1>
           <p className="mt-2 text-fintech-muted">{subheading}</p>
           <p className="mt-3 text-xs text-fintech-muted/80">
-            Live packages from Supabase · <Link href="/advertise" className="text-fintech-accent hover:underline">/advertise</Link>
+            Live packages from Supabase ·{" "}
+            <Link href="/advertise" className="text-fintech-accent hover:underline">
+              /advertise
+            </Link>
           </p>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <p className="text-center text-fintech-muted">Loading packages…</p>
-        ) : packages.length === 0 ? (
-          <p className="text-center text-lg text-fintech-muted">No ad packages available</p>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {packages.map((pkg) => {
-              const bullets = adPackageFeaturesToList(pkg.features);
-              const monthly = formatPriceMonthly(pkg.price_monthly);
-              const views = formatAdViews(pkg.ad_views);
-              return (
-                <div
-                  key={pkg.id}
-                  className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-6"
-                >
-                  <h2 className="text-xl font-bold">{pkg.name}</h2>
-                  <p className="mt-4 text-3xl font-black">
-                    ${monthly}
-                    <span className="text-base font-normal text-fintech-muted">/mo</span>
-                  </p>
-                  <p className="mt-2 text-sm text-fintech-muted">
-                    <span className="font-medium text-white/90">{views}</span> ad views
-                  </p>
-                  {bullets.length > 0 && (
-                    <ul className="mt-4 flex-1 space-y-2 text-sm text-fintech-muted">
-                      {bullets.map((f) => (
-                        <li key={f} className="flex gap-2">
-                          <span className="text-fintech-accent">•</span>
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <Link
-                    href={`/login?next=${encodeURIComponent("/dashboard/advertise")}`}
-                    className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white hover:opacity-90"
-                  >
-                    Start Campaign
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <AdPackagesCardGrid
+          variant="marketing"
+          packages={packages}
+          loading={loading}
+          error={error}
+        />
 
         {children}
 

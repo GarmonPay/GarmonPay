@@ -11,7 +11,8 @@ import {
   getAdvertiserMe,
 } from "@/lib/api";
 import { PLATFORMS } from "@/components/ads/SocialPlatformLink";
-import type { AdPackageRow } from "@/lib/ad-packages";
+import { AdPackagesCardGrid } from "@/components/advertising/AdPackagesCardGrid";
+import { formatAdViews, type AdPackageRow } from "@/lib/ad-packages";
 
 const AD_TYPES = [
   { id: "video", label: "Video Ad", desc: "Upload a video" },
@@ -68,16 +69,29 @@ export default function AdvertisePage() {
   const [paying, setPaying] = useState(false);
   const [adPackages, setAdPackages] = useState<AdPackageRow[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
+  const [packagesError, setPackagesError] = useState<string | null>(null);
+  /** Same Supabase row as public /advertise — drives budget + step 3 */
+  const [selectedPackage, setSelectedPackage] = useState<AdPackageRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/ad-packages?t=${Date.now()}`, { credentials: "same-origin", cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: { packages?: AdPackageRow[] }) => {
-        if (!cancelled) setAdPackages(Array.isArray(data?.packages) ? data.packages : []);
+      .then(async (r) => {
+        const data = (await r.json().catch(() => ({}))) as { packages?: AdPackageRow[]; message?: string };
+        if (cancelled) return;
+        if (!r.ok) {
+          setPackagesError(typeof data?.message === "string" ? data.message : "Could not load packages");
+          setAdPackages([]);
+          return;
+        }
+        setPackagesError(null);
+        setAdPackages(Array.isArray(data?.packages) ? data.packages : []);
       })
       .catch(() => {
-        if (!cancelled) setAdPackages([]);
+        if (!cancelled) {
+          setPackagesError("Could not load packages");
+          setAdPackages([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setPackagesLoading(false);
@@ -118,6 +132,18 @@ export default function AdvertisePage() {
     });
   }, [router, searchParams]);
 
+  const handleSelectPackage = (pkg: AdPackageRow) => {
+    setSelectedPackage(pkg);
+    const monthly = Number(pkg.price_monthly);
+    if (Number.isFinite(monthly) && monthly >= MIN_BUDGET) {
+      setBudget(monthly);
+    } else if (Number.isFinite(monthly)) {
+      setBudget(MIN_BUDGET);
+    }
+    setCustomBudget("");
+    setError(null);
+  };
+
   const handleCreateAdvertiser = async () => {
     if (!session || !businessName.trim()) return;
     setCreatingAdvertiser(true);
@@ -144,7 +170,7 @@ export default function AdvertisePage() {
       setError("Title or description too long");
       return;
     }
-    const amount = customBudget ? parseFloat(customBudget) : budget;
+    const amount = customBudget.trim() ? parseFloat(customBudget) : budget;
     if (isNaN(amount) || amount < MIN_BUDGET) {
       setError(`Minimum budget is $${MIN_BUDGET} to run an ad`);
       return;
@@ -209,7 +235,44 @@ export default function AdvertisePage() {
         </div>
       )}
 
-      {/* Advertiser onboarding */}
+      {/* 1) Ad packages — always visible when logged in (same API + data as /advertise) */}
+      {session && (
+        <div className="card-lux p-6">
+          <h2 className="text-lg font-semibold text-white mb-1">Choose your plan</h2>
+          <p className="text-sm text-fintech-muted mb-6">
+            Packages load from Supabase. Select one to set your campaign budget, then create your profile and start your campaign.
+          </p>
+          <AdPackagesCardGrid
+            variant="dashboard"
+            packages={adPackages}
+            loading={packagesLoading}
+            error={packagesError}
+            selectedPackageId={selectedPackage?.id ?? null}
+            onSelectPackage={handleSelectPackage}
+          />
+        </div>
+      )}
+
+      {session && selectedPackage && (
+        <div className="rounded-xl border border-fintech-accent/40 bg-fintech-accent/10 px-4 py-3 text-sm text-white">
+          <span className="text-fintech-muted">Selected plan: </span>
+          <strong>{selectedPackage.name}</strong>
+          {" — "}
+          ${Number(selectedPackage.price_monthly).toFixed(2)}/mo · {formatAdViews(selectedPackage.ad_views)} ad views
+          {!hasAdvertiser && (
+            <span className="block mt-2 text-fintech-muted">
+              Next: fill out your advertiser profile below, then you can create your campaign.
+            </span>
+          )}
+          {hasAdvertiser && (
+            <span className="block mt-2 text-fintech-muted">
+              Use <strong>Create your ad</strong> below — your budget step will use this plan unless you enter a custom amount.
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 2) Advertiser onboarding */}
       {!hasAdvertiser && session && (
         <div className="card-lux p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Create your advertiser profile</h2>
@@ -261,7 +324,10 @@ export default function AdvertisePage() {
       {/* Create your ad wizard */}
       {hasAdvertiser && (
         <div className="card-lux p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Create your ad</h2>
+          <h2 className="text-lg font-semibold text-white mb-1">Create your campaign</h2>
+          <p className="text-sm text-fintech-muted mb-4">
+            Pick ad type, content, budget, then pay. Your plan and profile are already set above.
+          </p>
           {step === 1 && (
             <>
               <p className="text-sm text-fintech-muted mb-4">Choose ad type</p>
@@ -363,54 +429,39 @@ export default function AdvertisePage() {
           {step === 3 && (
             <>
               <p className="text-sm text-fintech-muted mb-4">Set budget (min ${MIN_BUDGET})</p>
+              <p className="text-xs text-fintech-muted mb-3">
+                Your plan was chosen above. Change it anytime by scrolling to <strong>Choose your plan</strong>.
+              </p>
               <div className="space-y-3 max-w-lg">
-                {packagesLoading ? (
-                  <p className="text-sm text-fintech-muted">Loading packages…</p>
-                ) : adPackages.length === 0 ? (
-                  <p className="text-sm text-fintech-muted">No ad packages available</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {adPackages.map((p) => {
-                      const monthly = Number(p.price_monthly);
-                      const safe = Number.isFinite(monthly) ? monthly : MIN_BUDGET;
-                      const views =
-                        typeof p.ad_views === "number"
-                          ? p.ad_views
-                          : parseInt(String(p.ad_views ?? ""), 10);
-                      const viewsLabel = Number.isFinite(views) ? views.toLocaleString() : "—";
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setBudget(safe);
-                            setCustomBudget("");
-                          }}
-                          className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                            budget === safe && !customBudget
-                              ? "border-fintech-accent bg-fintech-accent/20"
-                              : "border-white/10"
-                          }`}
-                        >
-                          <span className="block font-medium text-white">{p.name}</span>
-                          <span className="text-fintech-muted">
-                            ${safe.toFixed(2)}/mo · {viewsLabel} views
-                          </span>
-                        </button>
-                      );
-                    })}
+                {selectedPackage ? (
+                  <div className="rounded-lg border border-fintech-accent/40 bg-fintech-accent/10 px-3 py-2 text-sm text-white">
+                    <span className="text-fintech-muted">Using plan: </span>
+                    {selectedPackage.name} — ${Number(selectedPackage.price_monthly).toFixed(2)}/mo ·{" "}
+                    {formatAdViews(selectedPackage.ad_views)} views
                   </div>
+                ) : (
+                  <p className="text-sm text-amber-400/90">
+                    No plan selected yet — pick one under <strong>Choose your plan</strong> above, or enter a custom amount below.
+                  </p>
                 )}
                 <div>
-                  <label className="block text-sm text-fintech-muted">Or custom amount ($)</label>
+                  <label className="block text-sm text-fintech-muted">Campaign budget ($)</label>
                   <input
                     type="number"
                     min={MIN_BUDGET}
                     step={1}
                     value={customBudget}
-                    onChange={(e) => { setCustomBudget(e.target.value); setBudget(0); }}
+                    onChange={(e) => setCustomBudget(e.target.value)}
+                    placeholder={
+                      selectedPackage
+                        ? `Default from plan: $${Number(selectedPackage.price_monthly).toFixed(2)}`
+                        : `Minimum $${MIN_BUDGET}`
+                    }
                     className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 text-white"
                   />
+                  <p className="mt-1 text-xs text-fintech-muted">
+                    Leave blank to use your selected plan amount (${budget.toFixed(2)}) at checkout.
+                  </p>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button type="button" onClick={() => setStep(2)} className="rounded-xl border border-white/20 px-4 py-2 text-sm">
@@ -433,7 +484,10 @@ export default function AdvertisePage() {
               <div className="max-w-lg space-y-2 text-sm">
                 <p><span className="text-fintech-muted">Type:</span> {adType}</p>
                 <p><span className="text-fintech-muted">Title:</span> {title || "—"}</p>
-                <p><span className="text-fintech-muted">Budget:</span> ${customBudget ? parseFloat(customBudget) || MIN_BUDGET : budget}</p>
+                <p>
+                  <span className="text-fintech-muted">Budget:</span> $
+                  {(customBudget.trim() ? parseFloat(customBudget) : budget).toFixed(2)}
+                </p>
               </div>
               <p className="text-xs text-fintech-muted mt-4">
                 Pay with Stripe to fund your ad. Minimum $5. After payment your ad will be submitted for review and go live when approved.
@@ -448,7 +502,9 @@ export default function AdvertisePage() {
                   disabled={paying}
                   className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  {paying ? "Redirecting to Stripe…" : `Pay $${(customBudget ? parseFloat(customBudget) : budget) || MIN_BUDGET} with Stripe`}
+                  {paying
+                    ? "Redirecting to Stripe…"
+                    : `Pay $${(customBudget.trim() ? parseFloat(customBudget) : budget).toFixed(2)} with Stripe`}
                 </button>
               </div>
             </>
