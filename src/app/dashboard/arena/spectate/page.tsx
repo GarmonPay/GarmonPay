@@ -6,10 +6,14 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 
 const ProBoxer = dynamic(
   () => import("@/components/arena/ProBoxer"),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => <Arena3dDynamicFallback />,
+  }
 );
 
 type LiveFight = {

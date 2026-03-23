@@ -4,31 +4,18 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 import { getApiRoot } from "@/lib/api";
 import { getSessionAsync } from "@/lib/session";
+import type { FighterData } from "@/lib/arena-fighter-types";
 
 const ProBoxer = dynamic(
   () => import("@/components/arena/ProBoxer"),
   {
     ssr: false,
-    loading: () => (
-      <div
-        style={{
-          width: "100%",
-          height: 380,
-          background: "#000",
-          borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    ),
+    loading: () => <Arena3dDynamicFallback />,
   }
 );
-import type { FighterData } from "@/lib/arena-fighter-types";
 
 const QUESTIONS: {
   id: string;

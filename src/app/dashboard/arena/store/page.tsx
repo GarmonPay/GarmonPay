@@ -3,11 +3,15 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Arena3dDynamicFallback } from '@/components/arena/arena-3d-dynamic-fallback'
 import { parseArenaMeResponse } from '@/lib/arena/arenaMeResponse'
 
 const BoxerDisplay = dynamic(
   () => import('@/components/arena/BoxerDisplay'),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => <Arena3dDynamicFallback />,
+  }
 )
 
 export default function ArenaStorePage() {

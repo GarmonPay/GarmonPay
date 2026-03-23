@@ -17,10 +17,14 @@ import {
   type HairStyle,
   type FighterData,
 } from "@/lib/arena-fighter-types";
+import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 
 const BoxerDisplay = dynamic(
   () => import("@/components/arena/BoxerDisplay"),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => <Arena3dDynamicFallback />,
+  }
 );
 
 const styleList = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;

@@ -5,24 +5,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getApiRoot } from "@/lib/api";
+import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { logArenaFighterPayload } from "@/lib/arena-merge-fighter";
 import { SPECTATE_MESHY_PROOF_GLB_URL } from "@/lib/spectate-meshy-proof";
 
-/** Minimal WebGL proof — no ArenaFight3DView, no ArenaErrorBoundary (🥊 screen). */
+/** Minimal WebGL proof — dynamic import only (no SSR of Three.js). */
 const SpectateMeshyProofCanvas = dynamic(
   () =>
     import("@/components/arena/spectate/SpectateMeshyProofCanvas").then((m) => m.SpectateMeshyProofCanvas),
   {
     ssr: false,
-    loading: () => (
-      <div
-        className="flex w-full items-center justify-center rounded-t-xl bg-black text-xs tracking-[0.2em] text-amber-400"
-        style={{ minHeight: 380, height: "min(52vh, 520px)" }}
-      >
-        LOADING WEBGL…
-      </div>
-    ),
+    loading: () => <Arena3dDynamicFallback />,
   }
 );
 

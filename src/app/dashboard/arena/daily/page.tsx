@@ -6,30 +6,17 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 
 import { getApiRoot } from "@/lib/api";
+import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
+import type { FighterData } from "@/lib/arena-fighter-types";
+import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 const ProBoxer = dynamic(
   () => import("@/components/arena/ProBoxer"),
   {
     ssr: false,
-    loading: () => (
-      <div
-        style={{
-          width: "100%",
-          height: 380,
-          background: "#000",
-          borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <span style={{ fontSize: 48 }}>🥊</span>
-      </div>
-    ),
+    loading: () => <Arena3dDynamicFallback />,
   }
 );
-import type { FighterData } from "@/lib/arena-fighter-types";
-import { parseArenaMeResponse } from "@/lib/arena/arenaMeResponse";
 
 export default function ArenaDailyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
