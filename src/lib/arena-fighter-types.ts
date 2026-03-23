@@ -176,12 +176,12 @@ export function getSkinHex(skinTone: string): string {
 }
 
 /** Option arrays for manual fighter creation UI */
-export const BODY_TYPES = [
+export const bodyTypeOptions = [
   { value: "lightweight" as const, label: "Lightweight" },
   { value: "middleweight" as const, label: "Middleweight" },
   { value: "heavyweight" as const, label: "Heavyweight" },
 ];
-export const SKIN_TONES = [
+export const skinToneOptions = [
   { value: "tone1" as const, label: "Tone 1", hex: SKIN_TONES_MAP.tone1 },
   { value: "tone2" as const, label: "Tone 2", hex: SKIN_TONES_MAP.tone2 },
   { value: "tone3" as const, label: "Tone 3", hex: SKIN_TONES_MAP.tone3 },
@@ -189,7 +189,7 @@ export const SKIN_TONES = [
   { value: "tone5" as const, label: "Tone 5", hex: SKIN_TONES_MAP.tone5 },
   { value: "tone6" as const, label: "Tone 6", hex: SKIN_TONES_MAP.tone6 },
 ];
-export const FACE_STYLES = [
+export const faceStyleOptions = [
   { value: "determined" as const, label: "Determined" },
   { value: "fierce" as const, label: "Fierce" },
   { value: "calm" as const, label: "Calm" },
@@ -199,7 +199,7 @@ export const FACE_STYLES = [
   { value: "veteran" as const, label: "Veteran" },
   { value: "masked" as const, label: "Masked" },
 ];
-export const HAIR_STYLES = [
+export const hairStyleOptions = [
   { value: "bald" as const, label: "Bald" },
   { value: "short_fade" as const, label: "Short Fade" },
   { value: "dreads" as const, label: "Dreads" },
@@ -209,3 +209,9 @@ export const HAIR_STYLES = [
   { value: "buzz_cut" as const, label: "Buzz Cut" },
   { value: "long_tied" as const, label: "Long Tied" },
 ];
+
+/** Same arrays as *Options — legacy names for imports expecting BODY_TYPES / SKIN_TONES / … */
+export const BODY_TYPES = bodyTypeOptions;
+export const SKIN_TONES = skinToneOptions;
+export const FACE_STYLES = faceStyleOptions;
+export const HAIR_STYLES = hairStyleOptions;
