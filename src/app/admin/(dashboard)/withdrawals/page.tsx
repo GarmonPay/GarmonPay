@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
+
+const ACTION_BTN =
+  "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-1.5 rounded-lg text-sm font-medium transition max-[480px]:w-full max-[480px]:min-w-0";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -84,11 +88,15 @@ export default function AdminWithdrawalsPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Withdrawals</h1>
-      <p className="text-[#9ca3af] mb-6">
-        Review and approve, reject, or mark as paid. Rejecting refunds the user&apos;s balance.
-      </p>
+    <div className="py-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-2">Withdrawals</h1>
+          <p className="text-[#9ca3af]">
+            Review and approve, reject, or mark as paid. Rejecting refunds the user&apos;s balance.
+          </p>
+        </div>
+      </div>
       {actionError && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{actionError}</div>
       )}
@@ -101,16 +109,17 @@ export default function AdminWithdrawalsPage() {
         <div className="text-[#9ca3af]">No withdrawal requests.</div>
       ) : (
         <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
+          <AdminScrollHint />
+          <AdminTableWrap>
+            <table className="w-full text-left min-w-[720px]">
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Amount</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Fee</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Net</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Method</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Wallet / details</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Fee</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Net</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Method</th>
+                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden lg:table-cell">Wallet / details</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Date</th>
                   <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
@@ -121,10 +130,10 @@ export default function AdminWithdrawalsPage() {
                   <tr key={w.id} className="border-b border-white/5">
                     <td className="p-3 text-white">{w.user_email ?? w.user_id}</td>
                     <td className="p-3 text-white font-medium">{formatCents(w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af]">{formatCents(w.platform_fee ?? 0)}</td>
-                    <td className="p-3 text-white">{formatCents(w.net_amount ?? w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{w.method}</td>
-                    <td className="p-3 text-[#9ca3af] font-mono text-sm max-w-xs truncate" title={w.wallet_address}>
+                    <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{formatCents(w.platform_fee ?? 0)}</td>
+                    <td className="p-3 text-white hidden sm:table-cell">{formatCents(w.net_amount ?? w.amount)}</td>
+                    <td className="p-3 text-[#9ca3af] capitalize hidden sm:table-cell">{w.method}</td>
+                    <td className="p-3 text-[#9ca3af] font-mono text-sm max-w-xs truncate hidden lg:table-cell" title={w.wallet_address}>
                       {w.wallet_address}
                     </td>
                     <td className="p-3">
@@ -143,12 +152,12 @@ export default function AdminWithdrawalsPage() {
                     <td className="p-3 text-[#9ca3af] text-sm">{formatDate(w.created_at)}</td>
                     <td className="p-3">
                       {w.status === "pending" && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
                           <button
                             type="button"
                             onClick={() => updateStatus(w.id, "approved")}
                             disabled={updatingId === w.id}
-                            className="px-2 py-1 rounded bg-green-600 text-white text-xs hover:bg-green-500 disabled:opacity-50"
+                            className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-500 disabled:opacity-50`}
                           >
                             Approve
                           </button>
@@ -156,7 +165,7 @@ export default function AdminWithdrawalsPage() {
                             type="button"
                             onClick={() => updateStatus(w.id, "rejected")}
                             disabled={updatingId === w.id}
-                            className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-500 disabled:opacity-50"
+                            className={`${ACTION_BTN} bg-red-600 text-white hover:bg-red-500 disabled:opacity-50`}
                           >
                             Reject
                           </button>
@@ -164,7 +173,7 @@ export default function AdminWithdrawalsPage() {
                             type="button"
                             onClick={() => updateStatus(w.id, "paid")}
                             disabled={updatingId === w.id}
-                            className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
+                            className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50`}
                           >
                             Mark paid
                           </button>
@@ -175,7 +184,7 @@ export default function AdminWithdrawalsPage() {
                           type="button"
                           onClick={() => updateStatus(w.id, "paid")}
                           disabled={updatingId === w.id}
-                          className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
+                          className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50`}
                         >
                           Mark paid
                         </button>
@@ -185,7 +194,7 @@ export default function AdminWithdrawalsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </AdminTableWrap>
         </div>
       )}
     </div>

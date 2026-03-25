@@ -34,20 +34,20 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="w-56 shrink-0 border-r border-white/10 bg-[#0f172a] flex flex-col min-h-screen">
+    <aside className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-white/10 bg-[#0f172a] flex flex-col md:min-h-screen">
       <div className="p-4 border-b border-white/10">
         <Link href="/admin/dashboard" className="text-lg font-bold text-white">
           GarmonPay Admin
         </Link>
       </div>
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-2 md:p-3 flex flex-row md:flex-col gap-1 md:gap-0 md:space-y-1 overflow-x-auto md:overflow-visible scrollbar-thin pb-2 md:pb-0">
         {links.map(({ href, label }) => {
           const active = pathname === href;
           return (
             <Link
               key={href}
               href={href}
-              className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? "bg-[#2563eb] text-white"
                   : "text-[#94a3b8] hover:bg-white/5 hover:text-white"
@@ -58,7 +58,7 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 hidden md:block">
         <button
           type="button"
           onClick={handleLogout}
@@ -71,6 +71,21 @@ export function AdminSidebar() {
           className="block mt-2 px-3 py-2 rounded-lg text-sm text-[#94a3b8] hover:text-white"
         >
           Back to site
+        </Link>
+      </div>
+      <div className="p-3 border-t border-white/10 md:hidden flex gap-2">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10"
+        >
+          Logout
+        </button>
+        <Link
+          href="/"
+          className="flex-1 text-center px-3 py-2 rounded-lg text-sm text-[#94a3b8] hover:text-white border border-white/10"
+        >
+          Site
         </Link>
       </div>
     </aside>

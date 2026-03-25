@@ -1,9 +1,33 @@
 "use client";
 
+import type { ComponentType, SVGProps } from "react";
 import { useEffect, useState, useCallback } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
+import {
+  IconCreditCard,
+  IconMegaphone,
+  IconOverview,
+  IconPeople,
+  IconShield,
+} from "@/components/admin/AdminGarmonTabIcons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+
+const ACTION_BTN =
+  "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-2 rounded-lg text-sm font-medium transition max-[480px]:w-full max-[480px]:min-w-0";
+
+type TabId = "queue" | "ads" | "advertisers" | "earners" | "fraud";
+
+const TAB_ORDER: TabId[] = ["queue", "earners", "advertisers", "ads", "fraud"];
+
+const TAB_META: Record<TabId, { label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> = {
+  queue: { label: "Overview", Icon: IconOverview },
+  earners: { label: "Transactions", Icon: IconCreditCard },
+  advertisers: { label: "Members", Icon: IconPeople },
+  ads: { label: "Ad Campaigns", Icon: IconMegaphone },
+  fraud: { label: "Security Flags", Icon: IconShield },
+};
 
 type GarmonAd = {
   id: string;
@@ -56,7 +80,7 @@ export default function AdminGarmonAdsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [activeTab, setActiveTab] = useState<"queue" | "ads" | "advertisers" | "earners" | "fraud">("queue");
+  const [activeTab, setActiveTab] = useState<TabId>("queue");
 
   const load = useCallback(() => {
     if (!session) return;
@@ -239,22 +263,83 @@ export default function AdminGarmonAdsPage() {
   const totalPaidToUsers = allAds.reduce((s, a) => s + Number(a.total_paid_to_users ?? 0), 0);
 
   return (
-    <div className="p-6 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white mb-2">GarmonPay Ads</h1>
-        <p className="text-[#9ca3af]">Moderate ads, revenue overview, advertisers, fraud.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {(["queue", "ads", "advertisers", "earners", "fraud"] as const).map((tab) => (
+    <div className="space-y-8 py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-2">Admin Panel — Garmon Ads</h1>
+          <p className="text-[#9ca3af]">Moderate ads, revenue overview, advertisers, and security.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end">
           <button
-            key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`px-3 py-1.5 rounded-lg text-sm capitalize ${activeTab === tab ? "bg-fintech-accent text-white" : "bg-white/10 text-[#9ca3af] hover:bg-white/15"}`}
+            className={`${ACTION_BTN} bg-white/10 text-[#9ca3af] hover:bg-white/15 border border-white/10`}
+            onClick={() => {
+              const rows = [
+                ["Metric", "Value"],
+                ["Total ad spend", String(totalSpend)],
+                ["GarmonPay cut", String(totalAdminCut)],
+                ["Paid to users", String(totalPaidToUsers)],
+              ];
+              const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `garmon-ads-overview-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }}
           >
-            {tab === "queue" ? "Moderation" : tab === "ads" ? "All ads" : tab === "earners" ? "Top earners" : tab}
+            Export CSV
           </button>
-        ))}
+          <a
+            href="/admin/ads"
+            className={`${ACTION_BTN} text-center bg-[#eab308]/20 text-[#fde047] border border-[#eab308]/40 hover:bg-[#eab308]/30 no-underline`}
+          >
+            New ad (site ads)
+          </a>
+        </div>
+      </div>
+
+      <div className="relative md:mb-2">
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[#0a0e17] via-[#0a0e17]/60 to-transparent"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[#0a0e17] via-[#0a0e17]/60 to-transparent"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-amber-500/25 via-transparent to-transparent"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-amber-500/25 via-transparent to-transparent"
+          aria-hidden
+        />
+        <div className="overflow-x-auto pb-1 md:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max min-w-full gap-2 flex-nowrap">
+            {TAB_ORDER.map((tab) => {
+              const { label, Icon } = TAB_META[tab];
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap min-w-[120px] max-[480px]:min-w-[120px] max-[480px]:flex-col max-[480px]:gap-1 max-[480px]:py-3 ${
+                    active
+                      ? "border-[#eab308] bg-[#eab308]/15 text-[#fde047]"
+                      : "border-white/10 bg-white/5 text-[#9ca3af] hover:bg-white/10"
+                  }`}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {actionError && (
@@ -262,7 +347,7 @@ export default function AdminGarmonAdsPage() {
       )}
 
       {/* Revenue overview */}
-      <div className="rounded-xl bg-[#111827] border border-white/10 p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="rounded-xl bg-[#111827] border border-white/10 p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <div>
           <p className="text-xs text-[#9ca3af] uppercase">Total ad spend</p>
           <p className="text-xl font-bold text-white">${totalSpend.toFixed(2)}</p>
@@ -298,25 +383,25 @@ export default function AdminGarmonAdsPage() {
                     <p className="text-sm text-[#9ca3af] mt-1 line-clamp-2">{ad.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 max-[480px]:flex-col max-[480px]:w-full">
                   <input
                     type="text"
                     placeholder="Rejection reason"
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
-                    className="px-2 py-1 rounded bg-black/30 border border-white/10 text-white text-sm w-40"
+                    className="px-2 py-2 rounded bg-black/30 border border-white/10 text-white text-sm w-full max-w-[200px] max-[480px]:max-w-none"
                   />
                   <button
                     type="button"
                     onClick={() => approve(ad.id)}
-                    className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30"
+                    className={`${ACTION_BTN} bg-green-500/20 text-green-400 hover:bg-green-500/30`}
                   >
                     Approve
                   </button>
                   <button
                     type="button"
                     onClick={() => reject(ad.id)}
-                    className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30"
+                    className={`${ACTION_BTN} bg-red-500/20 text-red-400 hover:bg-red-500/30`}
                   >
                     Reject
                   </button>
@@ -338,36 +423,41 @@ export default function AdminGarmonAdsPage() {
         ) : allAds.length === 0 ? (
           <div className="p-6 text-[#9ca3af]">No ads yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-3 text-[#9ca3af]">Title</th>
-                  <th className="p-3 text-[#9ca3af]">Advertiser</th>
-                  <th className="p-3 text-[#9ca3af]">Type</th>
-                  <th className="p-3 text-[#9ca3af]">Status</th>
-                  <th className="p-3 text-[#9ca3af]">Budget</th>
-                  <th className="p-3 text-[#9ca3af]">Views</th>
-                  <th className="p-3 text-[#9ca3af]">Spent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allAds.map((ad) => (
-                  <tr key={ad.id} className="border-b border-white/5">
-                    <td className="p-3 text-white">{ad.title}</td>
-                    <td className="p-3 text-[#9ca3af]">{(ad.advertisers as { business_name?: string })?.business_name ?? "—"}</td>
-                    <td className="p-3 text-[#9ca3af]">{ad.ad_type}</td>
-                    <td className="p-3">
-                      <span className={ad.status === "active" ? "text-green-400" : "text-[#9ca3af]"}>{ad.status}</span>
-                    </td>
-                    <td className="p-3 text-[#9ca3af]">${Number(ad.total_budget).toFixed(2)}</td>
-                    <td className="p-3 text-[#9ca3af]">{ad.views}</td>
-                    <td className="p-3 text-[#9ca3af]">${(Number(ad.total_budget) - Number(ad.remaining_budget)).toFixed(2)}</td>
+          <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left text-sm min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">ID</th>
+                    <th className="p-3 text-[#9ca3af]">Title</th>
+                    <th className="p-3 text-[#9ca3af]">Advertiser</th>
+                    <th className="p-3 text-[#9ca3af]">Type</th>
+                    <th className="p-3 text-[#9ca3af]">Status</th>
+                    <th className="p-3 text-[#9ca3af]">Budget</th>
+                    <th className="p-3 text-[#9ca3af]">Views</th>
+                    <th className="p-3 text-[#9ca3af]">Spent</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {allAds.map((ad) => (
+                    <tr key={ad.id} className="border-b border-white/5">
+                      <td className="p-3 font-mono text-xs text-[#6b7280] hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
+                      <td className="p-3 text-white">{ad.title}</td>
+                      <td className="p-3 text-[#9ca3af]">{(ad.advertisers as { business_name?: string })?.business_name ?? "—"}</td>
+                      <td className="p-3 text-[#9ca3af]">{ad.ad_type}</td>
+                      <td className="p-3">
+                        <span className={ad.status === "active" ? "text-green-400" : "text-[#9ca3af]"}>{ad.status}</span>
+                      </td>
+                      <td className="p-3 text-[#9ca3af]">${Number(ad.total_budget).toFixed(2)}</td>
+                      <td className="p-3 text-[#9ca3af]">{ad.views}</td>
+                      <td className="p-3 text-[#9ca3af]">${(Number(ad.total_budget) - Number(ad.remaining_budget)).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableWrap>
+          </>
         )}
       </div>
       )}
@@ -379,35 +469,56 @@ export default function AdminGarmonAdsPage() {
         {advertisers.length === 0 ? (
           <div className="p-6 text-[#9ca3af]">No advertisers.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-3 text-[#9ca3af]">Business</th>
-                  <th className="p-3 text-[#9ca3af]">User ID</th>
-                  <th className="p-3 text-[#9ca3af]">Total spent</th>
-                  <th className="p-3 text-[#9ca3af]">Verified</th>
-                  <th className="p-3 text-[#9ca3af]">Active</th>
-                  <th className="p-3 text-[#9ca3af]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {advertisers.map((a) => (
-                  <tr key={a.id} className="border-b border-white/5">
-                    <td className="p-3 text-white">{a.business_name}</td>
-                    <td className="p-3 text-[#9ca3af] font-mono text-xs">{a.user_id?.slice(0, 8)}…</td>
-                    <td className="p-3 text-[#9ca3af]">${Number(a.total_spent).toFixed(2)}</td>
-                    <td className="p-3">{a.is_verified ? <span className="text-green-400">Yes</span> : <span className="text-[#9ca3af]">No</span>}</td>
-                    <td className="p-3">{a.is_active ? <span className="text-green-400">Yes</span> : <span className="text-red-400">Suspended</span>}</td>
-                    <td className="p-3 flex gap-1">
-                      <button type="button" onClick={() => advertiserAction(a.id, a.is_verified ? "unverify" : "verify")} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">{a.is_verified ? "Unverify" : "Verify"}</button>
-                      <button type="button" onClick={() => advertiserAction(a.id, a.is_active ? "suspend" : "activate")} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">{a.is_active ? "Suspend" : "Activate"}</button>
-                    </td>
+          <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left text-sm min-w-[560px]">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af]">Business</th>
+                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">User ID</th>
+                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Joined</th>
+                    <th className="p-3 text-[#9ca3af]">Total spent</th>
+                    <th className="p-3 text-[#9ca3af]">Verified</th>
+                    <th className="p-3 text-[#9ca3af]">Active</th>
+                    <th className="p-3 text-[#9ca3af]">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {advertisers.map((a) => (
+                    <tr key={a.id} className="border-b border-white/5">
+                      <td className="p-3 text-white">{a.business_name}</td>
+                      <td className="p-3 text-[#9ca3af] font-mono text-xs hidden sm:table-cell">{a.user_id?.slice(0, 8)}…</td>
+                      <td className="p-3 text-[#9ca3af] text-xs hidden sm:table-cell">
+                        {a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="p-3 text-[#9ca3af]">${Number(a.total_spent).toFixed(2)}</td>
+                      <td className="p-3">{a.is_verified ? <span className="text-green-400">Yes</span> : <span className="text-[#9ca3af]">No</span>}</td>
+                      <td className="p-3">{a.is_active ? <span className="text-green-400">Yes</span> : <span className="text-red-400">Suspended</span>}</td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
+                          <button
+                            type="button"
+                            onClick={() => advertiserAction(a.id, a.is_verified ? "unverify" : "verify")}
+                            className={`${ACTION_BTN} bg-white/10 hover:bg-white/20 text-white`}
+                          >
+                            {a.is_verified ? "Unverify" : "Verify"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => advertiserAction(a.id, a.is_active ? "suspend" : "activate")}
+                            className={`${ACTION_BTN} bg-white/10 hover:bg-white/20 text-white`}
+                          >
+                            {a.is_active ? "Suspend" : "Activate"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableWrap>
+          </>
         )}
       </div>
       )}
@@ -419,26 +530,29 @@ export default function AdminGarmonAdsPage() {
         {topEarners.length === 0 ? (
           <div className="p-6 text-[#9ca3af]">No earnings this week.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-3 text-[#9ca3af]">#</th>
-                  <th className="p-3 text-[#9ca3af]">User ID</th>
-                  <th className="p-3 text-[#9ca3af]">Earned</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topEarners.map((e, i) => (
-                  <tr key={e.user_id} className="border-b border-white/5">
-                    <td className="p-3 text-[#9ca3af]">{i + 1}</td>
-                    <td className="p-3 font-mono text-xs text-white">{e.user_id}</td>
-                    <td className="p-3 text-green-400">${e.total.toFixed(2)}</td>
+          <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left text-sm min-w-[400px]">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-[#9ca3af]">#</th>
+                    <th className="p-3 text-[#9ca3af]">User ID</th>
+                    <th className="p-3 text-[#9ca3af]">Earned</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {topEarners.map((e, i) => (
+                    <tr key={e.user_id} className="border-b border-white/5">
+                      <td className="p-3 text-[#9ca3af]">{i + 1}</td>
+                      <td className="p-3 font-mono text-xs text-white">{e.user_id}</td>
+                      <td className="p-3 text-green-400">${e.total.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableWrap>
+          </>
         )}
       </div>
       )}
@@ -451,32 +565,96 @@ export default function AdminGarmonAdsPage() {
           {fraudFlags.length === 0 ? (
             <div className="p-6 text-[#9ca3af]">No fraud flags.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af]">User ID</th>
-                    <th className="p-3 text-[#9ca3af]">Reason</th>
-                    <th className="p-3 text-[#9ca3af]">Date</th>
-                    <th className="p-3 text-[#9ca3af]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fraudFlags.map((f) => (
-                    <tr key={f.id} className="border-b border-white/5">
-                      <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
-                      <td className="p-3 text-[#9ca3af]">{f.reason}</td>
-                      <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
-                      <td className="p-3 flex flex-wrap gap-1">
-                        <button type="button" onClick={() => removeFraudFlag(f.id)} className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-400 hover:bg-amber-500/30">Remove flag</button>
-                        <button type="button" onClick={() => banUser(f.user_id)} className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30">Ban from ads</button>
-                        <button type="button" onClick={() => viewEngagements(f.user_id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">View engagements</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="md:hidden space-y-4 p-4">
+                {fraudFlags.map((f) => (
+                  <div key={f.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-white break-all">{f.user_id.slice(0, 12)}…</span>
+                      <span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200">
+                        Flagged
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm text-[#9ca3af]">{f.reason}</p>
+                    <p className="mt-2 text-xs text-[#6b7280]">{new Date(f.created_at).toLocaleString()}</p>
+                    <div className="mt-4 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => banUser(f.user_id)}
+                        className={`${ACTION_BTN} w-full bg-red-500/20 text-red-400 hover:bg-red-500/30`}
+                      >
+                        Suspend
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFraudFlag(f.id)}
+                        className={`${ACTION_BTN} w-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30`}
+                      >
+                        Resolve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => viewEngagements(f.user_id)}
+                        className={`${ACTION_BTN} w-full bg-white/10 hover:bg-white/20 text-white`}
+                      >
+                        View engagements
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block">
+                <AdminScrollHint />
+                <AdminTableWrap>
+                  <table className="w-full text-left text-sm min-w-[720px]">
+                    <thead>
+                      <tr className="border-b border-white/10">
+                        <th className="p-3 text-[#9ca3af]">ID</th>
+                        <th className="p-3 text-[#9ca3af]">User ID</th>
+                        <th className="p-3 text-[#9ca3af]">Reason</th>
+                        <th className="p-3 text-[#9ca3af]">Date</th>
+                        <th className="p-3 text-[#9ca3af]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fraudFlags.map((f) => (
+                        <tr key={f.id} className="border-b border-white/5">
+                          <td className="p-3 font-mono text-xs text-[#6b7280]">{f.id.slice(0, 8)}…</td>
+                          <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
+                          <td className="p-3 text-[#9ca3af]">{f.reason}</td>
+                          <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
+                              <button
+                                type="button"
+                                onClick={() => removeFraudFlag(f.id)}
+                                className={`${ACTION_BTN} bg-amber-500/20 text-amber-400 hover:bg-amber-500/30`}
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => banUser(f.user_id)}
+                                className={`${ACTION_BTN} bg-red-500/20 text-red-400 hover:bg-red-500/30`}
+                              >
+                                Suspend
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => viewEngagements(f.user_id)}
+                                className={`${ACTION_BTN} bg-white/10 hover:bg-white/20 text-white`}
+                              >
+                                View
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </AdminTableWrap>
+              </div>
+            </>
           )}
         </div>
 
@@ -489,30 +667,33 @@ export default function AdminGarmonAdsPage() {
             {engagementsForUser.length === 0 ? (
               <div className="p-6 text-[#9ca3af]">No engagements.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="p-3 text-[#9ca3af]">Type</th>
-                      <th className="p-3 text-[#9ca3af]">Duration</th>
-                      <th className="p-3 text-[#9ca3af]">Earned</th>
-                      <th className="p-3 text-[#9ca3af]">IP</th>
-                      <th className="p-3 text-[#9ca3af]">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {engagementsForUser.map((e) => (
-                      <tr key={e.id} className="border-b border-white/5">
-                        <td className="p-3 text-white">{e.engagement_type}</td>
-                        <td className="p-3 text-[#9ca3af]">{e.duration_seconds}s</td>
-                        <td className="p-3 text-green-400">${Number(e.user_earned).toFixed(4)}</td>
-                        <td className="p-3 font-mono text-xs text-[#9ca3af]">{e.ip_address ?? "—"}</td>
-                        <td className="p-3 text-[#9ca3af]">{new Date(e.created_at).toLocaleString()}</td>
+              <>
+                <AdminScrollHint />
+                <AdminTableWrap>
+                  <table className="w-full text-left text-sm min-w-[720px]">
+                    <thead>
+                      <tr className="border-b border-white/10">
+                        <th className="p-3 text-[#9ca3af]">Type</th>
+                        <th className="p-3 text-[#9ca3af]">Duration</th>
+                        <th className="p-3 text-[#9ca3af]">Earned</th>
+                        <th className="p-3 text-[#9ca3af] hidden sm:table-cell">IP Address</th>
+                        <th className="p-3 text-[#9ca3af]">Date</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {engagementsForUser.map((e) => (
+                        <tr key={e.id} className="border-b border-white/5">
+                          <td className="p-3 text-white">{e.engagement_type}</td>
+                          <td className="p-3 text-[#9ca3af]">{e.duration_seconds}s</td>
+                          <td className="p-3 text-green-400">${Number(e.user_earned).toFixed(4)}</td>
+                          <td className="p-3 font-mono text-xs text-[#9ca3af] hidden sm:table-cell">{e.ip_address ?? "—"}</td>
+                          <td className="p-3 text-[#9ca3af]">{new Date(e.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </AdminTableWrap>
+              </>
             )}
           </div>
         )}
@@ -532,30 +713,39 @@ export default function AdminGarmonAdsPage() {
           {blockedIps.length === 0 ? (
             <div className="p-6 text-[#9ca3af]">No blocked IPs.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af]">IP / Prefix</th>
-                    <th className="p-3 text-[#9ca3af]">Reason</th>
-                    <th className="p-3 text-[#9ca3af]">Added</th>
-                    <th className="p-3 text-[#9ca3af]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {blockedIps.map((b) => (
-                    <tr key={b.id} className="border-b border-white/5">
-                      <td className="p-3 font-mono text-white">{b.ip_prefix}</td>
-                      <td className="p-3 text-[#9ca3af]">{b.reason ?? "—"}</td>
-                      <td className="p-3 text-[#9ca3af]">{new Date(b.created_at).toLocaleString()}</td>
-                      <td className="p-3">
-                        <button type="button" onClick={() => removeBlockedIp(b.id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">Remove</button>
-                      </td>
+            <>
+              <AdminScrollHint />
+              <AdminTableWrap>
+                <table className="w-full text-left text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="p-3 text-[#9ca3af]">IP / Prefix</th>
+                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Reason</th>
+                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Added</th>
+                      <th className="p-3 text-[#9ca3af]">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {blockedIps.map((b) => (
+                      <tr key={b.id} className="border-b border-white/5">
+                        <td className="p-3 font-mono text-white">{b.ip_prefix}</td>
+                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{b.reason ?? "—"}</td>
+                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() => removeBlockedIp(b.id)}
+                            className={`${ACTION_BTN} bg-white/10 hover:bg-white/20 text-white`}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AdminTableWrap>
+            </>
           )}
         </div>
 
@@ -573,34 +763,69 @@ export default function AdminGarmonAdsPage() {
           {bannedUsers.length === 0 ? (
             <div className="p-6 text-[#9ca3af]">No banned users.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af]">User ID</th>
-                    <th className="p-3 text-[#9ca3af]">Reason</th>
-                    <th className="p-3 text-[#9ca3af]">Banned</th>
-                    <th className="p-3 text-[#9ca3af]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bannedUsers.map((b) => (
-                    <tr key={b.user_id} className="border-b border-white/5">
-                      <td className="p-3 font-mono text-xs text-white">{b.user_id}</td>
-                      <td className="p-3 text-[#9ca3af]">{b.reason ?? "—"}</td>
-                      <td className="p-3 text-[#9ca3af]">{new Date(b.created_at).toLocaleString()}</td>
-                      <td className="p-3">
-                        <button type="button" onClick={() => unbanUser(b.user_id)} className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30">Unban</button>
-                      </td>
+            <>
+              <AdminScrollHint />
+              <AdminTableWrap>
+                <table className="w-full text-left text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="p-3 text-[#9ca3af]">User ID</th>
+                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Reason</th>
+                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Banned</th>
+                      <th className="p-3 text-[#9ca3af]">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {bannedUsers.map((b) => (
+                      <tr key={b.user_id} className="border-b border-white/5">
+                        <td className="p-3 font-mono text-xs text-white">{b.user_id.slice(0, 12)}…</td>
+                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{b.reason ?? "—"}</td>
+                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() => unbanUser(b.user_id)}
+                            className={`${ACTION_BTN} bg-green-500/20 text-green-400 hover:bg-green-500/30`}
+                          >
+                            Unban
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AdminTableWrap>
+            </>
           )}
         </div>
       </div>
       )}
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur-md md:hidden safe-area-pb"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        aria-label="Garmon Ads sections"
+      >
+        <div className="flex justify-around items-stretch gap-1 px-1 py-2 max-w-lg mx-auto">
+          {TAB_ORDER.map((tab) => {
+            const { label, Icon } = TAB_META[tab];
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium leading-tight ${
+                  active ? "text-[#fde047]" : "text-[#9ca3af]"
+                }`}
+              >
+                <Icon className={`h-6 w-6 ${active ? "text-[#eab308]" : "text-[#64748b]"}`} />
+                <span className="max-w-[4.5rem] text-center text-[9px] leading-tight">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

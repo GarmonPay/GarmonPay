@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
+
+const ACTION_BTN =
+  "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-2 py-2 rounded-lg text-sm font-medium transition max-[480px]:w-full max-[480px]:min-w-0";
 
 type SecurityEvent = {
   id: string;
@@ -117,138 +121,152 @@ export default function AdminSecurityPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="py-6 max-w-6xl">
       <h1 className="text-2xl font-bold text-white mb-6">Security dashboard</h1>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-white mb-3">Multiple accounts from same IP</h2>
-        <div className="rounded-lg border border-white/10 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="px-4 py-2 text-gray-300">IP</th>
-                <th className="px-4 py-2 text-gray-300">Account count</th>
-                <th className="px-4 py-2 text-gray-300">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {multiIp.length === 0 ? (
-                <tr><td colSpan={3} className="px-4 py-3 text-gray-500">None</td></tr>
-              ) : (
-                multiIp.map((row) => (
-                  <tr key={row.registration_ip} className="border-t border-white/10">
-                    <td className="px-4 py-2 font-mono text-gray-300">{row.registration_ip}</td>
-                    <td className="px-4 py-2 text-gray-300">{row.count}</td>
-                    <td className="px-4 py-2">
-                      {row.user_ids.map((uid) => (
-                        <button
-                          key={uid}
-                          type="button"
-                          onClick={() => banUser(uid, true)}
-                          disabled={banSubmitting === uid}
-                          className="mr-2 px-2 py-1 rounded bg-red-600/80 text-white text-xs hover:bg-red-600 disabled:opacity-50"
-                        >
-                          Ban
-                        </button>
-                      ))}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <AdminScrollHint />
+        <AdminTableWrap>
+          <div className="rounded-lg border border-white/10 overflow-hidden">
+            <table className="w-full text-left text-sm min-w-[400px]">
+              <thead className="bg-white/5">
+                <tr>
+                  <th className="px-4 py-2 text-gray-300">IP</th>
+                  <th className="px-4 py-2 text-gray-300">Account count</th>
+                  <th className="px-4 py-2 text-gray-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {multiIp.length === 0 ? (
+                  <tr><td colSpan={3} className="px-4 py-3 text-gray-500">None</td></tr>
+                ) : (
+                  multiIp.map((row) => (
+                    <tr key={row.registration_ip} className="border-t border-white/10">
+                      <td className="px-4 py-2 font-mono text-gray-300">{row.registration_ip}</td>
+                      <td className="px-4 py-2 text-gray-300">{row.count}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
+                          {row.user_ids.map((uid) => (
+                            <button
+                              key={uid}
+                              type="button"
+                              onClick={() => banUser(uid, true)}
+                              disabled={banSubmitting === uid}
+                              className={`${ACTION_BTN} bg-red-600/80 text-white hover:bg-red-600 disabled:opacity-50`}
+                            >
+                              Ban
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </AdminTableWrap>
       </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-white mb-3">Locked accounts</h2>
-        <div className="rounded-lg border border-white/10 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="px-4 py-2 text-gray-300">Email</th>
-                <th className="px-4 py-2 text-gray-300">Failed attempts</th>
-                <th className="px-4 py-2 text-gray-300">Locked until</th>
-                <th className="px-4 py-2 text-gray-300">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lockedUsers.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-3 text-gray-500">None</td></tr>
-              ) : (
-                lockedUsers.map((u) => (
-                  <tr key={u.id} className="border-t border-white/10">
-                    <td className="px-4 py-2 text-gray-300">{u.email ?? u.id}</td>
-                    <td className="px-4 py-2 text-gray-300">{u.failed_login_attempts}</td>
-                    <td className="px-4 py-2 text-gray-300">{u.locked_until ? new Date(u.locked_until).toLocaleString() : "—"}</td>
-                    <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => unlockUser(u.id)}
-                        disabled={unlockSubmitting === u.id}
-                        className="px-2 py-1 rounded bg-blue-600/80 text-white text-xs hover:bg-blue-600 disabled:opacity-50"
-                      >
-                        Unlock
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <AdminScrollHint />
+        <AdminTableWrap>
+          <div className="rounded-lg border border-white/10 overflow-hidden">
+            <table className="w-full text-left text-sm min-w-[480px]">
+              <thead className="bg-white/5">
+                <tr>
+                  <th className="px-4 py-2 text-gray-300">Email</th>
+                  <th className="px-4 py-2 text-gray-300 hidden sm:table-cell">Failed attempts</th>
+                  <th className="px-4 py-2 text-gray-300 hidden sm:table-cell">Locked until</th>
+                  <th className="px-4 py-2 text-gray-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lockedUsers.length === 0 ? (
+                  <tr><td colSpan={4} className="px-4 py-3 text-gray-500">None</td></tr>
+                ) : (
+                  lockedUsers.map((u) => (
+                    <tr key={u.id} className="border-t border-white/10">
+                      <td className="px-4 py-2 text-gray-300">{u.email ?? u.id}</td>
+                      <td className="px-4 py-2 text-gray-300 hidden sm:table-cell">{u.failed_login_attempts}</td>
+                      <td className="px-4 py-2 text-gray-300 hidden sm:table-cell">{u.locked_until ? new Date(u.locked_until).toLocaleString() : "—"}</td>
+                      <td className="px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => unlockUser(u.id)}
+                          disabled={unlockSubmitting === u.id}
+                          className={`${ACTION_BTN} bg-blue-600/80 text-white hover:bg-blue-600 disabled:opacity-50`}
+                        >
+                          Unlock
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </AdminTableWrap>
       </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-white mb-3">Failed login attempts / lockouts</h2>
-        <div className="rounded-lg border border-white/10 overflow-x-auto max-h-64 overflow-y-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 sticky top-0">
-              <tr>
-                <th className="px-4 py-2 text-gray-300">Time</th>
-                <th className="px-4 py-2 text-gray-300">Email</th>
-                <th className="px-4 py-2 text-gray-300">IP</th>
-                <th className="px-4 py-2 text-gray-300">Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {failedLogins.map((e) => (
-                <tr key={e.id} className="border-t border-white/10">
-                  <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-gray-300">{e.email ?? "—"}</td>
-                  <td className="px-4 py-2 font-mono text-gray-400">{e.ip_text ?? "—"}</td>
-                  <td className="px-4 py-2 text-gray-300">{e.event_type}</td>
+        <AdminScrollHint />
+        <div className="rounded-lg border border-white/10 max-h-64 overflow-y-auto">
+          <AdminTableWrap>
+            <table className="w-full text-left text-sm min-w-[480px]">
+              <thead className="bg-white/5 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2 text-gray-300">Time</th>
+                  <th className="px-4 py-2 text-gray-300">Email</th>
+                  <th className="px-4 py-2 text-gray-300 hidden sm:table-cell">IP</th>
+                  <th className="px-4 py-2 text-gray-300">Type</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {failedLogins.map((e) => (
+                  <tr key={e.id} className="border-t border-white/10">
+                    <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-gray-300">{e.email ?? "—"}</td>
+                    <td className="px-4 py-2 font-mono text-gray-400 hidden sm:table-cell">{e.ip_text ?? "—"}</td>
+                    <td className="px-4 py-2 text-gray-300">{e.event_type}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </AdminTableWrap>
         </div>
       </section>
 
       <section>
         <h2 className="text-lg font-semibold text-white mb-3">Recent security events</h2>
-        <div className="rounded-lg border border-white/10 overflow-x-auto max-h-96 overflow-y-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 sticky top-0">
-              <tr>
-                <th className="px-4 py-2 text-gray-300">Time</th>
-                <th className="px-4 py-2 text-gray-300">Email</th>
-                <th className="px-4 py-2 text-gray-300">IP</th>
-                <th className="px-4 py-2 text-gray-300">Event</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => (
-                <tr key={e.id} className="border-t border-white/10">
-                  <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-gray-300">{e.email ?? "—"}</td>
-                  <td className="px-4 py-2 font-mono text-gray-400">{e.ip_text ?? "—"}</td>
-                  <td className="px-4 py-2 text-gray-300">{e.event_type}</td>
+        <AdminScrollHint />
+        <div className="rounded-lg border border-white/10 max-h-96 overflow-y-auto">
+          <AdminTableWrap>
+            <table className="w-full text-left text-sm min-w-[480px]">
+              <thead className="bg-white/5 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2 text-gray-300">Time</th>
+                  <th className="px-4 py-2 text-gray-300">Email</th>
+                  <th className="px-4 py-2 text-gray-300 hidden sm:table-cell">IP</th>
+                  <th className="px-4 py-2 text-gray-300">Event</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={e.id} className="border-t border-white/10">
+                    <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-gray-300">{e.email ?? "—"}</td>
+                    <td className="px-4 py-2 font-mono text-gray-400 hidden sm:table-cell">{e.ip_text ?? "—"}</td>
+                    <td className="px-4 py-2 text-gray-300">{e.event_type}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </AdminTableWrap>
         </div>
       </section>
     </div>

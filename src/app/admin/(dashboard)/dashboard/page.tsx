@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAdminSessionAsync } from "@/lib/admin-supabase";
+import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
 const defaultStats = {
   totalUsers: 0,
@@ -123,11 +124,15 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <header className="shrink-0 border-b border-white/10 bg-[#0f172a]/80 px-6 py-4">
-        <h1 className="text-xl font-semibold text-white">Admin Dashboard</h1>
-        <p className="text-sm text-[#9ca3af] mt-0.5">Overview of platform stats and recent activity</p>
+      <header className="shrink-0 border-b border-white/10 bg-[#0f172a]/80 py-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-white">Admin Dashboard</h1>
+            <p className="text-sm text-[#9ca3af] mt-0.5">Overview of platform stats and recent activity</p>
+          </div>
+        </div>
       </header>
-      <div className="p-6 flex-1">
+      <div className="py-6 flex-1">
         <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-200/90 text-sm">
           Fight server is on free tier. Upgrade to Render Starter ($7/month) to eliminate cold start delays and improve fight performance.
         </div>
@@ -151,7 +156,7 @@ export default function Dashboard() {
           </p>
           {platformMetrics ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                 <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
                   <p className="text-xs text-[#9ca3af] uppercase">Platform revenue today</p>
                   <p className="text-xl font-bold text-emerald-400 mt-1">
@@ -195,7 +200,7 @@ export default function Dashboard() {
                 <p className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider mb-3">
                   Active members by plan (DB membership)
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 text-sm">
                   {[
                     { key: "starter", label: "Free / Starter" },
                     { key: "pro", label: "Growth / Pro" },
@@ -223,7 +228,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
             <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Users</h2>
             <p className="text-2xl font-bold text-white mt-2">{stats.totalUsers}</p>
@@ -265,8 +270,10 @@ export default function Dashboard() {
           {stats.recentTransactions.length === 0 ? (
             <p className="text-[#6b7280] text-sm">No transactions yet.</p>
           ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-left text-sm">
+            <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left text-sm min-w-[520px]">
                 <thead>
                   <tr className="border-b border-white/10 text-[#9ca3af]">
                     <th className="pb-3 pr-4 font-medium">Date</th>
@@ -292,7 +299,8 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableWrap>
+            </>
           )}
         </section>
         <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg mt-6">
@@ -300,8 +308,10 @@ export default function Dashboard() {
           {stats.recentPayments.length === 0 ? (
             <p className="text-[#6b7280] text-sm">No Stripe payments yet.</p>
           ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-left text-sm">
+            <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left text-sm min-w-[480px]">
                 <thead>
                   <tr className="border-b border-white/10 text-[#9ca3af]">
                     <th className="pb-3 pr-4 font-medium">Date</th>
@@ -325,7 +335,8 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableWrap>
+            </>
           )}
         </section>
       </div>

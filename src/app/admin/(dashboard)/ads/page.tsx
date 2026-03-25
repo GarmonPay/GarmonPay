@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
+
+const ACTION_BTN =
+  "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-2 rounded-lg text-sm transition max-[480px]:w-full max-[480px]:min-w-0";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -181,12 +185,14 @@ export default function AdminAdsPage() {
   }
 
   return (
-    <div className="p-6 space-y-8">
-      <div>
+    <div className="py-6 space-y-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
         <h1 className="text-2xl font-bold text-white mb-2">Advertisement management</h1>
         <p className="text-[#9ca3af]">
           Upload banner images or videos, set destination URL and placement. Track impressions and clicks.
         </p>
+        </div>
       </div>
 
       <div className="rounded-xl bg-[#111827] border border-white/10 p-6 max-w-2xl">
@@ -303,53 +309,60 @@ export default function AdminAdsPage() {
         ) : ads.length === 0 ? (
           <div className="p-6 text-[#9ca3af]">No advertisements yet. Create one above.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Title</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Type</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Placement</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Impressions</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Clicks</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ads.map((ad) => (
-                  <tr key={ad.id} className="border-b border-white/5">
-                    <td className="p-3 text-white">{ad.title}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{ad.ad_type}</td>
-                    <td className="p-3 text-[#9ca3af]">{ad.placement.replace("_", " ")}</td>
-                    <td className="p-3 text-[#9ca3af]">{ad.impressions}</td>
-                    <td className="p-3 text-[#9ca3af]">{ad.clicks}</td>
-                    <td className="p-3">
-                      <span className={ad.active ? "text-green-400" : "text-[#6b7280]"}>
-                        {ad.active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="p-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleActive(ad)}
-                        className="text-sm px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20"
-                      >
-                        {ad.active ? "Deactivate" : "Activate"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(ad)}
-                        className="text-sm px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                      >
-                        Delete
-                      </button>
-                    </td>
+          <>
+            <AdminScrollHint />
+            <AdminTableWrap>
+              <table className="w-full text-left min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">ID</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Title</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Type</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Placement</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Impressions</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Clicks</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
+                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {ads.map((ad) => (
+                    <tr key={ad.id} className="border-b border-white/5">
+                      <td className="p-3 font-mono text-xs text-[#6b7280] hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
+                      <td className="p-3 text-white">{ad.title}</td>
+                      <td className="p-3 text-[#9ca3af] capitalize">{ad.ad_type}</td>
+                      <td className="p-3 text-[#9ca3af]">{ad.placement.replace("_", " ")}</td>
+                      <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{ad.impressions}</td>
+                      <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{ad.clicks}</td>
+                      <td className="p-3">
+                        <span className={ad.active ? "text-green-400" : "text-[#6b7280]"}>
+                          {ad.active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
+                          <button
+                            type="button"
+                            onClick={() => toggleActive(ad)}
+                            className={`${ACTION_BTN} bg-white/10 text-white hover:bg-white/20`}
+                          >
+                            {ad.active ? "Deactivate" : "Activate"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(ad)}
+                            className={`${ACTION_BTN} bg-red-500/20 text-red-400 hover:bg-red-500/30`}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableWrap>
+          </>
         )}
       </div>
     </div>
