@@ -278,19 +278,30 @@ export async function creditReferralUpgrade(
 }
 
 /*
--- 1) Create transactions table
+-- 1) Create transactions table (first-time setup)
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  type text not null,
-  amount_cents integer not null default 0,
-  status text not null default 'pending',
+  user_id uuid references auth.users(id) on delete cascade,
+  type text,
+  amount_cents integer default 0,
+  status text default 'pending',
   ad_id text,
   fingerprint text,
   ip_address text,
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
 );
+
+-- 1b) Backfill missing columns for existing transactions tables
+alter table public.transactions add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.transactions add column if not exists type text;
+alter table public.transactions add column if not exists amount_cents integer default 0;
+alter table public.transactions add column if not exists status text default 'pending';
+alter table public.transactions add column if not exists ad_id text;
+alter table public.transactions add column if not exists fingerprint text;
+alter table public.transactions add column if not exists ip_address text;
+alter table public.transactions add column if not exists metadata jsonb default '{}'::jsonb;
+alter table public.transactions add column if not exists created_at timestamptz default now();
 
 -- 2) Indexes
 create index if not exists idx_transactions_user_created_at_desc
@@ -300,17 +311,39 @@ create index if not exists idx_transactions_fingerprint_ad_created
 
 -- 3) RLS and policy
 alter table public.transactions enable row level security;
-create policy "users_can_read_own_transactions"
-on public.transactions
-for select
-to authenticated
-using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'transactions'
+      and policyname = 'users_can_read_own_transactions'
+  ) then
+    create policy "users_can_read_own_transactions"
+      on public.transactions
+      for select
+      to authenticated
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 -- 4) Profiles columns
 alter table public.profiles add column if not exists balance_cents integer not null default 0;
-alter table public.profiles add column if not exists referral_code text unique;
+alter table public.profiles add column if not exists referral_code text;
 alter table public.profiles add column if not exists referred_by uuid references auth.users(id);
 alter table public.profiles add column if not exists role text not null default 'member';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_referral_code_key'
+  ) then
+    alter table public.profiles add constraint profiles_referral_code_key unique (referral_code);
+  end if;
+end
+$$;
 
 -- 5) increment_wallet function
 create or replace function public.increment_wallet(p_user_id uuid, p_amount_cents integer)
