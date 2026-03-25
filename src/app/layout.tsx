@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { KeepAlive } from "@/components/KeepAlive";
@@ -56,6 +57,7 @@ export default function RootLayout({
       <body className="font-sans antialiased flex min-h-screen flex-col">
         <ClientErrorBoundary>
           <AuthStateProvider>
+            <Navbar />
             {children}
           </AuthStateProvider>
         </ClientErrorBoundary>
