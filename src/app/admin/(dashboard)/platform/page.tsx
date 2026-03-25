@@ -28,6 +28,11 @@ export default function AdminPlatformPage() {
   } | null>(null);
   const [adRewardPct, setAdRewardPct] = useState<number>(40);
   const [adRewardInput, setAdRewardInput] = useState("40");
+  const [platformSettings, setPlatformSettings] = useState<{
+    earnRateMultiplier: number;
+    dailyPayoutCapCents: number;
+    lastHealthCheck: string | null;
+  } | null>(null);
   const [gameConfig, setGameConfig] = useState<Record<string, number>>({});
   const [gameInputs, setGameInputs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -65,6 +70,12 @@ export default function AdminPlatformPage() {
         const pct = Number(settingsRes.ad_reward_percent ?? 40);
         setAdRewardPct(pct);
         setAdRewardInput(String(pct));
+        setPlatformSettings({
+          earnRateMultiplier: Number(settingsRes.earn_rate_multiplier ?? 1),
+          dailyPayoutCapCents: Number(settingsRes.daily_payout_cap_cents ?? 50000),
+          lastHealthCheck:
+            typeof settingsRes.last_health_check === "string" ? settingsRes.last_health_check : null,
+        });
         const config = gameRes.config ?? {};
         setGameConfig(config);
         const inputs: Record<string, string> = {};
@@ -228,6 +239,36 @@ export default function AdminPlatformPage() {
           >
             Save
           </button>
+        </div>
+        <p className="text-[11px] text-[#6b7280] mt-2">
+          Platform settings row uses <code className="bg-white/10 px-1 rounded">id = 1</code>.
+        </p>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-bold text-white mb-3">Profit Protection Runtime Controls</h2>
+        <p className="text-[#9ca3af] text-sm mb-3">
+          These values are automatically managed by platform health checks and payout protection logic.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+            <p className="text-[#9ca3af] text-sm">Earn rate multiplier</p>
+            <p className="text-2xl font-bold text-white">{platformSettings?.earnRateMultiplier.toFixed(2) ?? "1.00"}x</p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+            <p className="text-[#9ca3af] text-sm">Daily payout cap</p>
+            <p className="text-2xl font-bold text-white">
+              {platformSettings ? formatCents(platformSettings.dailyPayoutCapCents) : "$500.00"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
+            <p className="text-[#9ca3af] text-sm">Last health check</p>
+            <p className="text-sm font-medium text-white mt-2">
+              {platformSettings?.lastHealthCheck
+                ? new Date(platformSettings.lastHealthCheck).toLocaleString()
+                : "Not checked yet"}
+            </p>
+          </div>
         </div>
       </section>
 

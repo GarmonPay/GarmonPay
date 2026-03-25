@@ -4,6 +4,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase";
+import { creditReferralJoin } from "@/lib/adTracker";
 
 const DAILY_REWARD_CENTS = 25;
 const REFERRAL_BONUS_CENTS = 50;
@@ -108,13 +109,15 @@ export async function canClaimDaily(userId: string): Promise<boolean> {
 export async function grantReferralBonusForUser(referredUserId: string): Promise<
   { success: boolean; message?: string; referrerId?: string }
 > {
-  const { data, error } = await supabase().rpc("grant_referral_bonus_for_user", {
-    p_referred_user_id: referredUserId,
-    p_bonus_cents: REFERRAL_BONUS_CENTS,
-  });
-  if (error) return { success: false, message: error.message };
-  const r = data as { success: boolean; message?: string; referrer_id?: string };
-  return { success: r.success, message: r.message, referrerId: r.referrer_id };
+  const r = await creditReferralJoin(referredUserId, REFERRAL_BONUS_CENTS);
+  if (r.granted) {
+    return { success: true, referrerId: r.referrerId };
+  }
+  return {
+    success: false,
+    message: r.reason ?? "Bonus already granted",
+    referrerId: r.referrerId,
+  };
 }
 
 /** Recent platform activities for feed. */
@@ -190,8 +193,21 @@ export async function countUserReferrals(userId: string): Promise<number> {
 
 /** Total referral earnings for user (from referral_bonus). */
 export async function getUserReferralEarningsCents(userId: string): Promise<number> {
-  const { data } = await supabase().from("referral_bonus").select("amount").eq("referrer_id", userId).eq("status", "paid");
-  return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
+  const [bonusRes, upgradeRes, legacyUpgradeRes] = await Promise.all([
+    supabase().from("referral_bonus").select("amount").eq("referrer_id", userId).eq("status", "paid"),
+    supabase().from("transactions").select("amount").eq("user_id", userId).eq("type", "referral_upgrade").eq("status", "completed"),
+    supabase()
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", userId)
+      .eq("type", "referral")
+      .eq("status", "completed")
+      .ilike("description", "[referral_upgrade]%"),
+  ]);
+  const oneTime = (bonusRes.data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
+  const upgrades = (upgradeRes.data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
+  const legacyUpgrades = (legacyUpgradeRes.data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
+  return oneTime + upgrades + legacyUpgrades;
 }
 
 /** Ensure badges are awarded based on current state (first earnings, first withdrawal, top referrer, vip). */

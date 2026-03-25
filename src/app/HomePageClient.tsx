@@ -24,7 +24,7 @@ const EARN_METHODS = [
   },
   {
     title: "Referral commissions",
-    body: "Grow your network and earn tiered rewards every time your invites stay active.",
+    body: "Grow your network and earn flat commissions when your referrals upgrade membership plans.",
     icon: "🔗",
   },
   {
@@ -44,31 +44,50 @@ const EARN_METHODS = [
   },
 ] as const;
 
-const REFERRAL_TIERS = [
-  { name: "Free", rate: "10%", detail: "Start earning & sharing" },
-  { name: "Starter", rate: "20%", detail: "Higher share per referral" },
-  { name: "Growth", rate: "30%", detail: "Games + ad credit boost" },
-  { name: "Pro", rate: "40%", detail: "Priority + maximum velocity" },
-  { name: "Elite", rate: "50%", detail: "Maximum lifetime commission" },
+const REFERRAL_UPGRADE_CARDS = [
+  {
+    name: "Starter Upgrade",
+    range: "$3 to $8",
+    detail: "You earn depending on your own plan",
+  },
+  {
+    name: "Growth Upgrade",
+    range: "$8 to $12",
+    detail: "You earn depending on your own plan",
+  },
+  {
+    name: "Pro Upgrade",
+    range: "$15 to $27",
+    detail: "You earn depending on your own plan",
+  },
+  {
+    name: "Elite Upgrade",
+    range: "$25 to $50",
+    detail: "You earn depending on your own plan",
+  },
 ] as const;
 
 export default function HomePage() {
   const [referralCount, setReferralCount] = useState(25);
-  const [hoursPerReferralDay, setHoursPerReferralDay] = useState(2);
+  const [monthlyUpgradeRate, setMonthlyUpgradeRate] = useState(20);
   const [plan, setPlan] = useState<MarketingPlanId>("growth");
 
   const projections = useMemo(() => {
-    const p = MARKETING_PLANS[plan];
-    const adsPerHour = 12;
-    /** Modeled gross referral earnings per day before your commission (illustrative). No cap. */
-    const referralDailyGrossUsd =
-      referralCount * hoursPerReferralDay * adsPerHour * p.adRatePerAd;
-    const daily = referralDailyGrossUsd * (p.referralPct / 100);
+    const commissionByPlan: Record<MarketingPlanId, number> = {
+      free: 8,
+      starter: 10,
+      growth: 12,
+      pro: 15,
+      elite: 20,
+    };
+    const commissionPerUpgrade = commissionByPlan[plan];
+    const monthlyUpgrades = referralCount * (monthlyUpgradeRate / 100);
+    const monthly = monthlyUpgrades * commissionPerUpgrade;
+    const daily = monthly / 30;
     const weekly = daily * 7;
-    const monthly = daily * 30;
-    const yearly = daily * 365;
+    const yearly = monthly * 12;
     return { daily, weekly, monthly, yearly };
-  }, [referralCount, hoursPerReferralDay, plan]);
+  }, [referralCount, monthlyUpgradeRate, plan]);
 
   function formatProjectionUsd(n: number): string {
     if (!Number.isFinite(n)) return "—";
@@ -370,8 +389,8 @@ export default function HomePage() {
                     Referral program
                   </h2>
                   <p className="mt-2 max-w-xl text-violet-200/85">
-                    Share your link. When your network earns, you earn—tier up as volume
-                    grows.
+                    Earn a commission every time one of your referrals upgrades their membership
+                    plan. Zero earnings from clicks or views — just real upgrade commissions.
                   </p>
                 </div>
                 <Link
@@ -381,8 +400,8 @@ export default function HomePage() {
                   Get your link
                 </Link>
               </div>
-              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {REFERRAL_TIERS.map((t) => (
+              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {REFERRAL_UPGRADE_CARDS.map((t) => (
                   <div
                     key={t.name}
                     className="rounded-xl border border-[#eab308]/30 bg-black/30 p-5 text-center"
@@ -390,7 +409,7 @@ export default function HomePage() {
                     <p className="text-sm font-medium uppercase tracking-wider text-[#fde047]">
                       {t.name}
                     </p>
-                    <p className="mt-3 text-3xl font-bold text-white">{t.rate}</p>
+                    <p className="mt-3 text-3xl font-bold text-white">{t.range}</p>
                     <p className="mt-2 text-xs text-violet-300/80">{t.detail}</p>
                   </div>
                 ))}
@@ -426,7 +445,7 @@ export default function HomePage() {
               ))}
             </div>
             <p className="mt-2 text-center text-xs text-violet-400/90">
-              {MARKETING_PLANS[plan].referralPct}% referral commission · ${MARKETING_PLANS[plan].adRatePerAd.toFixed(2)} per ad earn rate
+              Upgrade-only commissions — no earnings from referral ad views, clicks, or tasks.
             </p>
 
             <div className="mt-10 space-y-8">
@@ -450,18 +469,21 @@ export default function HomePage() {
               </div>
               <div>
                 <div className="mb-2 flex justify-between text-sm text-violet-200">
-                  <span>Average hours of activity per day per referral</span>
-                  <span className="font-mono text-[#eab308]">{hoursPerReferralDay}h</span>
+                  <span>Referrals that upgrade each month (%)</span>
+                  <span className="font-mono text-[#eab308]">{monthlyUpgradeRate}%</span>
                 </div>
                 <input
                   type="range"
-                  min={0.5}
-                  max={8}
-                  step={0.5}
-                  value={hoursPerReferralDay}
-                  onChange={(e) => setHoursPerReferralDay(Number(e.target.value))}
+                  min={10}
+                  max={50}
+                  step={5}
+                  value={monthlyUpgradeRate}
+                  onChange={(e) => setMonthlyUpgradeRate(Number(e.target.value))}
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-violet-950 accent-violet-500"
                 />
+                <p className="mt-1 text-xs text-violet-400/90">
+                  Estimate the percentage of your network that completes a membership upgrade this month.
+                </p>
               </div>
             </div>
 
@@ -478,7 +500,7 @@ export default function HomePage() {
                   key={label}
                   className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0"
                 >
-                  <span className="text-sm text-violet-300">{label} (your commission)</span>
+                  <span className="text-sm text-violet-300">{label} (upgrade commissions)</span>
                   <span className="font-mono text-lg font-bold text-[#fde047]">
                     ${formatProjectionUsd(val)}
                   </span>

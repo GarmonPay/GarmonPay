@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@/lib/supabase";
-import { referralCommissionFromMembershipTier } from "@/lib/garmon-plan-config";
 
 const EARNING_TYPES = new Set([
   "earning",
   "referral",
-  "referral_commission",
+  "referral_upgrade",
   "spin_wheel",
   "scratch_card",
   "mystery_box",
@@ -121,7 +120,9 @@ export function SupabaseEarningsTracker({
     };
   }, [userId]);
 
-  const commissionPct = referralCommissionFromMembershipTier(membershipTier);
+  const membershipLabel = membershipTier
+    ? membershipTier.charAt(0).toUpperCase() + membershipTier.slice(1)
+    : "Free";
 
   return (
     <div className="grid grid-cols-1 gap-4 tablet:grid-cols-2 tablet:gap-5">
@@ -182,13 +183,13 @@ export function SupabaseEarningsTracker({
             </dd>
           </div>
           <div className="flex justify-between gap-4 border-t border-white/[0.06] pt-3">
-            <dt className="text-xs text-fintech-muted">Your commission rate</dt>
-            <dd className="font-bold text-[#eab308]">{commissionPct}%</dd>
+            <dt className="text-xs text-fintech-muted">Your membership plan</dt>
+            <dd className="font-bold text-[#eab308]">{membershipLabel}</dd>
           </div>
         </dl>
         <p className="mt-3 text-xs text-fintech-muted">
-          Commission reflects your membership tier (see Pricing). Dashboard API refreshes with your
-          session; referral totals also sync from the platform.
+          Referral earnings here are upgrade commissions plus one-time join bonuses.
+          Dashboard API refreshes with your session; referral totals also sync from the platform.
         </p>
       </section>
     </div>

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { grantDepositBonus } from "@/lib/viral-referral-db";
+import { creditReferralUpgrade } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
 
@@ -13,6 +14,15 @@ import Stripe from "stripe";
  * Do not use the file path (e.g. .../src/app/api/stripe/webhook/route.ts).
  */
 export const runtime = "nodejs";
+
+function normalizeMembershipTier(raw: string | null | undefined): "starter" | "growth" | "pro" | "elite" {
+  const t = String(raw ?? "").trim().toLowerCase();
+  if (t === "starter" || t === "active") return "starter";
+  if (t === "growth") return "growth";
+  if (t === "pro") return "pro";
+  if (t === "elite" || t === "vip") return "elite";
+  return "starter";
+}
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
 
@@ -199,6 +209,71 @@ export async function POST(req: Request) {
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
   const product_type = (session.metadata?.product_type as string) || "payment";
+
+  if (product_type === "subscription" && session.mode === "subscription") {
+    const stripe = getStripe();
+    const subscriptionId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : ((session.subscription as Stripe.Subscription | null)?.id ?? null);
+    if (!subscriptionId) return new Response("OK", { status: 200 });
+
+    const sub = (await stripe.subscriptions.retrieve(subscriptionId)) as Stripe.Subscription & {
+      current_period_end?: number;
+    };
+    const periodEnd = sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+      : (() => {
+          const d = new Date();
+          d.setMonth(d.getMonth() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+    const status =
+      sub.status === "active" ? "active" : sub.status === "past_due" ? "past_due" : "canceled";
+
+    const newTier = normalizeMembershipTier(
+      (session.metadata?.tier as string | undefined) ||
+        (sub.metadata?.tier as string | undefined)
+    );
+    const monthlyPriceCents = Number(amount_total);
+
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("membership")
+      .eq("id", user_id)
+      .maybeSingle();
+    const prevTier = normalizeMembershipTier(
+      (existingUser as { membership?: string } | null)?.membership ?? null
+    );
+
+    await supabase
+      .from("subscriptions")
+      .upsert(
+        {
+          user_id,
+          membership_tier: newTier,
+          monthly_price: monthlyPriceCents,
+          status,
+          started_at: new Date().toISOString(),
+          next_billing_date: periodEnd,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    await supabase
+      .from("users")
+      .update({ membership: newTier, updated_at: new Date().toISOString() })
+      .eq("id", user_id);
+
+    const upgradeReferenceId = `sub_upgrade:${session.id}:${user_id}:${prevTier}->${newTier}`;
+    await creditReferralUpgrade({
+      referredUserId: user_id,
+      upgradedToTier: newTier,
+      previousTier: prevTier,
+      referenceId: upgradeReferenceId,
+    });
+  }
 
   if (product_type === "ad_deposit") {
     const ad_id = session.metadata?.ad_id as string | undefined;

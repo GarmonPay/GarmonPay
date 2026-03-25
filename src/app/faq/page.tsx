@@ -83,7 +83,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "How does the referral program work?",
-        a: "When someone signs up using your unique referral link you earn a percentage of their earnings forever. Your commission rate depends on your membership plan ranging from 10 percent on Free up to 50 percent on Elite.",
+        a: "When someone signs up using your unique referral link and later upgrades their membership plan you earn a flat commission instantly. Commissions range from $3 up to $50 per upgrade depending on your own membership plan and which plan your referral upgrades to. You do not earn from their ad views or clicks — only from their membership upgrades.",
       },
       {
         q: "Is there a limit on how many people I can refer?",
@@ -91,7 +91,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "When do I get paid for referrals?",
-        a: "Referral commissions are credited to your balance in real time whenever your referral completes an earning action.",
+        a: "Referral commissions are credited to your balance instantly the moment your referral completes a membership upgrade payment.",
       },
     ],
   },

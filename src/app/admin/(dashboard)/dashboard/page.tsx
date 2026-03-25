@@ -28,12 +28,55 @@ type PlatformMetrics = {
   totalUsers: number;
 };
 
+type ProfitMonitorPayload = {
+  advertiser_revenue_today: number;
+  advertiser_revenue_month: number;
+  member_payouts_today: number;
+  member_payouts_month: number;
+  deferred_payouts_today: number;
+  profit_today: number;
+  profit_month: number;
+  profit_margin_today: number;
+  profit_margin_month: number;
+  daily_payout_cap: number;
+  daily_payout_used: number;
+  daily_payout_remaining: number;
+  is_at_risk: boolean;
+  plan_breakdown: Array<{ plan: string; member_count: number; total_earned_today: number }>;
+};
+
+type StatsApiResponse = {
+  totalUsers?: number;
+  totalDeposits?: number;
+  totalWithdrawals?: number;
+  totalBalance?: number;
+  totalProfit?: number;
+  totalRevenue?: number;
+  recentTransactions?: typeof defaultStats.recentTransactions;
+  recentPayments?: typeof defaultStats.recentPayments;
+};
+
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
   const [stats, setStats] = useState(defaultStats);
   const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null);
+  const [profitMonitor, setProfitMonitor] = useState<ProfitMonitorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
+
+  const applyStats = (data: StatsApiResponse) => {
+    setStats((prev) => ({
+      ...prev,
+      totalUsers: data.totalUsers ?? 0,
+      totalDeposits: data.totalDeposits ?? 0,
+      totalWithdrawals: data.totalWithdrawals ?? 0,
+      totalBalance: data.totalBalance ?? 0,
+      totalProfit: data.totalProfit ?? 0,
+      totalRevenue: data.totalRevenue ?? 0,
+      recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+      recentPayments: Array.isArray(data.recentPayments) ? data.recentPayments : prev.recentPayments,
+    }));
+  };
 
   useEffect(() => {
     getAdminSessionAsync().then(setSession);
@@ -47,18 +90,7 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(res.status === 503 ? "Server configuration error. Ensure SUPABASE_SERVICE_ROLE_KEY is set in Vercel." : `Stats failed (${res.status}).`);
         return res.json();
       })
-      .then((data) => {
-        setStats({
-          totalUsers: data.totalUsers ?? 0,
-          totalDeposits: data.totalDeposits ?? 0,
-          totalWithdrawals: data.totalWithdrawals ?? 0,
-          totalBalance: data.totalBalance ?? 0,
-          totalProfit: data.totalProfit ?? 0,
-          totalRevenue: data.totalRevenue ?? 0,
-          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-          recentPayments: Array.isArray(data.recentPayments) ? data.recentPayments : [],
-        });
-      })
+      .then((data: StatsApiResponse) => applyStats(data))
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
   }, [session]);
@@ -81,6 +113,29 @@ export default function Dashboard() {
       .catch(() => setPlatformMetrics(null));
   }, [session]);
 
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+
+    const loadProfit = () => {
+      fetch("/api/admin/profit-monitor", { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: ProfitMonitorPayload | null) => {
+          if (!cancelled) setProfitMonitor(data);
+        })
+        .catch(() => {
+          if (!cancelled) setProfitMonitor(null);
+        });
+    };
+
+    loadProfit();
+    const timer = setInterval(loadProfit, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [session]);
+
   function load() {
     if (!session) return;
     setLoading(true);
@@ -90,18 +145,7 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(res.status === 503 ? "Server configuration error." : `Stats failed (${res.status}).`);
         return res.json();
       })
-      .then((data) => {
-        setStats((prev) => ({
-          ...prev,
-          totalUsers: data.totalUsers ?? 0,
-          totalDeposits: data.totalDeposits ?? 0,
-          totalWithdrawals: data.totalWithdrawals ?? 0,
-          totalBalance: data.totalBalance ?? 0,
-          totalProfit: data.totalProfit ?? 0,
-          totalRevenue: data.totalRevenue ?? 0,
-          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-        }));
-      })
+      .then((data: StatsApiResponse) => applyStats(data))
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
   }
@@ -144,6 +188,101 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        <section className="mb-8 rounded-xl border border-violet-400/20 bg-[#0f172a]/90 p-5 shadow-lg">
+          <h2 className="text-sm font-semibold text-[#eab308] uppercase tracking-wider mb-4">
+            Profit Monitor
+          </h2>
+          {!profitMonitor ? (
+            <p className="text-[#9ca3af] text-sm">Loading profit monitor…</p>
+          ) : (
+            <>
+              {profitMonitor.profit_margin_today > 70 ? (
+                <div className="mb-5 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-emerald-300 text-sm font-medium">
+                  Platform Healthy — Profit margin is above target.
+                </div>
+              ) : profitMonitor.profit_margin_today >= 60 ? (
+                <div className="mb-5 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-amber-300 text-sm font-medium">
+                  Monitor Closely — Profit margin is approaching minimum threshold.
+                </div>
+              ) : (
+                <div className="mb-5 rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-3 text-red-300 text-sm font-semibold animate-pulse">
+                  ALERT — Profit margin below 60 percent. Review advertiser revenue and consider pausing
+                  new member earning actions.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+                <MetricCard
+                  label="Advertiser Revenue Today"
+                  value={`$${(profitMonitor.advertiser_revenue_today / 100).toFixed(2)}`}
+                  valueClass="text-[#fde047]"
+                />
+                <MetricCard
+                  label="Member Payouts Today"
+                  value={`$${(profitMonitor.member_payouts_today / 100).toFixed(2)}`}
+                  valueClass="text-violet-300"
+                />
+                <MetricCard
+                  label="Platform Profit Today"
+                  value={`$${(profitMonitor.profit_today / 100).toFixed(2)}`}
+                  valueClass="text-white"
+                />
+                <MetricCard
+                  label="Profit Margin Today"
+                  value={`${profitMonitor.profit_margin_today.toFixed(2)}%`}
+                  valueClass={
+                    profitMonitor.profit_margin_today > 70
+                      ? "text-emerald-400"
+                      : profitMonitor.profit_margin_today >= 60
+                        ? "text-amber-400"
+                        : "text-red-400"
+                  }
+                />
+                <MetricCard
+                  label="Daily Payout Cap Remaining"
+                  value={`$${(profitMonitor.daily_payout_remaining / 100).toFixed(2)}`}
+                  valueClass="text-[#eab308]"
+                />
+                <MetricCard
+                  label="Deferred Payouts"
+                  value={String(profitMonitor.deferred_payouts_today)}
+                  valueClass="text-red-300"
+                />
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-[#111827] p-4">
+                <p className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider mb-3">
+                  Revenue vs Payout Ratio (Today)
+                </p>
+                <div className="space-y-3">
+                  <BarRow
+                    label="Revenue"
+                    value={profitMonitor.advertiser_revenue_today}
+                    max={Math.max(
+                      1,
+                      profitMonitor.advertiser_revenue_today,
+                      profitMonitor.member_payouts_today
+                    )}
+                    barClass="bg-[#eab308]"
+                    textClass="text-[#fde047]"
+                  />
+                  <BarRow
+                    label="Payouts"
+                    value={profitMonitor.member_payouts_today}
+                    max={Math.max(
+                      1,
+                      profitMonitor.advertiser_revenue_today,
+                      profitMonitor.member_payouts_today
+                    )}
+                    barClass="bg-violet-500"
+                    textClass="text-violet-300"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </section>
 
         <section className="mb-10 rounded-xl border border-[#eab308]/25 bg-[#0f172a]/90 p-5 shadow-lg">
           <h2 className="text-sm font-semibold text-[#eab308] uppercase tracking-wider mb-4">
@@ -339,6 +478,50 @@ export default function Dashboard() {
             </>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+      <p className="text-xs text-[#9ca3af] uppercase">{label}</p>
+      <p className={`text-xl font-bold mt-1 ${valueClass ?? "text-white"}`}>{value}</p>
+    </div>
+  );
+}
+
+function BarRow({
+  label,
+  value,
+  max,
+  barClass,
+  textClass,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  barClass: string;
+  textClass: string;
+}) {
+  const widthPct = Math.max(2, Math.min(100, (value / Math.max(1, max)) * 100));
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className={textClass}>{label}</span>
+        <span className="text-[#9ca3af]">${(value / 100).toFixed(2)}</span>
+      </div>
+      <div className="h-3 w-full rounded-full bg-white/10 overflow-hidden">
+        <div className={`h-full ${barClass}`} style={{ width: `${widthPct}%` }} />
       </div>
     </div>
   );
