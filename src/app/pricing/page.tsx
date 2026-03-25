@@ -168,6 +168,11 @@ export default function PricingPage() {
 
   return (
     <main className="min-h-screen bg-[#05020a] text-white">
+      <div className="border-b border-[#eab308]/40 bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#fbbf24] px-4 py-5 text-center shadow-[0_8px_40px_-8px_rgba(234,179,8,0.45)]">
+        <p className="mx-auto max-w-4xl text-base font-bold leading-snug text-[#0c0618] sm:text-lg md:text-xl">
+          Free members earn from day one. Paid plans multiply your earnings. No credit card ever required to start.
+        </p>
+      </div>
       <div className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
         <header className="text-center">
           <h1
@@ -233,9 +238,10 @@ export default function PricingPage() {
                   </ul>
                   <Link
                     href="/register"
-                    className="mt-8 block w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400"
+                    className="mt-8 block w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400 sm:text-base"
                   >
-                    Get Started
+                    <span className="hidden sm:inline">Start Earning Free — No Credit Card Needed</span>
+                    <span className="sm:hidden">Start Earning Free</span>
                   </Link>
                 </div>
               );

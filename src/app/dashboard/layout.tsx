@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { MobileLayout } from "@/components/mobile-layout";
 import { DesktopLayout } from "@/components/desktop-layout";
 import MobileNav from "@/components/mobile-nav";
@@ -36,15 +36,23 @@ export default function DashboardLayout({
 
   return (
     <AppErrorBoundary>
-      {/* Mobile: default under 768px; bottom nav, no sidebar */}
-      <div className="block tablet:hidden">
-        <MobileLayout>{children}</MobileLayout>
-      </div>
-      {/* Desktop: 768px and up — sidebar + main */}
-      <div className="hidden tablet:block">
-        <DesktopLayout>{children}</DesktopLayout>
-      </div>
-      <MobileNav />
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center bg-[#0a0e17] text-[#9ca3af]">
+            Loading…
+          </div>
+        }
+      >
+        {/* Mobile: default under 768px; bottom nav, no sidebar */}
+        <div className="block tablet:hidden">
+          <MobileLayout>{children}</MobileLayout>
+        </div>
+        {/* Desktop: 768px and up — sidebar + main */}
+        <div className="hidden tablet:block">
+          <DesktopLayout>{children}</DesktopLayout>
+        </div>
+        <MobileNav />
+      </Suspense>
     </AppErrorBoundary>
   );
 }

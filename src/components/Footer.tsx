@@ -13,6 +13,9 @@ export default function Footer() {
         <Link href="/disclaimer" className="text-gray-300 hover:text-white underline underline-offset-2">
           Disclaimer
         </Link>
+        <Link href="/faq" className="text-gray-300 hover:text-white underline underline-offset-2">
+          FAQ
+        </Link>
       </div>
       <p className="max-w-[800px] mx-auto mt-4 text-center text-gray-500 text-xs">
         © {new Date().getFullYear()} GarmonPay. All rights reserved.

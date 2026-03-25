@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getRegisterUrl } from "@/lib/site-url";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -10,34 +10,59 @@ import { TurnstileWidget } from "@/components/TurnstileWidget";
 const REF_STORAGE_KEY = "garmonpay_ref";
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
 export default function RegisterPage() {
-  const searchParams = useSearchParams();
   const supabase = createBrowserClient();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const ref = searchParams.get("ref")?.trim();
-    if (ref && typeof localStorage !== "undefined") {
-      localStorage.setItem(REF_STORAGE_KEY, ref);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref")?.trim();
+    if (ref) {
+      setReferralCode(ref);
+      try {
+        localStorage.setItem(REF_STORAGE_KEY, ref);
+        document.cookie = `garmonpay_ref=${encodeURIComponent(ref)}; path=/; max-age=${14 * 24 * 60 * 60}; SameSite=Lax`;
+      } catch {
+        // ignore
+      }
+    } else {
+      try {
+        const fromCookie = document.cookie.match(/garmonpay_ref=([^;]+)/)?.[1];
+        if (fromCookie) setReferralCode(decodeURIComponent(fromCookie).trim());
+        else {
+          const fromLs = localStorage.getItem(REF_STORAGE_KEY)?.trim();
+          if (fromLs) setReferralCode(fromLs);
+        }
+      } catch {
+        // ignore
+      }
     }
-    if (ref && typeof document !== "undefined") {
-      document.cookie = `garmonpay_ref=${encodeURIComponent(ref)}; path=/; max-age=${14 * 24 * 60 * 60}; SameSite=Lax`;
-    }
-  }, [searchParams]);
+  }, []);
 
   function getStoredReferralCode(): string {
-    const fromUrl = searchParams.get("ref")?.trim();
-    if (fromUrl) return fromUrl;
+    const trimmed = referralCode.trim();
+    if (trimmed) return trimmed;
     if (typeof document !== "undefined") {
       const match = document.cookie.match(/garmonpay_ref=([^;]+)/);
       if (match?.[1]) return decodeURIComponent(match[1]).trim();
     }
-    if (typeof localStorage !== "undefined") return (localStorage.getItem(REF_STORAGE_KEY) ?? "").trim();
+    if (typeof localStorage !== "undefined") {
+      return (localStorage.getItem(REF_STORAGE_KEY) ?? "").trim();
+    }
     return "";
   }
 
@@ -51,6 +76,11 @@ export default function RegisterPage() {
       return;
     }
     const trimmedEmail = email.trim();
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      setError("Full name is required.");
+      return;
+    }
     if (!trimmedEmail) {
       setError("Email is required.");
       return;
@@ -81,7 +111,10 @@ export default function RegisterPage() {
       password,
       options: {
         emailRedirectTo: getRegisterUrl(),
-        data: refCode ? { referred_by_code: refCode } : undefined,
+        data: {
+          full_name: trimmedName,
+          ...(refCode ? { referred_by_code: refCode } : {}),
+        },
       },
     });
     if (err) {
@@ -100,7 +133,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           id: data.user.id,
           email: data.user.email ?? trimmedEmail,
-          referralCode: getStoredReferralCode() || undefined,
+          referralCode: refCode || undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -115,48 +148,98 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="bg-gray-900 p-8 rounded w-96">
-        <h1 className="text-2xl mb-4">Register</h1>
+    <div className="min-h-screen flex items-center justify-center bg-[#0c0618] text-white px-4 py-12">
+      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+        <h1
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+        >
+          GarmonPay
+        </h1>
+        <p className="mt-2 text-center text-sm text-violet-200/85">Create your free account</p>
 
-        <input
-          type="email"
-          autoComplete="email"
-          className="w-full p-2 mb-3 text-black rounded"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-
-        <input
-          type="password"
-          className="w-full p-2 mb-3 text-black rounded"
-          placeholder="Password (min 8 characters)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={loading}
-          minLength={8}
-          autoComplete="new-password"
-        />
+        <div className="mt-8 space-y-4">
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Full name
+            </label>
+            <input
+              type="text"
+              autoComplete="name"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none focus:border-[#eab308]/60"
+              placeholder="Your full name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Email
+            </label>
+            <input
+              type="email"
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none focus:border-[#eab308]/60"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Password
+            </label>
+            <input
+              type="password"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none focus:border-[#eab308]/60"
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Referral code <span className="text-violet-500 normal-case">(optional)</span>
+            </label>
+            <input
+              type="text"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none focus:border-[#eab308]/60"
+              placeholder="Friend's code"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              disabled={loading}
+              autoComplete="off"
+            />
+          </div>
+        </div>
 
         {TURNSTILE_SITE_KEY && (
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onVerify={onTurnstileVerify} />
+          <div className="mt-4">
+            <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onVerify={onTurnstileVerify} />
+          </div>
         )}
 
         <button
           type="button"
           disabled={loading}
           onClick={register}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold w-full py-3 rounded-lg transition mb-3"
+          className="mt-6 w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? "Creating account…" : "Register"}
         </button>
 
-        {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
-        {message && <p className="text-green-400 mt-2 text-sm">{message}</p>}
+        {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
+        {message && <p className="mt-3 text-center text-sm text-emerald-400/90">{message}</p>}
 
-        <p className="mt-4 text-gray-400 text-sm">
-          Already have an account? <Link href="/login" className="text-blue-400 underline">Login</Link>
+        <p className="mt-8 text-center text-sm text-violet-300/90">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]">
+            Login
+          </Link>
         </p>
       </div>
     </div>
