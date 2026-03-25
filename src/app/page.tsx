@@ -60,7 +60,7 @@ export default function HomePage() {
   const projections = useMemo(() => {
     const p = MARKETING_PLANS[plan];
     const adsPerHour = 12;
-    /** Modeled gross referral earnings per day before your commission (illustrative). */
+    /** Modeled gross referral earnings per day before your commission (illustrative). No cap. */
     const referralDailyGrossUsd =
       referralCount * hoursPerReferralDay * adsPerHour * p.adRatePerAd;
     const daily = referralDailyGrossUsd * (p.referralPct / 100);
@@ -69,6 +69,14 @@ export default function HomePage() {
     const yearly = daily * 365;
     return { daily, weekly, monthly, yearly };
   }, [referralCount, hoursPerReferralDay, plan]);
+
+  function formatProjectionUsd(n: number): string {
+    if (!Number.isFinite(n)) return "—";
+    return n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
 
   return (
     <>
@@ -356,17 +364,13 @@ export default function HomePage() {
                 >
                   <span className="text-sm text-violet-300">{label} (your commission)</span>
                   <span className="font-mono text-lg font-bold text-[#fde047]">
-                    $
-                    {val.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    ${formatProjectionUsd(val)}
                   </span>
                 </div>
               ))}
               <p className="pt-2 text-center text-xs leading-relaxed text-violet-300/85">
-                Top GarmonPay Elite members with large networks earn thousands per month. Your growth
-                is limited only by your effort.
+                Top GarmonPay Elite members with large active networks earn thousands per month. Your
+                growth is limited only by your effort and your network.
               </p>
               <Link
                 href="/register"

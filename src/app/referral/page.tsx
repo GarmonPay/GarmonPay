@@ -60,8 +60,8 @@ export default function ReferralPartnerPage() {
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const [bannerStyle, setBannerStyle] = useState<"gold" | "purple" | "dark">("gold");
 
-  const [refs, setRefs] = useState(50);
-  const [avgDailyPerRef, setAvgDailyPerRef] = useState(3.5);
+  const [refs, setRefs] = useState(10);
+  const [avgDailyPerRef, setAvgDailyPerRef] = useState(2);
   const [plan, setPlan] = useState<MarketingPlanId>("growth");
 
   const commissionPct = MARKETING_PLANS[plan].referralPct;
@@ -77,10 +77,13 @@ export default function ReferralPartnerPage() {
 
   const motivation = useMemo(() => {
     const m = breakdown.monthly;
-    if (m < 500) return "You are just getting started. Stay consistent and keep recruiting.";
-    if (m < 2000) return "You are building real income. This is what part time freedom looks like.";
-    if (m < 5000) return "This is full time income territory. You are running a real business.";
-    return "You are in elite earner status. This is life changing money.";
+    if (m < 500)
+      return "You are planting seeds. Stay consistent, keep sharing your link, and your network will grow.";
+    if (m < 2000)
+      return "You are building real recurring income. This is what financial freedom starts to look like.";
+    if (m < 5000)
+      return "This is full time income. You are running a legitimate online business with GarmonPay.";
+    return "Elite earner territory. You have built something most people only dream about. Keep going.";
   }, [breakdown.monthly]);
 
   useEffect(() => {
@@ -221,20 +224,30 @@ export default function ReferralPartnerPage() {
 
       {/* Business guide */}
       <section className="mx-auto max-w-4xl px-4 py-14">
-        <h2 className="text-2xl font-bold text-white md:text-3xl">
-          How To Build Your GarmonPay Business
+        <h2 className={`${cinzel.className} text-center text-2xl font-bold text-[#fde047] md:text-3xl`}>
+          Your Step by Step Blueprint to Earning with GarmonPay Partners
         </h2>
-        <ol className="mt-10 space-y-8">
+        <h3 className="mt-4 text-center text-lg font-semibold text-white md:text-xl">
+          How To Build Your GarmonPay Business
+        </h3>
+        <ol className="mt-10 space-y-6">
           {STEPS.map((s, i) => (
             <li
               key={s.title}
-              className="rounded-2xl border border-white/10 bg-[#0c0618]/90 p-6 md:p-8"
+              className="rounded-2xl border-2 border-[#eab308]/35 bg-[#0c0618]/95 p-6 md:p-8 shadow-[0_0_30px_-12px_rgba(234,179,8,0.2)]"
             >
-              <p className="text-sm font-semibold uppercase tracking-widest text-violet-400">
-                Step {i + 1}
-              </p>
-              <h3 className="mt-2 text-xl font-bold text-[#eab308]">{s.title}</h3>
-              <p className="mt-3 leading-relaxed text-violet-200/90">{s.body}</p>
+              <div className="flex gap-4 md:gap-6">
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#eab308] bg-[#1a0f2e] text-lg font-bold text-[#fde047] md:h-14 md:w-14 md:text-xl"
+                  aria-hidden
+                >
+                  {i + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xl font-bold text-[#eab308]">{s.title}</h4>
+                  <p className="mt-3 leading-relaxed text-violet-200/90">{s.body}</p>
+                </div>
+              </div>
             </li>
           ))}
         </ol>
@@ -253,13 +266,13 @@ export default function ReferralPartnerPage() {
             </div>
             <input
               type="range"
-              min={0}
+              min={1}
               max={500}
               value={refs}
               onChange={(e) => setRefs(Number(e.target.value))}
               className="mt-2 h-2 w-full cursor-pointer accent-[#eab308]"
             />
-            <p className="mt-1 text-xs text-violet-400">The sky is truly the limit — no cap.</p>
+            <p className="mt-1 text-xs text-violet-400">No ceiling on your network size.</p>
           </div>
           <div className="mb-6">
             <div className="flex justify-between text-sm text-violet-200">
@@ -299,14 +312,20 @@ export default function ReferralPartnerPage() {
             <table className="w-full text-sm">
               <tbody>
                 {[
-                  ["Daily Income", breakdown.daily],
-                  ["Weekly Income", breakdown.weekly],
-                  ["Monthly Income", breakdown.monthly],
-                  ["Yearly Income", breakdown.yearly],
-                ].map(([label, val]) => (
+                  ["Daily Income", breakdown.daily, false],
+                  ["Weekly Income", breakdown.weekly, false],
+                  ["Monthly Income", breakdown.monthly, false],
+                  ["Yearly Income", breakdown.yearly, true],
+                ].map(([label, val, isYear]) => (
                   <tr key={label as string} className="border-b border-white/5">
                     <td className="px-4 py-3 text-violet-300">{label}</td>
-                    <td className="px-4 py-3 text-right font-mono text-[#fde047]">
+                    <td
+                      className={`px-4 py-3 text-right font-mono ${
+                        isYear
+                          ? "text-xl font-bold text-[#fde047] md:text-2xl"
+                          : "text-[#fde047]"
+                      }`}
+                    >
                       $
                       {(val as number).toLocaleString("en-US", {
                         minimumFractionDigits: 2,

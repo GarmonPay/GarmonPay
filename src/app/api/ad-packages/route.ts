@@ -24,5 +24,13 @@ export async function GET() {
     return NextResponse.json({ message: "Failed to load packages" }, { status: 500 });
   }
 
-  return NextResponse.json({ packages: data ?? [] });
+  const rows = (data ?? []) as { id: string }[];
+  const seen = new Set<string>();
+  const unique = rows.filter((r) => {
+    if (!r?.id || seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
+
+  return NextResponse.json({ packages: unique });
 }

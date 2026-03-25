@@ -3,9 +3,10 @@
 import Link from "next/link";
 import type { AdPackageRow } from "@/lib/ad-packages";
 import {
-  adPackageFeaturesToList,
+  parseAdPackageFeatures,
   formatAdViews,
   formatPriceMonthly,
+  cpvFromPackage,
 } from "@/lib/ad-packages";
 
 export type AdPackagesCardGridProps = {
@@ -22,7 +23,7 @@ export type AdPackagesCardGridProps = {
 };
 
 /**
- * Shared UI for `ad_packages` rows (same fields as Supabase: name, price_monthly, ad_views, features).
+ * Shared UI for `ad_packages` rows (Supabase: name, price_monthly, ad_views, features JSON).
  */
 export function AdPackagesCardGrid({
   packages,
@@ -50,10 +51,12 @@ export function AdPackagesCardGrid({
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {packages.map((pkg) => {
-        const bullets = adPackageFeaturesToList(pkg.features);
+        const meta = parseAdPackageFeatures(pkg.features);
+        const bullets = meta.bullets.length > 0 ? meta.bullets : [];
         const monthly = formatPriceMonthly(pkg.price_monthly);
         const views = formatAdViews(pkg.ad_views);
         const isSelected = variant === "dashboard" && selectedPackageId === pkg.id;
+        const cpv = cpvFromPackage(pkg);
 
         return (
           <div
@@ -67,11 +70,36 @@ export function AdPackagesCardGrid({
             <h3 className="text-xl font-bold text-white">{pkg.name}</h3>
             <p className="mt-4 text-3xl font-black text-white">
               ${monthly}
-              <span className="text-base font-normal text-fintech-muted">/mo</span>
+              <span className="text-base font-normal text-fintech-muted">/campaign</span>
             </p>
-            <p className="mt-2 text-sm text-fintech-muted">
-              <span className="font-medium text-white/90">{views}</span> ad views
+            <p className="mt-2 text-sm text-violet-200/90">
+              <span className="font-semibold text-[#eab308]">{views}</span> views delivered
             </p>
+            <p className="mt-1 text-xs text-fintech-muted">
+              Your cost per view: <span className="text-white/90">{cpv}</span>
+            </p>
+            {meta.est_reach && (
+              <p className="mt-1 text-xs text-violet-300/90">
+                Est. reach: <span className="text-white/90">{meta.est_reach}</span>
+              </p>
+            )}
+            {meta.member_payout_usd != null && (
+              <p className="mt-2 text-xs text-fintech-muted">
+                Member payout pool:{" "}
+                <span className="text-emerald-400/90">
+                  ${meta.member_payout_usd.toFixed(2)}
+                </span>{" "}
+                ($0.01 × views)
+              </p>
+            )}
+            {meta.platform_profit_usd != null && (
+              <p className="text-xs text-fintech-muted">
+                Est. platform margin:{" "}
+                <span className="text-amber-300/90">
+                  ${meta.platform_profit_usd.toFixed(2)}
+                </span>
+              </p>
+            )}
             {bullets.length > 0 && (
               <ul className="mt-4 flex-1 space-y-2 text-sm text-fintech-muted">
                 {bullets.map((f) => (
