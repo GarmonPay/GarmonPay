@@ -1,6 +1,6 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
-import Navbar from "@/components/Navbar";
+import { PublicNavbarWrapper } from "@/components/PublicNavbarWrapper";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { KeepAlive } from "@/components/KeepAlive";
@@ -20,7 +20,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#ff0000",
+  themeColor: "#6d28d9",
 };
 
 export const metadata = {
@@ -57,7 +57,7 @@ export default function RootLayout({
       <body className="font-sans antialiased flex min-h-screen flex-col">
         <ClientErrorBoundary>
           <AuthStateProvider>
-            <Navbar />
+            <PublicNavbarWrapper />
             {children}
           </AuthStateProvider>
         </ClientErrorBoundary>

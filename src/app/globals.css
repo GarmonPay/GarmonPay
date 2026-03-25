@@ -2,15 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Purple & Gold design system — source of truth for brand tokens */
 :root {
-  --fintech-bg: #0B0F1A;
-  --fintech-bg-card: #111827;
-  --fintech-accent: #3B82F6;
-  --fintech-success: #22C55E;
-  --fintech-danger: #EF4444;
-  --fintech-text: #FFFFFF;
-  --fintech-text-secondary: #9CA3AF;
-  --fintech-muted: #9CA3AF;
+  --gp-purple: #8b5cf6;
+  --gp-purple-deep: #6d28d9;
+  --gp-purple-glow: rgba(139, 92, 246, 0.35);
+  --gp-gold: #eab308;
+  --gp-gold-rich: #d4af37;
+  --gp-gold-muted: rgba(234, 179, 8, 0.85);
+  --fintech-bg: #0c0618;
+  --fintech-bg-card: #150d24;
+  --fintech-accent: var(--gp-purple);
+  --fintech-accent-gold: var(--gp-gold);
+  --fintech-success: #22c55e;
+  --fintech-danger: #ef4444;
+  --fintech-text: #fafafa;
+  --fintech-text-secondary: #c4b5fd;
+  --fintech-muted: #a78bfa;
 }
 
 *,
@@ -29,18 +37,32 @@ body {
   min-height: 100vh;
   width: 100%;
   background: var(--fintech-bg);
+  background-image: radial-gradient(
+      ellipse 100% 80% at 50% -20%,
+      var(--gp-purple-glow) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, #0c0618 0%, #07030f 100%);
   color: var(--fintech-text);
-  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 a {
-  color: var(--fintech-accent);
+  color: var(--gp-gold);
 }
 
-input, button, select, textarea {
+a:hover {
+  color: var(--gp-gold-rich);
+}
+
+input,
+button,
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -51,11 +73,12 @@ input, button, select, textarea {
     @apply rounded-2xl border border-white/[0.06] bg-fintech-bg-card shadow-card transition-all duration-app;
   }
   .card-lux:hover {
-    @apply shadow-card-hover border-white/[0.08];
+    @apply shadow-card-hover border-purple-500/20;
   }
   /* Glass bar (header / bottom nav) */
   .glass-bar {
-    @apply bg-fintech-bg-card/80 backdrop-blur-xl border-white/[0.06];
+    @apply bg-fintech-bg-card/85 backdrop-blur-xl border-white/[0.08];
+    box-shadow: 0 0 40px -12px var(--gp-purple-glow);
   }
   /* Button press */
   .btn-press:active {
@@ -63,19 +86,32 @@ input, button, select, textarea {
   }
   /* Fight Arena: dark + gold */
   .arena-bg {
-    background: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(180, 120, 40, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 30, 0.08) 0%, transparent 50%),
-                linear-gradient(180deg, #0B0F1A 0%, #0d1220 50%, #0B0F1A 100%);
+    background: radial-gradient(
+        ellipse 120% 80% at 50% 0%,
+        rgba(139, 92, 246, 0.14) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse 80% 60% at 50% 100%,
+        rgba(212, 175, 55, 0.1) 0%,
+        transparent 50%
+      ),
+      linear-gradient(180deg, #0c0618 0%, #0d1220 50%, #0c0618 100%);
   }
   .arena-glow {
-    box-shadow: 0 0 40px -10px rgba(212, 175, 55, 0.25);
+    box-shadow: 0 0 40px -10px rgba(234, 179, 8, 0.35);
   }
   .arena-border {
-    border-color: rgba(212, 175, 55, 0.2);
+    border-color: rgba(212, 175, 55, 0.25);
   }
   @keyframes arenaPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.85; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.9;
+    }
   }
   .arena-bg {
     animation: arenaPulse 8s ease-in-out infinite;
@@ -91,8 +127,12 @@ input, button, select, textarea {
 
 /* Mobile: safe area for notches / home indicator */
 @supports (padding: env(safe-area-inset-bottom)) {
-  .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
-  .safe-area-pt { padding-top: env(safe-area-inset-top); }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 /* Touch-friendly: minimum tap target 48px */
@@ -108,7 +148,8 @@ input, button, select, textarea {
 @media (max-width: 767px) {
   .dashboard-main .card-lux {
     border-radius: 0.75rem;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25),
+      0 4px 6px -2px rgba(0, 0, 0, 0.12);
     padding: 16px;
     margin-bottom: 16px;
   }

@@ -4,13 +4,13 @@ const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ 
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1727] to-[#020617] text-white flex flex-col items-center justify-center py-12">
+    <main className="min-h-screen bg-gradient-to-b from-[#12081f] via-[#0c0618] to-[#05020a] text-white flex flex-col items-center justify-center py-12">
 
-      <h1 className="text-5xl font-bold mb-4">
+      <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#eab308] to-[#fbbf24] bg-clip-text text-transparent">
         GarmonPay
       </h1>
 
-      <p className="text-xl text-blue-400 mb-8">
+      <p className="text-xl text-violet-300 mb-8">
         Get Seen. Get Known. Get Paid.
       </p>
 
@@ -18,21 +18,21 @@ export default function HomePage() {
 
         <a
           href="/login"
-          className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold"
+          className="bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-lg font-semibold text-white shadow-lg shadow-violet-900/40"
         >
           Login
         </a>
 
         <a
           href="/register"
-          className="bg-gray-700 hover:bg-gray-800 px-6 py-3 rounded-lg font-semibold"
+          className="bg-fintech-bg-card border border-violet-500/30 hover:border-violet-400/50 px-6 py-3 rounded-lg font-semibold"
         >
           Register
         </a>
 
         <a
           href="/advertise"
-          className="border border-amber-500 text-amber-400 hover:bg-amber-500/10 px-6 py-3 rounded-lg font-semibold"
+          className="border-2 border-[#eab308] text-[#fde047] hover:bg-[#eab308]/15 px-6 py-3 rounded-lg font-semibold"
         >
           Advertise
         </a>
@@ -41,13 +41,13 @@ export default function HomePage() {
 
       <a
         href="/wallet"
-        className="mt-6 text-blue-400 underline"
+        className="mt-6 text-[#eab308] underline underline-offset-2 hover:text-[#fde047]"
       >
         Go to Wallet
       </a>
       <a
         href="/pricing"
-        className="mt-2 inline-block text-sm text-fintech-muted hover:text-white"
+        className="mt-2 inline-block text-sm text-fintech-muted hover:text-violet-200"
       >
         Plans &amp; ad packages
       </a>

@@ -26,16 +26,16 @@ const config: Config = {
       },
       colors: {
         fintech: {
-          bg: "#0B0F1A",
-          "bg-card": "#111827",
-          accent: "#3B82F6",
+          bg: "#0c0618",
+          "bg-card": "#150d24",
+          accent: "#8b5cf6",
           success: "#22C55E",
           danger: "#EF4444",
-          "text-primary": "#FFFFFF",
-          "text-secondary": "#9CA3AF",
-          muted: "#9CA3AF",
+          "text-primary": "#fafafa",
+          "text-secondary": "#c4b5fd",
+          muted: "#a78bfa",
           money: "#22C55E",
-          highlight: "#F59E0B",
+          highlight: "#eab308",
         },
       },
       boxShadow: {
