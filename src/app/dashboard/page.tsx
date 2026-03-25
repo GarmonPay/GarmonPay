@@ -1,717 +1,204 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { getSessionAsync, type ClientSession } from "@/lib/session";
-import { generateReferralLink } from "@/lib/referrals";
-import {
-  getDashboard,
-  getWithdrawals,
-  getGrowth,
-  getActivities,
-  claimDailyReward,
-  ensureReferralBonus,
-  convertToAdCredit,
-} from "@/lib/api";
+import { useMemo, useState } from "react";
 
-const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
+type DashboardTab = "earn" | "history" | "referral";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
+type Tx = {
+  id: string;
+  type: string;
+  amount: number;
+  status: "completed" | "pending" | "failed";
+  time: string;
+};
+
+const mockTransactions: Tx[] = [
+  { id: "TX-9912", type: "ad_view", amount: 5, status: "completed", time: "2m ago" },
+  { id: "TX-9908", type: "withdrawal", amount: -2500, status: "pending", time: "1h ago" },
+  { id: "TX-9897", type: "referral_upgrade", amount: 1500, status: "completed", time: "3h ago" },
+  { id: "TX-9881", type: "click_task", amount: 10, status: "completed", time: "5h ago" },
+];
+
+const earnCards = [
+  { key: "watch", icon: "▶", title: "Watch an Ad", reward: "$0.05 / view" },
+  { key: "click", icon: "🖱", title: "Click Task", reward: "$0.10 / click" },
+  { key: "game", icon: "🎮", title: "Play a Game", reward: "Up to $1.00" },
+  { key: "daily", icon: "✅", title: "Daily Task", reward: "Up to $2.00" },
+] as const;
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [data, setData] = useState<Awaited<ReturnType<typeof getDashboard>> | null>(null);
-  const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [convertModal, setConvertModal] = useState(false);
-  const [convertAmount, setConvertAmount] = useState("");
-  const [convertSubmitting, setConvertSubmitting] = useState(false);
-  const [convertError, setConvertError] = useState<string | null>(null);
-  const [growth, setGrowth] = useState<{
-    totalReferrals: number;
-    leaderboardRank: number | null;
-    badges: Array<{ code: string; name: string; icon: string }>;
-    canClaimDaily: boolean;
-  } | null>(null);
-  const [activities, setActivities] = useState<Array<{ id: string; email: string; activityType: string; description: string; amountCents: number | null; createdAt: string }>>([]);
-  const [dailyClaiming, setDailyClaiming] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
-  const [depositLoading, setDepositLoading] = useState(false);
-  const [depositModalOpen, setDepositModalOpen] = useState(false);
-  const [stripeStatusMessage, setStripeStatusMessage] = useState<string | null>(null);
+  const [tab, setTab] = useState<DashboardTab>("earn");
+  const [watchingAd, setWatchingAd] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(15);
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!depositModalOpen) return;
-    fetch("/api/stripe/status").then((r) => r.json()).then((d) => {
-      if (!d?.ok && d?.message) setStripeStatusMessage(d.message);
-      else setStripeStatusMessage(null);
-    }).catch(() => setStripeStatusMessage(null));
-  }, [depositModalOpen]);
+  const memberName = "Alex Member";
+  const memberPlan = "Pro";
+  const referralCode = "GARM-A7X9";
+  const referralLink = `https://garmonpay.com/r/${referralCode}`;
 
-  // Balance comes from getDashboard (/api/dashboard) — same source as wallet and Fight Arena
-  const refetchParam = searchParams.get("refetch");
-  useEffect(() => {
-    if (refetchParam !== "1") return;
-    const t = setTimeout(() => {
-      getSessionAsync().then((session) => {
-        if (session) {
-          const tokenOrId = session.accessToken ?? session.userId;
-          const isToken = !!session.accessToken;
-          getDashboard(tokenOrId, isToken).then(setData);
+  const adProgress = useMemo(() => ((15 - secondsLeft) / 15) * 100, [secondsLeft]);
+
+  function startWatchAd() {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    setSecondsLeft(15);
+    const timer = window.setInterval(() => {
+      setSecondsLeft((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          setWatchingAd(false);
+          return 0;
         }
+        return current - 1;
       });
-    }, 2500);
-    return () => clearTimeout(t);
-  }, [refetchParam]);
-
-  function loadDashboardData(tokenOrId: string, isToken: boolean) {
-    Promise.all([
-      getDashboard(tokenOrId, isToken),
-      getWithdrawals(tokenOrId, isToken).catch(() => ({ withdrawals: [] as { id: string; amount: number; status: string; created_at: string }[], minWithdrawalCents: 100 })),
-      getGrowth(tokenOrId, isToken).catch(() => null),
-      getActivities(tokenOrId, isToken).catch(() => ({ activities: [] })),
-    ]).then(([dash, w, g, a]) => {
-      setData(dash);
-      setWithdrawals(w.withdrawals ?? []);
-      setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
-      setActivities("activities" in a ? a.activities : []);
-    });
+    }, 1000);
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    getSessionAsync()
-      .then((session) => {
-        if (cancelled) return;
-        if (!session) {
-          router.replace("/login?next=/dashboard");
-          return;
-        }
-        const tokenOrId = session.accessToken ?? session.userId;
-        const isToken = !!session.accessToken;
-        ensureReferralBonus(tokenOrId, isToken).catch(() => {});
-        return Promise.allSettled([
-          getDashboard(tokenOrId, isToken),
-          getWithdrawals(tokenOrId, isToken),
-          getGrowth(tokenOrId, isToken),
-          getActivities(tokenOrId, isToken),
-        ]).then(([dashRes, wRes, gRes, aRes]) => {
-          if (cancelled) return;
-          if (dashRes.status === "fulfilled" && dashRes.value != null) {
-            setData(dashRes.value);
-            setError(null);
-          } else {
-            setError(null);
-            setData({
-              earningsTodayCents: 0,
-              earningsWeekCents: 0,
-              earningsMonthCents: 0,
-              balanceCents: 0,
-              adCreditBalanceCents: 0,
-              withdrawableCents: 0,
-              totalEarningsCents: 0,
-              totalWithdrawnCents: 0,
-              membershipTier: "starter",
-              referralCode: "",
-              referralEarningsCents: 0,
-              totalReferrals: 0,
-              activeReferralSubscriptions: 0,
-              monthlyReferralCommissionCents: 0,
-              lifetimeReferralCommissionCents: 0,
-              announcements: [],
-              availableAds: [],
-            } as Awaited<ReturnType<typeof getDashboard>>);
-          }
-          if (wRes.status === "fulfilled") {
-            setWithdrawals(wRes.value?.withdrawals ?? []);
-          }
-          if (gRes.status === "fulfilled" && gRes.value) {
-            const g = gRes.value;
-            setGrowth({ totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily });
-          }
-          if (aRes.status === "fulfilled" && aRes.value && typeof aRes.value === "object" && "activities" in aRes.value) {
-            setActivities((aRes.value as { activities?: typeof activities }).activities ?? []);
-          }
-        });
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("Dashboard load error", err);
-          setError("Unable to load dashboard. Check your connection or try again.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [router]);
-
-  const [session, setSessionState] = useState<ClientSession | null | "pending">("pending");
-  useEffect(() => {
-    getSessionAsync().then(setSessionState);
-  }, []);
-  useEffect(() => {
-    if (session !== "pending") return;
-    const t = setTimeout(() => setSessionState(null), 3000);
-    return () => clearTimeout(t);
-  }, [session]);
-
-  const loadingStyle: React.CSSProperties = { color: "#9CA3AF", minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" };
-  if (session === "pending") {
-    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Loading…</div>;
+  async function copyReferral() {
+    await navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   }
-  if (session === null) {
-    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Redirecting to login…</div>;
-  }
-
-  if (loading) {
-    return <div className="flex min-h-[60vh] items-center justify-center text-fintech-muted" style={loadingStyle}>Loading dashboard…</div>;
-  }
-
-  if (error || !data) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center p-6">
-        <div className="card-lux max-w-md p-6 text-center">
-          <p className="mb-4 text-fintech-danger">{error ?? "Failed to load dashboard"}</p>
-          <button
-            type="button"
-            onClick={() => { setError(null); setLoading(true); window.location.reload(); }}
-            className="btn-press min-h-touch rounded-xl bg-fintech-accent px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            Try again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const balanceCents = data?.balanceCents ?? 0;
-  const adCreditBalanceCents = (data as { adCreditBalanceCents?: number }).adCreditBalanceCents ?? 0;
-  const totalEarningsCents = (data as { totalEarningsCents?: number }).totalEarningsCents ?? 0;
-  const totalWithdrawnCents = (data as { totalWithdrawnCents?: number }).totalWithdrawnCents ?? 0;
-
-  async function handleDailyClaim() {
-    const s = await getSessionAsync();
-    if (!s) return;
-    setDailyClaiming(true);
-    try {
-      await claimDailyReward(s.accessToken ?? s.userId, !!s.accessToken);
-      loadDashboardData(s.accessToken ?? s.userId, !!s.accessToken);
-    } finally {
-      setDailyClaiming(false);
-    }
-  }
-
-  async function handleConvertToAdCredit(e: React.FormEvent) {
-    e.preventDefault();
-    const session = await getSessionAsync();
-    if (!session || !convertAmount.trim()) return;
-    const amountCents = Math.round(parseFloat(convertAmount) * 100);
-    if (!Number.isFinite(amountCents) || amountCents <= 0 || amountCents > balanceCents) {
-      setConvertError("Enter a valid amount not exceeding your balance");
-      return;
-    }
-    setConvertError(null);
-    setConvertSubmitting(true);
-    try {
-      await convertToAdCredit(session.accessToken ?? session.userId, !!session.accessToken, amountCents);
-      setConvertModal(false);
-      setConvertAmount("");
-      const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
-      setData(dash);
-    } catch (err) {
-      setConvertError(err instanceof Error ? err.message : "Conversion failed");
-    } finally {
-      setConvertSubmitting(false);
-    }
-  }
-
-  const upgrade = async (tier: string) => {
-    const session = await getSessionAsync();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else if (session?.userId) headers["X-User-Id"] = session.userId;
-    const res = await fetch("/api/stripe/create-membership-session", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ tier }),
-    });
-    const data = await res.json();
-    if (data?.url) window.location.href = data.url;
-    else if (data?.error) setCheckoutError(data.error);
-  };
-
-  const addFunds = async (amount: number) => {
-    const session = await getSessionAsync();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    if (session?.userId) headers["X-User-Id"] = session.userId;
-    try {
-      const res = await fetch("/api/stripe/add-funds", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ amount }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-      setCheckoutError(data?.error || (res.status === 401 ? "Please sign in to deposit." : "Deposit unavailable. Try again."));
-    } catch {
-      setCheckoutError("Network error. Please try again.");
-    }
-  };
-
-  const handleDeposit = async () => {
-    const amount = Number(depositAmount);
-    if (!Number.isFinite(amount) || amount < 5 || amount > 1000) {
-      setCheckoutError("Enter an amount between $5 and $1,000.");
-      return;
-    }
-    setCheckoutError(null);
-    setDepositLoading(true);
-    try {
-      await addFunds(amount);
-    } finally {
-      setDepositLoading(false);
-    }
-  };
 
   return (
-    <div className="space-y-5 tablet:space-y-6">
-      {/* ——— Wallet-style Balance Card ——— */}
-      <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
-        <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
-        <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
-          {formatCents(balanceCents)}
-        </p>
-        <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
-          <button
-            type="button"
-            onClick={() => { setDepositModalOpen(true); setCheckoutError(null); setDepositAmount(""); }}
-            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
-          >
-            Deposit
-          </button>
-          <Link
-            href="/dashboard/withdraw"
-            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
-          >
-            Withdraw
-          </Link>
-          <button
-            type="button"
-            onClick={() => setConvertModal(true)}
-            className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50"
-            disabled={balanceCents < 100}
-          >
-            Transfer
-          </button>
-        </div>
-      </section>
-
-      {/* ——— Quick actions ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6">
-        <h2 className="text-lg font-bold text-white">Quick actions</h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => router.push("/dashboard/earn/calculator")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                router.push("/dashboard/earn/calculator");
-              }
-            }}
-            style={{
-              background: "linear-gradient(135deg, #1a1200, #2a1800)",
-              border: "1px solid #f0a500",
-              borderRadius: 12,
-              padding: 16,
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ fontSize: 28 }}>💰</div>
-            <div
-              style={{
-                color: "#f0a500",
-                fontWeight: 700,
-                fontSize: 14,
-                marginTop: 8,
-              }}
-            >
-              Income Calculator
-            </div>
-            <div style={{ color: "#666", fontSize: 12 }}>See your earning potential</div>
+    <main className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-20 pt-10 md:px-6">
+      <section className="gp-card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-[#cdbde3]">Welcome back,</p>
+            <h1 className="font-cinzel text-3xl text-[#f5df9e]">{memberName}</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="gp-badge-gold">{memberPlan} Plan</span>
+            <button type="button" className="gp-btn-purple">Upgrade Plan</button>
           </div>
         </div>
       </section>
 
-      {/* ——— Upgrade Membership & Add Funds ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6" style={{ marginTop: "30px" }}>
-        {checkoutError && (
-          <p className="mb-3 text-sm text-red-400">
-            {checkoutError}
-            <button type="button" onClick={() => setCheckoutError(null)} className="ml-2 underline">Dismiss</button>
-          </p>
-        )}
-        <h2 className="text-lg font-bold text-white">Upgrade Membership</h2>
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => upgrade("starter")}
-            className="btn-press min-h-touch rounded-xl bg-white/10 px-4 py-3 font-medium text-white hover:bg-white/20 active:scale-[0.98]"
-          >
-            Starter — $19
-          </button>
-          <button
-            type="button"
-            onClick={() => upgrade("pro")}
-            className="btn-press min-h-touch rounded-xl bg-fintech-accent px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
-          >
-            Pro — $49
-          </button>
-          <button
-            type="button"
-            onClick={() => upgrade("vip")}
-            className="btn-press min-h-touch rounded-xl bg-fintech-highlight/80 px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
-          >
-            VIP — $99
-          </button>
-        </div>
-        <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
-        <p className="mt-1 text-sm text-fintech-muted">Click Deposit above to add funds ($5–$1,000).</p>
+      <section className="grid gap-3 md:grid-cols-5">
+        {[
+          ["Available Balance", "$482.35", "text-[#f5c842]"],
+          ["Pending", "$37.20", "text-[#dcc8f5]"],
+          ["Total Earned", "$3,209.41", "text-[#d7f0e0]"],
+          ["Referrals", "128", "text-[#e7d8ff]"],
+          ["Ads Watched", "3,914", "text-[#e7d8ff]"],
+        ].map(([label, value, className]) => (
+          <div key={label} className="gp-card p-4">
+            <p className="text-xs text-[#c9b8e1]">{label}</p>
+            <p className={`mt-2 text-2xl font-bold ${className}`}>{value}</p>
+          </div>
+        ))}
       </section>
 
-      {/* ——— Deposit modal ——— */}
-      {depositModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onClick={() => !depositLoading && setDepositModalOpen(false)}
-        >
-          <div
-            className="card-lux w-full max-w-sm p-6 animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-white">Deposit</h3>
-            <p className="mt-1 text-sm text-fintech-muted">Enter amount between $5 and $1,000.</p>
-            {checkoutError && (
-              <p className="mt-2 text-sm text-red-400">
-                {checkoutError}
-                <button type="button" onClick={() => setCheckoutError(null)} className="ml-2 underline hover:no-underline">Retry</button>
-              </p>
-            )}
-            {stripeStatusMessage && (
-              <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
-                <p className="font-medium">Stripe key issue</p>
-                <ol className="mt-2 list-decimal list-inside space-y-1 text-xs">
-                  <li>Stripe Dashboard → Developers → API keys → copy Secret key (sk_...)</li>
-                  <li>In .env.local set STRIPE_SECRET_KEY=sk_...</li>
-                  <li>Restart: run npm run dev</li>
-                </ol>
-                <button type="button" onClick={() => setStripeStatusMessage(null)} className="mt-2 underline">Dismiss</button>
-              </div>
-            )}
-            <input
-              type="number"
-              id="depositAmount"
-              min={5}
-              max={1000}
-              step="0.01"
-              placeholder="Enter amount"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              className="mt-4 w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none"
-            />
-            <div className="mt-4 flex gap-3">
+      <button type="button" className="gp-btn-gold w-full text-lg">
+        Withdraw
+      </button>
+
+      <section className="gp-card p-4">
+        <div className="grid grid-cols-3 gap-2">
+          <button type="button" className={tab === "earn" ? "gp-btn-gold" : "gp-btn-outline"} onClick={() => setTab("earn")}>
+            Earn Now
+          </button>
+          <button type="button" className={tab === "history" ? "gp-btn-gold" : "gp-btn-outline"} onClick={() => setTab("history")}>
+            History
+          </button>
+          <button type="button" className={tab === "referral" ? "gp-btn-gold" : "gp-btn-outline"} onClick={() => setTab("referral")}>
+            Referral
+          </button>
+        </div>
+      </section>
+
+      {tab === "earn" && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {earnCards.map((card) => (
+            <article key={card.key} className="gp-card p-5">
+              <p className="text-2xl">{card.icon}</p>
+              <h2 className="font-cinzel mt-3 text-2xl text-[#f5de9c]">{card.title}</h2>
+              <p className="mt-1 text-[#d2c0e8]">{card.reward}</p>
               <button
                 type="button"
-                onClick={() => setDepositModalOpen(false)}
-                disabled={depositLoading}
-                className="btn-press min-h-touch flex-1 rounded-xl border border-white/20 py-3 text-white hover:bg-white/5 disabled:opacity-50"
+                className="gp-btn-purple mt-4"
+                onClick={card.key === "watch" ? startWatchAd : undefined}
               >
-                Cancel
+                Start
               </button>
-              <button
-                type="button"
-                onClick={handleDeposit}
-                disabled={depositLoading}
-                className="btn-press min-h-touch flex-1 rounded-xl bg-fintech-accent py-3 font-semibold text-white hover:opacity-90 disabled:opacity-70"
-              >
-                {depositLoading ? "Redirecting…" : "Deposit"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </article>
+          ))}
 
-      {/* ——— Earnings, Referral, Ad cards ——— */}
-      <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:gap-5">
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Earnings</p>
-          <p className="mt-2 text-2xl font-bold text-white tablet:text-3xl">{formatCents(data.earningsTodayCents)}</p>
-          <p className="mt-1 text-sm text-fintech-muted">Today</p>
-          <div className="mt-4 flex gap-4 border-t border-white/[0.06] pt-4">
-            <div>
-              <p className="text-lg font-semibold text-white">{formatCents(data.earningsWeekCents)}</p>
-              <p className="text-xs text-fintech-muted">This week</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-white">{formatCents(data.earningsMonthCents)}</p>
-              <p className="text-xs text-fintech-muted">This month</p>
-            </div>
-          </div>
-          <Link href="/dashboard/earnings" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            View details →
-          </Link>
-        </section>
-
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Referral Earnings</p>
-          <p className="mt-2 text-2xl font-bold text-fintech-success tablet:text-3xl">{formatCents(data.referralEarningsCents ?? 0)}</p>
-          <p className="mt-1 text-sm text-fintech-muted">{data.totalReferrals ?? 0} referrals</p>
-          <Link href="/dashboard/referrals" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            Referral dashboard →
-          </Link>
-        </section>
-
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <p className="text-xs font-medium uppercase tracking-wider text-fintech-muted">Ad Credit</p>
-          <p className="mt-2 text-2xl font-bold text-fintech-highlight tablet:text-3xl">{formatCents(adCreditBalanceCents)}</p>
-          <p className="mt-1 text-sm text-fintech-muted">Balance</p>
-          <Link href="/dashboard/ads" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            Watch ads →
-          </Link>
-        </section>
-      </div>
-
-      {/* ——— Convert to Ad Credit modal ——— */}
-      {convertModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
-          onClick={() => !convertSubmitting && setConvertModal(false)}
-        >
-          <div className="card-lux w-full max-w-sm p-6 animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Transfer to Ad Credit</h3>
-            <p className="mt-1 text-sm text-fintech-muted">Move funds from balance. Minimum $1.</p>
-            {convertError && <p className="mt-2 text-sm text-fintech-danger">{convertError}</p>}
-            <form onSubmit={handleConvertToAdCredit} className="mt-4">
-              <input
-                type="number"
-                step="0.01"
-                min="1"
-                max={balanceCents / 100}
-                value={convertAmount}
-                onChange={(e) => setConvertAmount(e.target.value)}
-                placeholder="Amount (USD)"
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none"
-              />
-              <div className="mt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setConvertModal(false)}
-                  disabled={convertSubmitting}
-                  className="btn-press min-h-touch flex-1 rounded-xl border border-white/20 py-3 text-white transition-opacity hover:bg-white/5 active:opacity-90 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={convertSubmitting}
-                  className="btn-press min-h-touch flex-1 rounded-xl bg-fintech-accent py-3 font-semibold text-white transition-opacity hover:opacity-90 active:opacity-90 disabled:opacity-50"
-                >
-                  {convertSubmitting ? "Converting…" : "Transfer"}
-                </button>
+          {watchingAd && (
+            <div className="md:col-span-2 gp-card p-5">
+              <p className="font-semibold text-[#f5df9e]">Watching Ad... {secondsLeft}s remaining</p>
+              <p className="mt-1 text-sm text-[#cfbde5]">Please do not close the window while your reward is validating.</p>
+              <div className="mt-3 h-3 w-full rounded-full bg-[#2f1847]">
+                <div className="h-3 rounded-full bg-gradient-to-r from-[#f5c842] to-[#7c3aed] transition-all duration-700" style={{ width: `${adProgress}%` }} />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ——— Account summary + Ad opportunities ——— */}
-      <div className="grid grid-cols-1 gap-4 tablet:gap-5 lg:grid-cols-12">
-        <section className="animate-slide-up card-lux p-5 tablet:p-6 lg:col-span-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Ad Opportunities</h2>
-          {(data.availableAds?.length ?? 0) === 0 ? (
-            <p className="mt-3 text-fintech-muted">No ads available. Check back later.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {(data.availableAds ?? []).map((ad) => (
-                <li key={ad.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3">
-                  <span className="font-medium text-white">{ad.title}</span>
-                  <span className="text-fintech-success font-medium">+{formatCents(ad.rewardCents)}</span>
-                </li>
-              ))}
-            </ul>
+            </div>
           )}
-          <Link href="/dashboard/ads" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            View all ads →
-          </Link>
-        </section>
-
-        <section className="animate-slide-up card-lux p-5 tablet:p-6 lg:col-span-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Summary</h2>
-          <div className="mt-4 space-y-4">
-            <div>
-              <p className="text-xs text-fintech-muted">Total deposits</p>
-              <p className="text-lg font-semibold text-white">{formatCents((data as { totalDepositsCents?: number }).totalDepositsCents ?? 0)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-fintech-muted">Total earned</p>
-              <p className="text-lg font-semibold text-fintech-success">{formatCents(totalEarningsCents)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-fintech-muted">Total withdrawn</p>
-              <p className="text-lg font-semibold text-white">{formatCents(totalWithdrawnCents)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-fintech-muted">Membership</p>
-              <p className="text-lg font-semibold text-white capitalize">{data.membershipTier}</p>
-            </div>
-          </div>
-          <Link href="/dashboard/transactions" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            Transaction history →
-          </Link>
-        </section>
-      </div>
-
-      {/* ——— Withdrawals + Referral link ——— */}
-      <div className="grid grid-cols-1 gap-4 tablet:grid-cols-2 tablet:gap-5">
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Withdrawals</h2>
-          <p className="mt-3 text-sm text-fintech-muted">
-            Pending: <span className="font-medium text-fintech-highlight">{withdrawals.filter((w) => w.status === "pending").length}</span>
-            {" · "}
-            Completed: <span className="font-medium text-fintech-success">{withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length}</span>
-          </p>
-          <Link href="/dashboard/withdraw" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            Withdraw or view history →
-          </Link>
-        </section>
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Referral link</h2>
-          <code className="mt-3 block break-all rounded-xl bg-black/20 px-3 py-2 text-sm text-fintech-accent">
-            {generateReferralLink(session.userId)}
-          </code>
-          <Link href="/dashboard/referrals" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-            Referral dashboard →
-          </Link>
-        </section>
-      </div>
-
-      {/* ——— Games & Rewards ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Games & Rewards</h2>
-        <p className="mt-2 text-sm text-fintech-muted">Spin the wheel, daily bonuses, and more.</p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard/games"
-            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
-          >
-            Play Games
-          </Link>
-          <Link
-            href="/dashboard/rewards"
-            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
-          >
-            Spin Wheel
-          </Link>
-          <Link
-            href="/dashboard/rewards"
-            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
-          >
-            Daily Bonus
-          </Link>
-        </div>
-      </section>
-
-      {/* ——— Growth + Daily check-in ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Your Growth</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted">Total Referrals</p>
-            <p className="text-2xl font-bold text-white">{growth?.totalReferrals ?? 0}</p>
-          </div>
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted">Leaderboard</p>
-            <p className="text-2xl font-bold text-white">{growth?.leaderboardRank != null ? `#${growth.leaderboardRank}` : "—"}</p>
-          </div>
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted">Badges</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {(growth?.badges ?? []).length === 0 ? (
-                <span className="text-sm text-fintech-muted">None yet</span>
-              ) : (
-                (growth?.badges ?? []).map((b) => (
-                  <span key={b.code} className="rounded-full bg-fintech-accent/20 px-2 py-0.5 text-xs text-fintech-accent" title={b.name}>{b.icon} {b.name}</span>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted">Daily Check-In</p>
-            <button
-              type="button"
-              onClick={handleDailyClaim}
-              disabled={dailyClaiming || !growth?.canClaimDaily}
-              className="btn-press min-h-touch mt-2 w-full rounded-xl border border-fintech-success/40 bg-fintech-success/10 py-3 font-medium text-fintech-success transition-opacity hover:bg-fintech-success/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {dailyClaiming ? "Claiming…" : growth?.canClaimDaily ? "Claim daily" : "Claimed today"}
-            </button>
-          </div>
-        </div>
-        <Link href="/dashboard/leaderboard" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">
-          View leaderboard →
-        </Link>
-      </section>
-
-      {/* ——— Activity ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Recent Activity</h2>
-        {activities.length === 0 ? (
-          <p className="mt-3 text-fintech-muted">No recent activity.</p>
-        ) : (
-          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-            {activities.slice(0, 20).map((a) => (
-              <li key={a.id} className="flex items-center justify-between border-b border-white/[0.06] py-2 text-sm">
-                <span className="truncate text-white">{a.description}</span>
-                {a.amountCents != null && <span className="ml-2 shrink-0 font-medium text-fintech-success">{formatCents(a.amountCents)}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* ——— Announcements ——— */}
-      {(data.announcements?.length ?? 0) > 0 && (
-        <section className="animate-slide-up card-lux p-5 tablet:p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fintech-muted">Platform News</h2>
-          <ul className="mt-3 space-y-4">
-            {(data.announcements ?? []).map((a) => (
-              <li key={a.id}>
-                <h3 className="font-semibold text-white">{a.title}</h3>
-                <p className="mt-1 text-sm text-fintech-muted">{a.body}</p>
-                <p className="mt-2 text-xs text-fintech-muted">{new Date(a.publishedAt).toLocaleDateString()}</p>
-              </li>
-            ))}
-          </ul>
         </section>
       )}
 
-      {/* ——— Display ad (placement: dashboard) ——— */}
-      <section className="animate-slide-up card-lux p-5 tablet:p-6 max-w-lg">
-        <AdDisplay placement="dashboard" />
-      </section>
-    </div>
+      {tab === "history" && (
+        <section className="gp-card overflow-x-auto p-4">
+          <table className="gp-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockTransactions.map((tx) => (
+                <tr key={tx.id}>
+                  <td>{tx.id}</td>
+                  <td>{tx.type}</td>
+                  <td className={tx.amount >= 0 ? "text-[#34d399]" : "text-[#f87171]"}>
+                    {tx.amount >= 0 ? "+" : "-"}${Math.abs(tx.amount / 100).toFixed(2)}
+                  </td>
+                  <td>
+                    <span className={tx.status === "completed" ? "gp-badge-gold" : "gp-badge"}>
+                      {tx.status}
+                    </span>
+                  </td>
+                  <td>{tx.time}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {tab === "referral" && (
+        <section className="space-y-4">
+          <div className="gp-card p-5">
+            <p className="text-sm text-[#cfbee8]">Referral Code</p>
+            <p className="font-cinzel mt-2 text-3xl text-[#f5c842]">{referralCode}</p>
+            <button type="button" className="gp-btn-gold mt-4" onClick={copyReferral}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <p className="mt-3 break-all text-sm text-[#cfbee8]">{referralLink}</p>
+            <Link href="/referral" className="gp-btn-outline mt-4">Go to Full Referral Page</Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="gp-card p-4">
+              <p className="text-xs text-[#cdbde3]">Total Referrals</p>
+              <p className="mt-2 text-2xl font-bold text-[#f5c842]">128</p>
+            </div>
+            <div className="gp-card p-4">
+              <p className="text-xs text-[#cdbde3]">Earned from Refs</p>
+              <p className="mt-2 text-2xl font-bold text-[#34d399]">$1,204.00</p>
+            </div>
+            <div className="gp-card p-4">
+              <p className="text-xs text-[#cdbde3]">Active Upgrades</p>
+              <p className="mt-2 text-2xl font-bold text-[#e8d8ff]">37</p>
+            </div>
+          </div>
+        </section>
+      )}
+    </main>
   );
 }

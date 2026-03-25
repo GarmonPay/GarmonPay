@@ -1,4 +1,4 @@
-const CACHE_NAME = "garmonpay-v2-ad-packages";
+const CACHE_NAME = "garmonpay-v3-purple-gold-redesign";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -24,9 +24,25 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (request.method !== "GET") return;
+
   const path = url.pathname;
+
+  // Navigation requests should prefer network to avoid stale UI shells.
+  if (request.mode === "navigate" || path === "/") {
+    event.respondWith(
+      fetch(request)
+        .then((res) =>
+          caches.open(CACHE_NAME).then((cache) => {
+            if (res.ok && res.type === "basic") cache.put(request, res.clone());
+            return res;
+          })
+        )
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
   const isStatic =
-    path === "/" ||
     path === "/manifest.json" ||
     path.startsWith("/icon-") ||
     path.startsWith("/_next/static/") ||
@@ -34,7 +50,9 @@ self.addEventListener("fetch", (event) => {
     path.endsWith(".css") ||
     path.endsWith(".png") ||
     path.endsWith(".ico");
+
   if (!isStatic) return;
+
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(request).then((cached) => {

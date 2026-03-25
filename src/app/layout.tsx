@@ -6,6 +6,7 @@ import { KeepAlive } from "@/components/KeepAlive";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
 import { ClientErrorBoundary } from "@/components/ClientErrorBoundary";
+import Navbar from "@/components/Navbar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -54,9 +55,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased flex min-h-screen flex-col">
+        <Navbar />
         <ClientErrorBoundary>
           <AuthStateProvider>
-            {children}
+            <main className="w-full pt-20">{children}</main>
           </AuthStateProvider>
         </ClientErrorBoundary>
         <KeepAlive />
