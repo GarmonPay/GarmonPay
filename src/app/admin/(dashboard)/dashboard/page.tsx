@@ -14,9 +14,23 @@ const defaultStats = {
   recentPayments: [] as { id: string; user_id: string; email: string; amount: number; currency: string; status: string; stripe_session_id: string | null; created_at: string }[],
 };
 
+type PlatformMetrics = {
+  platformRevenueTodayCents: number;
+  platformRevenueMonthCents: number;
+  paidOutWithdrawalsTodayCents: number;
+  paidOutWithdrawalsMonthCents: number;
+  earningsCreditedTodayCents: number;
+  earningsCreditedMonthCents: number;
+  profitTodayCents: number;
+  profitMonthCents: number;
+  membershipCounts: Record<string, number>;
+  totalUsers: number;
+};
+
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
   const [stats, setStats] = useState(defaultStats);
+  const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -54,6 +68,16 @@ export default function Dashboard() {
       .then((res) => (res.ok ? res.json() : { payments: [] }))
       .then((data) => setStats((prev) => ({ ...prev, recentPayments: data.payments ?? [] })))
       .catch(() => {});
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetch("/api/admin/platform-metrics", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: PlatformMetrics | null) => {
+        if (data) setPlatformMetrics(data);
+      })
+      .catch(() => setPlatformMetrics(null));
   }, [session]);
 
   function load() {
@@ -115,6 +139,90 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        <section className="mb-10 rounded-xl border border-[#eab308]/25 bg-[#0f172a]/90 p-5 shadow-lg">
+          <h2 className="text-sm font-semibold text-[#eab308] uppercase tracking-wider mb-4">
+            Platform Earnings Tracker
+          </h2>
+          <p className="text-xs text-[#9ca3af] mb-4">
+            Derived from Supabase <code className="text-[#a78bfa]">transactions</code> (deposits =
+            revenue, completed withdrawals = paid out to members) and{" "}
+            <code className="text-[#a78bfa]">users.membership</code> for plan counts.
+          </p>
+          {platformMetrics ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Platform revenue today</p>
+                  <p className="text-xl font-bold text-emerald-400 mt-1">
+                    ${(platformMetrics.platformRevenueTodayCents / 100).toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Platform revenue this month</p>
+                  <p className="text-xl font-bold text-emerald-400 mt-1">
+                    ${(platformMetrics.platformRevenueMonthCents / 100).toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Paid out to members today</p>
+                  <p className="text-xl font-bold text-amber-300 mt-1">
+                    ${(platformMetrics.paidOutWithdrawalsTodayCents / 100).toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Paid out to members this month</p>
+                  <p className="text-xl font-bold text-amber-300 mt-1">
+                    ${(platformMetrics.paidOutWithdrawalsMonthCents / 100).toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Platform profit today</p>
+                  <p className="text-xl font-bold text-white mt-1">
+                    ${(platformMetrics.profitTodayCents / 100).toFixed(2)}
+                  </p>
+                  <p className="text-[10px] text-[#6b7280] mt-1">Revenue today − withdrawals completed today</p>
+                </div>
+                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
+                  <p className="text-xs text-[#9ca3af] uppercase">Earnings credited (month)</p>
+                  <p className="text-xl font-bold text-violet-300 mt-1">
+                    ${(platformMetrics.earningsCreditedMonthCents / 100).toFixed(2)}
+                  </p>
+                  <p className="text-[10px] text-[#6b7280] mt-1">Member earning types completed</p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-[#111827] p-4">
+                <p className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider mb-3">
+                  Active members by plan (DB membership)
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+                  {[
+                    { key: "starter", label: "Free / Starter" },
+                    { key: "pro", label: "Growth / Pro" },
+                    { key: "elite", label: "Pro / Elite" },
+                    { key: "vip", label: "Elite (VIP)" },
+                    { key: "active", label: "Active" },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="rounded-md bg-black/30 px-3 py-2 border border-white/5">
+                      <p className="text-[#9ca3af] text-xs">{label}</p>
+                      <p className="text-lg font-bold text-white">
+                        {platformMetrics.membershipCounts[key] ?? 0}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#6b7280] mt-3">
+                  Marketing names (Free, Starter, Growth, Pro, Elite) map to database{" "}
+                  <code className="text-[#a78bfa]">users.membership</code> values; adjust tiers in
+                  Stripe/webhooks to match five SKUs over time.
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-[#6b7280] text-sm">Loading platform metrics…</p>
+          )}
+        </section>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
           <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
             <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Users</h2>

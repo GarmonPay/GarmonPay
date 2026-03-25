@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Cinzel_Decorative } from "next/font/google";
+import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
 
 const cinzelDecorative = Cinzel_Decorative({
   subsets: ["latin"],
@@ -44,56 +45,30 @@ const EARN_METHODS = [
 ] as const;
 
 const REFERRAL_TIERS = [
-  { name: "Bronze", rate: "5%", detail: "First-line invites" },
-  { name: "Silver", rate: "8%", detail: "Active 30-day refs" },
-  { name: "Gold", rate: "12%", detail: "Volume milestones" },
-  { name: "Platinum", rate: "18%", detail: "Top performers" },
+  { name: "Free", rate: "10%", detail: "Start earning & sharing" },
+  { name: "Starter", rate: "20%", detail: "Higher share per referral" },
+  { name: "Growth", rate: "30%", detail: "Games + ad credit boost" },
+  { name: "Pro", rate: "40%", detail: "Priority + maximum velocity" },
+  { name: "Elite", rate: "50%", detail: "Maximum lifetime commission" },
 ] as const;
 
-type PlanId = "starter" | "growth" | "pro" | "max";
-
-const PLANS: Record<
-  PlanId,
-  { label: string; hourly: number; refMonthly: number; desc: string }
-> = {
-  starter: {
-    label: "Starter",
-    hourly: 0.35,
-    refMonthly: 2.5,
-    desc: "Core tasks & ads",
-  },
-  growth: {
-    label: "Growth",
-    hourly: 0.75,
-    refMonthly: 5,
-    desc: "Games + missions boost",
-  },
-  pro: {
-    label: "Pro",
-    hourly: 1.4,
-    refMonthly: 9,
-    desc: "Arena + banners access",
-  },
-  max: {
-    label: "Max",
-    hourly: 2.25,
-    refMonthly: 15,
-    desc: "Full platform upside",
-  },
-};
-
 export default function HomePage() {
-  const [hoursPerDay, setHoursPerDay] = useState(2);
-  const [referralCount, setReferralCount] = useState(3);
-  const [plan, setPlan] = useState<PlanId>("growth");
+  const [referralCount, setReferralCount] = useState(25);
+  const [hoursPerReferralDay, setHoursPerReferralDay] = useState(2);
+  const [plan, setPlan] = useState<MarketingPlanId>("growth");
 
-  const estimatedMonthly = useMemo(() => {
-    const p = PLANS[plan];
-    const days = 30;
-    const taskPart = hoursPerDay * p.hourly * days;
-    const refPart = referralCount * p.refMonthly;
-    return Math.max(0, Math.round((taskPart + refPart) * 100) / 100);
-  }, [hoursPerDay, referralCount, plan]);
+  const projections = useMemo(() => {
+    const p = MARKETING_PLANS[plan];
+    const adsPerHour = 12;
+    /** Modeled gross referral earnings per day before your commission (illustrative). */
+    const referralDailyGrossUsd =
+      referralCount * hoursPerReferralDay * adsPerHour * p.adRatePerAd;
+    const daily = referralDailyGrossUsd * (p.referralPct / 100);
+    const weekly = daily * 7;
+    const monthly = daily * 30;
+    const yearly = daily * 365;
+    return { daily, weekly, monthly, yearly };
+  }, [referralCount, hoursPerReferralDay, plan]);
 
   return (
     <>
@@ -282,7 +257,7 @@ export default function HomePage() {
                   Get your link
                 </Link>
               </div>
-              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {REFERRAL_TIERS.map((t) => (
                   <div
                     key={t.name}
@@ -311,7 +286,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-8 flex flex-wrap justify-center gap-2">
-              {(Object.keys(PLANS) as PlanId[]).map((id) => (
+              {(Object.keys(MARKETING_PLANS) as MarketingPlanId[]).map((id) => (
                 <button
                   key={id}
                   type="button"
@@ -322,60 +297,80 @@ export default function HomePage() {
                       : "border border-white/10 bg-white/5 text-violet-200 hover:border-violet-500/40"
                   }`}
                 >
-                  {PLANS[id].label}
+                  {MARKETING_PLANS[id].label}
                 </button>
               ))}
             </div>
             <p className="mt-2 text-center text-xs text-violet-400/90">
-              {PLANS[plan].desc}
+              {MARKETING_PLANS[plan].referralPct}% referral commission · ${MARKETING_PLANS[plan].adRatePerAd.toFixed(2)} per ad earn rate
             </p>
 
             <div className="mt-10 space-y-8">
               <div>
                 <div className="mb-2 flex justify-between text-sm text-violet-200">
-                  <span>Hours per day on tasks</span>
-                  <span className="font-mono text-[#eab308]">{hoursPerDay}h</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={8}
-                  step={0.5}
-                  value={hoursPerDay}
-                  onChange={(e) => setHoursPerDay(Number(e.target.value))}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-violet-950 accent-violet-500"
-                />
-              </div>
-              <div>
-                <div className="mb-2 flex justify-between text-sm text-violet-200">
-                  <span>Active referrals (monthly)</span>
+                  <span>Referrals in your network (0–1000)</span>
                   <span className="font-mono text-[#eab308]">{referralCount}</span>
                 </div>
                 <input
                   type="range"
                   min={0}
-                  max={40}
+                  max={1000}
                   step={1}
                   value={referralCount}
                   onChange={(e) => setReferralCount(Number(e.target.value))}
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-violet-950 accent-[#eab308]"
                 />
+                <p className="mt-1 text-xs text-violet-400/90">
+                  Your referral network can be unlimited — model up to 1,000 here.
+                </p>
+              </div>
+              <div>
+                <div className="mb-2 flex justify-between text-sm text-violet-200">
+                  <span>Average hours of activity per day per referral</span>
+                  <span className="font-mono text-[#eab308]">{hoursPerReferralDay}h</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={8}
+                  step={0.5}
+                  value={hoursPerReferralDay}
+                  onChange={(e) => setHoursPerReferralDay(Number(e.target.value))}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-violet-950 accent-violet-500"
+                />
               </div>
             </div>
 
-            <div className="mt-10 rounded-xl border border-[#eab308]/40 bg-gradient-to-br from-violet-950/80 to-[#0c0618] p-6 text-center">
-              <p className="text-sm uppercase tracking-widest text-violet-300">
-                Estimated monthly
-              </p>
-              <p className="mt-2 text-4xl font-bold text-[#fde047] md:text-5xl">
-                ${estimatedMonthly.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+            <div className="mt-10 space-y-3 rounded-xl border border-[#eab308]/40 bg-gradient-to-br from-violet-950/80 to-[#0c0618] p-6">
+              {(
+                [
+                  ["Daily", projections.daily],
+                  ["Weekly", projections.weekly],
+                  ["Monthly", projections.monthly],
+                  ["Yearly", projections.yearly],
+                ] as const
+              ).map(([label, val]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between border-b border-white/5 pb-3 last:border-0 last:pb-0"
+                >
+                  <span className="text-sm text-violet-300">{label} (your commission)</span>
+                  <span className="font-mono text-lg font-bold text-[#fde047]">
+                    $
+                    {val.toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              ))}
+              <p className="pt-2 text-center text-xs leading-relaxed text-violet-300/85">
+                Top GarmonPay Elite members with large networks earn thousands per month. Your growth
+                is limited only by your effort.
               </p>
               <Link
                 href="/register"
-                className="mt-6 inline-block rounded-lg bg-white/10 px-6 py-2 text-sm font-medium text-white hover:bg-white/15"
+                className="mt-4 block text-center text-sm font-medium text-white underline underline-offset-2 hover:text-[#fde047]"
               >
                 Create free account
               </Link>

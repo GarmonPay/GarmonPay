@@ -15,6 +15,7 @@ import {
   ensureReferralBonus,
   convertToAdCredit,
 } from "@/lib/api";
+import { SupabaseEarningsTracker } from "@/components/dashboard/SupabaseEarningsTracker";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -287,6 +288,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 tablet:space-y-6">
+      <SupabaseEarningsTracker
+        userId={session.userId}
+        membershipTier={data.membershipTier}
+        dashboardReferrals={{
+          totalReferrals: data.totalReferrals ?? 0,
+          activeReferralSubscriptions: data.activeReferralSubscriptions ?? 0,
+          referralEarningsCents: data.referralEarningsCents ?? 0,
+        }}
+      />
+
       {/* ——— Wallet-style Balance Card ——— */}
       <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
         <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
