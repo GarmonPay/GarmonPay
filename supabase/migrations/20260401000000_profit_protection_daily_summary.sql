@@ -75,8 +75,25 @@ ALTER TABLE public.platform_settings
     CASE WHEN id::text ~ '^[0-9]+$' THEN id::integer ELSE 1 END
   );
 
-ALTER TABLE public.platform_settings
-  ALTER COLUMN id SET DEFAULT 1;
+-- If id is an identity column, Postgres disallows SET DEFAULT.
+-- Keep identity as-is in that case; otherwise set a singleton-friendly default.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'platform_settings'
+      AND column_name = 'id'
+      AND is_identity = 'YES'
+  ) THEN
+    -- no-op for identity columns
+    NULL;
+  ELSE
+    EXECUTE 'ALTER TABLE public.platform_settings ALTER COLUMN id SET DEFAULT 1';
+  END IF;
+END
+$$;
 
 -- Ensure only singleton row id=1 can exist
 ALTER TABLE public.platform_settings
