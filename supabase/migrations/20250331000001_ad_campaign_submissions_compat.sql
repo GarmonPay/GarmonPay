@@ -3,9 +3,7 @@
 -- This view exposes the same rows so SELECTs against ad_campaign_submissions work.
 -- For INSERT/UPDATE/DELETE, use public.garmon_ads (or extend this migration with INSTEAD OF triggers if needed).
 
-CREATE OR REPLACE VIEW public.ad_campaign_submissions
-WITH (security_invoker = true)
-AS
+CREATE OR REPLACE VIEW public.ad_campaign_submissions AS
 SELECT * FROM public.garmon_ads;
 
 COMMENT ON VIEW public.ad_campaign_submissions IS
