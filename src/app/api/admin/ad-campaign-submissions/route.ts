@@ -93,7 +93,7 @@ export async function GET(request: Request) {
   });
 }
 
-/** PATCH /api/admin/ad-campaign-submissions with body { id, status } */
+/** PATCH /api/admin/ad-campaign-submissions with body { id, status } or { ids, status } */
 export async function PATCH(request: Request) {
   if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
@@ -104,38 +104,49 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { id?: string; status?: string };
+  let body: { id?: string; ids?: string[]; status?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 });
   }
 
-  const id = body.id?.trim();
   const status = body.status?.trim().toLowerCase();
-  if (!id) {
-    return NextResponse.json({ message: "id is required" }, { status: 400 });
-  }
   if (!status || !ALLOWED_STATUSES.has(status)) {
     return NextResponse.json({ message: "Invalid status" }, { status: 400 });
+  }
+
+  const id = body.id?.trim();
+  const ids = Array.isArray(body.ids)
+    ? body.ids
+        .map((raw) => String(raw).trim())
+        .filter(Boolean)
+        .slice(0, 100)
+    : [];
+  const targetIds = ids.length > 0 ? ids : id ? [id] : [];
+  if (targetIds.length === 0) {
+    return NextResponse.json({ message: "id or ids is required" }, { status: 400 });
   }
 
   const { data, error } = await supabase
     .from("ad_campaign_submissions")
     .update({ status })
-    .eq("id", id)
+    .in("id", targetIds)
     .select(
       "id, campaign_type, content_url, campaign_goal, target_audience, package_selected, contact_email, status, created_at"
-    )
-    .maybeSingle();
+    );
 
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 
-  if (!data) {
+  const rows = (data ?? []) as SubmissionRow[];
+  if (rows.length === 0) {
     return NextResponse.json({ message: "Submission not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, submission: data as SubmissionRow });
+  if (targetIds.length === 1) {
+    return NextResponse.json({ success: true, submission: rows[0] });
+  }
+  return NextResponse.json({ success: true, updated: rows.length, submissions: rows });
 }

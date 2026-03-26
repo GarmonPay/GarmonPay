@@ -59,10 +59,12 @@ type AdCampaignSubmission = {
 
 type SubmissionsApiResponse = {
   submissions?: AdCampaignSubmission[];
-  page?: number;
-  limit?: number;
-  total?: number;
-  totalPages?: number;
+  pagination?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    total_pages?: number;
+  };
 };
 
 type StatsApiResponse = {
@@ -94,6 +96,11 @@ export default function Dashboard() {
   const [submissionsTypeFilter, setSubmissionsTypeFilter] = useState<string>("all");
   const [submissionsSearchInput, setSubmissionsSearchInput] = useState("");
   const [submissionsSearchQuery, setSubmissionsSearchQuery] = useState("");
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
+  const [bulkActionStatus, setBulkActionStatus] = useState<
+    "approved" | "rejected" | "in_progress" | "completed"
+  >("approved");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -206,11 +213,18 @@ export default function Dashboard() {
         if (!res.ok) throw new Error((data?.message as string) || "Failed to load submissions");
         const payload = data as SubmissionsApiResponse;
         setSubmissions(Array.isArray(payload.submissions) ? payload.submissions : []);
-        setSubmissionsPage(typeof payload.page === "number" ? payload.page : Math.max(1, page));
-        setSubmissionsTotalPages(
-          typeof payload.totalPages === "number" ? Math.max(1, payload.totalPages) : 1
+        setSubmissionsPage(
+          typeof payload.pagination?.page === "number" ? payload.pagination.page : Math.max(1, page)
         );
-        setSubmissionsTotal(typeof payload.total === "number" ? payload.total : 0);
+        setSubmissionsTotalPages(
+          typeof payload.pagination?.total_pages === "number"
+            ? Math.max(1, payload.pagination.total_pages)
+            : 1
+        );
+        setSubmissionsTotal(
+          typeof payload.pagination?.total === "number" ? payload.pagination.total : 0
+        );
+        setSelectedSubmissionIds([]);
       })
       .catch((err) =>
         setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions")
@@ -240,11 +254,32 @@ export default function Dashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data?.message as string) || "Failed to update submission");
-      loadSubmissions();
+      loadSubmissions(submissionsPage);
     } catch (err) {
       setSubmissionsError(err instanceof Error ? err.message : "Failed to update submission");
     } finally {
       setSubmissionsBusyId(null);
+    }
+  }
+
+  async function applyBulkStatus() {
+    if (!session || selectedSubmissionIds.length === 0) return;
+    setBulkBusy(true);
+    setSubmissionsError(null);
+    try {
+      const res = await fetch("/api/admin/ad-campaign-submissions", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedSubmissionIds, status: bulkActionStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data?.message as string) || "Failed to apply bulk update");
+      loadSubmissions(submissionsPage);
+    } catch (err) {
+      setSubmissionsError(err instanceof Error ? err.message : "Failed to apply bulk update");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -668,6 +703,41 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-3">
+            <span className="text-xs text-[#9ca3af]">
+              Selected: <span className="font-semibold text-white">{selectedSubmissionIds.length}</span>
+            </span>
+            <select
+              value={bulkActionStatus}
+              onChange={(e) =>
+                setBulkActionStatus(
+                  e.target.value as "approved" | "rejected" | "in_progress" | "completed"
+                )
+              }
+              className="rounded-md border border-white/20 bg-black/30 px-2.5 py-1.5 text-xs text-white outline-none"
+            >
+              <option value="approved">Approve</option>
+              <option value="in_progress">Set in progress</option>
+              <option value="completed">Mark completed</option>
+              <option value="rejected">Reject</option>
+            </select>
+            <button
+              type="button"
+              disabled={bulkBusy || selectedSubmissionIds.length === 0}
+              onClick={applyBulkStatus}
+              className="rounded-md bg-[#eab308]/20 px-3 py-1.5 text-xs text-[#fde047] hover:bg-[#eab308]/30 disabled:opacity-40"
+            >
+              {bulkBusy ? "Applying…" : "Apply to selected"}
+            </button>
+            <button
+              type="button"
+              disabled={selectedSubmissionIds.length === 0}
+              onClick={() => setSelectedSubmissionIds([])}
+              className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-40"
+            >
+              Clear selection
+            </button>
+          </div>
           {submissionsError && (
             <div className="mb-3 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
               {submissionsError}
@@ -687,6 +757,24 @@ export default function Dashboard() {
                 <table className="w-full text-left text-sm min-w-[980px]">
                   <thead>
                     <tr className="border-b border-white/10 text-[#9ca3af]">
+                      <th className="pb-3 pr-4 font-medium">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all submissions on page"
+                          checked={
+                            submissions.length > 0 &&
+                            submissions.every((s) => selectedSubmissionIds.includes(s.id))
+                          }
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSubmissionIds(submissions.map((s) => s.id));
+                            } else {
+                              setSelectedSubmissionIds([]);
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-white/20 bg-black/30"
+                        />
+                      </th>
                       <th className="pb-3 pr-4 font-medium">Date</th>
                       <th className="pb-3 pr-4 font-medium">Type</th>
                       <th className="pb-3 pr-4 font-medium">Goal</th>
@@ -700,6 +788,21 @@ export default function Dashboard() {
                   <tbody>
                     {submissions.map((s) => (
                       <tr key={s.id} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select submission ${s.id}`}
+                            checked={selectedSubmissionIds.includes(s.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSubmissionIds((prev) => [...prev, s.id]);
+                              } else {
+                                setSelectedSubmissionIds((prev) => prev.filter((id) => id !== s.id));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-white/20 bg-black/30"
+                          />
+                        </td>
                         <td className="py-3 pr-4 text-[#9ca3af]">
                           {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                         </td>
