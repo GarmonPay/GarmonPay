@@ -3,6 +3,20 @@ import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
 
 const ALLOWED_STATUSES = new Set(["pending", "approved", "rejected", "in_progress", "completed"]);
+const CAMPAIGN_TYPES = [
+  "YouTube Video Views",
+  "YouTube Subscribers",
+  "TikTok Video Views",
+  "TikTok Followers",
+  "TikTok Likes",
+  "Instagram Reel Views",
+  "Instagram Followers",
+  "Instagram Likes",
+  "Facebook Video Views",
+  "Facebook Page Likes",
+  "Facebook Followers",
+  "GarmonPay General Ad",
+] as const;
 
 type SubmissionRow = {
   id: string;
@@ -29,25 +43,54 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const status = (searchParams.get("status") ?? "").trim().toLowerCase();
+  const campaignType = (searchParams.get("campaign_type") ?? "").trim();
+  const q = (searchParams.get("q") ?? "").trim();
+  const page = Math.max(1, Number(searchParams.get("page") ?? 1) || 1);
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 25) || 25));
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
   let query = supabase
     .from("ad_campaign_submissions")
     .select(
-      "id, campaign_type, content_url, campaign_goal, target_audience, package_selected, contact_email, status, created_at"
+      "id, campaign_type, content_url, campaign_goal, target_audience, package_selected, contact_email, status, created_at",
+      { count: "exact" }
     )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
 
   if (status && ALLOWED_STATUSES.has(status)) {
     query = query.eq("status", status);
   }
+  if (campaignType && CAMPAIGN_TYPES.includes(campaignType as (typeof CAMPAIGN_TYPES)[number])) {
+    query = query.eq("campaign_type", campaignType);
+  }
+  if (q) {
+    const escaped = q.replace(/[%_]/g, "");
+    query = query.or(
+      `campaign_goal.ilike.%${escaped}%,target_audience.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,package_selected.ilike.%${escaped}%`
+    );
+  }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ submissions: (data ?? []) as SubmissionRow[] });
+  return NextResponse.json({
+    submissions: (data ?? []) as SubmissionRow[],
+    pagination: {
+      page,
+      limit,
+      total: count ?? 0,
+      total_pages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+    },
+    filters: {
+      status: status && ALLOWED_STATUSES.has(status) ? status : "all",
+      campaign_type: campaignType || "all",
+      q,
+    },
+  });
 }
 
 /** PATCH /api/admin/ad-campaign-submissions with body { id, status } */

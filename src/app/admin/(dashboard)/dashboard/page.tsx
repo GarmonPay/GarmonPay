@@ -57,6 +57,14 @@ type AdCampaignSubmission = {
   created_at: string;
 };
 
+type SubmissionsApiResponse = {
+  submissions?: AdCampaignSubmission[];
+  page?: number;
+  limit?: number;
+  total?: number;
+  totalPages?: number;
+};
+
 type StatsApiResponse = {
   totalUsers?: number;
   totalDeposits?: number;
@@ -77,6 +85,15 @@ export default function Dashboard() {
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
   const [submissionsBusyId, setSubmissionsBusyId] = useState<string | null>(null);
+  const [submissionsPage, setSubmissionsPage] = useState(1);
+  const [submissionsTotalPages, setSubmissionsTotalPages] = useState(1);
+  const [submissionsTotal, setSubmissionsTotal] = useState(0);
+  const [submissionsStatusFilter, setSubmissionsStatusFilter] = useState<
+    "all" | "pending" | "approved" | "rejected" | "in_progress" | "completed"
+  >("all");
+  const [submissionsTypeFilter, setSubmissionsTypeFilter] = useState<string>("all");
+  const [submissionsSearchInput, setSubmissionsSearchInput] = useState("");
+  const [submissionsSearchQuery, setSubmissionsSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -166,15 +183,34 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }
 
-  function loadSubmissions() {
+  function loadSubmissions(page = submissionsPage) {
     if (!session) return;
     setSubmissionsLoading(true);
     setSubmissionsError(null);
-    fetch("/api/admin/ad-campaign-submissions?limit=50", { credentials: "include" })
+    const params = new URLSearchParams();
+    params.set("limit", "20");
+    params.set("page", String(Math.max(1, page)));
+    if (submissionsStatusFilter !== "all") {
+      params.set("status", submissionsStatusFilter);
+    }
+    if (submissionsTypeFilter !== "all") {
+      params.set("campaign_type", submissionsTypeFilter);
+    }
+    if (submissionsSearchQuery.trim()) {
+      params.set("q", submissionsSearchQuery.trim());
+    }
+
+    fetch(`/api/admin/ad-campaign-submissions?${params.toString()}`, { credentials: "include" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data?.message as string) || "Failed to load submissions");
-        setSubmissions(Array.isArray(data?.submissions) ? (data.submissions as AdCampaignSubmission[]) : []);
+        const payload = data as SubmissionsApiResponse;
+        setSubmissions(Array.isArray(payload.submissions) ? payload.submissions : []);
+        setSubmissionsPage(typeof payload.page === "number" ? payload.page : Math.max(1, page));
+        setSubmissionsTotalPages(
+          typeof payload.totalPages === "number" ? Math.max(1, payload.totalPages) : 1
+        );
+        setSubmissionsTotal(typeof payload.total === "number" ? payload.total : 0);
       })
       .catch((err) =>
         setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions")
@@ -184,9 +220,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!session) return;
-    loadSubmissions();
+    loadSubmissions(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, submissionsStatusFilter, submissionsTypeFilter, submissionsSearchQuery]);
 
   async function updateSubmissionStatus(
     id: string,
@@ -204,11 +240,7 @@ export default function Dashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data?.message as string) || "Failed to update submission");
-      setSubmissions((prev) =>
-        prev.map((s) =>
-          s.id === id ? ({ ...s, status, updated_at: new Date().toISOString() } as AdCampaignSubmission) : s
-        )
-      );
+      loadSubmissions();
     } catch (err) {
       setSubmissionsError(err instanceof Error ? err.message : "Failed to update submission");
     } finally {
@@ -552,11 +584,89 @@ export default function Dashboard() {
             </h2>
             <button
               type="button"
-              onClick={loadSubmissions}
+              onClick={() => loadSubmissions()}
               className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10"
             >
               Refresh
             </button>
+          </div>
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs text-[#9ca3af]">Status</label>
+              <select
+                value={submissionsStatusFilter}
+                onChange={(e) =>
+                  setSubmissionsStatusFilter(
+                    e.target.value as
+                      | "all"
+                      | "pending"
+                      | "approved"
+                      | "rejected"
+                      | "in_progress"
+                      | "completed"
+                  )
+                }
+                className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="all">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="in_progress">In progress</option>
+                <option value="completed">Completed</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-[#9ca3af]">Campaign type</label>
+              <select
+                value={submissionsTypeFilter}
+                onChange={(e) => setSubmissionsTypeFilter(e.target.value)}
+                className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="all">All types</option>
+                <option value="YouTube Video Views">YouTube Video Views</option>
+                <option value="YouTube Subscribers">YouTube Subscribers</option>
+                <option value="TikTok Video Views">TikTok Video Views</option>
+                <option value="TikTok Followers">TikTok Followers</option>
+                <option value="TikTok Likes">TikTok Likes</option>
+                <option value="Instagram Reel Views">Instagram Reel Views</option>
+                <option value="Instagram Followers">Instagram Followers</option>
+                <option value="Instagram Likes">Instagram Likes</option>
+                <option value="Facebook Video Views">Facebook Video Views</option>
+                <option value="Facebook Page Likes">Facebook Page Likes</option>
+                <option value="Facebook Followers">Facebook Followers</option>
+                <option value="GarmonPay General Ad">GarmonPay General Ad</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs text-[#9ca3af]">Search (email, goal, URL)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={submissionsSearchInput}
+                  onChange={(e) => setSubmissionsSearchInput(e.target.value)}
+                  className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-white outline-none"
+                  placeholder="Search submissions"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSubmissionsSearchQuery(submissionsSearchInput.trim())}
+                  className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10"
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmissionsSearchInput("");
+                    setSubmissionsSearchQuery("");
+                  }}
+                  className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
           </div>
           {submissionsError && (
             <div className="mb-3 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
@@ -569,6 +679,9 @@ export default function Dashboard() {
             <p className="text-[#6b7280] text-sm">No campaign submissions yet.</p>
           ) : (
             <>
+              <div className="mb-3 text-xs text-[#9ca3af]">
+                Showing {submissions.length} of {submissionsTotal} submissions
+              </div>
               <AdminScrollHint />
               <AdminTableWrap>
                 <table className="w-full text-left text-sm min-w-[980px]">
@@ -656,6 +769,29 @@ export default function Dashboard() {
               </AdminTableWrap>
             </>
           )}
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <p className="text-xs text-[#9ca3af]">
+              Page {submissionsPage} of {submissionsTotalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={submissionsLoading || submissionsPage <= 1}
+                onClick={() => loadSubmissions(submissionsPage - 1)}
+                className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={submissionsLoading || submissionsPage >= submissionsTotalPages}
+                onClick={() => loadSubmissions(submissionsPage + 1)}
+                className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     </div>
