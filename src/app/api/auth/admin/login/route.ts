@@ -84,11 +84,19 @@ export async function POST(request: Request) {
 
   const role = (profile as { role?: string } | null)?.role?.toLowerCase();
   const isSuperAdmin = !!(profile as { is_super_admin?: boolean } | null)?.is_super_admin;
-  const isAdmin = role === "admin" || isSuperAdmin;
+  const isAdmin =
+    isSuperAdmin ||
+    role === "admin" ||
+    role === "game_admin" ||
+    role === "super_admin";
 
   if (!isAdmin) {
     return NextResponse.json(
-      { ok: false, message: "Access denied. Your account does not have role='admin' in public.users." },
+      {
+        ok: false,
+        message:
+          "Access denied. Your account needs role admin, game_admin, or super_admin (or is_super_admin).",
+      },
       { status: 403 }
     );
   }

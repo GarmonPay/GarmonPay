@@ -1,7 +1,7 @@
 /**
  * Admin auth: token from cookie or Bearer, then public.users lookup.
  * Uses SUPABASE_SERVICE_ROLE_KEY when set; else token-scoped read (RLS may allow own row).
- * Valid admin = role = 'admin' OR is_super_admin = true in public.users.
+ * Valid admin = role in admin, game_admin, super_admin OR is_super_admin.
  */
 
 import { cookies } from "next/headers";
@@ -10,7 +10,9 @@ import { ADMIN_SESSION_COOKIE } from "@/lib/admin-cookie";
 
 function hasAdminRole(row: { role?: string; is_super_admin?: boolean } | null | undefined): boolean {
   if (!row) return false;
-  return (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
+  if (!!row.is_super_admin) return true;
+  const r = row.role?.toLowerCase() ?? "";
+  return r === "admin" || r === "game_admin" || r === "super_admin";
 }
 
 /** Returns true if request has valid admin. Server-side only. */

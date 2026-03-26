@@ -50,7 +50,12 @@ export default async function AdminDashboardLayout({
     redirect("/admin/login");
   }
   const row = profile as { role?: string; is_super_admin?: boolean };
-  const isAdmin = (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
+  const rl = row.role?.toLowerCase() ?? "";
+  const isAdmin =
+    !!row.is_super_admin ||
+    rl === "admin" ||
+    rl === "game_admin" ||
+    rl === "super_admin";
   if (!isAdmin) {
     redirect("/admin/login");
   }

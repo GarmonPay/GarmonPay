@@ -8,6 +8,7 @@ export interface AdminSession {
   email: string;
   expiresAt: string;
   isSuperAdmin?: boolean;
+  role?: string | null;
   accessToken?: string;
 }
 
@@ -33,6 +34,7 @@ export async function getAdminSessionAsync(): Promise<AdminSession | null> {
       email: data.email ?? "",
       expiresAt: data.expiresAt ?? "",
       isSuperAdmin: !!data.isSuperAdmin,
+      role: typeof data.role === "string" ? data.role : null,
     };
   } catch {
     return null;

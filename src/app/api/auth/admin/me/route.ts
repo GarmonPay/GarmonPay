@@ -53,7 +53,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
   const row = profile as { role?: string; is_super_admin?: boolean };
-  const isAdminUser = (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
+  const rl = row.role?.toLowerCase() ?? "";
+  const isAdminUser =
+    !!row.is_super_admin || rl === "admin" || rl === "game_admin" || rl === "super_admin";
   if (!isAdminUser) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
@@ -64,5 +66,6 @@ export async function GET(request: Request) {
     email: user.email ?? "",
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     isSuperAdmin: !!row.is_super_admin,
+    role: row.role ?? null,
   });
 }

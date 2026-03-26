@@ -72,6 +72,18 @@ export default function GamesComingSoonPage() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-4xl px-4 py-16 md:py-24">
+        <div className="mb-10 rounded-2xl border border-[#eab308]/40 bg-[#12081f]/95 p-5 shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)]">
+          <h2 className="text-lg font-semibold text-[#fde047]">Stake & Escape — live</h2>
+          <p className="mt-2 text-sm text-violet-200/90">
+            Members-only 3D vault escape. Stake from your wallet or play free (ad-supported).
+          </p>
+          <a
+            href="/games/escape"
+            className="mt-4 inline-flex rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white no-underline shadow-lg shadow-violet-900/40"
+          >
+            Enter lobby →
+          </a>
+        </div>
         <p className="text-center text-7xl md:text-8xl drop-shadow-[0_0_40px_rgba(234,179,8,0.35)]" aria-hidden>
           🎮
         </p>
