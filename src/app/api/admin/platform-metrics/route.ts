@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/admin-auth";
 const EARNING_TYPES = [
   "earning",
   "referral",
+  "referral_upgrade",
   "referral_commission",
   "spin_wheel",
   "scratch_card",

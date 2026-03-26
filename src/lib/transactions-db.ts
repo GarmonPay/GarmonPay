@@ -4,7 +4,13 @@
 
 import { createAdminClient } from "@/lib/supabase";
 
-export type TransactionType = "earning" | "withdrawal" | "ad_credit" | "referral" | "referral_commission";
+export type TransactionType =
+  | "earning"
+  | "withdrawal"
+  | "ad_credit"
+  | "referral"
+  | "referral_upgrade"
+  | "referral_commission";
 export type TransactionStatus = "pending" | "completed" | "rejected" | "cancelled";
 
 export interface TransactionRow {
@@ -87,7 +93,19 @@ export async function getTotalsForUser(userId: string): Promise<{
   let totalWithdrawnCents = 0;
   let totalAdCreditConvertedCents = 0;
   let totalDepositsCents = 0;
-  const earningTypes = ["earning", "referral", "referral_commission", "spin_wheel", "scratch_card", "mystery_box", "streak", "mission", "tournament_prize", "team_prize"];
+  const earningTypes = [
+    "earning",
+    "referral",
+    "referral_upgrade",
+    "referral_commission",
+    "spin_wheel",
+    "scratch_card",
+    "mystery_box",
+    "streak",
+    "mission",
+    "tournament_prize",
+    "team_prize",
+  ];
   for (const r of rows) {
     const amt = Number(r.amount);
     if (r.type === "deposit" && r.status === "completed") {
@@ -145,7 +163,19 @@ export async function getPlatformTotals(): Promise<{
   let totalWithdrawalsCents = 0;
   let totalEarningsCents = 0;
   let totalAdCreditCents = 0;
-  const earningTypes = ["earning", "referral", "referral_commission", "spin_wheel", "scratch_card", "mystery_box", "streak", "mission", "tournament_prize", "team_prize"];
+  const earningTypes = [
+    "earning",
+    "referral",
+    "referral_upgrade",
+    "referral_commission",
+    "spin_wheel",
+    "scratch_card",
+    "mystery_box",
+    "streak",
+    "mission",
+    "tournament_prize",
+    "team_prize",
+  ];
   for (const r of rows) {
     const amt = Number(r.amount);
     if (r.type === "deposit" && r.status === "completed") {

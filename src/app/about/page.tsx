@@ -18,7 +18,7 @@ const HOW_CARDS = [
   },
   {
     title: "You earn every day",
-    body: "Members earn by watching ads, completing tasks, playing games, and referring friends.",
+    body: "Members earn personally by watching ads, completing tasks, and playing games. Referral earnings are paid only when referred members upgrade their membership plans.",
   },
   {
     title: "Everyone wins",

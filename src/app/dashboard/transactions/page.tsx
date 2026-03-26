@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
   earning: "Ad / Earning",
   ad_credit: "Ad credit conversion",
   referral: "Referral",
+  referral_upgrade: "Referral upgrade",
   bonus: "Bonus",
   profit: "Profit",
   adjustment: "Adjustment",
@@ -149,7 +150,7 @@ export default function TransactionsPage() {
                 </tr>
               ) : (
                 transactions.map((tx) => {
-                  const isCredit = ["earning", "referral", "deposit", "bonus", "profit"].includes(tx.type) || (tx.type === "adjustment" && tx.amount > 0);
+                  const isCredit = ["earning", "referral", "referral_upgrade", "deposit", "bonus", "profit"].includes(tx.type) || (tx.type === "adjustment" && tx.amount > 0);
                   const isDebit = tx.type === "withdrawal" || tx.type === "ad_credit" || (tx.type === "adjustment" && tx.amount < 0);
                   const amountDisplay = isCredit
                     ? `+${formatCents(tx.amount)}`

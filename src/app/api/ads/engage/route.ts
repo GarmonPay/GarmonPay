@@ -13,7 +13,7 @@ import {
 } from "@/lib/garmon-ads-db";
 import { checkIpReputation } from "@/lib/ip-reputation";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
-import { grantAdReferralCommission } from "@/lib/viral-referral-db";
+import { completeAdView } from "@/lib/adTracker";
 import {
   GARMON_AD_RATES,
   MAX_USER_EARNINGS_PER_DAY,
@@ -196,6 +196,25 @@ export async function POST(request: Request) {
     const levelMultiplier = await getLevelMultiplier(supabase, userId);
     const streakMultiplier = await getStreakMultiplier(supabase, userId);
     userEarns = round6(userEarns * levelMultiplier * streakMultiplier);
+
+    // Profit protection: ad views are capped by membership-plan reward limits + daily payout cap.
+    if (engagementType === "view") {
+      const capCheck = await completeAdView({
+        userId,
+        referenceId: `ad_view:${adId}:${sessionId ?? Date.now()}`,
+        baseAmountCents: Math.round(userEarns * 100),
+      });
+      if (!capCheck.success && capCheck.reason === "payout_cap_reached") {
+        return NextResponse.json(
+          { success: false, reason: "payout_cap_reached", message: "Daily payout cap reached." },
+          { status: 200 }
+        );
+      }
+      if (capCheck.success) {
+        userEarns = round6(capCheck.amountCents / 100);
+      }
+    }
+
     advertiserCharged = round6(userEarns * 2);
     const adminEarns = userEarns;
     if (Number(ad.remaining_budget) < advertiserCharged) {
@@ -244,7 +263,6 @@ export async function POST(request: Request) {
 
     const userEarnedDollars = result.userEarnedDollars ?? userEarns;
     const userEarnedCents = result.userEarnedCents ?? Math.round(userEarns * 100);
-    grantAdReferralCommission(userId, userEarnedCents, `${adId}_${Date.now()}`).catch(() => {});
     createGarmonNotification(
       userId,
       "ad_earned",

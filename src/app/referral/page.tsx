@@ -14,13 +14,35 @@ const cinzel = Cinzel_Decorative({
   display: "swap",
 });
 
-const PLAN_ROWS = [
-  { id: "free" as MarketingPlanId, label: "Free", pct: 10 },
-  { id: "starter" as MarketingPlanId, label: "Starter", pct: 20 },
-  { id: "growth" as MarketingPlanId, label: "Growth", pct: 30 },
-  { id: "pro" as MarketingPlanId, label: "Pro", pct: 40 },
-  { id: "elite" as MarketingPlanId, label: "Elite", pct: 50 },
+const PLAN_ROWS: Array<{
+  id: MarketingPlanId;
+  label: string;
+  starter: number;
+  growth: number;
+  pro: number;
+  elite: number;
+}> = [
+  { id: "free", label: "Free", starter: 3, growth: 8, pro: 15, elite: 25 },
+  { id: "starter", label: "Starter", starter: 4, growth: 10, pro: 18, elite: 30 },
+  { id: "growth", label: "Growth", starter: 5, growth: 12, pro: 22, elite: 35 },
+  { id: "pro", label: "Pro", starter: 6, growth: 15, pro: 27, elite: 42 },
+  { id: "elite", label: "Elite", starter: 8, growth: 20, pro: 35, elite: 50 },
 ];
+
+const REFERRAL_UPGRADE_OPTIONS = [10, 20, 30, 40, 50] as const;
+type UpgradeRate = (typeof REFERRAL_UPGRADE_OPTIONS)[number];
+type UpgradeTarget = "starter" | "growth" | "pro" | "elite";
+
+const COMMISSION_BY_PLAN_AND_UPGRADE: Record<
+  MarketingPlanId,
+  Record<UpgradeTarget, number>
+> = {
+  free: { starter: 3, growth: 8, pro: 15, elite: 25 },
+  starter: { starter: 4, growth: 10, pro: 18, elite: 30 },
+  growth: { starter: 5, growth: 12, pro: 22, elite: 35 },
+  pro: { starter: 6, growth: 15, pro: 27, elite: 42 },
+  elite: { starter: 8, growth: 20, pro: 35, elite: 50 },
+};
 
 const STEPS = [
   {
@@ -41,18 +63,13 @@ const STEPS = [
   },
   {
     title: "Help Your Referrals Succeed",
-    body: "The more your referrals earn, the more you earn. Help them get started, answer their questions, and encourage them to upgrade their membership because their upgrade pays you a commission instantly.",
+    body: "Help your referrals understand the value of each plan and support them as they grow. You earn commission only when they complete membership upgrades.",
   },
   {
     title: "Scale Like a Business",
-    body: "Once you have 10 active referrals, focus on getting them to recruit too. Your commission applies to everyone they bring in at your tier level. Think of it as building a sales team where everyone gets paid.",
+    body: "Once you have 10 active referrals, focus on helping each one convert into an upgraded member. Upgrade-focused guidance creates predictable commissions at scale.",
   },
 ];
-
-function exampleMonthlyEarnings(planPct: number, referrals = 10, avgPerRefMonth = 120): number {
-  const gross = referrals * avgPerRefMonth;
-  return Math.round((gross * (planPct / 100)) * 100) / 100;
-}
 
 export default function ReferralPartnerPage() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -61,19 +78,17 @@ export default function ReferralPartnerPage() {
   const [bannerStyle, setBannerStyle] = useState<"gold" | "purple" | "dark">("gold");
 
   const [refs, setRefs] = useState(10);
-  const [avgDailyPerRef, setAvgDailyPerRef] = useState(2);
+  const [upgradeRate, setUpgradeRate] = useState<UpgradeRate>(20);
+  const [upgradePlan, setUpgradePlan] = useState<UpgradeTarget>("growth");
   const [plan, setPlan] = useState<MarketingPlanId>("growth");
 
-  const commissionPct = MARKETING_PLANS[plan].referralPct;
-
   const breakdown = useMemo(() => {
-    const monthlyReferralGross = refs * avgDailyPerRef * 30;
-    const daily = (monthlyReferralGross * (commissionPct / 100)) / 30;
-    const weekly = daily * 7;
-    const monthly = monthlyReferralGross * (commissionPct / 100);
+    const upgradesThisMonth = refs * (upgradeRate / 100);
+    const commissionPerUpgrade = COMMISSION_BY_PLAN_AND_UPGRADE[plan][upgradePlan];
+    const monthly = upgradesThisMonth * commissionPerUpgrade;
     const yearly = monthly * 12;
-    return { daily, weekly, monthly, yearly };
-  }, [refs, avgDailyPerRef, commissionPct]);
+    return { upgradesThisMonth, commissionPerUpgrade, monthly, yearly };
+  }, [refs, upgradeRate, plan, upgradePlan]);
 
   const motivation = useMemo(() => {
     const m = breakdown.monthly;
@@ -134,7 +149,9 @@ export default function ReferralPartnerPage() {
   }, [fullUrl]);
 
   const share = (network: "twitter" | "facebook" | "whatsapp" | "telegram") => {
-    const text = encodeURIComponent(`Join me on GarmonPay — earn with ads, games & referrals. ${fullUrl}`);
+    const text = encodeURIComponent(
+      `Join me on GarmonPay. When you upgrade your membership plan, I earn a referral commission instantly. ${fullUrl}`
+    );
     const url = encodeURIComponent(fullUrl || "https://garmonpay.com");
     const map: Record<string, string> = {
       twitter: `https://twitter.com/intent/tweet?text=${text}`,
@@ -165,8 +182,8 @@ export default function ReferralPartnerPage() {
             Welcome to the GarmonPay Partner Program
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-violet-200/95">
-            You are not just a member — you are a business partner. Every person you bring in
-            earns you money forever.
+            You are not just a member — you are a business partner. Every referral who upgrades
+            their membership plan earns you an instant commission.
           </p>
         </div>
       </section>
@@ -174,9 +191,9 @@ export default function ReferralPartnerPage() {
       {/* Stats */}
       <section className="mx-auto grid max-w-6xl gap-6 px-4 py-14 md:grid-cols-3">
         {[
-          "Earn up to 50% of every dollar your referrals make",
+          "Earn up to $25 every time a referral upgrades their plan",
           "No cap on how many people you can refer",
-          "Get paid every time they watch an ad, complete a task, or upgrade",
+          "Get paid instantly every time a referral upgrades",
         ].map((t) => (
           <div
             key={t}
@@ -193,33 +210,32 @@ export default function ReferralPartnerPage() {
           Your Earnings Depend On Your Plan
         </h2>
         <p className="mt-2 text-violet-200/85">
-          Higher membership = higher referral commission on the same activity.
+          Higher membership plans unlock bigger flat upgrade commissions.
         </p>
         <div className="mt-6 overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 bg-[#0a0514] text-violet-300">
-                <th className="px-4 py-3">Plan</th>
-                <th className="px-4 py-3">Referral commission</th>
-                <th className="px-4 py-3">Example monthly (10 active referrals)*</th>
+                <th className="px-4 py-3">Your Plan</th>
+                <th className="px-4 py-3">Commission When Referral Upgrades to Starter</th>
+                <th className="px-4 py-3">Commission When Referral Upgrades to Growth</th>
+                <th className="px-4 py-3">Commission When Referral Upgrades to Pro</th>
+                <th className="px-4 py-3">Commission When Referral Upgrades to Elite</th>
               </tr>
             </thead>
             <tbody>
               {PLAN_ROWS.map((row) => (
                 <tr key={row.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                   <td className="px-4 py-3 font-medium text-white">{row.label}</td>
-                  <td className="px-4 py-3 text-[#fde047]">{row.pct}%</td>
-                  <td className="px-4 py-3 text-violet-200/90">
-                    ${exampleMonthlyEarnings(row.pct).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </td>
+                  <td className="px-4 py-3 text-[#fde047]">${row.starter.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-[#fde047]">${row.growth.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-[#fde047]">${row.pro.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-[#fde047]">${row.elite.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-violet-400/90">
-          *Illustrative example assuming ~$120/month gross per referral before your commission.
-        </p>
       </section>
 
       {/* Business guide */}
@@ -261,7 +277,7 @@ export default function ReferralPartnerPage() {
         <div className="mt-6 rounded-2xl border border-[#eab308]/30 bg-[#12081f] p-6 md:p-8">
           <div className="mb-6">
             <div className="flex justify-between text-sm text-violet-200">
-              <span>Active referrals</span>
+              <span>Your Referral Network</span>
               <span className="font-mono text-[#eab308]">{refs}</span>
             </div>
             <input
@@ -275,22 +291,45 @@ export default function ReferralPartnerPage() {
             <p className="mt-1 text-xs text-violet-400">No ceiling on your network size.</p>
           </div>
           <div className="mb-6">
-            <div className="flex justify-between text-sm text-violet-200">
-              <span>Average daily earnings per referral ($)</span>
-              <span className="font-mono text-[#eab308]">${avgDailyPerRef.toFixed(2)}</span>
+            <p className="text-sm text-violet-200">What percentage of your referrals upgrade each month?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {REFERRAL_UPGRADE_OPTIONS.map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setUpgradeRate(pct)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                    upgradeRate === pct
+                      ? "bg-violet-600 text-white"
+                      : "border border-white/10 bg-white/5 text-violet-200"
+                  }`}
+                >
+                  {pct}%
+                </button>
+              ))}
             </div>
-            <input
-              type="range"
-              min={0.5}
-              max={20}
-              step={0.1}
-              value={avgDailyPerRef}
-              onChange={(e) => setAvgDailyPerRef(Number(e.target.value))}
-              className="mt-2 h-2 w-full cursor-pointer accent-violet-500"
-            />
+          </div>
+          <div className="mb-6">
+            <p className="text-sm text-violet-200">Which plan do most referrals upgrade to?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(["starter", "growth", "pro", "elite"] as UpgradeTarget[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setUpgradePlan(id)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold capitalize ${
+                    upgradePlan === id
+                      ? "bg-violet-600 text-white"
+                      : "border border-white/10 bg-white/5 text-violet-200"
+                  }`}
+                >
+                  {id}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
-            <p className="text-sm text-violet-200">Your membership plan (commission %)</p>
+            <p className="text-sm text-violet-200">Your membership plan</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {(Object.keys(MARKETING_PLANS) as MarketingPlanId[]).map((id) => (
                 <button
@@ -303,7 +342,7 @@ export default function ReferralPartnerPage() {
                       : "border border-white/10 bg-white/5 text-violet-200"
                   }`}
                 >
-                  {MARKETING_PLANS[id].label} ({MARKETING_PLANS[id].referralPct}%)
+                  {MARKETING_PLANS[id].label}
                 </button>
               ))}
             </div>
@@ -312,10 +351,10 @@ export default function ReferralPartnerPage() {
             <table className="w-full text-sm">
               <tbody>
                 {[
-                  ["Daily Income", breakdown.daily, false],
-                  ["Weekly Income", breakdown.weekly, false],
-                  ["Monthly Income", breakdown.monthly, false],
-                  ["Yearly Income", breakdown.yearly, true],
+                  ["Number of referrals who upgrade this month", breakdown.upgradesThisMonth, false],
+                  ["Commission per upgrade", breakdown.commissionPerUpgrade, false],
+                  ["Monthly commission income", breakdown.monthly, false],
+                  ["Yearly projection", breakdown.yearly, true],
                 ].map(([label, val, isYear]) => (
                   <tr key={label as string} className="border-b border-white/5">
                     <td className="px-4 py-3 text-violet-300">{label}</td>
@@ -326,19 +365,38 @@ export default function ReferralPartnerPage() {
                           : "text-[#fde047]"
                       }`}
                     >
-                      $
-                      {(val as number).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {String(label).includes("Number of referrals")
+                        ? (val as number).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : `$${(val as number).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p
+            className={`${cinzel.className} mt-6 text-center text-3xl font-bold text-[#fde047] md:text-4xl`}
+          >
+            {`$${breakdown.monthly.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`}
+          </p>
+          <p className="mt-2 text-center text-xs uppercase tracking-[0.18em] text-violet-300/80">
+            Total Monthly Earnings Estimate
+          </p>
           <p className="mt-6 rounded-lg border border-violet-500/20 bg-violet-950/40 px-4 py-3 text-center text-violet-100/95">
             {motivation}
+          </p>
+          <p className="mt-4 text-center text-xs text-violet-300/85">
+            Commissions are paid instantly when your referral completes their membership upgrade.
+            There is no limit to how many referrals you can have.
           </p>
         </div>
       </section>
