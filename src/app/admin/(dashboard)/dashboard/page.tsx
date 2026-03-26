@@ -45,6 +45,18 @@ type ProfitMonitorPayload = {
   plan_breakdown: Array<{ plan: string; member_count: number; total_earned_today: number }>;
 };
 
+type AdCampaignSubmission = {
+  id: string;
+  campaign_type: string;
+  content_url: string;
+  campaign_goal: string;
+  target_audience: string;
+  package_selected: string;
+  contact_email: string;
+  status: "pending" | "approved" | "rejected" | "in_progress" | "completed";
+  created_at: string;
+};
+
 type StatsApiResponse = {
   totalUsers?: number;
   totalDeposits?: number;
@@ -61,6 +73,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState(defaultStats);
   const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null);
   const [profitMonitor, setProfitMonitor] = useState<ProfitMonitorPayload | null>(null);
+  const [submissions, setSubmissions] = useState<AdCampaignSubmission[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsBusyId, setSubmissionsBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -148,6 +164,56 @@ export default function Dashboard() {
       .then((data: StatsApiResponse) => applyStats(data))
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
+  }
+
+  function loadSubmissions() {
+    if (!session) return;
+    setSubmissionsLoading(true);
+    setSubmissionsError(null);
+    fetch("/api/admin/ad-campaign-submissions?limit=50", { credentials: "include" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data?.message as string) || "Failed to load submissions");
+        setSubmissions(Array.isArray(data?.submissions) ? (data.submissions as AdCampaignSubmission[]) : []);
+      })
+      .catch((err) =>
+        setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions")
+      )
+      .finally(() => setSubmissionsLoading(false));
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    loadSubmissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  async function updateSubmissionStatus(
+    id: string,
+    status: "pending" | "approved" | "rejected" | "in_progress" | "completed"
+  ) {
+    if (!session) return;
+    setSubmissionsBusyId(id);
+    setSubmissionsError(null);
+    try {
+      const res = await fetch("/api/admin/ad-campaign-submissions", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data?.message as string) || "Failed to update submission");
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === id ? ({ ...s, status, updated_at: new Date().toISOString() } as AdCampaignSubmission) : s
+        )
+      );
+    } catch (err) {
+      setSubmissionsError(err instanceof Error ? err.message : "Failed to update submission");
+    } finally {
+      setSubmissionsBusyId(null);
+    }
   }
 
   if (!session) {
@@ -475,6 +541,119 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </AdminTableWrap>
+            </>
+          )}
+        </section>
+
+        <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg mt-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium text-[#9ca3af] uppercase tracking-wider">
+              Ad Campaign Submissions
+            </h2>
+            <button
+              type="button"
+              onClick={loadSubmissions}
+              className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10"
+            >
+              Refresh
+            </button>
+          </div>
+          {submissionsError && (
+            <div className="mb-3 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              {submissionsError}
+            </div>
+          )}
+          {submissionsLoading ? (
+            <p className="text-[#6b7280] text-sm">Loading submissions…</p>
+          ) : submissions.length === 0 ? (
+            <p className="text-[#6b7280] text-sm">No campaign submissions yet.</p>
+          ) : (
+            <>
+              <AdminScrollHint />
+              <AdminTableWrap>
+                <table className="w-full text-left text-sm min-w-[980px]">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[#9ca3af]">
+                      <th className="pb-3 pr-4 font-medium">Date</th>
+                      <th className="pb-3 pr-4 font-medium">Type</th>
+                      <th className="pb-3 pr-4 font-medium">Goal</th>
+                      <th className="pb-3 pr-4 font-medium">Package</th>
+                      <th className="pb-3 pr-4 font-medium">Email</th>
+                      <th className="pb-3 pr-4 font-medium">URL</th>
+                      <th className="pb-3 pr-4 font-medium">Status</th>
+                      <th className="pb-3 pr-4 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissions.map((s) => (
+                      <tr key={s.id} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-3 pr-4 text-[#9ca3af]">
+                          {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
+                        </td>
+                        <td className="py-3 pr-4 text-white">{s.campaign_type}</td>
+                        <td className="py-3 pr-4 text-[#9ca3af]">{s.campaign_goal}</td>
+                        <td className="py-3 pr-4 text-[#9ca3af]">{s.package_selected}</td>
+                        <td className="py-3 pr-4 text-white">{s.contact_email}</td>
+                        <td className="py-3 pr-4">
+                          <a
+                            href={s.content_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-violet-300 underline underline-offset-2"
+                          >
+                            Open link
+                          </a>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              s.status === "approved"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : s.status === "rejected"
+                                  ? "bg-red-500/20 text-red-300"
+                                  : s.status === "in_progress"
+                                    ? "bg-amber-500/20 text-amber-300"
+                                    : s.status === "completed"
+                                      ? "bg-blue-500/20 text-blue-300"
+                                      : "bg-white/10 text-[#d1d5db]"
+                            }`}
+                          >
+                            {s.status}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={submissionsBusyId === s.id}
+                              onClick={() => updateSubmissionStatus(s.id, "approved")}
+                              className="rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submissionsBusyId === s.id}
+                              onClick={() => updateSubmissionStatus(s.id, "in_progress")}
+                              className="rounded-md bg-amber-500/20 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/30 disabled:opacity-50"
+                            >
+                              In progress
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submissionsBusyId === s.id}
+                              onClick={() => updateSubmissionStatus(s.id, "rejected")}
+                              className="rounded-md bg-red-500/20 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AdminTableWrap>
             </>
           )}
         </section>
