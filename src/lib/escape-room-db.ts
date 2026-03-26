@@ -739,6 +739,7 @@ export async function getPrizePoolSnapshot(windowKey?: string): Promise<{
 export async function listSessions(filters?: {
   mode?: EscapeMode | "all";
   result?: EscapeResult | "all";
+  playerId?: string;
   from?: string;
   to?: string;
   minStakeCents?: number;
@@ -749,6 +750,7 @@ export async function listSessions(filters?: {
   let query = admin().from("escape_room_sessions").select("*").order("started_at", { ascending: false });
   if (filters?.mode && filters.mode !== "all") query = query.eq("mode", filters.mode);
   if (filters?.result && filters.result !== "all") query = query.eq("result", filters.result);
+  if (filters?.playerId) query = query.eq("player_id", filters.playerId);
   if (filters?.from) query = query.gte("started_at", filters.from);
   if (filters?.to) query = query.lte("started_at", filters.to);
   if (typeof filters?.minStakeCents === "number") query = query.gte("stake_cents", filters.minStakeCents);
@@ -1057,6 +1059,15 @@ export async function reviewPayout(
 
 export async function getSessionReplayMetadata(sessionId: string): Promise<{
   session: SessionRow | null;
+  player: { id: string; email: string } | null;
+  flags: Array<{
+    id: string;
+    status: "pending" | "legit" | "cheated" | "voided";
+    reason: string;
+    notes: string | null;
+    created_at: string;
+    reviewed_at: string | null;
+  }>;
   timerLogs: Array<{ id: number; event_type: string; server_time: string; payload: Record<string, unknown> }>;
 }> {
   const [sessionRes, logsRes] = await Promise.all([
@@ -1068,8 +1079,44 @@ export async function getSessionReplayMetadata(sessionId: string): Promise<{
       .order("server_time", { ascending: true }),
   ]);
   if (logsRes.error) throw new Error(logsRes.error.message);
+  const session = (sessionRes.data as SessionRow | null) ?? null;
+  let player: { id: string; email: string } | null = null;
+  let flags: Array<{
+    id: string;
+    status: "pending" | "legit" | "cheated" | "voided";
+    reason: string;
+    notes: string | null;
+    created_at: string;
+    reviewed_at: string | null;
+  }> = [];
+  if (session?.player_id) {
+    const [userRes, flagsRes] = await Promise.all([
+      admin().from("users").select("id, email").eq("id", session.player_id).maybeSingle(),
+      admin()
+        .from("escape_room_flags")
+        .select("id, status, reason, notes, created_at, reviewed_at")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: false }),
+    ]);
+    player = (userRes.data as { id?: string; email?: string } | null)
+      ? {
+          id: (userRes.data as { id: string }).id,
+          email: (userRes.data as { email?: string }).email ?? "—",
+        }
+      : null;
+    flags = (flagsRes.data ?? []) as Array<{
+      id: string;
+      status: "pending" | "legit" | "cheated" | "voided";
+      reason: string;
+      notes: string | null;
+      created_at: string;
+      reviewed_at: string | null;
+    }>;
+  }
   return {
-    session: (sessionRes.data as SessionRow | null) ?? null,
+    session,
+    player,
+    flags,
     timerLogs: (logsRes.data ?? []) as Array<{
       id: number;
       event_type: string;
@@ -1133,6 +1180,21 @@ export async function getAdminStats(range: "daily" | "weekly" | "monthly" = "dai
       (p) => p.status === "pending"
     ).length,
   };
+}
+
+export async function getPlayerSessionHistory(
+  playerId: string,
+  limit = 200
+): Promise<SessionRow[]> {
+  const safeLimit = Math.min(1000, Math.max(1, limit));
+  const { data, error } = await admin()
+    .from("escape_room_sessions")
+    .select("*")
+    .eq("player_id", playerId)
+    .order("started_at", { ascending: false })
+    .limit(safeLimit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SessionRow[];
 }
 
 export async function getFinancialSummary(filters?: { from?: string; to?: string }) {

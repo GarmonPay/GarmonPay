@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { isGameAdmin } from "@/lib/admin-auth";
-import {
-  getSessionReplayMetadata,
-  listPlayers,
-  listSessions,
-  reviewPayout,
-} from "@/lib/escape-room-db";
+import { listPlayers, listSessions, reviewPayout } from "@/lib/escape-room-db";
 import { getAdminUserIdFromRequest } from "@/lib/escape-room-api-auth";
 
 function csvEscape(value: string): string {
@@ -46,7 +41,6 @@ export async function GET(req: Request) {
   const minStake = url.searchParams.get("minStake");
   const maxStake = url.searchParams.get("maxStake");
   const exportFormat = url.searchParams.get("export");
-  const sessionId = url.searchParams.get("sessionId");
   const view = (url.searchParams.get("view") ?? "sessions").toLowerCase();
 
   if (view === "players") {
@@ -56,17 +50,6 @@ export async function GET(req: Request) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to fetch players";
-      return NextResponse.json({ message }, { status: 500 });
-    }
-  }
-
-  if (sessionId) {
-    try {
-      const replay = await getSessionReplayMetadata(sessionId);
-      return NextResponse.json(replay);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load session replay";
       return NextResponse.json({ message }, { status: 500 });
     }
   }

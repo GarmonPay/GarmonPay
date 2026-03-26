@@ -64,6 +64,15 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+function shareResultText(result: FinishResponse, fallbackElapsed: number) {
+  const time = mmss(result.session.escape_time_seconds ?? fallbackElapsed);
+  const payout = result.session.payout_cents || result.session.projected_payout_cents || 0;
+  const rank = result.standing?.rank;
+  return `I escaped the GarmonPay Stake & Escape vault in ${time}${
+    rank ? ` (rank #${rank})` : ""
+  } and earned ${cents(payout)}.`;
+}
+
 export function EscapeRoomPlayClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,6 +112,7 @@ export function EscapeRoomPlayClient() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [finishing, setFinishing] = useState(false);
   const [result, setResult] = useState<FinishResponse | null>(null);
+  const [shareDone, setShareDone] = useState(false);
 
   const sessionId = searchParams.get("session") ?? "";
 
@@ -428,6 +438,30 @@ export function EscapeRoomPlayClient() {
     }
   }
 
+  async function shareToLeaderboard() {
+    if (!result) return;
+    const text = shareResultText(result, elapsed);
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title: "Stake & Escape",
+          text,
+          url: `${window.location.origin}/escape-room`,
+        });
+        setShareDone(true);
+        return;
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setShareDone(true);
+        return;
+      }
+      setError("Share is unavailable on this device.");
+    } catch {
+      setError("Share was cancelled or failed.");
+    }
+  }
+
   function onPuzzleConfirm() {
     if (!focusedObject || !startPayload) return;
     if (focusedObject === "terminal") {
@@ -521,6 +555,15 @@ export function EscapeRoomPlayClient() {
             </p>
           )}
           <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+            {isWin && (
+              <button
+                type="button"
+                onClick={shareToLeaderboard}
+                className="rounded-lg border border-fintech-highlight/40 bg-fintech-highlight/20 px-4 py-2 text-fintech-highlight font-semibold"
+              >
+                {shareDone ? "Shared to Leaderboard" : "Share to Leaderboard"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => router.push("/escape-room")}

@@ -55,11 +55,22 @@ type SessionRow = {
   stake_cents: number;
   started_at: string;
   ended_at: string | null;
+  server_elapsed_seconds?: number | null;
   escape_time_seconds: number | null;
   result: "active" | "win" | "lose" | "timeout" | "voided";
   payout_cents: number;
   payout_status: string;
   suspicious: boolean;
+};
+
+type ReplayPayload = {
+  session: SessionRow | null;
+  timerLogs: Array<{
+    id: number;
+    event_type: string;
+    server_time: string;
+    payload: Record<string, unknown>;
+  }>;
 };
 
 type Financials = {
@@ -176,6 +187,12 @@ export default function EscapeRoomAdminPage() {
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [overviewRange, setOverviewRange] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [financialDateFrom, setFinancialDateFrom] = useState("");
+  const [financialDateTo, setFinancialDateTo] = useState("");
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerRow | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedReplay, setSelectedReplay] = useState<ReplayPayload | null>(null);
 
   const [sessionFilterMode, setSessionFilterMode] = useState<"all" | "free" | "stake">("all");
   const [sessionFilterResult, setSessionFilterResult] = useState<
@@ -200,8 +217,8 @@ export default function EscapeRoomAdminPage() {
     return adminApiHeaders(session);
   }
 
-  async function loadOverview() {
-    const res = await fetch("/api/admin/games/stats?range=daily", {
+  async function loadOverview(range = overviewRange) {
+    const res = await fetch(`/api/admin/games/stats?range=${range}`, {
       credentials: "include",
       headers: headers(),
     });
@@ -234,13 +251,33 @@ export default function EscapeRoomAdminPage() {
   }
 
   async function loadFinancials() {
-    const res = await fetch("/api/admin/games/financials", {
+    const params = new URLSearchParams();
+    if (financialDateFrom) params.set("from", new Date(financialDateFrom).toISOString());
+    if (financialDateTo) {
+      const dayEnd = new Date(financialDateTo);
+      dayEnd.setHours(23, 59, 59, 999);
+      params.set("to", dayEnd.toISOString());
+    }
+    const query = params.toString();
+    const res = await fetch(`/api/admin/games/financials${query ? `?${query}` : ""}`, {
       credentials: "include",
       headers: headers(),
     });
     if (!res.ok) throw new Error(`Financials failed (${res.status})`);
     const json = await res.json();
     setFinancials((json.financials ?? null) as Financials | null);
+  }
+
+  async function loadSessionReplay(sessionId: string) {
+    const params = new URLSearchParams({ sessionId });
+    const res = await fetch(`/api/admin/games/replay?${params.toString()}`, {
+      credentials: "include",
+      headers: headers(),
+    });
+    if (!res.ok) throw new Error(`Replay failed (${res.status})`);
+    const json = await res.json();
+    setSelectedSessionId(sessionId);
+    setSelectedReplay((json.replay ?? null) as ReplayPayload | null);
   }
 
   async function loadPuzzles() {
@@ -310,6 +347,22 @@ export default function EscapeRoomAdminPage() {
     loadSessions().catch((e) => setError(e instanceof Error ? e.message : "Sessions failed"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionFilterMode, sessionFilterResult]);
+
+  useEffect(() => {
+    if (!session) return;
+    loadOverview(overviewRange).catch((e) =>
+      setError(e instanceof Error ? e.message : "Overview failed")
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overviewRange]);
+
+  useEffect(() => {
+    if (!session) return;
+    loadFinancials().catch((e) =>
+      setError(e instanceof Error ? e.message : "Financials failed")
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [financialDateFrom, financialDateTo]);
 
   const filteredPlayers = useMemo(() => {
     const q = playersSearch.trim().toLowerCase();
@@ -607,6 +660,27 @@ export default function EscapeRoomAdminPage() {
             <p className="text-[#9ca3af] text-sm">Loading overview…</p>
           ) : (
             <div className="space-y-6">
+              <div className="flex flex-wrap gap-2">
+                {(["daily", "weekly", "monthly"] as const).map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    onClick={() => {
+                      setOverviewRange(range);
+                      loadOverview(range).catch((e) =>
+                        setError(e instanceof Error ? e.message : "Failed to load overview range")
+                      );
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                      overviewRange === range
+                        ? "bg-[#2563eb] text-white"
+                        : "bg-white/5 text-[#9ca3af] hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {range[0].toUpperCase() + range.slice(1)}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
                 <div className="rounded-lg bg-[#0b1220] border border-white/10 p-4">
                   <p className="text-xs text-[#9ca3af] uppercase">Players online</p>
@@ -781,6 +855,13 @@ export default function EscapeRoomAdminPage() {
                       <div className="flex gap-2">
                         <button
                           type="button"
+                          onClick={() => setSelectedPlayer(p)}
+                          className="px-2 py-1 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+                        >
+                          History
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => banOrSuspendPlayer(p.user_id, "suspended")}
                           className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
                         >
@@ -916,13 +997,22 @@ export default function EscapeRoomAdminPage() {
                     </td>
                     <td className="py-2 pr-3 text-white">{cents(s.payout_cents || 0)}</td>
                     <td className="py-2 pr-3">
-                      <button
-                        type="button"
-                        onClick={() => voidSessionAction(s.id)}
-                        className="px-2 py-1 rounded bg-red-500/20 text-red-300 hover:bg-red-500/30"
-                      >
-                        Void
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => loadSessionReplay(s.id)}
+                          className="px-2 py-1 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+                        >
+                          Replay
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => voidSessionAction(s.id)}
+                          className="px-2 py-1 rounded bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                        >
+                          Void
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -936,11 +1026,105 @@ export default function EscapeRoomAdminPage() {
               </tbody>
             </table>
           </AdminTableWrap>
+
+          {selectedReplay && (
+            <div className="mt-4 rounded-lg bg-[#0b1220] border border-white/10 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-white">
+                  Replay metadata · Session {selectedReplay.session?.id?.slice(0, 8) ?? "—"}…
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSessionId(null);
+                    setSelectedReplay(null);
+                  }}
+                  className="px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 text-xs"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                <div className="rounded bg-black/20 border border-white/5 p-3">
+                  <p className="text-[#9ca3af]">Result</p>
+                  <p className="text-white">{selectedReplay.session?.result ?? "—"}</p>
+                </div>
+                <div className="rounded bg-black/20 border border-white/5 p-3">
+                  <p className="text-[#9ca3af]">Server elapsed</p>
+                  <p className="text-white">
+                    {typeof selectedReplay.session?.server_elapsed_seconds === "number"
+                      ? compactSeconds(selectedReplay.session.server_elapsed_seconds)
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+              <AdminScrollHint />
+              <AdminTableWrap>
+                <table className="w-full text-left text-sm min-w-[680px]">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[#9ca3af]">
+                      <th className="py-2 pr-3">Time</th>
+                      <th className="py-2 pr-3">Event</th>
+                      <th className="py-2 pr-3">Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedReplay.timerLogs.map((log) => (
+                      <tr key={log.id} className="border-b border-white/5 align-top">
+                        <td className="py-2 pr-3 text-[#9ca3af]">
+                          {new Date(log.server_time).toLocaleString()}
+                        </td>
+                        <td className="py-2 pr-3 text-white">{log.event_type}</td>
+                        <td className="py-2 pr-3 text-[#9ca3af] whitespace-pre-wrap break-all text-xs">
+                          {JSON.stringify(log.payload)}
+                        </td>
+                      </tr>
+                    ))}
+                    {selectedReplay.timerLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="py-3 text-center text-[#6b7280]">
+                          No timer logs captured.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </AdminTableWrap>
+            </div>
+          )}
         </section>
       )}
 
       {tab === "financials" && (
         <section className="rounded-xl bg-[#111827] border border-white/10 p-5 space-y-6">
+          <div className="rounded-lg bg-[#0b1220] border border-white/10 p-4">
+            <h3 className="text-sm font-semibold text-white mb-3">Filter financial range</h3>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="date"
+                value={financialDateFrom}
+                onChange={(e) => setFinancialDateFrom(e.target.value)}
+                className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+              />
+              <input
+                type="date"
+                value={financialDateTo}
+                onChange={(e) => setFinancialDateTo(e.target.value)}
+                className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  loadFinancials().catch((e) =>
+                    setError(e instanceof Error ? e.message : "Failed to load financials")
+                  );
+                }}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10"
+              >
+                Apply Date Filter
+              </button>
+            </div>
+          </div>
           {!financials ? (
             <p className="text-[#9ca3af] text-sm">Loading financial data…</p>
           ) : (
