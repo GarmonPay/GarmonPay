@@ -53,7 +53,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
   const row = profile as { role?: string; is_super_admin?: boolean };
-  const isAdminUser = (row.role?.toLowerCase() === "admin") || !!row.is_super_admin;
+  const role = row.role?.toLowerCase() ?? "";
+  const isAdminUser = role === "admin" || role === "super_admin" || role === "game_admin" || !!row.is_super_admin;
   if (!isAdminUser) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }

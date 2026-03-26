@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
   const role = (profile as { role?: string } | null)?.role?.toLowerCase();
   const isSuperAdmin = !!(profile as { is_super_admin?: boolean } | null)?.is_super_admin;
-  const isAdmin = role === "admin" || isSuperAdmin;
+  const isAdmin = role === "admin" || role === "super_admin" || role === "game_admin" || isSuperAdmin;
 
   if (!isAdmin) {
     return NextResponse.json(
