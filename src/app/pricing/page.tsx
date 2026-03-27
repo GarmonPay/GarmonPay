@@ -191,7 +191,7 @@ export default function PricingPage() {
               ? "Loading plans from Supabase…"
               : source === "supabase"
                 ? "Plans synced from Supabase `membership_plan_catalog` (Free always first)."
-                : "Showing embedded defaults — ensure migration `20250326000002_membership_catalog_and_ad_packages.sql` is applied and API is reachable."}
+                : "Showing embedded membership defaults — apply Supabase `membership_plan_catalog` migrations and ensure `/api/membership-plans` is reachable."}
           </p>
         </header>
 
@@ -278,6 +278,27 @@ export default function PricingPage() {
             </table>
           </section>
         )}
+
+        <section className="mt-16 rounded-2xl border border-white/10 bg-[#0c0618]/80 px-6 py-6 md:px-8 md:py-7">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Advertising your business</h2>
+              <p className="mt-1 text-sm text-violet-200/80">
+                Separate from membership: view + click campaign packages, managed in admin and shown on{" "}
+                <Link href="/advertise" className="text-[#eab308] hover:underline">
+                  /advertise
+                </Link>
+                .
+              </p>
+            </div>
+            <Link
+              href="/advertise"
+              className="shrink-0 rounded-xl border border-[#eab308]/50 bg-[#eab308]/15 px-5 py-2.5 text-center text-sm font-semibold text-[#fde047] hover:bg-[#eab308]/25"
+            >
+              View ad packages
+            </Link>
+          </div>
+        </section>
 
         <section className="mt-20 rounded-2xl border border-[#eab308]/30 bg-gradient-to-br from-[#1a0f2e]/95 to-[#0c0618] p-8 md:p-10">
           <h2 className={`${cinzel.className} text-2xl font-bold text-[#fde047] md:text-3xl`}>

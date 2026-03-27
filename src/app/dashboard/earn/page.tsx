@@ -223,11 +223,21 @@ export default function EarnPage() {
           )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-fintech-muted">Level: <span className="text-white font-medium">{level}</span></span>
+          <span className="text-fintech-muted" title="From your lifetime ad earnings — display only; payouts use each ad’s base rate.">
+            Level: <span className="text-white font-medium">{level}</span>
+          </span>
           {streakDays > 0 && (
-            <span className="text-amber-400">🔥 {streakDays} day streak</span>
+            <span
+              className="text-amber-400"
+              title="Consecutive days you completed an ad engagement. Does not multiply payout."
+            >
+              🔥 {streakDays} day streak
+            </span>
           )}
         </div>
+        <p className="mt-2 text-xs text-fintech-muted">
+          Ad payouts use each campaign’s base rate (no level/streak multiplier), so advertiser budgets match package pricing.
+        </p>
       </div>
 
       {/* Leaderboard */}

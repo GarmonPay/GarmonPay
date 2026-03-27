@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
-import { GARMON_AD_RATES, MAX_USER_EARNINGS_PER_DAY } from "@/lib/garmon-ad-rates";
+import {
+  GARMON_AD_RATES,
+  GARMON_AD_EARN_MULT_CAP,
+  MAX_USER_EARNINGS_PER_DAY,
+  capAdEarnMultiplier,
+} from "@/lib/garmon-ad-rates";
 
 const LEVEL_OPTIONS = [
   { id: "bronze", label: "Bronze", mult: 1.0, hint: "$0–$9.99 lifetime" },
@@ -50,6 +55,11 @@ export default function IncomeCalculatorPage() {
   const levelMult = LEVEL_OPTIONS.find((l) => l.id === levelId)?.mult ?? 1;
   const streakMult = STREAK_OPTIONS.find((s) => s.id === streakId)?.mult ?? 1;
 
+  const adEarnMult = useMemo(
+    () => capAdEarnMultiplier(levelMult, streakMult),
+    [levelMult, streakMult]
+  );
+
   const { rawDaily, cappedDaily, monthly } = useMemo(() => {
     const base =
       v15 * GARMON_AD_RATES.view_15.userEarns +
@@ -59,14 +69,14 @@ export default function IncomeCalculatorPage() {
       follows * GARMON_AD_RATES.follow.userEarns +
       shares * GARMON_AD_RATES.share.userEarns +
       banners * GARMON_AD_RATES.banner_view.userEarns;
-    const raw = base * levelMult * streakMult;
+    const raw = base * adEarnMult;
     const capped = Math.min(raw, MAX_USER_EARNINGS_PER_DAY);
     return {
       rawDaily: raw,
       cappedDaily: capped,
       monthly: capped * 30,
     };
-  }, [v15, v30, v60, clicks, follows, shares, banners, levelMult, streakMult]);
+  }, [v15, v30, v60, clicks, follows, shares, banners, adEarnMult]);
 
   if (!ready) {
     return (
@@ -82,8 +92,10 @@ export default function IncomeCalculatorPage() {
         </Link>
         <h1 className="mt-3 text-xl font-bold text-white">Income calculator</h1>
         <p className="mt-1 text-sm text-fintech-muted">
-          Estimates use current GarmonPay ad rates. Level and streak bonuses match the live earn flow.
-          Daily earnings are capped at ${MAX_USER_EARNINGS_PER_DAY.toFixed(2)} per user.
+          Estimates use current GarmonPay ad rates. Level × streak is capped at{" "}
+          <span className="text-white/90">{GARMON_AD_EARN_MULT_CAP}×</span> for ad payouts (matches live{" "}
+          <code className="text-violet-300/90">/api/ads/engage</code>
+          ). Daily earnings are capped at ${MAX_USER_EARNINGS_PER_DAY.toFixed(2)} per user.
         </p>
       </div>
 
@@ -118,7 +130,11 @@ export default function IncomeCalculatorPage() {
       </div>
 
       <div className="animate-slide-up card-lux space-y-3 p-5">
-        <h2 className="text-sm font-semibold text-white">Bonuses</h2>
+        <h2 className="text-sm font-semibold text-white">Level &amp; streak (capped for ads)</h2>
+        <p className="text-xs text-fintech-muted">
+          Effective multiplier applied: <span className="text-white font-medium">{adEarnMult}×</span>
+          {GARMON_AD_EARN_MULT_CAP <= 1 ? " — streak/level do not increase ad payout right now." : ""}
+        </p>
         <div>
           <p className="mb-2 text-xs text-fintech-muted">Level (from lifetime ad earnings)</p>
           <div className="flex flex-wrap gap-2">

@@ -63,6 +63,8 @@ export interface GarmonAdRow {
   shares: number;
   total_paid_to_users: number;
   total_admin_cut: number;
+  /** SKU from `ad_packages` when the campaign was created from the dashboard picker. */
+  ad_package_id?: string | null;
   is_active: boolean;
   starts_at: string | null;
   ends_at: string | null;
@@ -269,79 +271,6 @@ export async function getGarmonAdsByUserId(userId: string): Promise<GarmonAdRow[
   return (data ?? []) as GarmonAdRow[];
 }
 
-/** Insert engagement and earning (call after wallet credit). Updates ad stats and budget via RPC or separate updates. */
-export async function recordEngagementAndEarning(params: {
-  ad_id: string;
-  user_id: string;
-  engagement_type: GarmonEngagementTypeDb;
-  duration_seconds: number;
-  user_earned: number;
-  admin_earned: number;
-  advertiser_charged: number;
-  ip_address?: string | null;
-  device_type?: string | null;
-}): Promise<{ engagementId: string; earningId: string }> {
-  const { data: eng, error: eErr } = await supabase()
-    .from("garmon_ad_engagements")
-    .insert({
-      ad_id: params.ad_id,
-      user_id: params.user_id,
-      engagement_type: params.engagement_type,
-      duration_seconds: params.duration_seconds,
-      user_earned: params.user_earned,
-      admin_earned: params.admin_earned,
-      advertiser_charged: params.advertiser_charged,
-      ip_address: params.ip_address ?? null,
-      device_type: params.device_type ?? null,
-    })
-    .select("id")
-    .single();
-  if (eErr) throw eErr;
-  const engagementId = (eng as { id: string }).id;
-
-  const { data: earn, error: earnErr } = await supabase()
-    .from("garmon_user_ad_earnings")
-    .insert({
-      user_id: params.user_id,
-      ad_id: params.ad_id,
-      engagement_id: engagementId,
-      amount: params.user_earned,
-      engagement_type: params.engagement_type,
-      status: "credited",
-      credited_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-  if (earnErr) throw earnErr;
-  const earningId = (earn as { id: string }).id;
-
-  const ad = await getGarmonAdById(params.ad_id);
-  if (ad) {
-    const newRemaining = Number(ad.remaining_budget) - params.advertiser_charged;
-    const incViews = params.engagement_type === "view" || params.engagement_type === "banner_view" ? 1 : 0;
-    const incClicks = params.engagement_type === "click" ? 1 : 0;
-    const incFollows = params.engagement_type === "follow" ? 1 : 0;
-    const incShares = params.engagement_type === "share" ? 1 : 0;
-    await supabase()
-      .from("garmon_ads")
-      .update({
-        remaining_budget: newRemaining,
-        total_paid_to_users: Number(ad.total_paid_to_users) + params.user_earned,
-        total_admin_cut: Number(ad.total_admin_cut) + params.admin_earned,
-        views: ad.views + incViews,
-        clicks: ad.clicks + incClicks,
-        follows: ad.follows + incFollows,
-        shares: ad.shares + incShares,
-        status: newRemaining <= 0 ? "paused" : ad.status,
-        is_active: newRemaining <= 0 ? false : ad.is_active,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", params.ad_id);
-  }
-
-  return { engagementId, earningId };
-}
-
 /** Get user ad earnings summary (today, week, month, all time). */
 export async function getUserGarmonEarningsSummary(userId: string): Promise<{
   todayDollars: number;
@@ -451,6 +380,7 @@ export async function createGarmonAd(params: {
   cost_per_click?: number;
   cost_per_follow?: number;
   cost_per_share?: number;
+  ad_package_id?: string | null;
   status?: GarmonAdStatus;
   rejection_reason?: string | null;
 }): Promise<GarmonAdRow> {
@@ -473,10 +403,11 @@ export async function createGarmonAd(params: {
       twitch_url: params.twitch_url ?? null,
       total_budget: params.total_budget,
       remaining_budget: params.remaining_budget,
-      cost_per_view: params.cost_per_view ?? 0.008,
-      cost_per_click: params.cost_per_click ?? 0.025,
-      cost_per_follow: params.cost_per_follow ?? 0.05,
-      cost_per_share: params.cost_per_share ?? 0.03,
+      cost_per_view: params.cost_per_view ?? 0.02,
+      cost_per_click: params.cost_per_click ?? 0.1,
+      cost_per_follow: params.cost_per_follow ?? 0.1,
+      cost_per_share: params.cost_per_share ?? 0.06,
+      ad_package_id: params.ad_package_id ?? null,
       status: params.status ?? "pending",
       rejection_reason: params.rejection_reason ?? null,
     })

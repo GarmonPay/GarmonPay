@@ -12,18 +12,42 @@ export type GarmonEngagementType =
   | "share"
   | "banner_view";
 
+/** Used when `garmon_ads.cost_per_view` is below `GARMON_LEGACY_COST_PER_VIEW_MAX` (older rows). */
 export const GARMON_AD_RATES: Record<
   GarmonEngagementType,
   { userEarns: number; advertiserCharged: number }
 > = {
   view_15: { userEarns: 0.005, advertiserCharged: 0.01 },
-  view_30: { userEarns: 0.008, advertiserCharged: 0.016 },
-  view_60: { userEarns: 0.012, advertiserCharged: 0.024 },
-  click: { userEarns: 0.025, advertiserCharged: 0.05 },
+  view_30: { userEarns: 0.01, advertiserCharged: 0.02 },
+  view_60: { userEarns: 0.015, advertiserCharged: 0.03 },
+  click: { userEarns: 0.05, advertiserCharged: 0.1 },
   follow: { userEarns: 0.05, advertiserCharged: 0.1 },
   share: { userEarns: 0.03, advertiserCharged: 0.06 },
-  banner_view: { userEarns: 0.002, advertiserCharged: 0.004 },
+  banner_view: { userEarns: 0.01, advertiserCharged: 0.02 },
 };
+
+/** Default advertiser charge per 30s-class view; member gets half before streak/level multipliers. */
+export const GARMON_DEFAULT_ADVERTISER_COST_PER_VIEW = 0.02;
+
+/** Default advertiser charge per click. */
+export const GARMON_DEFAULT_ADVERTISER_COST_PER_CLICK = 0.1;
+
+/** Below this `cost_per_view`, use `GARMON_AD_RATES` for video/banner tiers (legacy campaigns). */
+export const GARMON_LEGACY_COST_PER_VIEW_MAX = 0.015;
+
+/** Below this `cost_per_click`, use legacy click rate from `GARMON_AD_RATES`. */
+export const GARMON_LEGACY_COST_PER_CLICK_MAX = 0.08;
+
+/**
+ * Max combined level × streak multiplier on ad member payouts (and thus on advertiser charge = 2× payout).
+ * Use `1` so real spend matches `advertiser_burn_ceiling_usd` on ad packages. Raise only if SKUs reserve extra headroom.
+ */
+export const GARMON_AD_EARN_MULT_CAP = 1;
+
+export function capAdEarnMultiplier(levelMult: number, streakMult: number): number {
+  const raw = (Number.isFinite(levelMult) ? levelMult : 1) * (Number.isFinite(streakMult) ? streakMult : 1);
+  return Math.min(Math.max(raw, 0), GARMON_AD_EARN_MULT_CAP);
+}
 
 /** Map engagement_type from DB to rate key. */
 export const ENGAGEMENT_TO_RATE: Record<string, GarmonEngagementType> = {
@@ -48,3 +72,34 @@ export const VIDEO_MIN_SECONDS = { view_15: 15, view_30: 30, view_60: 60 };
 
 /** Banner view duration seconds. */
 export const BANNER_VIEW_SECONDS = 30;
+
+/** Base member payout ($) before level/streak multipliers — video tiers scale off 30s = half of advertiser view cost. */
+export function baseUserEarnForVideoTier(
+  tier: "view_15" | "view_30" | "view_60",
+  adCostPerView: number
+): number {
+  const adv = Number(adCostPerView);
+  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_VIEW_MAX) {
+    return GARMON_AD_RATES[tier].userEarns;
+  }
+  const u30 = adv / 2;
+  if (tier === "view_15") return u30 * 0.5;
+  if (tier === "view_30") return u30;
+  return u30 * 1.5;
+}
+
+export function baseUserEarnForBannerView(adCostPerView: number): number {
+  const adv = Number(adCostPerView);
+  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_VIEW_MAX) {
+    return GARMON_AD_RATES.banner_view.userEarns;
+  }
+  return adv / 2;
+}
+
+export function baseUserEarnForClick(adCostPerClick: number): number {
+  const adv = Number(adCostPerClick);
+  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_CLICK_MAX) {
+    return GARMON_AD_RATES.click.userEarns;
+  }
+  return adv / 2;
+}

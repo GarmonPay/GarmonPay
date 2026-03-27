@@ -4,7 +4,12 @@ import {
   getActiveGarmonAds,
   getEngagedAdIdsToday,
 } from "@/lib/garmon-ads-db";
-import { GARMON_AD_RATES } from "@/lib/garmon-ad-rates";
+import {
+  GARMON_AD_RATES,
+  baseUserEarnForVideoTier,
+  baseUserEarnForBannerView,
+  baseUserEarnForClick,
+} from "@/lib/garmon-ad-rates";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const FEED_LIMIT = 10;
@@ -32,9 +37,9 @@ export async function GET(request: Request) {
         const adType = ad.ad_type;
         const userEarnsView =
           adType === "banner"
-            ? GARMON_AD_RATES.banner_view.userEarns
-            : GARMON_AD_RATES.view_30.userEarns;
-        const userEarnsClick = GARMON_AD_RATES.click.userEarns;
+            ? baseUserEarnForBannerView(ad.cost_per_view)
+            : baseUserEarnForVideoTier("view_30", ad.cost_per_view);
+        const userEarnsClick = baseUserEarnForClick(ad.cost_per_click);
         const userEarnsFollow = GARMON_AD_RATES.follow.userEarns;
         const userEarnsShare = GARMON_AD_RATES.share.userEarns;
         return {
@@ -62,9 +67,9 @@ export async function GET(request: Request) {
           userEarnsClick,
           userEarnsFollow,
           userEarnsShare,
-          userEarnsView15: GARMON_AD_RATES.view_15.userEarns,
-          userEarnsView30: GARMON_AD_RATES.view_30.userEarns,
-          userEarnsView60: GARMON_AD_RATES.view_60.userEarns,
+          userEarnsView15: baseUserEarnForVideoTier("view_15", ad.cost_per_view),
+          userEarnsView30: baseUserEarnForVideoTier("view_30", ad.cost_per_view),
+          userEarnsView60: baseUserEarnForVideoTier("view_60", ad.cost_per_view),
         };
       }),
     });

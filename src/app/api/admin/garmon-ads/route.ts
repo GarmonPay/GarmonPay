@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { isAdmin } from "@/lib/admin-auth";
+import { createGarmonNotification } from "@/lib/garmon-notifications";
 
 /** GET /api/admin/garmon-ads — list garmon ads (all or pending). Query: ?status=pending */
 export async function GET(request: Request) {
@@ -55,6 +56,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
+  const { data: adRow, error: fetchErr } = await supabase
+    .from("garmon_ads")
+    .select("user_id, title, remaining_budget")
+    .eq("id", adId)
+    .maybeSingle();
+  if (fetchErr || !adRow) {
+    return NextResponse.json({ message: fetchErr?.message ?? "Ad not found" }, { status: 404 });
+  }
+  const ownerId = (adRow as { user_id: string }).user_id;
+  const adTitle = (adRow as { title?: string }).title ?? "Your ad";
+
   const updates: Record<string, unknown> = {
     status: action === "approve" ? "active" : "rejected",
     updated_at: new Date().toISOString(),
@@ -70,5 +82,25 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
+
+  if (action === "approve") {
+    const remaining = Number((adRow as { remaining_budget?: number }).remaining_budget ?? 0);
+    createGarmonNotification(
+      ownerId,
+      "ad_approved",
+      "Your ad was approved",
+      remaining > 0
+        ? `${adTitle.slice(0, 80)} is live and can run in the feed.`
+        : `${adTitle.slice(0, 80)} is approved. Add budget from Advertise if it has not been funded yet.`
+    ).catch(() => {});
+  } else {
+    createGarmonNotification(
+      ownerId,
+      "ad_rejected",
+      "Ad not approved",
+      (updates.rejection_reason as string) ?? "See Advertise for details."
+    ).catch(() => {});
+  }
+
   return NextResponse.json({ success: true, status: updates.status });
 }

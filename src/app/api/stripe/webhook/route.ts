@@ -210,15 +210,12 @@ export async function POST(req: Request) {
         const ad = adRow as { remaining_budget: number; total_budget: number; status: string };
         const newRemaining = Number(ad.remaining_budget) + deposit_amount;
         const newTotal = Number(ad.total_budget) + deposit_amount;
-        const updates: { remaining_budget: number; total_budget: number; updated_at: string; status?: string; is_active?: boolean } = {
+        const wasPending = ad.status === "pending";
+        const updates: { remaining_budget: number; total_budget: number; updated_at: string } = {
           remaining_budget: newRemaining,
           total_budget: newTotal,
           updated_at: new Date().toISOString(),
         };
-        if (ad.status === "pending" && newRemaining >= 5) {
-          updates.status = "active";
-          updates.is_active = true;
-        }
         await supabase.from("garmon_ads").update(updates).eq("id", ad_id);
         await supabase.from("stripe_payments").insert({
           user_id,
@@ -231,8 +228,20 @@ export async function POST(req: Request) {
           status: "completed",
         }).then(({ error }) => { if (error) console.error("[Stripe webhook] stripe_payments ad_deposit:", error.message); });
         recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
-        if (updates.status === "active") {
-          createGarmonNotification(user_id, "ad_approved", "Your ad is now live!", "Your ad has been approved and is now running.").catch(() => {});
+        if (wasPending) {
+          createGarmonNotification(
+            user_id,
+            "ad_payment_received",
+            "Ad payment received",
+            `We added $${deposit_amount.toFixed(2)} to your campaign. It will go live after review.`
+          ).catch(() => {});
+        } else {
+          createGarmonNotification(
+            user_id,
+            "ad_payment_received",
+            "Ad budget updated",
+            `$${deposit_amount.toFixed(2)} added to your campaign balance.`
+          ).catch(() => {});
         }
         console.log("[Stripe webhook] ad_deposit credited", { ad_id, user_id, amount: deposit_amount });
         return new Response("OK", { status: 200 });

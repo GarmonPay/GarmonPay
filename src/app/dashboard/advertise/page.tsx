@@ -12,7 +12,12 @@ import {
 } from "@/lib/api";
 import { PLATFORMS } from "@/components/ads/SocialPlatformLink";
 import { AdPackagesCardGrid } from "@/components/advertising/AdPackagesCardGrid";
-import { formatAdViews, type AdPackageRow } from "@/lib/ad-packages";
+import {
+  advertiserBurnCeilingUsd,
+  formatAdViews,
+  formatIncludedClicks,
+  type AdPackageRow,
+} from "@/lib/ad-packages";
 
 const AD_TYPES = [
   { id: "video", label: "Video Ad", desc: "Upload a video" },
@@ -118,7 +123,9 @@ export default function AdvertisePage() {
         const success = searchParams.get("success");
         const canceled = searchParams.get("canceled");
         if (success === "1") {
-          setSuccess("Payment received! Your ad will go live after approval.");
+          setSuccess(
+            "Payment received — budget is on your ad. It stays in review until a moderator approves it, then it can run in the feed."
+          );
           window.history.replaceState({}, "", "/dashboard/advertise");
         } else if (canceled === "1") {
           setError("Payment canceled. You can add funds to your ad from My Ads.");
@@ -185,6 +192,7 @@ export default function AdvertisePage() {
         media_url: mediaUrl.trim() || undefined,
         destination_url: destinationUrl.trim() || undefined,
         total_budget: 0,
+        ...(selectedPackage?.id ? { ad_package_id: selectedPackage.id } : {}),
         ...(adType === "social" && {
           instagram_url: socialUrls.instagram || undefined,
           tiktok_url: socialUrls.tiktok || undefined,
@@ -208,6 +216,25 @@ export default function AdvertisePage() {
       setPaying(false);
     }
   };
+
+  const checkoutAmount = customBudget.trim() ? parseFloat(customBudget) : budget;
+  const packageBurnMax =
+    selectedPackage != null
+      ? advertiserBurnCeilingUsd({
+          ad_views:
+            typeof selectedPackage.ad_views === "string"
+              ? parseInt(selectedPackage.ad_views, 10)
+              : Math.round(Number(selectedPackage.ad_views)),
+          included_clicks:
+            typeof selectedPackage.included_clicks === "string"
+              ? parseInt(selectedPackage.included_clicks, 10)
+              : Math.round(Number(selectedPackage.included_clicks ?? 0)),
+        })
+      : null;
+  const checkoutBelowPackageBurn =
+    packageBurnMax != null &&
+    Number.isFinite(checkoutAmount) &&
+    checkoutAmount + 1e-6 < packageBurnMax;
 
   if (!session && !loading) {
     return (
@@ -258,7 +285,8 @@ export default function AdvertisePage() {
           <span className="text-fintech-muted">Selected plan: </span>
           <strong>{selectedPackage.name}</strong>
           {" — "}
-          ${Number(selectedPackage.price_monthly).toFixed(2)}/mo · {formatAdViews(selectedPackage.ad_views)} ad views
+          ${Number(selectedPackage.price_monthly).toFixed(2)}/campaign · {formatAdViews(selectedPackage.ad_views)} views ·{" "}
+          {formatIncludedClicks(selectedPackage.included_clicks)} click credits
           {!hasAdvertiser && (
             <span className="block mt-2 text-fintech-muted">
               Next: fill out your advertiser profile below, then you can create your campaign.
@@ -434,10 +462,27 @@ export default function AdvertisePage() {
               </p>
               <div className="space-y-3 max-w-lg">
                 {selectedPackage ? (
-                  <div className="rounded-lg border border-fintech-accent/40 bg-fintech-accent/10 px-3 py-2 text-sm text-white">
-                    <span className="text-fintech-muted">Using plan: </span>
-                    {selectedPackage.name} — ${Number(selectedPackage.price_monthly).toFixed(2)}/mo ·{" "}
-                    {formatAdViews(selectedPackage.ad_views)} views
+                  <div className="space-y-2">
+                    <div className="rounded-lg border border-fintech-accent/40 bg-fintech-accent/10 px-3 py-2 text-sm text-white">
+                      <span className="text-fintech-muted">Using plan: </span>
+                      {selectedPackage.name} — ${Number(selectedPackage.price_monthly).toFixed(2)}/campaign ·{" "}
+                      {formatAdViews(selectedPackage.ad_views)} views · {formatIncludedClicks(selectedPackage.included_clicks)}{" "}
+                      click credits
+                    </div>
+                    <p className="text-xs text-fintech-muted">
+                      At full delivery, engagements can draw up to ~$
+                      {advertiserBurnCeilingUsd({
+                        ad_views:
+                          typeof selectedPackage.ad_views === "string"
+                            ? parseInt(selectedPackage.ad_views, 10)
+                            : Math.round(Number(selectedPackage.ad_views)),
+                        included_clicks:
+                          typeof selectedPackage.included_clicks === "string"
+                            ? parseInt(selectedPackage.included_clicks, 10)
+                            : Math.round(Number(selectedPackage.included_clicks ?? 0)),
+                      }).toFixed(2)}{" "}
+                      from this campaign budget (2× member payouts). Funding less still runs the ad until the balance is used.
+                    </p>
                   </div>
                 ) : (
                   <p className="text-sm text-amber-400/90">
@@ -485,12 +530,16 @@ export default function AdvertisePage() {
                 <p><span className="text-fintech-muted">Type:</span> {adType}</p>
                 <p><span className="text-fintech-muted">Title:</span> {title || "—"}</p>
                 <p>
-                  <span className="text-fintech-muted">Budget:</span> $
-                  {(customBudget.trim() ? parseFloat(customBudget) : budget).toFixed(2)}
+                  <span className="text-fintech-muted">Budget:</span> ${checkoutAmount.toFixed(2)}
                 </p>
               </div>
+              {checkoutBelowPackageBurn && packageBurnMax != null && (
+                <p className="mt-3 text-xs text-amber-400/90 max-w-lg">
+                  You are funding below the ~${packageBurnMax.toFixed(2)} ceiling for full delivery on this plan. The ad will pause when the balance runs out, which may happen before all view/click credits are exhausted.
+                </p>
+              )}
               <p className="text-xs text-fintech-muted mt-4">
-                Pay with Stripe to fund your ad. Minimum $5. After payment your ad will be submitted for review and go live when approved.
+                Pay with Stripe to fund your ad (min ${MIN_BUDGET}). After payment, budget is credited while the ad stays <strong className="text-white/80">pending</strong> until a moderator approves it.
               </p>
               <div className="flex gap-2 mt-4">
                 <button type="button" onClick={() => setStep(3)} className="rounded-xl border border-white/20 px-4 py-2 text-sm" disabled={paying}>
@@ -504,7 +553,7 @@ export default function AdvertisePage() {
                 >
                   {paying
                     ? "Redirecting to Stripe…"
-                    : `Pay $${(customBudget.trim() ? parseFloat(customBudget) : budget).toFixed(2)} with Stripe`}
+                    : `Pay $${checkoutAmount.toFixed(2)} with Stripe`}
                 </button>
               </div>
             </>

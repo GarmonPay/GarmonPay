@@ -16,6 +16,11 @@ import { createGarmonNotification } from "@/lib/garmon-notifications";
 import { grantAdReferralCommission } from "@/lib/viral-referral-db";
 import {
   GARMON_AD_RATES,
+  baseUserEarnForVideoTier,
+  baseUserEarnForBannerView,
+  baseUserEarnForClick,
+  capAdEarnMultiplier,
+  GARMON_AD_EARN_MULT_CAP,
   MAX_USER_EARNINGS_PER_DAY,
   MAX_ENGAGEMENTS_SAME_AD_PER_DAY,
   MAX_ENGAGEMENTS_SAME_ADVERTISER_PER_DAY,
@@ -133,8 +138,6 @@ export async function POST(request: Request) {
       );
     }
 
-    let rateKey: keyof typeof GARMON_AD_RATES;
-    let advertiserCharged: number;
     let userEarns: number;
 
     let serverDuration = Math.round(durationSeconds ?? 0);
@@ -154,21 +157,20 @@ export async function POST(request: Request) {
 
     if (engagementType === "view") {
       const dur = serverDuration;
+      let tier: "view_15" | "view_30" | "view_60";
       if (dur >= VIDEO_MIN_SECONDS.view_60) {
-        rateKey = "view_60";
+        tier = "view_60";
       } else if (dur >= VIDEO_MIN_SECONDS.view_30) {
-        rateKey = "view_30";
+        tier = "view_30";
       } else if (dur >= VIDEO_MIN_SECONDS.view_15) {
-        rateKey = "view_15";
+        tier = "view_15";
       } else {
         return NextResponse.json(
           { message: "Watch at least 15 seconds for video credit" },
           { status: 400 }
         );
       }
-      const rate = GARMON_AD_RATES[rateKey];
-      advertiserCharged = rate.advertiserCharged;
-      userEarns = rate.userEarns;
+      userEarns = baseUserEarnForVideoTier(tier, ad.cost_per_view);
     } else if (engagementType === "banner_view") {
       if (serverDuration < BANNER_VIEW_SECONDS) {
         return NextResponse.json(
@@ -176,27 +178,23 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const rate = GARMON_AD_RATES.banner_view;
-      advertiserCharged = rate.advertiserCharged;
-      userEarns = rate.userEarns;
+      userEarns = baseUserEarnForBannerView(ad.cost_per_view);
     } else if (engagementType === "click") {
-      const rate = GARMON_AD_RATES.click;
-      advertiserCharged = rate.advertiserCharged;
-      userEarns = rate.userEarns;
+      userEarns = baseUserEarnForClick(ad.cost_per_click);
     } else if (engagementType === "follow") {
-      const rate = GARMON_AD_RATES.follow;
-      advertiserCharged = rate.advertiserCharged;
-      userEarns = rate.userEarns;
+      userEarns = GARMON_AD_RATES.follow.userEarns;
     } else {
-      const rate = GARMON_AD_RATES.share;
-      advertiserCharged = rate.advertiserCharged;
-      userEarns = rate.userEarns;
+      userEarns = GARMON_AD_RATES.share.userEarns;
     }
 
-    const levelMultiplier = await getLevelMultiplier(supabase, userId);
-    const streakMultiplier = await getStreakMultiplier(supabase, userId);
-    userEarns = round6(userEarns * levelMultiplier * streakMultiplier);
-    advertiserCharged = round6(userEarns * 2);
+    let earnMult = 1;
+    if (GARMON_AD_EARN_MULT_CAP > 1) {
+      const levelMultiplier = await getLevelMultiplier(supabase, userId);
+      const streakMultiplier = await getStreakMultiplier(supabase, userId);
+      earnMult = capAdEarnMultiplier(levelMultiplier, streakMultiplier);
+    }
+    userEarns = round6(userEarns * earnMult);
+    const advertiserCharged = round6(userEarns * 2);
     const adminEarns = userEarns;
     if (Number(ad.remaining_budget) < advertiserCharged) {
       return NextResponse.json({ message: "Ad budget exhausted" }, { status: 400 });

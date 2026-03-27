@@ -2,6 +2,7 @@
 
 import type { ComponentType, SVGProps } from "react";
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 import {
@@ -34,6 +35,8 @@ type GarmonAd = {
   title: string;
   description: string | null;
   ad_type: string;
+  /** `ad_packages.id` when created from dashboard plan picker */
+  ad_package_id?: string | null;
   status: string;
   is_active: boolean;
   total_budget: number;
@@ -81,6 +84,7 @@ export default function AdminGarmonAdsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("queue");
+  const [packageNamesById, setPackageNamesById] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     if (!session) return;
@@ -93,8 +97,9 @@ export default function AdminGarmonAdsPage() {
       fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
       fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
       fetch(`${API_BASE}/admin/garmon-ads/banned-users`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/ad-packages`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
     ])
-      .then(([pendingRes, allRes, advRes, earnRes, fraudRes, blockedRes, bannedRes]) => {
+      .then(([pendingRes, allRes, advRes, earnRes, fraudRes, blockedRes, bannedRes, pkgRes]) => {
         setPending(pendingRes.ads ?? []);
         setAllAds(allRes.ads ?? []);
         setAdvertisers(advRes.advertisers ?? []);
@@ -102,6 +107,12 @@ export default function AdminGarmonAdsPage() {
         setFraudFlags(fraudRes.flags ?? []);
         setBlockedIps(blockedRes.blockedIps ?? []);
         setBannedUsers(bannedRes.bannedUsers ?? []);
+        const pkgs = (pkgRes.packages ?? []) as Array<{ id?: string; name?: string }>;
+        setPackageNamesById(
+          Object.fromEntries(
+            pkgs.filter((p) => p?.id).map((p) => [p.id as string, String(p.name ?? p.id)])
+          )
+        );
         setError(null);
       })
       .catch(() => setError("Failed to load"))
@@ -365,7 +376,13 @@ export default function AdminGarmonAdsPage() {
       {/* Moderation queue */}
       {activeTab === "queue" && (
       <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
-        <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Moderation queue (pending)</h2>
+        <div className="p-4 border-b border-white/10 space-y-2">
+          <h2 className="text-lg font-semibold text-white">Moderation queue (pending)</h2>
+          <p className="text-xs text-[#9ca3af] max-w-2xl">
+            Stripe may have already credited <span className="text-[#d1d5db]">remaining_budget</span> while status is
+            still pending. Approve only after content checks; funding is separate from going live.
+          </p>
+        </div>
         {loading ? (
           <div className="p-6 text-[#9ca3af]">Loading…</div>
         ) : pending.length === 0 ? (
@@ -382,6 +399,30 @@ export default function AdminGarmonAdsPage() {
                   {ad.description && (
                     <p className="text-sm text-[#9ca3af] mt-1 line-clamp-2">{ad.description}</p>
                   )}
+                  <p className="text-xs text-[#9ca3af] mt-2">
+                    Budget:{" "}
+                    <span className="text-[#d1d5db]">
+                      ${Number(ad.remaining_budget).toFixed(2)} remaining
+                    </span>{" "}
+                    · ${Number(ad.total_budget).toFixed(2)} total
+                    {Number(ad.total_budget) > 0 && Number(ad.remaining_budget) <= 0 && (
+                      <span className="text-amber-400/90"> · balance depleted</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-[#9ca3af] mt-1">
+                    Package:{" "}
+                    {ad.ad_package_id ? (
+                      <Link
+                        href="/admin/ad-packages"
+                        className="text-violet-400 hover:underline"
+                        title={ad.ad_package_id}
+                      >
+                        {packageNamesById[ad.ad_package_id] ?? `${ad.ad_package_id.slice(0, 8)}…`}
+                      </Link>
+                    ) : (
+                      <span className="text-[#6b7280]">—</span>
+                    )}
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 max-[480px]:flex-col max-[480px]:w-full">
                   <input
@@ -433,6 +474,7 @@ export default function AdminGarmonAdsPage() {
                     <th className="p-3 text-[#9ca3af]">Title</th>
                     <th className="p-3 text-[#9ca3af]">Advertiser</th>
                     <th className="p-3 text-[#9ca3af]">Type</th>
+                    <th className="p-3 text-[#9ca3af] hidden lg:table-cell">Package</th>
                     <th className="p-3 text-[#9ca3af]">Status</th>
                     <th className="p-3 text-[#9ca3af]">Budget</th>
                     <th className="p-3 text-[#9ca3af]">Views</th>
@@ -446,6 +488,19 @@ export default function AdminGarmonAdsPage() {
                       <td className="p-3 text-white">{ad.title}</td>
                       <td className="p-3 text-[#9ca3af]">{(ad.advertisers as { business_name?: string })?.business_name ?? "—"}</td>
                       <td className="p-3 text-[#9ca3af]">{ad.ad_type}</td>
+                      <td className="p-3 text-[#9ca3af] font-mono text-xs hidden lg:table-cell">
+                        {ad.ad_package_id ? (
+                          <Link
+                            href="/admin/ad-packages"
+                            className="text-violet-400 hover:underline"
+                            title="Edit packages"
+                          >
+                            {ad.ad_package_id}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="p-3">
                         <span className={ad.status === "active" ? "text-green-400" : "text-[#9ca3af]"}>{ad.status}</span>
                       </td>

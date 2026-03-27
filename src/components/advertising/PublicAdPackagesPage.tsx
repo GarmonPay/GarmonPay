@@ -62,8 +62,12 @@ export function PublicAdPackagesPage({
           <h1 className="mt-4 text-4xl font-bold">{heading}</h1>
           <p className="mt-2 text-fintech-muted">{subheading}</p>
           <p className="mt-3 text-xs text-fintech-muted/80">
-            Six reach packages — views, economics, and cost per view load from Supabase{" "}
-            <code className="text-violet-300/90">ad_packages</code> (deduped by id).
+            Campaign packages (views + click credits, economics) load from Supabase{" "}
+            <code className="text-violet-300/90">ad_packages</code>. Advertisers:{" "}
+            <Link href="/dashboard/advertise" className="text-fintech-accent hover:underline">
+              dashboard → Advertise
+            </Link>
+            .
           </p>
         </div>
 

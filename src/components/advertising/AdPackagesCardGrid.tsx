@@ -5,8 +5,12 @@ import type { AdPackageRow } from "@/lib/ad-packages";
 import {
   parseAdPackageFeatures,
   formatAdViews,
+  formatIncludedClicks,
   formatPriceMonthly,
   cpvFromPackage,
+  displayAdPackageTitle,
+  AD_PACKAGE_MEMBER_EARN_PER_VIEW,
+  AD_PACKAGE_MEMBER_EARN_PER_CLICK,
 } from "@/lib/ad-packages";
 
 export type AdPackagesCardGridProps = {
@@ -55,6 +59,7 @@ export function AdPackagesCardGrid({
         const bullets = meta.bullets.length > 0 ? meta.bullets : [];
         const monthly = formatPriceMonthly(pkg.price_monthly);
         const views = formatAdViews(pkg.ad_views);
+        const clicks = formatIncludedClicks(pkg.included_clicks);
         const isSelected = variant === "dashboard" && selectedPackageId === pkg.id;
         const cpv = cpvFromPackage(pkg);
 
@@ -67,13 +72,15 @@ export function AdPackagesCardGrid({
                 : "border-white/10 bg-white/[0.03]"
             }`}
           >
-            <h3 className="text-xl font-bold text-white">{pkg.name}</h3>
+            <h3 className="text-xl font-bold text-white">{displayAdPackageTitle(pkg, packages)}</h3>
             <p className="mt-4 text-3xl font-black text-white">
               ${monthly}
               <span className="text-base font-normal text-fintech-muted">/campaign</span>
             </p>
             <p className="mt-2 text-sm text-violet-200/90">
-              <span className="font-semibold text-[#eab308]">{views}</span> views delivered
+              <span className="font-semibold text-[#eab308]">{views}</span> views
+              <span className="text-fintech-muted"> · </span>
+              <span className="font-semibold text-[#eab308]">{clicks}</span> click credits
             </p>
             <p className="mt-1 text-xs text-fintech-muted">
               Your cost per view: <span className="text-white/90">{cpv}</span>
@@ -85,11 +92,20 @@ export function AdPackagesCardGrid({
             )}
             {meta.member_payout_usd != null && (
               <p className="mt-2 text-xs text-fintech-muted">
-                Member payout pool:{" "}
+                Member payout pool (cap):{" "}
                 <span className="text-emerald-400/90">
                   ${meta.member_payout_usd.toFixed(2)}
                 </span>{" "}
-                ($0.01 × views)
+                (${AD_PACKAGE_MEMBER_EARN_PER_VIEW}/view + ${AD_PACKAGE_MEMBER_EARN_PER_CLICK}/click credit)
+              </p>
+            )}
+            {meta.advertiser_burn_ceiling_usd != null && (
+              <p className="text-xs text-fintech-muted">
+                Est. budget use if fully delivered:{" "}
+                <span className="text-sky-300/90">
+                  ${meta.advertiser_burn_ceiling_usd.toFixed(2)}
+                </span>{" "}
+                <span className="opacity-80">(2× member pool)</span>
               </p>
             )}
             {meta.platform_profit_usd != null && (

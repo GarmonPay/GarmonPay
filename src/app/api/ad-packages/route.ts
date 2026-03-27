@@ -15,8 +15,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("ad_packages")
-    .select("id, name, price_monthly, ad_views, features, is_active")
+    .select("id, name, price_monthly, ad_views, included_clicks, sort_order, features, is_active")
     .eq("is_active", true)
+    .order("sort_order", { ascending: true })
     .order("price_monthly", { ascending: true });
 
   if (error) {

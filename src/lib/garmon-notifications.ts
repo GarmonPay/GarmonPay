@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase";
 export type GarmonNotificationType =
   | "ad_earned"
   | "ad_approved"
+  | "ad_rejected"
+  | "ad_payment_received"
   | "ad_budget_low"
   | "ad_budget_out"
   | "ad_milestone_views"

@@ -30,6 +30,8 @@ export async function POST(request: Request) {
     facebook_url?: string;
     twitch_url?: string;
     total_budget?: number;
+    /** Optional: `ad_packages.id` when the advertiser picked a plan on /dashboard/advertise */
+    ad_package_id?: string;
   };
   try {
     body = await request.json();
@@ -51,7 +53,13 @@ export async function POST(request: Request) {
     facebook_url,
     twitch_url,
     total_budget = 0,
+    ad_package_id,
   } = body;
+
+  const packageId =
+    typeof ad_package_id === "string" && /^[a-z0-9_]+$/.test(ad_package_id.trim())
+      ? ad_package_id.trim()
+      : undefined;
 
   if (!title || typeof title !== "string" || !title.trim()) {
     return NextResponse.json({ message: "title is required" }, { status: 400 });
@@ -105,6 +113,7 @@ export async function POST(request: Request) {
       twitch_url: twitch_url?.trim() || null,
       total_budget: Number(total_budget),
       remaining_budget: 0,
+      ad_package_id: packageId ?? null,
       status: "pending",
     });
     return NextResponse.json({ adId: ad.id, status: ad.status });
