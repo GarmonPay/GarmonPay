@@ -2,7 +2,9 @@
 
 import { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
-import { ContactShadows, Environment, PresentationControls, useGLTF } from "@react-three/drei";
+import { ContactShadows, useGLTF } from "@react-three/drei";
+import { ArenaLocalEnvironment } from "@/components/arena/ArenaLocalEnvironment";
+import { SafePresentationControls } from "@/components/arena/SafePresentationControls";
 import { CenteredMeshyModel } from "@/components/arena/meshy/CenteredMeshyModel";
 import { ModelErrorBoundary } from "@/components/arena/meshy/ModelErrorBoundary";
 import { ProceduralFallbackBoxer } from "@/components/arena/meshy/ProceduralFallbackBoxer";
@@ -77,11 +79,11 @@ export default function BoxerCanvas({
         <spotLight position={[-3, 4, 2]} angle={0.6} penumbra={0.8} intensity={0.9} color="#b0c8ff" />
         <pointLight position={[0, 2, -3]} intensity={0.65} color={fighterColor} distance={5} />
         <Suspense fallback={null}>
-          <PresentationControls global polar={[-0.1, 0.1]} azimuth={[-0.4, 0.4]} snap>
+          <SafePresentationControls global polar={[-0.1, 0.1]} azimuth={[-0.4, 0.4]} snap>
             <FighterModel modelUrl={modelUrl} facingRight={facingRight} />
-          </PresentationControls>
+          </SafePresentationControls>
           <ContactShadows position={[0, -1.4, 0]} opacity={0.9} scale={6} blur={2} color="#000" />
-          <Environment preset="studio" environmentIntensity={0.75} />
+          <ArenaLocalEnvironment environmentIntensity={0.75} />
         </Suspense>
       </Canvas>
     </div>

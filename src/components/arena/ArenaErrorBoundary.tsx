@@ -18,8 +18,11 @@ export class ArenaErrorBoundary extends React.Component<{ children: React.ReactN
     };
   }
 
-  componentDidCatch(error: unknown) {
+  componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
     console.error("[ArenaErrorBoundary]", error);
+    if (errorInfo?.componentStack) {
+      console.error("[ArenaErrorBoundary] component stack", errorInfo.componentStack);
+    }
   }
 
   render() {
