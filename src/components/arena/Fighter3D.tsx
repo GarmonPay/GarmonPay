@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useGLTF } from "@react-three/drei";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
 import { safeFighterColor } from "@/lib/arena-safe-fighter";
@@ -84,12 +83,14 @@ export default function Fighter3D({
 
   useEffect(() => {
     if (!url || typeof window === "undefined") return;
-    try {
-      const draco = process.env.NEXT_PUBLIC_MESHY_DRACO === "1";
-      useGLTF.preload(url, draco);
-    } catch (e) {
-      console.warn("[Fighter3D] preload skipped:", e);
-    }
+    const draco = process.env.NEXT_PUBLIC_MESHY_DRACO === "1";
+    void import("@react-three/drei").then(({ useGLTF }) => {
+      try {
+        useGLTF.preload(url, draco);
+      } catch (e) {
+        console.warn("[Fighter3D] preload skipped:", e);
+      }
+    });
   }, [url]);
 
   const showDebug = isArenaDebugEnabled();

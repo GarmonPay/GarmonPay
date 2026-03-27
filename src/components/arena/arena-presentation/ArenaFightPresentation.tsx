@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { ContactShadows } from "@react-three/drei";
-import { ArenaLocalEnvironment } from "@/components/arena/ArenaLocalEnvironment";
+import { ArenaOptionalEnvironment } from "@/components/arena/ArenaOptionalEnvironment";
 import { ArenaRing } from "./ArenaRing";
 import { FightCameraRig } from "./FightCameraRig";
 import { FightHUD } from "./FightHUD";
@@ -196,7 +196,7 @@ export default function ArenaFightPresentation({
               far={9}
               color="#000000"
             />
-            <ArenaLocalEnvironment environmentIntensity={0.85} />
+            <ArenaOptionalEnvironment environmentIntensity={0.85} />
           </Suspense>
         </Canvas>
       </div>
