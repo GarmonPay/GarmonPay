@@ -1,6 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { Cinzel_Decorative } from "next/font/google";
+
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
 
 /**
  * Admin login: server-side only. POST to /api/auth/admin/login with credentials.
@@ -42,67 +50,53 @@ export default function AdminLogin() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        background: "#0f172a",
-      }}
-    >
-      <div
-        style={{
-          background: "#020617",
-          padding: "40px",
-          borderRadius: "10px",
-          width: "350px",
-          color: "white",
-        }}
-      >
-        <h2 style={{ marginBottom: "20px", fontSize: "1.5rem" }}>
-          Admin Login
-        </h2>
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0e17] px-4 py-12 text-white">
+      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+        <h1
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+        >
+          GarmonPay
+        </h1>
+        <p className="mt-2 text-center text-sm font-medium text-violet-200/90">Admin login</p>
+        <p className="mt-1 text-center text-xs text-violet-400/70">Staff dashboard access</p>
 
-        <form onSubmit={login}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{
-              width: "100%",
-              padding: "10px",
-              marginBottom: "10px",
-              boxSizing: "border-box",
-              borderRadius: "5px",
-              border: "1px solid #334155",
-              background: "#0f172a",
-              color: "white",
-            }}
-          />
+        <form onSubmit={login} className="mt-8 space-y-4">
+          <div>
+            <label htmlFor="admin-email" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Email
+            </label>
+            <input
+              id="admin-email"
+              type="email"
+              autoComplete="email"
+              required
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{
-              width: "100%",
-              padding: "10px",
-              marginBottom: "10px",
-              boxSizing: "border-box",
-              borderRadius: "5px",
-              border: "1px solid #334155",
-              background: "#0f172a",
-              color: "white",
-            }}
-          />
+          <div>
+            <label htmlFor="admin-password" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Password
+            </label>
+            <input
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
           {error ? (
-            <p style={{ color: "#f87171", fontSize: "14px", marginBottom: "12px" }}>
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300" role="alert">
               {error}
             </p>
           ) : null}
@@ -110,20 +104,17 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: "100%",
-              padding: "12px",
-              background: loading ? "#1e40af" : "#2563eb",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.8 : 1,
-            }}
+            className="btn-press w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "Signing in…" : "Login"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <p className="mt-8 text-center text-sm text-violet-300/90">
+          <Link href="/" className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]">
+            Back to site
+          </Link>
+        </p>
       </div>
     </div>
   );

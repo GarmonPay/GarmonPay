@@ -1,12 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Cinzel_Decorative } from "next/font/google";
 import { getDashboardUrl } from "@/lib/site-url";
 import { login as authLogin } from "@/core/auth";
 import { createBrowserClient } from "@/core/supabase";
-import Link from "next/link";
 
-export default function LoginPage() {
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -72,10 +82,12 @@ export default function LoginPage() {
       } catch {
         // best-effort
       }
+      const safeNext =
+        nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
       if (result.isAdmin) {
         window.location.href = "/admin";
       } else {
-        window.location.href = getDashboardUrl();
+        window.location.href = safeNext ?? getDashboardUrl();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -85,50 +97,97 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="bg-gray-900 p-8 rounded w-96">
-        <h1 className="text-2xl mb-4">Member Login</h1>
+    <div className="min-h-[calc(100vh-8rem)] flex flex-1 flex-col items-center justify-center px-4 py-12 text-white">
+      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+        <h1
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+        >
+          GarmonPay
+        </h1>
+        <p className="mt-2 text-center text-sm font-medium text-violet-200/90">Member login</p>
+        <p className="mt-1 text-center text-xs text-violet-400/70">Sign in to your dashboard</p>
 
-        <form onSubmit={login}>
-          <input
-            type="email"
-            autoComplete="email"
-            className="w-full p-2 mb-3 text-black rounded"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-          />
+        <form onSubmit={login} className="mt-8 space-y-4">
+          <div>
+            <label htmlFor="login-email" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Email
+            </label>
+            <input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
-          <input
-            type="password"
-            autoComplete="current-password"
-            className="w-full p-2 mb-3 text-black rounded"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-          />
+          <div>
+            <label htmlFor="login-password" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+              Password
+            </label>
+            <input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="flex justify-end pt-0.5">
+            <Link
+              href="/forgot-password"
+              className="text-sm font-medium text-[#fde047]/90 underline-offset-2 hover:text-[#eab308] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold w-full py-3 rounded-lg transition"
+            className="btn-press mt-2 w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "Logging in…" : "Login"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
 
-          <p className="mt-2 text-right">
-            <Link href="/forgot-password" className="text-sm text-blue-400 hover:underline">Forgot password?</Link>
-          </p>
-
-          {error && <p className="text-red-500 mt-3 text-sm">{error}</p>}
+          {error && (
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300" role="alert">
+              {error}
+            </p>
+          )}
         </form>
 
-        <p className="mt-4 text-center text-gray-400 text-sm">
-          Don&apos;t have an account? <Link href="/register" className="text-blue-400 hover:underline">Register</Link>
+        <p className="mt-8 text-center text-sm text-violet-300/90">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]"
+          >
+            Create one free
+          </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[calc(100vh-8rem)] flex flex-1 items-center justify-center px-4 py-12 text-violet-300/80">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
