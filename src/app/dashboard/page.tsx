@@ -16,11 +16,23 @@ import {
   convertToAdCredit,
 } from "@/lib/api";
 import { SupabaseEarningsTracker } from "@/components/dashboard/SupabaseEarningsTracker";
+import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
+const UPGRADE_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
+
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatUsdMonthly(n: number) {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function DashboardPage() {
@@ -376,28 +388,38 @@ export default function DashboardPage() {
           </p>
         )}
         <h2 className="text-lg font-bold text-white">Upgrade Membership</h2>
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => upgrade("starter")}
-            className="btn-press min-h-touch rounded-xl bg-white/10 px-4 py-3 font-medium text-white hover:bg-white/20 active:scale-[0.98]"
-          >
-            Starter — $19
-          </button>
-          <button
-            type="button"
-            onClick={() => upgrade("pro")}
-            className="btn-press min-h-touch rounded-xl bg-fintech-accent px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
-          >
-            Pro — $49
-          </button>
-          <button
-            type="button"
-            onClick={() => upgrade("vip")}
-            className="btn-press min-h-touch rounded-xl bg-fintech-highlight/80 px-4 py-3 font-medium text-white hover:opacity-90 active:scale-[0.98]"
-          >
-            VIP — $99
-          </button>
+        <p className="mt-1 text-sm text-fintech-muted">
+          Same plans as{" "}
+          <Link href="/pricing" className="text-fintech-accent underline-offset-2 hover:underline">
+            Pricing
+          </Link>
+          — billed monthly via Stripe.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-3">
+          {UPGRADE_TIERS.map((id) => {
+            const m = MARKETING_PLANS[id];
+            const isPro = id === "pro";
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => upgrade(id)}
+                className={`btn-press min-h-touch flex flex-col items-start rounded-xl px-4 py-3 text-left font-medium transition active:scale-[0.98] ${
+                  isPro
+                    ? "bg-fintech-accent ring-2 ring-[#eab308]/50 shadow-[0_0_24px_-8px_rgba(234,179,8,0.45)] text-white"
+                    : id === "elite"
+                      ? "bg-fintech-highlight/85 text-[#0c0618] hover:opacity-95"
+                      : "bg-white/10 text-white hover:bg-white/20"
+                }`}
+              >
+                <span className="text-sm font-semibold">{m.label}</span>
+                <span className={`mt-0.5 text-lg ${isPro ? "text-white" : id === "elite" ? "text-[#0c0618]" : "text-white"}`}>
+                  {formatUsdMonthly(m.monthlyUsd)}
+                  <span className="text-xs font-normal opacity-80">/mo</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
         <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
         <p className="mt-1 text-sm text-fintech-muted">Click Deposit above to add funds ($5–$1,000).</p>

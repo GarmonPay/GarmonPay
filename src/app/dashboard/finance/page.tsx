@@ -5,11 +5,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals } from "@/lib/api";
+import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+const UPGRADE_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
+
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatUsdMonthly(n: number) {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
@@ -27,6 +39,7 @@ export default function FinancePage() {
   const [error, setError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     getSessionAsync()
@@ -46,7 +59,7 @@ export default function FinancePage() {
           setWithdrawals(w?.withdrawals ?? []);
         });
       })
-      .catch(() => setError("Unable to load finance data"))
+      .catch(() => setError("Unable to load finance data."))
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -75,6 +88,32 @@ export default function FinancePage() {
 
   const pending = withdrawals.filter((w) => w.status === "pending").length;
   const completed = withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length;
+
+  async function startMembershipCheckout(tier: MarketingPlanId) {
+    if (!session) return;
+    setCheckoutLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_BASE || ""}/api/stripe/create-membership-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
+        body: JSON.stringify({ tier }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Checkout failed");
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error("No checkout URL returned");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Checkout failed");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-4 tablet:space-y-6">
@@ -116,97 +155,80 @@ export default function FinancePage() {
           </Link>
         </div>
 
-        {/* Stripe: Subscribe / Upgrade / Platform access */}
+        {/* Membership + Stripe Connect — same tiers as /pricing and dashboard */}
         <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-          <h2 className="text-sm font-semibold text-white mb-2">Payments</h2>
-          <p className="text-sm text-fintech-muted mb-3">Subscribe, upgrade, or pay for platform access via Stripe.</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={!session || checkoutLoading}
-              onClick={async () => {
-                if (!session) return;
-                setCheckoutLoading(true);
-                setError(null);
-                try {
-                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
-                    body: JSON.stringify({
-                      productType: "subscription",
-                      amountCents: 999,
-                      name: "Pro Subscription",
-                    }),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (!res.ok) throw new Error((data as { message?: string }).message || "Checkout failed");
-                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : "Checkout failed");
-                } finally {
-                  setCheckoutLoading(false);
-                }
-              }}
-              className="btn-press min-h-touch rounded-xl bg-fintech-highlight/90 px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {checkoutLoading ? "Redirecting…" : "Subscribe ($9.99)"}
-            </button>
-            <button
-              type="button"
-              disabled={!session || checkoutLoading}
-              onClick={async () => {
-                if (!session) return;
-                setCheckoutLoading(true);
-                setError(null);
-                try {
-                  const res = await fetch(`${API_BASE || ""}/api/create-checkout-session`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", ...authHeaders(session.tokenOrId, session.isToken) },
-                    body: JSON.stringify({
-                      productType: "upgrade",
-                      amountCents: 1999,
-                      name: "Platform Upgrade",
-                    }),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (!res.ok) throw new Error((data as { message?: string }).message || "Checkout failed");
-                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : "Checkout failed");
-                } finally {
-                  setCheckoutLoading(false);
-                }
-              }}
-              className="btn-press min-h-touch rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/5 disabled:opacity-50"
-            >
-              Upgrade ($19.99)
-            </button>
-            <button
-              type="button"
-              disabled={!session || connectLoading}
-              onClick={async () => {
-                if (!session) return;
-                setConnectLoading(true);
-                setError(null);
-                try {
-                  const res = await fetch(`${API_BASE || ""}/api/stripe-connect/onboard`, {
-                    method: "POST",
-                    headers: authHeaders(session.tokenOrId, session.isToken),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (!res.ok) throw new Error((data as { message?: string }).message || "Onboarding failed");
-                  if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : "Connect onboarding failed");
-                } finally {
-                  setConnectLoading(false);
-                }
-              }}
-              className="btn-press min-h-touch rounded-xl border border-fintech-accent/50 px-4 py-2.5 text-sm font-medium text-fintech-accent hover:bg-fintech-accent/10 disabled:opacity-50"
-            >
-              {connectLoading ? "Redirecting…" : "Set up payouts (Stripe Connect)"}
-            </button>
+          <h2 className="text-sm font-semibold text-white mb-1">Membership (Stripe)</h2>
+          <p className="text-sm text-fintech-muted mb-3">
+            Monthly plans match{" "}
+            <Link href="/pricing" className="text-fintech-accent hover:underline">
+              Pricing
+            </Link>{" "}
+            and the{" "}
+            <Link href="/dashboard" className="text-fintech-accent hover:underline">
+              dashboard
+            </Link>{" "}
+            upgrade buttons.
+          </p>
+          {actionError && (
+            <p className="mb-3 text-sm text-red-400">
+              {actionError}
+              <button type="button" onClick={() => setActionError(null)} className="ml-2 underline">
+                Dismiss
+              </button>
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-2 tablet:grid-cols-2 mb-4">
+            {UPGRADE_TIERS.map((id) => {
+              const m = MARKETING_PLANS[id];
+              const isPro = id === "pro";
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={!session || checkoutLoading}
+                  onClick={() => startMembershipCheckout(id)}
+                  className={`btn-press min-h-touch flex flex-col items-start rounded-xl px-3 py-2.5 text-left text-sm font-medium transition disabled:opacity-50 ${
+                    isPro
+                      ? "bg-fintech-accent ring-1 ring-[#eab308]/40 text-white"
+                      : id === "elite"
+                        ? "bg-fintech-highlight/85 text-[#0c0618]"
+                        : "bg-white/10 text-white hover:bg-white/15"
+                  }`}
+                >
+                  <span>{m.label}</span>
+                  <span className={`text-xs mt-0.5 ${isPro ? "text-white/90" : id === "elite" ? "text-[#0c0618]/90" : "text-fintech-muted"}`}>
+                    {formatUsdMonthly(m.monthlyUsd)}/mo
+                  </span>
+                </button>
+              );
+            })}
           </div>
+          <p className="text-xs text-fintech-muted mb-2">Creator / seller payouts</p>
+          <button
+            type="button"
+            disabled={!session || connectLoading}
+            onClick={async () => {
+              if (!session) return;
+              setConnectLoading(true);
+              setActionError(null);
+              try {
+                const res = await fetch(`${API_BASE || ""}/api/stripe-connect/onboard`, {
+                  method: "POST",
+                  headers: authHeaders(session.tokenOrId, session.isToken),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data as { message?: string }).message || "Onboarding failed");
+                if ((data as { url?: string }).url) window.location.href = (data as { url: string }).url;
+              } catch (e) {
+                setActionError(e instanceof Error ? e.message : "Connect onboarding failed");
+              } finally {
+                setConnectLoading(false);
+              }
+            }}
+            className="btn-press min-h-touch w-full tablet:w-auto rounded-xl border border-fintech-accent/50 px-4 py-2.5 text-sm font-medium text-fintech-accent hover:bg-fintech-accent/10 disabled:opacity-50"
+          >
+            {connectLoading ? "Redirecting…" : "Set up payouts (Stripe Connect)"}
+          </button>
         </div>
       </div>
     </div>

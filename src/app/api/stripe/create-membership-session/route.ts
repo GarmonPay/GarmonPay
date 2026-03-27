@@ -3,6 +3,16 @@ import Stripe from "stripe";
 import { getAuthUserId } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getCheckoutBaseUrl } from "@/lib/stripe-server";
+import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
+
+const PAID_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
+
+function normalizeMembershipTier(raw: string | undefined): MarketingPlanId | null {
+  const t = (raw ?? "").toLowerCase().trim();
+  if (t === "vip") return "elite";
+  if (PAID_TIERS.includes(t as MarketingPlanId)) return t as MarketingPlanId;
+  return null;
+}
 
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_SECRET_KEY;
@@ -32,26 +42,28 @@ export async function POST(req: Request) {
     apiVersion: "2026-01-28.clover",
   });
 
-  let tier = "starter";
+  let tierRaw = "starter";
   try {
     const body = await req.json();
-    tier = (body as { tier?: string })?.tier ?? "starter";
+    tierRaw = (body as { tier?: string })?.tier ?? "starter";
   } catch {
     return NextResponse.json({ error: "Invalid JSON body", url: null }, { status: 400 });
   }
 
-  let price = 1900;
-  let name = "Starter";
-
-  if (tier === "pro") {
-    price = 4900;
-    name = "Pro";
+  const tierId = normalizeMembershipTier(tierRaw);
+  if (!tierId) {
+    return NextResponse.json(
+      {
+        error: "Invalid tier. Use starter, growth, pro, or elite.",
+        url: null,
+      },
+      { status: 400 }
+    );
   }
 
-  if (tier === "elite" || tier === "vip") {
-    price = 9900;
-    name = "VIP";
-  }
+  const plan = MARKETING_PLANS[tierId];
+  const price = Math.round(plan.monthlyUsd * 100);
+  const name = plan.label;
 
   const baseUrl = getCheckoutBaseUrl(req);
 
@@ -65,7 +77,8 @@ export async function POST(req: Request) {
         user_id: userId,
         email,
         product_type: "subscription",
-        tier: name.toLowerCase(),
+        membership_tier: tierId,
+        tier: tierId,
       },
       line_items: [
         {
