@@ -3,7 +3,8 @@ import Stripe from "stripe";
 import { getAuthUserId } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getCheckoutBaseUrl } from "@/lib/stripe-server";
-import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { getMembershipPriceId, isPlaceholderPriceId, type PaidMembershipTier } from "@/lib/membership-price-ids";
 
 const PAID_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
 
@@ -61,9 +62,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const plan = MARKETING_PLANS[tierId];
-  const price = Math.round(plan.monthlyUsd * 100);
-  const name = plan.label;
+  const priceId = getMembershipPriceId(tierId as PaidMembershipTier);
+  if (!priceId || isPlaceholderPriceId(priceId)) {
+    return NextResponse.json(
+      { error: `Stripe price ID missing for ${tierId}. Set ${tierId.toUpperCase()} monthly price env.`, url: null },
+      { status: 503 }
+    );
+  }
 
   const baseUrl = getCheckoutBaseUrl(req);
 
@@ -76,22 +81,13 @@ export async function POST(req: Request) {
       metadata: {
         user_id: userId,
         email,
-        product_type: "subscription",
+        product_type: "membership_upgrade",
         membership_tier: tierId,
         tier: tierId,
       },
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `GarmonPay ${name} Membership`,
-            },
-            unit_amount: price,
-            recurring: {
-              interval: "month",
-            },
-          },
+          price: priceId,
           quantity: 1,
         },
       ],

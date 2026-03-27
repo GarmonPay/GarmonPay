@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { createAdminClient } from "@/lib/supabase";
+import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
 
-const MIN_WITHDRAWAL_CENTS = 1000; // $10
+const MIN_BY_PLAN_CENTS: Record<string, number> = {
+  free: 2000,
+  starter: 1000,
+  growth: 500,
+  pro: 200,
+  elite: 100,
+};
 
 /**
  * POST /api/wallet/withdraw
@@ -40,9 +47,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Wallet address required" }, { status: 400 });
   }
 
-  if (!Number.isFinite(amountCents) || amountCents < MIN_WITHDRAWAL_CENTS) {
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+  }
+  const { data: userPlanRow } = await supabase
+    .from("users")
+    .select("membership")
+    .eq("id", userId)
+    .maybeSingle();
+  const plan = normalizeUserMembershipTier((userPlanRow as { membership?: string } | null)?.membership);
+  const minCents = MIN_BY_PLAN_CENTS[plan] ?? 1000;
+
+  if (!Number.isFinite(amountCents) || amountCents < minCents) {
     return NextResponse.json(
-      { error: `Minimum withdrawal is $${(MIN_WITHDRAWAL_CENTS / 100).toFixed(2)}` },
+      { error: `Minimum withdrawal is $${(minCents / 100).toFixed(2)} for ${plan} plan` },
       { status: 400 }
     );
   }
@@ -55,11 +74,6 @@ export async function POST(req: Request) {
       { error: ledgerResult.message ?? "Insufficient balance" },
       { status: 400 }
     );
-  }
-
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
   const platformFee = Math.round(amountCents * 0.1);
@@ -100,6 +114,16 @@ export async function POST(req: Request) {
     description: "Withdrawal request",
     reference_id: (withdrawalRow as { id: string }).id,
   }).then(({ error }) => { if (error) console.error("Wallet withdraw tx insert:", error.message); });
+
+  await supabase.from("withdrawal_requests").insert({
+    user_id: userId,
+    amount_cents: amountCents,
+    status: "pending",
+    stripe_email: walletAddress,
+    notes: `method=${method}`,
+  }).then(({ error }) => {
+    if (error) console.warn("[wallet/withdraw] withdrawal_requests insert failed:", error.message);
+  });
 
   return NextResponse.json({
     success: true,

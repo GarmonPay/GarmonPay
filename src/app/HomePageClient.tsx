@@ -44,12 +44,27 @@ const EARN_METHODS = [
   },
 ] as const;
 
-const REFERRAL_TIERS = [
-  { name: "Free", rate: "10%", detail: "Start earning & sharing" },
-  { name: "Starter", rate: "20%", detail: "Higher share per referral" },
-  { name: "Growth", rate: "30%", detail: "Games + ad credit boost" },
-  { name: "Pro", rate: "40%", detail: "Priority + maximum velocity" },
-  { name: "Elite", rate: "50%", detail: "Maximum lifetime commission" },
+const REFERRAL_UPGRADE_CARDS = [
+  {
+    title: "Starter Upgrade $9.99",
+    detail: "Free members earn $1.00, Elite members earn $5.00",
+  },
+  {
+    title: "Growth Upgrade $24.99",
+    detail: "Free members earn $2.50, Elite members earn $12.50",
+  },
+  {
+    title: "Pro Upgrade $49.99",
+    detail: "Free members earn $5.00, Elite members earn $25.00",
+  },
+  {
+    title: "Elite Upgrade $99.99",
+    detail: "Free members earn $10.00, Elite members earn $50.00",
+  },
+  {
+    title: "Referral Join Bonus",
+    detail: "Plus $0.50 instantly when they sign up",
+  },
 ] as const;
 
 export default function HomePage() {
@@ -370,8 +385,7 @@ export default function HomePage() {
                     Referral program
                   </h2>
                   <p className="mt-2 max-w-xl text-violet-200/85">
-                    Share your link. When your network earns, you earn—tier up as volume
-                    grows.
+                    Earn a commission every time one of your referrals upgrades their membership. Plus $0.50 instantly when they sign up.
                   </p>
                 </div>
                 <Link
@@ -382,15 +396,14 @@ export default function HomePage() {
                 </Link>
               </div>
               <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {REFERRAL_TIERS.map((t) => (
+                {REFERRAL_UPGRADE_CARDS.map((t) => (
                   <div
-                    key={t.name}
+                    key={t.title}
                     className="rounded-xl border border-[#eab308]/30 bg-black/30 p-5 text-center"
                   >
                     <p className="text-sm font-medium uppercase tracking-wider text-[#fde047]">
-                      {t.name}
+                      {t.title}
                     </p>
-                    <p className="mt-3 text-3xl font-bold text-white">{t.rate}</p>
                     <p className="mt-2 text-xs text-violet-300/80">{t.detail}</p>
                   </div>
                 ))}

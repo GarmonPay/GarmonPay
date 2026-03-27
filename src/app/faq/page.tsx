@@ -83,7 +83,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "How does the referral program work?",
-        a: "When someone signs up using your unique referral link you earn a percentage of their earnings forever. Your commission rate depends on your membership plan ranging from 10 percent on Free up to 50 percent on Elite.",
+        a: "When someone signs up using your unique referral link you instantly earn $0.50. When they upgrade their membership plan you earn a percentage of their upgrade price. Free members earn 10 percent. Starter members earn 20 percent. Growth members earn 30 percent. Pro members earn 40 percent. Elite members earn 50 percent. You do not earn from their ad views or clicks. Only from sign ups and membership upgrades.",
       },
       {
         q: "Is there a limit on how many people I can refer?",

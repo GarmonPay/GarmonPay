@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { getClientIp } from "@/lib/rate-limit";
+import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { REFERRAL_JOIN_BONUS_CENTS } from "@/lib/adTracker";
 
 const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
@@ -124,17 +126,33 @@ export async function POST(req: Request) {
             referrerUserId: referrerId,
             referredUserId: id,
             referralCode: refCode,
-            grantSignupBonus: true,
+            grantSignupBonus: false,
             referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
           });
           if (result?.success) {
-            const { data: existing } = await supabase.from("arena_referral_bonus").select("id").eq("referred_user_id", id).maybeSingle();
-            if (!existing) {
-              const { data: refUser } = await supabase.from("users").select("arena_coins").eq("id", referrerId).single();
-              const coins = Number((refUser as { arena_coins?: number })?.arena_coins ?? 0) + 500;
-              await supabase.from("users").update({ arena_coins: coins }).eq("id", referrerId);
-              await supabase.from("arena_referral_bonus").insert({ referrer_user_id: referrerId, referred_user_id: id, coins_granted: 500 });
-              await supabase.from("arena_coin_transactions").insert({ user_id: referrerId, amount: 500, type: "referral", description: "Referred a new fighter" });
+            const refId = `referral_join_${id}`;
+            const { data: existingJoinTx } = await supabase
+              .from("transactions")
+              .select("id")
+              .eq("reference_id", refId)
+              .maybeSingle();
+            if (!existingJoinTx) {
+              const joinCredit = await walletLedgerEntry(
+                referrerId,
+                "referral_bonus",
+                REFERRAL_JOIN_BONUS_CENTS,
+                refId
+              );
+              if (joinCredit.success) {
+                await supabase.from("transactions").insert({
+                  user_id: referrerId,
+                  type: "referral_join",
+                  amount: REFERRAL_JOIN_BONUS_CENTS,
+                  status: "completed",
+                  description: "Referral join bonus",
+                  reference_id: refId,
+                });
+              }
             }
           }
         }

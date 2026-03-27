@@ -13,10 +13,8 @@ import {
 } from "@/lib/garmon-ads-db";
 import { checkIpReputation } from "@/lib/ip-reputation";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
-import { grantAdReferralCommission } from "@/lib/viral-referral-db";
 import {
   GARMON_AD_RATES,
-  baseUserEarnForVideoTier,
   baseUserEarnForBannerView,
   baseUserEarnForClick,
   capAdEarnMultiplier,
@@ -28,9 +26,18 @@ import {
   BANNER_VIEW_SECONDS,
 } from "@/lib/garmon-ad-rates";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
+import type { MarketingPlanId } from "@/lib/garmon-plan-config";
 
 const RATE_LIMIT_PER_HOUR = 30;
 const WINDOW_MS = 60 * 60 * 1000;
+const PLAN_VIEW_PAYOUT_DOLLARS = {
+  free: 0.01,
+  starter: 0.03,
+  growth: 0.05,
+  pro: 0.08,
+  elite: 0.15,
+} as const;
 
 type EngageBody = {
   adId: string;
@@ -139,6 +146,13 @@ export async function POST(request: Request) {
     }
 
     let userEarns: number;
+    let memberTier: MarketingPlanId = "free";
+    const { data: memberRow } = await supabase
+      .from("users")
+      .select("membership")
+      .eq("id", userId)
+      .maybeSingle();
+    memberTier = normalizeUserMembershipTier((memberRow as { membership?: string } | null)?.membership);
 
     let serverDuration = Math.round(durationSeconds ?? 0);
     if (sessionId) {
@@ -157,20 +171,16 @@ export async function POST(request: Request) {
 
     if (engagementType === "view") {
       const dur = serverDuration;
-      let tier: "view_15" | "view_30" | "view_60";
       if (dur >= VIDEO_MIN_SECONDS.view_60) {
-        tier = "view_60";
       } else if (dur >= VIDEO_MIN_SECONDS.view_30) {
-        tier = "view_30";
       } else if (dur >= VIDEO_MIN_SECONDS.view_15) {
-        tier = "view_15";
       } else {
         return NextResponse.json(
           { message: "Watch at least 15 seconds for video credit" },
           { status: 400 }
         );
       }
-      userEarns = baseUserEarnForVideoTier(tier, ad.cost_per_view);
+      userEarns = PLAN_VIEW_PAYOUT_DOLLARS[memberTier];
     } else if (engagementType === "banner_view") {
       if (serverDuration < BANNER_VIEW_SECONDS) {
         return NextResponse.json(
@@ -188,7 +198,7 @@ export async function POST(request: Request) {
     }
 
     let earnMult = 1;
-    if (GARMON_AD_EARN_MULT_CAP > 1) {
+    if (engagementType !== "view" && GARMON_AD_EARN_MULT_CAP > 1) {
       const levelMultiplier = await getLevelMultiplier(supabase, userId);
       const streakMultiplier = await getStreakMultiplier(supabase, userId);
       earnMult = capAdEarnMultiplier(levelMultiplier, streakMultiplier);
@@ -242,7 +252,16 @@ export async function POST(request: Request) {
 
     const userEarnedDollars = result.userEarnedDollars ?? userEarns;
     const userEarnedCents = result.userEarnedCents ?? Math.round(userEarns * 100);
-    grantAdReferralCommission(userId, userEarnedCents, `${adId}_${Date.now()}`).catch(() => {});
+    await supabase.from("transactions").insert({
+      user_id: userId,
+      type: "ad_view",
+      amount: userEarnedCents,
+      status: "completed",
+      description: `Ad ${engagementType} reward`,
+      reference_id: `ad_view_${adId}_${Date.now()}`,
+    }).then(({ error: txErr }) => {
+      if (txErr) console.error("[ads/engage] transactions insert failed:", txErr.message);
+    });
     createGarmonNotification(
       userId,
       "ad_earned",

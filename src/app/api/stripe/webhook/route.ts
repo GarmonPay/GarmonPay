@@ -3,9 +3,10 @@ import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
-import { grantDepositBonus } from "@/lib/viral-referral-db";
+import { creditReferralUpgradeCommission } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
+import { MEMBERSHIP_PRICE_ENV_BY_TIER, type PaidMembershipTier } from "@/lib/membership-price-ids";
 
 /**
  * Stripe webhook — use this URL in Stripe Dashboard (Developers → Webhooks):
@@ -15,6 +16,42 @@ import Stripe from "stripe";
 export const runtime = "nodejs";
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim().replace(/^["']|["']$/g, "").split("\n")[0]?.trim() ?? "";
+
+function tierFromPriceId(priceId: string | null | undefined): PaidMembershipTier | null {
+  const normalized = (priceId ?? "").trim();
+  if (!normalized) return null;
+  const entries = Object.entries(MEMBERSHIP_PRICE_ENV_BY_TIER) as [PaidMembershipTier, string][];
+  for (const [tier, envName] of entries) {
+    const envValue = process.env[envName]?.trim();
+    if (envValue && envValue === normalized) return tier;
+  }
+  return null;
+}
+
+async function safeMembershipUpdate(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  payload: { membership: string; stripe_subscription_id?: string | null; subscription_status?: string | null }
+) {
+  const now = new Date().toISOString();
+  const extended = await supabase
+    .from("users")
+    .update({
+      membership: payload.membership,
+      stripe_subscription_id: payload.stripe_subscription_id ?? null,
+      subscription_status: payload.subscription_status ?? "active",
+      updated_at: now,
+    })
+    .eq("id", userId);
+  if (!extended.error) return;
+  await supabase
+    .from("users")
+    .update({
+      membership: payload.membership,
+      updated_at: now,
+    })
+    .eq("id", userId);
+}
 
 export async function GET() {
   return NextResponse.json({ status: "live" });
@@ -96,7 +133,6 @@ export async function POST(req: Request) {
       await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id, stripe_session: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
       await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id, session_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
       recordRevenue(amountTotal, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
-      grantDepositBonus(user_id_pi).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id_pi); });
       console.log("[Stripe webhook] payment_intent.succeeded credited via ledger", { eventId, user_id: user_id_pi, amountTotal });
       return new Response("OK", { status: 200 });
     }
@@ -108,7 +144,6 @@ export async function POST(req: Request) {
       await supabasePi.from("transactions").insert({ user_id: user_id_pi, type: "deposit", amount: amountTotal, status: "completed", description: `Stripe payment_intent ${pi.id}`, reference_id: pi.id, stripe_session: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded tx insert:", error.message); });
       await supabasePi.from("stripe_payments").insert({ user_id: user_id_pi, email: customerEmail || "unknown", amount: amountTotal / 100, currency: (pi.currency ?? "usd").toLowerCase(), status: "completed", stripe_payment_intent_id: pi.id, session_id: pi.id }).then(({ error }) => { if (error) console.error("[Stripe webhook] payment_intent.succeeded stripe_payments insert:", error.message); });
       recordRevenue(amountTotal, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
-      grantDepositBonus(user_id_pi).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id_pi); });
       console.log("[Stripe webhook] payment_intent.succeeded credited via increment_user_balance", { eventId, user_id: user_id_pi, amountTotal });
       return new Response("OK", { status: 200 });
     }
@@ -129,6 +164,18 @@ export async function POST(req: Request) {
   if (eventType === "customer.subscription.updated" || eventType === "customer.subscription.deleted") {
     const sub = event.data.object as Stripe.Subscription & { current_period_end?: number };
     const productType = (sub.metadata?.product_type as string) || "";
+    if (productType === "membership_upgrade" && supabaseForWebhook) {
+      const userId = (sub.metadata?.user_id as string) || null;
+      const tier = ((sub.metadata?.membership_tier as string) || (sub.metadata?.tier as string) || "starter").toLowerCase();
+      if (userId) {
+        await safeMembershipUpdate(supabaseForWebhook, userId, {
+          membership: tier,
+          stripe_subscription_id: sub.id,
+          subscription_status: eventType === "customer.subscription.deleted" ? "canceled" : sub.status,
+        });
+      }
+      return new Response("OK", { status: 200 });
+    }
     if (productType !== "arena_season_pass" || !supabaseForWebhook) return new Response("OK", { status: 200 });
     const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
     const status = eventType === "customer.subscription.deleted" ? "canceled" : sub.status === "active" ? "active" : sub.status === "past_due" ? "past_due" : "canceled";
@@ -199,6 +246,77 @@ export async function POST(req: Request) {
   const session_id = session.id;
   const amount_dollars = amount_total / 100;
   const product_type = (session.metadata?.product_type as string) || "payment";
+
+  if (product_type === "membership_upgrade" && session.mode === "subscription") {
+    const stripe = getStripe();
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+    const first = lineItems.data[0];
+    const linePriceId = typeof first?.price === "string" ? first.price : first?.price?.id ?? null;
+    const tierFromPrice = tierFromPriceId(linePriceId);
+    const tierFromMeta = ((session.metadata?.membership_tier as string) || (session.metadata?.tier as string) || "").toLowerCase();
+    const targetTier =
+      tierFromPrice ??
+      (["starter", "growth", "pro", "elite"].includes(tierFromMeta)
+        ? (tierFromMeta as PaidMembershipTier)
+        : null);
+
+    if (!targetTier) {
+      console.error("[Stripe webhook] membership_upgrade unknown tier", { sessionId: session.id, linePriceId, tierFromMeta });
+      return new Response("OK", { status: 200 });
+    }
+
+    const subId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : ((session.subscription as Stripe.Subscription | null)?.id ?? null);
+
+    await safeMembershipUpdate(supabase, user_id, {
+      membership: targetTier,
+      stripe_subscription_id: subId,
+      subscription_status: "active",
+    });
+
+    await supabase.from("transactions").insert({
+      user_id,
+      type: "membership_upgrade",
+      amount: amount_total,
+      status: "completed",
+      description: `Membership upgrade to ${targetTier}`,
+      reference_id: session_id,
+      stripe_session: session_id,
+    });
+
+    const { data: existingUpgradeCommission } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("reference_id", `referral_upgrade_${user_id}`)
+      .maybeSingle();
+
+    if (!existingUpgradeCommission) {
+      await creditReferralUpgradeCommission({
+        upgradedUserId: user_id,
+        upgradePlan: targetTier,
+        stripeSessionId: session_id,
+        stripeSubscriptionId: subId,
+      });
+    }
+
+    await supabase.from("stripe_payments").insert({
+      user_id,
+      email: customer_email || "unknown",
+      amount: amount_dollars,
+      currency: (session.currency ?? "usd").toLowerCase(),
+      product_type: "membership_upgrade",
+      stripe_session_id: session_id,
+      session_id,
+      status: "completed",
+    }).then(({ error }) => {
+      if (error) console.error("[Stripe webhook] stripe_payments membership_upgrade:", error.message);
+    });
+
+    recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+    return new Response("OK", { status: 200 });
+  }
 
   if (product_type === "ad_deposit") {
     const ad_id = session.metadata?.ad_id as string | undefined;
@@ -376,8 +494,6 @@ export async function POST(req: Request) {
   });
 
   recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
-  grantDepositBonus(user_id).then((r) => { if (r.granted) console.log("[Stripe webhook] Referrer deposit bonus granted for", user_id); });
-
   const { data: existingDeposit } = await supabase.from("deposits").select("id").or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`).maybeSingle();
 
   if (!existingDeposit) {

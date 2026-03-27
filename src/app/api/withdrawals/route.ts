@@ -9,6 +9,15 @@ import {
 import { recordActivity } from "@/lib/viral-db";
 import { createAdminClient } from "@/lib/supabase";
 import { sanitizeWalletAddress } from "@/lib/security";
+import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
+
+const MIN_BY_PLAN_CENTS: Record<string, number> = {
+  free: 2000,
+  starter: 1000,
+  growth: 500,
+  pro: 200,
+  elite: 100,
+};
 
 /** GET /api/withdrawals — list current user's withdrawals. */
 export async function GET(request: Request) {
@@ -52,9 +61,18 @@ export async function POST(request: Request) {
     : null;
   const walletAddress = sanitizeWalletAddress(body.wallet_address);
 
-  if (amountCents == null || amountCents < MIN_WITHDRAWAL_CENTS) {
+  const admin = createAdminClient();
+  const { data: userRow } = await admin!
+    .from("users")
+    .select("membership")
+    .eq("id", userId)
+    .maybeSingle();
+  const plan = normalizeUserMembershipTier((userRow as { membership?: string } | null)?.membership);
+  const planMin = MIN_BY_PLAN_CENTS[plan] ?? MIN_WITHDRAWAL_CENTS;
+
+  if (amountCents == null || amountCents < planMin) {
     return NextResponse.json(
-      { message: `Minimum withdrawal is $${(MIN_WITHDRAWAL_CENTS / 100).toFixed(2)}` },
+      { message: `Minimum withdrawal is $${(planMin / 100).toFixed(2)} for ${plan} plan` },
       { status: 400 }
     );
   }
@@ -73,6 +91,15 @@ export async function POST(request: Request) {
   if (!result.success) {
     return NextResponse.json({ message: result.message }, { status: 400 });
   }
+
+  await admin!.from("withdrawal_requests").insert({
+    user_id: userId,
+    amount_cents: amountCents,
+    status: "pending",
+    stripe_email: walletAddress,
+  }).then(({ error }) => {
+    if (error) console.warn("[withdrawals] withdrawal_requests insert failed:", error.message);
+  });
   recordActivity(userId, "withdrew", "Withdrawal requested", amountCents).catch(() => {});
   return NextResponse.json({
     withdrawal: result.withdrawal,
