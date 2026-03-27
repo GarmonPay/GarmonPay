@@ -16,23 +16,13 @@ import {
   convertToAdCredit,
 } from "@/lib/api";
 import { SupabaseEarningsTracker } from "@/components/dashboard/SupabaseEarningsTracker";
-import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { MARKETING_PLANS, normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
-const UPGRADE_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
-
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatUsdMonthly(n: number) {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 export default function DashboardPage() {
@@ -131,7 +121,7 @@ export default function DashboardPage() {
               withdrawableCents: 0,
               totalEarningsCents: 0,
               totalWithdrawnCents: 0,
-              membershipTier: "starter",
+              membershipTier: "free",
               referralCode: "",
               referralEarningsCents: 0,
               totalReferrals: 0,
@@ -246,7 +236,8 @@ export default function DashboardPage() {
     }
   }
 
-  const upgrade = async (tier: string) => {
+  const upgrade = async (tier: MarketingPlanId) => {
+    if (tier === "free") return;
     const session = await getSessionAsync();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
@@ -298,11 +289,15 @@ export default function DashboardPage() {
     }
   };
 
+  const planForUi = normalizeUserMembershipTier(data.membershipTier);
+  const tierDbRaw = (data as { membershipTierDb?: string }).membershipTierDb ?? "";
+
   return (
     <div className="space-y-5 tablet:space-y-6">
       <SupabaseEarningsTracker
         userId={session.userId}
-        membershipTier={data.membershipTier}
+        membershipTier={planForUi}
+        commissionTier={tierDbRaw || undefined}
         dashboardReferrals={{
           totalReferrals: data.totalReferrals ?? 0,
           activeReferralSubscriptions: data.activeReferralSubscriptions ?? 0,
@@ -387,39 +382,16 @@ export default function DashboardPage() {
             <button type="button" onClick={() => setCheckoutError(null)} className="ml-2 underline">Dismiss</button>
           </p>
         )}
-        <h2 className="text-lg font-bold text-white">Upgrade Membership</h2>
+        <h2 className="text-lg font-bold text-white">Membership</h2>
         <p className="mt-1 text-sm text-fintech-muted">
-          Same plans as{" "}
+          <span className="text-white/90">Your plan: {MARKETING_PLANS[planForUi].label}.</span> Free members pay $0; paid tiers match{" "}
           <Link href="/pricing" className="text-fintech-accent underline-offset-2 hover:underline">
             Pricing
-          </Link>
-          — billed monthly via Stripe.
+          </Link>{" "}
+          and bill monthly via Stripe.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-3">
-          {UPGRADE_TIERS.map((id) => {
-            const m = MARKETING_PLANS[id];
-            const isPro = id === "pro";
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => upgrade(id)}
-                className={`btn-press min-h-touch flex flex-col items-start rounded-xl px-4 py-3 text-left font-medium transition active:scale-[0.98] ${
-                  isPro
-                    ? "bg-fintech-accent ring-2 ring-[#eab308]/50 shadow-[0_0_24px_-8px_rgba(234,179,8,0.45)] text-white"
-                    : id === "elite"
-                      ? "bg-fintech-highlight/85 text-[#0c0618] hover:opacity-95"
-                      : "bg-white/10 text-white hover:bg-white/20"
-                }`}
-              >
-                <span className="text-sm font-semibold">{m.label}</span>
-                <span className={`mt-0.5 text-lg ${isPro ? "text-white" : id === "elite" ? "text-[#0c0618]" : "text-white"}`}>
-                  {formatUsdMonthly(m.monthlyUsd)}
-                  <span className="text-xs font-normal opacity-80">/mo</span>
-                </span>
-              </button>
-            );
-          })}
+        <div className="mt-4">
+          <MembershipPlanPicker currentTier={planForUi} onUpgradePaid={upgrade} />
         </div>
         <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
         <p className="mt-1 text-sm text-fintech-muted">Click Deposit above to add funds ($5–$1,000).</p>
@@ -608,7 +580,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs text-fintech-muted">Membership</p>
-              <p className="text-lg font-semibold text-white capitalize">{data.membershipTier}</p>
+              <p className="text-lg font-semibold text-white">{MARKETING_PLANS[planForUi].label}</p>
             </div>
           </div>
           <Link href="/dashboard/transactions" className="mt-4 inline-block text-sm font-medium text-fintech-accent hover:underline">

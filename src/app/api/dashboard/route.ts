@@ -10,6 +10,7 @@ import {
 } from "@/lib/referral-commissions-db";
 import { createServerClient, createAdminClient } from "@/lib/supabase";
 import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -26,7 +27,8 @@ export async function GET(request: Request) {
     totalEarningsCents: 0,
     totalWithdrawnCents: 0,
     totalDepositsCents: 0,
-    membershipTier: "starter",
+    membershipTier: "free",
+    membershipTierDb: "",
     referralCode: "",
     referralEarningsCents: 0,
     totalReferrals: 0,
@@ -106,7 +108,14 @@ export async function GET(request: Request) {
         // referral_commissions / subscriptions tables may be missing
       }
 
-      const userRow = row as { balance?: number; ad_credit_balance?: number; withdrawable_balance?: number; membership?: string; referral_code?: string } | null;
+      const userRow = row as {
+        balance?: number;
+        ad_credit_balance?: number;
+        withdrawable_balance?: number;
+        membership?: string;
+        referral_code?: string;
+      } | null;
+      const membershipRaw = userRow?.membership ?? "";
       const balanceCents = await getCanonicalBalanceCents(authUser.id);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
       const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? balanceCents);
@@ -121,7 +130,8 @@ export async function GET(request: Request) {
           totalEarningsCents,
           totalWithdrawnCents,
           totalDepositsCents,
-          membershipTier: userRow?.membership ?? "starter",
+          membershipTier: normalizeUserMembershipTier(membershipRaw),
+          membershipTierDb: membershipRaw,
           referralCode: userRow?.referral_code ?? "",
           referralEarningsCents,
           totalReferrals,
@@ -150,7 +160,8 @@ export async function GET(request: Request) {
       balanceCents: 0,
       withdrawableCents: 0,
       totalDepositsCents: 0,
-      membershipTier: "starter",
+      membershipTier: "free",
+      membershipTierDb: "",
       referralCode: user.referralCode,
       referralEarningsCents: 0,
       totalReferrals: 0,

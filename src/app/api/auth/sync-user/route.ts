@@ -78,6 +78,7 @@ export async function POST(req: Request) {
         email: emailVal,
         role: "user",
         balance: 0,
+        membership: "free",
         created_at: new Date().toISOString(),
         registration_ip: registrationIp !== "unknown" ? registrationIp : null,
       });

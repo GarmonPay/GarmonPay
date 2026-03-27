@@ -5,23 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals } from "@/lib/api";
-import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const UPGRADE_TIERS: MarketingPlanId[] = ["starter", "growth", "pro", "elite"];
-
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatUsdMonthly(n: number) {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
@@ -40,6 +30,7 @@ export default function FinancePage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [membershipPlan, setMembershipPlan] = useState<MarketingPlanId>("free");
 
   useEffect(() => {
     getSessionAsync()
@@ -57,6 +48,7 @@ export default function FinancePage() {
         ]).then(([dash, w]) => {
           setBalanceCents(dash.balanceCents ?? 0);
           setWithdrawals(w?.withdrawals ?? []);
+          setMembershipPlan(normalizeUserMembershipTier(dash.membershipTier));
         });
       })
       .catch(() => setError("Unable to load finance data."))
@@ -177,31 +169,15 @@ export default function FinancePage() {
               </button>
             </p>
           )}
-          <div className="grid grid-cols-1 gap-2 tablet:grid-cols-2 mb-4">
-            {UPGRADE_TIERS.map((id) => {
-              const m = MARKETING_PLANS[id];
-              const isPro = id === "pro";
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  disabled={!session || checkoutLoading}
-                  onClick={() => startMembershipCheckout(id)}
-                  className={`btn-press min-h-touch flex flex-col items-start rounded-xl px-3 py-2.5 text-left text-sm font-medium transition disabled:opacity-50 ${
-                    isPro
-                      ? "bg-fintech-accent ring-1 ring-[#eab308]/40 text-white"
-                      : id === "elite"
-                        ? "bg-fintech-highlight/85 text-[#0c0618]"
-                        : "bg-white/10 text-white hover:bg-white/15"
-                  }`}
-                >
-                  <span>{m.label}</span>
-                  <span className={`text-xs mt-0.5 ${isPro ? "text-white/90" : id === "elite" ? "text-[#0c0618]/90" : "text-fintech-muted"}`}>
-                    {formatUsdMonthly(m.monthlyUsd)}/mo
-                  </span>
-                </button>
-              );
-            })}
+          <div className="mb-4">
+            <MembershipPlanPicker
+              compact
+              currentTier={membershipPlan}
+              disabled={!session || checkoutLoading}
+              onUpgradePaid={(tier) => {
+                void startMembershipCheckout(tier);
+              }}
+            />
           </div>
           <p className="text-xs text-fintech-muted mb-2">Creator / seller payouts</p>
           <button

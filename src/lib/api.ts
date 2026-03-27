@@ -293,6 +293,8 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     totalWithdrawnCents: number;
     totalDepositsCents?: number;
     membershipTier: string;
+    /** Raw `users.membership` before UI normalization (used for referral commission rules). */
+    membershipTierDb?: string;
     referralCode: string;
     referralEarningsCents: number;
     totalReferrals: number;

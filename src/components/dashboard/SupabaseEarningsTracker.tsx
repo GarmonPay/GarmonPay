@@ -61,7 +61,10 @@ function formatCents(cents: number) {
 
 type Props = {
   userId: string;
+  /** Normalized tier (display / fallback). */
   membershipTier: string;
+  /** Raw DB `users.membership` when present — used for commission % so legacy flags stay accurate. */
+  commissionTier?: string | null;
   dashboardReferrals: {
     totalReferrals: number;
     activeReferralSubscriptions: number;
@@ -72,6 +75,7 @@ type Props = {
 export function SupabaseEarningsTracker({
   userId,
   membershipTier,
+  commissionTier,
   dashboardReferrals,
 }: Props) {
   const [sums, setSums] = useState<ReturnType<typeof aggregateEarnings> | null>(null);
@@ -121,7 +125,9 @@ export function SupabaseEarningsTracker({
     };
   }, [userId]);
 
-  const commissionPct = referralCommissionFromMembershipTier(membershipTier);
+  const commissionPct = referralCommissionFromMembershipTier(
+    commissionTier != null && commissionTier !== "" ? commissionTier : membershipTier
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 tablet:grid-cols-2 tablet:gap-5">

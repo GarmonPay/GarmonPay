@@ -2,6 +2,34 @@
 
 export type MarketingPlanId = "free" | "starter" | "growth" | "pro" | "elite";
 
+/** UI / upgrade flow order (Free always first; paid tiers follow). */
+export const ALL_MEMBERSHIP_PLANS_ORDER: readonly MarketingPlanId[] = [
+  "free",
+  "starter",
+  "growth",
+  "pro",
+  "elite",
+] as const;
+
+export function membershipTierRank(tier: MarketingPlanId): number {
+  const i = ALL_MEMBERSHIP_PLANS_ORDER.indexOf(tier);
+  return i >= 0 ? i : 0;
+}
+
+/**
+ * Map `users.membership` (and legacy values) to a marketing tier.
+ * Empty / unknown → free (unpaid members are never implied to be Starter).
+ */
+export function normalizeUserMembershipTier(raw: string | null | undefined): MarketingPlanId {
+  const t = (raw ?? "").toLowerCase().trim();
+  if (!t) return "free";
+  if (t === "vip") return "elite";
+  if ((ALL_MEMBERSHIP_PLANS_ORDER as readonly string[]).includes(t)) return t as MarketingPlanId;
+  /** Legacy Stripe “subscribed but tier not synced” flag — treat as Free for display until tier is written. */
+  if (t === "active") return "free";
+  return "free";
+}
+
 export const MARKETING_PLANS: Record<
   MarketingPlanId,
   {
@@ -54,12 +82,12 @@ export const MARKETING_PLANS: Record<
  * DB values: starter, pro, elite, vip, active — aligned to marketing Free→Elite.
  */
 export function referralCommissionFromMembershipTier(tier: string | undefined | null): number {
-  const t = (tier ?? "starter").toLowerCase();
+  const t = (tier ?? "").toLowerCase().trim();
   if (t === "vip" || t === "elite") return MARKETING_PLANS.elite.referralPct;
   if (t === "pro") return MARKETING_PLANS.pro.referralPct;
   if (t === "growth") return MARKETING_PLANS.growth.referralPct;
   if (t === "free") return MARKETING_PLANS.free.referralPct;
   if (t === "starter") return MARKETING_PLANS.starter.referralPct;
   if (t === "active") return MARKETING_PLANS.starter.referralPct;
-  return MARKETING_PLANS.starter.referralPct;
+  return MARKETING_PLANS.free.referralPct;
 }

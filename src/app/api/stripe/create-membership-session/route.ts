@@ -42,10 +42,10 @@ export async function POST(req: Request) {
     apiVersion: "2026-01-28.clover",
   });
 
-  let tierRaw = "starter";
+  let tierRaw = "";
   try {
     const body = await req.json();
-    tierRaw = (body as { tier?: string })?.tier ?? "starter";
+    tierRaw = (body as { tier?: string })?.tier ?? "";
   } catch {
     return NextResponse.json({ error: "Invalid JSON body", url: null }, { status: 400 });
   }
