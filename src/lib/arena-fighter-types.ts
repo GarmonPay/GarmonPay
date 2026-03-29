@@ -30,7 +30,8 @@ export type HairStyle =
   | "afro"
   | "mohawk"
   | "buzz_cut"
-  | "long_tied";
+  | "long_tied"
+  | "ponytail";
 
 export type GearGlovesKey =
   | "default"
@@ -208,4 +209,5 @@ export const hairStyleOptions = [
   { value: "mohawk" as const, label: "Mohawk" },
   { value: "buzz_cut" as const, label: "Buzz Cut" },
   { value: "long_tied" as const, label: "Long Tied" },
+  { value: "ponytail" as const, label: "Ponytail" },
 ];

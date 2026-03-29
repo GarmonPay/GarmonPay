@@ -17,18 +17,35 @@ import {
   type HairStyle,
   type FighterData,
 } from "@/lib/arena-fighter-types";
-import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 
-const BoxerDisplay = dynamic(
-  () => import("@/components/arena/BoxerDisplay"),
-  {
-    ssr: false,
-    loading: () => <Arena3dDynamicFallback />,
-  }
-);
+const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
 
 const styleList = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const avatarList = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
+const skinToneMap: Record<SkinTone, "light" | "medium" | "tan" | "dark" | "deep"> = {
+  tone1: "light",
+  tone2: "medium",
+  tone3: "tan",
+  tone4: "dark",
+  tone5: "deep",
+  tone6: "deep",
+};
+const hairStyleMap: Record<HairStyle, "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long" | "ponytail"> = {
+  bald: "bald",
+  short_fade: "fade",
+  dreads: "dreads",
+  cornrows: "cornrows",
+  afro: "afro",
+  mohawk: "mohawk",
+  buzz_cut: "buzz",
+  long_tied: "long",
+  ponytail: "ponytail",
+};
+const bodyTypeMap: Record<BodyType, "lightweight" | "middleweight" | "heavyweight"> = {
+  lightweight: "lightweight",
+  middleweight: "middleweight",
+  heavyweight: "heavyweight",
+};
 
 function isHtmlResponse(str: string): boolean {
   const trimmed = str.trimStart();
@@ -234,10 +251,16 @@ export default function CreateFighterManualPage() {
 
           <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4 w-full min-w-0">
             <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
-            <div className="w-full max-w-md">
-              <BoxerDisplay
-                fighter={{ fighter_color: selectedColor || "#f0a500" }}
-                size="medium"
+            <div className="w-full max-w-md flex justify-center">
+              <Boxer2D
+                skinTone={skinToneMap[skinTone]}
+                trunksColor={selectedColor}
+                hairStyle={hairStyleMap[hairStyle]}
+                bodyType={bodyTypeMap[bodyType]}
+                name={name || "FIGHTER"}
+                animate={true}
+                width={220}
+                height={320}
               />
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm text-[#9ca3af]">
