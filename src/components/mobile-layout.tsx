@@ -109,9 +109,10 @@ export function MobileLayout({ children }: { children: React.ReactNode }) {
 
       {/* App container: max-width 430px, centered, banking-app style */}
       <main
-        className="mx-auto w-full max-w-[430px] pt-14 pb-[65px]"
+        className="mx-auto w-full max-w-[430px] pb-[65px]"
         style={{
           minHeight: "100dvh",
+          paddingTop: "calc(3.5rem + env(safe-area-inset-top, 0px))",
           paddingBottom: "calc(65px + env(safe-area-inset-bottom, 0))",
         }}
       >
