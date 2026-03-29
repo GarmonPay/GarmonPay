@@ -4,11 +4,44 @@ import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
-import { safeFighterColor } from "@/lib/arena-safe-fighter";
+import { safeDisplayName, safeFighterColor } from "@/lib/arena-safe-fighter";
 import type { FightAnim } from "@/components/arena/meshy/ProceduralFallbackBoxer";
-import { FighterCard2D } from "@/components/arena/FighterCard2D";
 
 const BoxerCanvas = dynamic(() => import("@/components/arena/BoxerCanvas"), { ssr: false });
+const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
+
+type Boxer2DSkinTone = "light" | "medium" | "tan" | "dark" | "deep";
+type Boxer2DHairStyle = "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long";
+type Boxer2DBodyType = "lightweight" | "middleweight" | "heavyweight";
+
+function mapSkinTone(input: unknown): Boxer2DSkinTone {
+  if (typeof input !== "string") return "medium";
+  const tone = input.toLowerCase();
+  if (tone === "light" || tone === "medium" || tone === "tan" || tone === "dark" || tone === "deep") return tone;
+  if (tone === "tone1" || tone === "tone2") return "light";
+  if (tone === "tone3") return "medium";
+  if (tone === "tone4") return "tan";
+  if (tone === "tone5") return "dark";
+  if (tone === "tone6") return "deep";
+  return "medium";
+}
+
+function mapHairStyle(input: unknown): Boxer2DHairStyle {
+  if (typeof input !== "string") return "fade";
+  const hair = input.toLowerCase();
+  if (hair === "bald" || hair === "fade" || hair === "dreads" || hair === "cornrows" || hair === "afro" || hair === "mohawk" || hair === "buzz" || hair === "long") {
+    return hair;
+  }
+  if (hair === "short_fade") return "fade";
+  if (hair === "buzz_cut") return "buzz";
+  if (hair === "long_tied") return "long";
+  return "fade";
+}
+
+function mapBodyType(input: unknown): Boxer2DBodyType {
+  if (input === "lightweight" || input === "middleweight" || input === "heavyweight") return input;
+  return "middleweight";
+}
 
 export type Fighter3DProps = {
   /** Raw fighter row / API object — reads `model_3d_url`, `model_url`, `glb_url`, `meshy_glb_url`. */
@@ -21,6 +54,9 @@ export type Fighter3DProps = {
     name?: string | null;
     style?: string | null;
     avatar?: string | null;
+    skin_tone?: string | null;
+    hair_style?: string | null;
+    body_type?: string | null;
   }) | null | undefined;
   /** Reserved for future clip-driven animation (dashboard uses idle). */
   animationState?: FightAnim | string;
@@ -32,6 +68,11 @@ export type Fighter3DProps = {
 };
 
 const heights = { small: 220, medium: 380, large: 560 };
+const fallbackCanvasSize = {
+  small: { width: 142, height: 220 },
+  medium: { width: 220, height: 340 },
+  large: { width: 305, height: 472 },
+};
 
 function isValidFighterRecord(f: Fighter3DProps["fighter"]): f is Record<string, unknown> {
   return f != null && typeof f === "object" && !Array.isArray(f);
@@ -56,6 +97,11 @@ export default function Fighter3D({
   const color = fighterColor ?? safeFighterColor(fighter, "#f0a500");
   const faceRight = facingRight ?? position === "right";
   const h = heights[size];
+  const skinTone = mapSkinTone(fighter?.skin_tone);
+  const hairStyle = mapHairStyle(fighter?.hair_style);
+  const bodyType = mapBodyType(fighter?.body_type);
+  const displayName = safeDisplayName(fighter?.name, "Boxer");
+  const { width: canvasWidth, height: canvasHeight } = fallbackCanvasSize[size];
 
   useEffect(() => {
     if (!fighterOk) {
@@ -145,13 +191,30 @@ export default function Fighter3D({
       {url ? (
         <BoxerCanvas modelUrl={url} facingRight={faceRight} fighterColor={color} size={size} />
       ) : (
-        <FighterCard2D
-          name={typeof fighter?.name === "string" ? fighter.name : undefined}
-          style={typeof fighter?.style === "string" ? fighter.style : undefined}
-          avatar={typeof fighter?.avatar === "string" ? fighter.avatar : undefined}
-          accentColor={color}
-          size={size}
-        />
+        <div
+          style={{
+            width: "100%",
+            minHeight: h,
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              "radial-gradient(120% 100% at 50% 10%, rgba(45,55,72,0.55) 0%, rgba(8,10,15,0.98) 62%)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <Boxer2D
+            skinTone={skinTone}
+            trunksColor={color}
+            hairStyle={hairStyle}
+            bodyType={bodyType}
+            name={displayName}
+            animate
+            width={canvasWidth}
+            height={canvasHeight}
+          />
+        </div>
       )}
     </div>
   );
