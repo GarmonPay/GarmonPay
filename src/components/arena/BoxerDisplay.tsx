@@ -115,7 +115,7 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
   if (isArenaDebugEnabled()) {
     console.log(
       "RENDER PATH:",
-      getFighterModelUrl(fighter as Record<string, unknown>) ? "Fighter3D" : "FighterCard2D"
+      getFighterModelUrl(fighter as Record<string, unknown>) ? "Fighter3D (GLB)" : "Fighter3D (Boxer2D canvas)"
     );
   }
 

@@ -6,9 +6,10 @@ import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
 import { safeFighterColor } from "@/lib/arena-safe-fighter";
 import type { FightAnim } from "@/components/arena/meshy/ProceduralFallbackBoxer";
-import { FighterCard2D } from "@/components/arena/FighterCard2D";
+import { fighterRecordToBoxer2DProps } from "@/lib/arena-boxer2d-map";
 
 const BoxerCanvas = dynamic(() => import("@/components/arena/BoxerCanvas"), { ssr: false });
+const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
 
 export type Fighter3DProps = {
   /** Raw fighter row / API object — reads `model_3d_url`, `model_url`, `glb_url`, `meshy_glb_url`. */
@@ -21,6 +22,9 @@ export type Fighter3DProps = {
     name?: string | null;
     style?: string | null;
     avatar?: string | null;
+    body_type?: string | null;
+    skin_tone?: string | null;
+    hair_style?: string | null;
   }) | null | undefined;
   /** Reserved for future clip-driven animation (dashboard uses idle). */
   animationState?: FightAnim | string;
@@ -145,13 +149,17 @@ export default function Fighter3D({
       {url ? (
         <BoxerCanvas modelUrl={url} facingRight={faceRight} fighterColor={color} size={size} />
       ) : (
-        <FighterCard2D
-          name={typeof fighter?.name === "string" ? fighter.name : undefined}
-          style={typeof fighter?.style === "string" ? fighter.style : undefined}
-          avatar={typeof fighter?.avatar === "string" ? fighter.avatar : undefined}
-          accentColor={color}
-          size={size}
-        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            minHeight: h,
+          }}
+        >
+          <Boxer2D {...fighterRecordToBoxer2DProps(fighter as Record<string, unknown>, color, size)} />
+        </div>
       )}
     </div>
   );

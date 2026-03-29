@@ -236,10 +236,14 @@ export default function CreateFighterManualPage() {
             <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
             <div className="w-full max-w-md">
               <BoxerDisplay
-                fighter={{ fighter_color: selectedColor || "#f0a500" }}
+                fighter={{
+                  ...previewFighter,
+                  fighter_color: selectedColor || "#f0a500",
+                }}
                 size="medium"
               />
             </div>
+            <p className="mt-2 text-center text-xs text-[#6b7280]">{style}</p>
             <label className="mt-3 flex items-center gap-2 text-sm text-[#9ca3af]">
               Trunks color
               <input
