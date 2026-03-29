@@ -10,7 +10,7 @@ type Gender = "male" | "female";
 interface Boxer2DProps {
   skinTone: SkinTone;
   trunksColor: string;
-  hairStyle: HairStyle;
+  hairStyle?: HairStyle;
   bodyType: BodyType;
   name: string;
   gender?: Gender;
@@ -300,7 +300,7 @@ function drawBoxer(
     height: number;
     skinTone: SkinTone;
     trunksColor: string;
-    hairStyle: HairStyle;
+    hairStyle?: HairStyle;
     bodyType: BodyType;
     name: string;
     gender: Gender;
@@ -323,7 +323,7 @@ function drawBoxer(
   const shoulderHalf = 44 * shoulderScale;
   const waistHalf = isFemale ? 24 : 32;
   const armScale = isFemale ? 0.94 : 1;
-  const resolvedHairStyle = hairStyle || (isFemale ? "ponytail" : "fade");
+  const resolvedHairStyle = hairStyle ?? (isFemale ? "ponytail" : "fade");
 
   ctx.save();
   ctx.translate(width / 2, 6 + bobOffset);

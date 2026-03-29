@@ -27,8 +27,8 @@ function mapSkinTone(input: unknown): Boxer2DSkinTone {
   return "medium";
 }
 
-function mapHairStyle(input: unknown): Boxer2DHairStyle {
-  if (typeof input !== "string") return "fade";
+function mapHairStyle(input: unknown): Boxer2DHairStyle | undefined {
+  if (typeof input !== "string") return undefined;
   const hair = input.toLowerCase();
   if (
     hair === "bald" ||
@@ -46,7 +46,7 @@ function mapHairStyle(input: unknown): Boxer2DHairStyle {
   if (hair === "short_fade") return "fade";
   if (hair === "buzz_cut") return "buzz";
   if (hair === "long_tied") return "long";
-  return "fade";
+  return undefined;
 }
 
 function mapBodyType(input: unknown): Boxer2DBodyType {
