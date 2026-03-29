@@ -3,8 +3,9 @@
 import { useEffect, useRef } from "react";
 
 type SkinTone = "light" | "medium" | "tan" | "dark" | "deep";
-type HairStyle = "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long";
+type HairStyle = "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long" | "ponytail";
 type BodyType = "lightweight" | "middleweight" | "heavyweight";
+type Gender = "male" | "female";
 
 interface Boxer2DProps {
   skinTone: SkinTone;
@@ -12,6 +13,7 @@ interface Boxer2DProps {
   hairStyle: HairStyle;
   bodyType: BodyType;
   name: string;
+  gender?: Gender;
   animate?: boolean;
   width?: number;
   height?: number;
@@ -175,7 +177,7 @@ function drawShoe(
   ctx.stroke();
 }
 
-function drawHair(ctx: CanvasRenderingContext2D, style: HairStyle): void {
+function drawHair(ctx: CanvasRenderingContext2D, style: HairStyle, gender: Gender): void {
   if (style === "bald") return;
 
   const root = "#18130F";
@@ -188,6 +190,42 @@ function drawHair(ctx: CanvasRenderingContext2D, style: HairStyle): void {
   if (style === "afro") {
     drawSoftEllipse(ctx, -3, topY + 8, 34, 26, mid, "rgba(0,0,0,0)");
     drawSoftEllipse(ctx, -3, topY + 7, 27, 19, root, "rgba(0,0,0,0)");
+  } else if (style === "ponytail") {
+    const crown = ctx.createRadialGradient(-3, topY + 10, 2, -3, topY + 11, 24);
+    crown.addColorStop(0, mid);
+    crown.addColorStop(1, root);
+    ctx.fillStyle = crown;
+    ctx.beginPath();
+    ctx.ellipse(-3, topY + 12, 21, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (gender === "female") {
+      const bunGrad = ctx.createRadialGradient(6, topY + 3, 1, 6, topY + 3, 10);
+      bunGrad.addColorStop(0, mid);
+      bunGrad.addColorStop(1, root);
+      ctx.fillStyle = bunGrad;
+      ctx.beginPath();
+      ctx.ellipse(6, topY + 3, 8, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(22,17,13,0.85)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-19, topY + 17);
+      ctx.quadraticCurveTo(-22, topY + 25, -18, topY + 31);
+      ctx.moveTo(13, topY + 17);
+      ctx.quadraticCurveTo(16, topY + 25, 12, topY + 31);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = root;
+      ctx.beginPath();
+      ctx.ellipse(15, topY + 16, 5.5, 4, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(18,13,10,0.9)";
+      ctx.beginPath();
+      ctx.ellipse(18, topY + 17, 2.5, 1.8, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (style === "mohawk") {
     const g = ctx.createLinearGradient(-6, topY - 6, 4, topY + 25);
     g.addColorStop(0, mid);
@@ -255,6 +293,7 @@ function drawBoxer(
     hairStyle,
     bodyType,
     name,
+    gender,
     bobOffset,
   }: {
     width: number;
@@ -264,6 +303,7 @@ function drawBoxer(
     hairStyle: HairStyle;
     bodyType: BodyType;
     name: string;
+    gender: Gender;
     bobOffset: number;
   }
 ): void {
@@ -278,6 +318,12 @@ function drawBoxer(
   const trunksLight = mixHex(trunksBase, "#FFFFFF", 0.25);
   const trunksDark = mixHex(trunksBase, "#000000", 0.32);
   const gloveMid = mixHex(trunksBase, "#000000", 0.2);
+  const isFemale = gender === "female";
+  const shoulderScale = isFemale ? 0.82 : 1;
+  const shoulderHalf = 44 * shoulderScale;
+  const waistHalf = isFemale ? 24 : 32;
+  const armScale = isFemale ? 0.94 : 1;
+  const resolvedHairStyle = hairStyle || (isFemale ? "ponytail" : "fade");
 
   ctx.save();
   ctx.translate(width / 2, 6 + bobOffset);
@@ -306,7 +352,7 @@ function drawBoxer(
 
   // Socks.
   const sockLeft = ctx.createLinearGradient(leadAnkle.x, leadAnkle.y - 8, leadAnkle.x, leadAnkle.y + 9);
-  sockLeft.addColorStop(0, "#FFFFFF");
+  sockLeft.addColorStop(0, SOCK_WHITE);
   sockLeft.addColorStop(1, "#DCE5EE");
   ctx.fillStyle = sockLeft;
   ctx.beginPath();
@@ -314,7 +360,7 @@ function drawBoxer(
   ctx.fill();
 
   const sockRight = ctx.createLinearGradient(rearAnkle.x, rearAnkle.y - 8, rearAnkle.x, rearAnkle.y + 9);
-  sockRight.addColorStop(0, "#FFFFFF");
+  sockRight.addColorStop(0, SOCK_WHITE);
   sockRight.addColorStop(1, "#DCE5EE");
   ctx.fillStyle = sockRight;
   ctx.beginPath();
@@ -363,12 +409,12 @@ function drawBoxer(
 
   // Torso with realistic muscle shading.
   const torsoPath = new Path2D();
-  torsoPath.moveTo(-44, 123);
-  torsoPath.quadraticCurveTo(-49, 152, -32, 188);
-  torsoPath.quadraticCurveTo(0, 203, 32, 188);
-  torsoPath.quadraticCurveTo(50, 152, 44, 123);
-  torsoPath.quadraticCurveTo(28, 112, 0, 113);
-  torsoPath.quadraticCurveTo(-28, 112, -44, 123);
+  torsoPath.moveTo(-shoulderHalf, 123);
+  torsoPath.quadraticCurveTo(-shoulderHalf - 5, 152, -waistHalf, 188);
+  torsoPath.quadraticCurveTo(0, isFemale ? 206 : 203, waistHalf, 188);
+  torsoPath.quadraticCurveTo(shoulderHalf + 6, 152, shoulderHalf, 123);
+  torsoPath.quadraticCurveTo(shoulderHalf * 0.64, 112, 0, 113);
+  torsoPath.quadraticCurveTo(-shoulderHalf * 0.64, 112, -shoulderHalf, 123);
 
   const torsoGrad = ctx.createLinearGradient(0, 114, 0, 194);
   torsoGrad.addColorStop(0, mixHex(tone.base, "#FFFFFF", 0.1));
@@ -377,9 +423,36 @@ function drawBoxer(
   ctx.fillStyle = torsoGrad;
   ctx.fill(torsoPath);
 
-  drawSoftEllipse(ctx, -16, 140, 18, 12, withAlpha(tone.dark, 0.42), "rgba(0,0,0,0)");
-  drawSoftEllipse(ctx, 16, 140, 18, 12, withAlpha(tone.dark, 0.42), "rgba(0,0,0,0)");
+  drawSoftEllipse(ctx, -16 * shoulderScale, 140, 18 * shoulderScale, 12, withAlpha(tone.dark, 0.42), "rgba(0,0,0,0)");
+  drawSoftEllipse(ctx, 16 * shoulderScale, 140, 18 * shoulderScale, 12, withAlpha(tone.dark, 0.42), "rgba(0,0,0,0)");
   drawSoftEllipse(ctx, 0, 128, 30, 16, "rgba(255,255,255,0.16)", "rgba(255,255,255,0)");
+
+  if (isFemale) {
+    // Sports bra top: fitted chest band with subtle color depth.
+    const braTop = 132;
+    const braBottom = 149;
+    const braGrad = ctx.createLinearGradient(0, braTop, 0, braBottom);
+    braGrad.addColorStop(0, trunksLight);
+    braGrad.addColorStop(0.45, trunksBase);
+    braGrad.addColorStop(1, trunksDark);
+    ctx.save();
+    ctx.clip(torsoPath);
+    ctx.fillStyle = braGrad;
+    ctx.beginPath();
+    ctx.moveTo(-shoulderHalf * 0.72, braTop + 3);
+    ctx.quadraticCurveTo(0, braTop - 5, shoulderHalf * 0.72, braTop + 3);
+    ctx.lineTo(shoulderHalf * 0.67, braBottom);
+    ctx.quadraticCurveTo(0, braBottom + 6, -shoulderHalf * 0.67, braBottom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-shoulderHalf * 0.63, braTop + 6);
+    ctx.quadraticCurveTo(0, braTop + 2, shoulderHalf * 0.63, braTop + 6);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   const abCenterGrad = ctx.createLinearGradient(0, 146, 0, 194);
   abCenterGrad.addColorStop(0, "rgba(0,0,0,0)");
@@ -393,15 +466,15 @@ function drawBoxer(
   ctx.stroke();
 
   for (const y of [156, 168, 181]) {
-    const g = ctx.createLinearGradient(-18, y, 18, y);
+    const g = ctx.createLinearGradient(-18 * shoulderScale, y, 18 * shoulderScale, y);
     g.addColorStop(0, "rgba(0,0,0,0)");
     g.addColorStop(0.5, withAlpha(tone.dark, 0.27));
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.strokeStyle = g;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(-17, y);
-    ctx.quadraticCurveTo(0, y + 2.5, 17, y);
+    ctx.moveTo(-17 * shoulderScale, y);
+    ctx.quadraticCurveTo(0, y + 2.5, 17 * shoulderScale, y);
     ctx.stroke();
   }
 
@@ -434,7 +507,7 @@ function drawBoxer(
   ctx.ellipse(25, 79, 3.4, 6.7, 0.08, 0, Math.PI * 2);
   ctx.fill();
 
-  drawHair(ctx, hairStyle);
+  drawHair(ctx, resolvedHairStyle, gender);
 
   // Headgear shell.
   const gearGrad = ctx.createLinearGradient(0, 40, 0, 120);
@@ -516,16 +589,16 @@ function drawBoxer(
   ctx.stroke();
 
   // Arms: orthodox guard with lead (left) hand raised and extended.
-  const leftShoulder: Point = { x: -34, y: 130 };
-  const leftElbow: Point = { x: -54, y: 120 };
-  const leftWrist: Point = { x: -69, y: 108 };
-  const rightShoulder: Point = { x: 34, y: 132 };
-  const rightElbow: Point = { x: 26, y: 122 };
-  const rightWrist: Point = { x: 22, y: 111 };
-  drawSegment(ctx, rightShoulder, rightElbow, 10.5, tone);
-  drawSegment(ctx, rightElbow, rightWrist, 9.2, tone);
-  drawSegment(ctx, leftShoulder, leftElbow, 11.4, tone);
-  drawSegment(ctx, leftElbow, leftWrist, 9.9, tone);
+  const leftShoulder: Point = { x: -34 * shoulderScale, y: 130 };
+  const leftElbow: Point = { x: -54 * shoulderScale, y: 120 };
+  const leftWrist: Point = { x: -69 * shoulderScale, y: 108 };
+  const rightShoulder: Point = { x: 34 * shoulderScale, y: 132 };
+  const rightElbow: Point = { x: 26 * shoulderScale, y: 122 };
+  const rightWrist: Point = { x: 22 * shoulderScale, y: 111 };
+  drawSegment(ctx, rightShoulder, rightElbow, 10.5 * armScale, tone);
+  drawSegment(ctx, rightElbow, rightWrist, 9.2 * armScale, tone);
+  drawSegment(ctx, leftShoulder, leftElbow, 11.4 * armScale, tone);
+  drawSegment(ctx, leftElbow, leftWrist, 9.9 * armScale, tone);
 
   const gloveShade = ctx.createRadialGradient(0, 0, 1, 0, 0, 24);
   gloveShade.addColorStop(0, trunksLight);
@@ -534,7 +607,7 @@ function drawBoxer(
 
   // Rear hand tucked near chin.
   ctx.save();
-  ctx.translate(30, 106);
+  ctx.translate(isFemale ? 26 : 30, 106);
   ctx.rotate(0.22);
   ctx.fillStyle = gloveShade;
   ctx.beginPath();
@@ -550,7 +623,7 @@ function drawBoxer(
 
   // Lead hand at chin height, slightly extended.
   ctx.save();
-  ctx.translate(-78, 102);
+  ctx.translate(isFemale ? -74 : -78, 102);
   ctx.rotate(-0.18);
   const leadGlove = ctx.createRadialGradient(-2, -3, 2, 0, 0, 26);
   leadGlove.addColorStop(0, trunksLight);
@@ -599,6 +672,7 @@ export default function Boxer2D({
   hairStyle,
   bodyType,
   name,
+  gender = "male",
   animate = true,
   width = 220,
   height = 340,
@@ -637,6 +711,7 @@ export default function Boxer2D({
         hairStyle,
         bodyType,
         name,
+        gender,
         bobOffset,
       });
 
@@ -656,7 +731,7 @@ export default function Boxer2D({
         window.cancelAnimationFrame(raf);
       }
     };
-  }, [animate, bodyType, hairStyle, height, name, skinTone, trunksColor, width]);
+  }, [animate, bodyType, gender, hairStyle, height, name, skinTone, trunksColor, width]);
 
   return (
     <canvas

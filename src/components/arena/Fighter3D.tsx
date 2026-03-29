@@ -11,7 +11,8 @@ const BoxerCanvas = dynamic(() => import("@/components/arena/BoxerCanvas"), { ss
 const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
 
 type Boxer2DSkinTone = "light" | "medium" | "tan" | "dark" | "deep";
-type Boxer2DHairStyle = "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long";
+type Boxer2DHairStyle = "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long" | "ponytail";
+type Boxer2DGender = "male" | "female";
 type Boxer2DBodyType = "lightweight" | "middleweight" | "heavyweight";
 
 function mapSkinTone(input: unknown): Boxer2DSkinTone {
@@ -29,7 +30,17 @@ function mapSkinTone(input: unknown): Boxer2DSkinTone {
 function mapHairStyle(input: unknown): Boxer2DHairStyle {
   if (typeof input !== "string") return "fade";
   const hair = input.toLowerCase();
-  if (hair === "bald" || hair === "fade" || hair === "dreads" || hair === "cornrows" || hair === "afro" || hair === "mohawk" || hair === "buzz" || hair === "long") {
+  if (
+    hair === "bald" ||
+    hair === "fade" ||
+    hair === "dreads" ||
+    hair === "cornrows" ||
+    hair === "afro" ||
+    hair === "mohawk" ||
+    hair === "buzz" ||
+    hair === "long" ||
+    hair === "ponytail"
+  ) {
     return hair;
   }
   if (hair === "short_fade") return "fade";
@@ -41,6 +52,10 @@ function mapHairStyle(input: unknown): Boxer2DHairStyle {
 function mapBodyType(input: unknown): Boxer2DBodyType {
   if (input === "lightweight" || input === "middleweight" || input === "heavyweight") return input;
   return "middleweight";
+}
+
+function mapGender(input: unknown): Boxer2DGender {
+  return input === "female" ? "female" : "male";
 }
 
 export type Fighter3DProps = {
@@ -57,6 +72,7 @@ export type Fighter3DProps = {
     skin_tone?: string | null;
     hair_style?: string | null;
     body_type?: string | null;
+    gender?: string | null;
   }) | null | undefined;
   /** Reserved for future clip-driven animation (dashboard uses idle). */
   animationState?: FightAnim | string;
@@ -100,6 +116,7 @@ export default function Fighter3D({
   const skinTone = mapSkinTone(fighter?.skin_tone);
   const hairStyle = mapHairStyle(fighter?.hair_style);
   const bodyType = mapBodyType(fighter?.body_type);
+  const gender = mapGender(fighter?.gender);
   const displayName = safeDisplayName(fighter?.name, "Boxer");
   const { width: canvasWidth, height: canvasHeight } = fallbackCanvasSize[size];
 
@@ -209,6 +226,7 @@ export default function Fighter3D({
             trunksColor={color}
             hairStyle={hairStyle}
             bodyType={bodyType}
+            gender={gender}
             name={displayName}
             animate
             width={canvasWidth}

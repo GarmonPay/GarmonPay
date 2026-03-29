@@ -30,7 +30,7 @@ const skinToneMap: Record<SkinTone, "light" | "medium" | "tan" | "dark" | "deep"
   tone5: "deep",
   tone6: "deep",
 };
-const hairStyleMap: Record<HairStyle, "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long"> = {
+const hairStyleMap: Record<HairStyle, "bald" | "fade" | "dreads" | "cornrows" | "afro" | "mohawk" | "buzz" | "long" | "ponytail"> = {
   bald: "bald",
   short_fade: "fade",
   dreads: "dreads",
@@ -39,6 +39,7 @@ const hairStyleMap: Record<HairStyle, "bald" | "fade" | "dreads" | "cornrows" | 
   mohawk: "mohawk",
   buzz_cut: "buzz",
   long_tied: "long",
+  ponytail: "ponytail",
 };
 const bodyTypeMap: Record<BodyType, "lightweight" | "middleweight" | "heavyweight"> = {
   lightweight: "lightweight",
