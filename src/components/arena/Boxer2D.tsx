@@ -645,9 +645,10 @@ export default function Boxer2D({
       }
     };
 
-    render(performance.now());
     if (animate) {
       raf = window.requestAnimationFrame(render);
+    } else {
+      render(performance.now());
     }
 
     return () => {
