@@ -24,7 +24,10 @@ export default function FighterShowcasePanel({ minHeight, children, label }: Fig
         aria-hidden
       />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_50%_100%,rgba(20,24,40,0.5),transparent_55%)]" aria-hidden />
-      <div className="relative z-10 flex h-full w-full min-h-0 flex-col items-center px-3 pb-3 pt-4">
+      <div
+        className="relative z-10 flex w-full flex-col items-center px-3 pb-3 pt-4"
+        style={{ minHeight }}
+      >
         {label ? (
           <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400/90">
             {label}

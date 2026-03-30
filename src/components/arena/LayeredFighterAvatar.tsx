@@ -57,8 +57,11 @@ export default function LayeredFighterAvatar({ config, size = "medium", classNam
   const shortsSrc = useReplacedSvgUrl(config.shortsUrl, { SHORTS_FILL: config.trunksColor });
   const glovesSrc = useReplacedSvgUrl(config.glovesUrl, { GLOVE_FILL: config.gloveColor });
 
+  /** Fixed 400:640 frame — object-fill keeps every layer pixel-aligned (contain/bottom was scaling layers differently). */
+  const stackH = Math.round(h);
+  const stackW = Math.round((stackH * 400) / 640);
   const layerClass =
-    "pointer-events-none absolute inset-0 h-full w-full select-none object-contain object-bottom";
+    "pointer-events-none absolute left-0 top-0 box-border h-full w-full select-none object-fill object-center";
 
   return (
     <div
@@ -66,28 +69,83 @@ export default function LayeredFighterAvatar({ config, size = "medium", classNam
       style={{
         position: "relative",
         width: "100%",
-        minHeight: h,
+        minHeight: stackH,
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
       }}
     >
       <div
-        className="relative max-w-full"
+        className="relative shrink-0 overflow-hidden"
         style={{
-          width: `${(h * 400) / 640}px`,
-          aspectRatio: "400 / 640",
+          width: stackW,
+          height: stackH,
           transform: `scale(${config.bodyScale})`,
           transformOrigin: "50% 100%",
         }}
       >
-        {bodySrc ? <img src={bodySrc} alt="" className={layerClass} draggable={false} /> : null}
-        {shortsSrc ? <img src={shortsSrc} alt="" className={layerClass} draggable={false} /> : null}
-        <img src={config.shoesUrl} alt="" className={layerClass} draggable={false} />
-        {glovesSrc ? <img src={glovesSrc} alt="" className={layerClass} draggable={false} /> : null}
-        <img src={config.faceUrl} alt="" className={layerClass} draggable={false} />
-        <img src={config.hairUrl} alt="" className={layerClass} draggable={false} />
-        <img src={config.accessoryUrl} alt="" className={layerClass} draggable={false} />
+        {bodySrc ? (
+          <img
+            src={bodySrc}
+            alt=""
+            width={400}
+            height={640}
+            className={layerClass}
+            draggable={false}
+          />
+        ) : null}
+        {shortsSrc ? (
+          <img
+            src={shortsSrc}
+            alt=""
+            width={400}
+            height={640}
+            className={layerClass}
+            draggable={false}
+          />
+        ) : null}
+        <img
+          src={config.shoesUrl}
+          alt=""
+          width={400}
+          height={640}
+          className={layerClass}
+          draggable={false}
+        />
+        {glovesSrc ? (
+          <img
+            src={glovesSrc}
+            alt=""
+            width={400}
+            height={640}
+            className={layerClass}
+            draggable={false}
+          />
+        ) : null}
+        <img
+          src={config.faceUrl}
+          alt=""
+          width={400}
+          height={640}
+          className={layerClass}
+          draggable={false}
+        />
+        <img
+          src={config.hairUrl}
+          alt=""
+          width={400}
+          height={640}
+          className={layerClass}
+          draggable={false}
+        />
+        <img
+          src={config.accessoryUrl}
+          alt=""
+          width={400}
+          height={640}
+          className={layerClass}
+          draggable={false}
+        />
       </div>
     </div>
   );
