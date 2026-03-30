@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
@@ -19,13 +19,10 @@ import {
 } from "@/lib/arena-fighter-types";
 import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 
-const BoxerDisplay = dynamic(
-  () => import("@/components/arena/BoxerDisplay"),
-  {
-    ssr: false,
-    loading: () => <Arena3dDynamicFallback />,
-  }
-);
+const BoxerDisplay = dynamic(() => import("@/components/arena/BoxerDisplay"), {
+  ssr: false,
+  loading: () => <Arena3dDynamicFallback />,
+});
 
 const styleList = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const avatarList = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
@@ -37,6 +34,34 @@ function isHtmlResponse(str: string): boolean {
 
 function randomChoice<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function PillButton({
+  active,
+  children,
+  onClick,
+  className = "",
+}: {
+  active: boolean;
+  children: ReactNode;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-200",
+        active
+          ? "bg-gradient-to-r from-amber-400 to-amber-500 text-black shadow-[0_0_20px_rgba(240,165,0,0.25)] ring-2 ring-amber-300/60"
+          : "border border-white/10 bg-white/[0.04] text-slate-200 hover:border-amber-400/25 hover:bg-white/[0.07]",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function CreateFighterManualPage() {
@@ -95,9 +120,7 @@ export default function CreateFighterManualPage() {
         return;
       }
       const apiUrl =
-        typeof window !== "undefined"
-          ? "/api/arena/fighters"
-          : `${getApiRoot()}/arena/fighters`;
+        typeof window !== "undefined" ? "/api/arena/fighters" : `${getApiRoot()}/arena/fighters`;
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -148,175 +171,180 @@ export default function CreateFighterManualPage() {
     }
   }
 
+  const panelClass =
+    "rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md";
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="rounded-xl bg-[#161b22] border border-white/10 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-white">Build your fighter</h1>
-          <Link href="/dashboard/arena/create" className="text-[#f0a500] hover:underline">Back to choices</Link>
-        </div>
-        <p className="text-[#9ca3af] text-sm mb-6">Customize every detail, then name them and enter the Arena. Always free.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            <p className="text-[#f0a500] font-medium">STEP 1 — Body type</p>
-            <div className="flex flex-wrap gap-2">
-              {bodyTypeOptions.map((b) => (
-                <button
-                  key={b.value}
-                  type="button"
-                  onClick={() => setBodyType(b.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    bodyType === b.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[#f0a500] font-medium pt-2">STEP 2 — Skin tone</p>
-            <div className="flex flex-wrap gap-2">
-              {skinToneOptions.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setSkinTone(t.value)}
-                  className={`w-10 h-10 rounded-full border-2 transition ${
-                    skinTone === t.value ? "border-[#f0a500] scale-110" : "border-white/20 hover:border-white/40"
-                  }`}
-                  style={{ backgroundColor: t.hex }}
-                  title={t.label}
-                />
-              ))}
-            </div>
-
-            <p className="text-[#f0a500] font-medium pt-2">STEP 3 — Face</p>
-            <div className="flex flex-wrap gap-2">
-              {faceStyleOptions.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFaceStyle(f.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    faceStyle === f.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[#f0a500] font-medium pt-2">STEP 4 — Hair</p>
-            <div className="flex flex-wrap gap-2">
-              {hairStyleOptions.map((h) => (
-                <button
-                  key={h.value}
-                  type="button"
-                  onClick={() => setHairStyle(h.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    hairStyle === h.value ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleRandomize}
-              className="mt-2 px-4 py-2 rounded-lg border border-white/20 text-white text-sm font-medium hover:bg-white/5"
-            >
-              Randomize
-            </button>
-          </div>
-
-          <div className="flex flex-col items-center justify-center bg-[#0d1117] rounded-lg border border-white/10 p-4 w-full min-w-0">
-            <p className="text-[#9ca3af] text-sm mb-2">Live preview</p>
-            <div className="w-full max-w-md">
-              <BoxerDisplay
-                fighter={{
-                  ...previewFighter,
-                  fighter_color: selectedColor || "#f0a500",
-                }}
-                size="medium"
-              />
-            </div>
-            <p className="mt-2 text-center text-xs text-[#6b7280]">{style}</p>
-            <label className="mt-3 flex items-center gap-2 text-sm text-[#9ca3af]">
-              Trunks color
-              <input
-                type="color"
-                value={selectedColor}
-                onChange={(e) => setSelectedColor(e.target.value)}
-                className="h-8 w-14 cursor-pointer rounded border border-white/20 bg-transparent"
-                disabled={loading}
-              />
-            </label>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 border-t border-white/10 pt-6">
-          <p className="text-[#9ca3af] font-medium">Name, style & avatar</p>
+    <div className="mx-auto max-w-6xl px-4 pb-10 pt-2">
+      <div className={panelClass}>
+        <div className="mb-6 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">Fighter name</label>
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Build your fighter</h1>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-400">
+              Layered ring-ready look. Tune body, skin, face, and hair — preview updates live.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/arena/create"
+            className="shrink-0 text-sm font-semibold text-amber-400 transition hover:text-amber-300"
+          >
+            ← Back to choices
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_minmax(300px,400px)] lg:items-start">
+          <div className="space-y-6">
+            <section className={panelClass}>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400/90">Body</p>
+              <p className="mt-1 text-lg font-semibold text-white">Body type</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {bodyTypeOptions.map((b) => (
+                  <PillButton key={b.value} active={bodyType === b.value} onClick={() => setBodyType(b.value)}>
+                    {b.label}
+                  </PillButton>
+                ))}
+              </div>
+
+              <p className="mt-6 text-lg font-semibold text-white">Skin tone</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {skinToneOptions.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    title={t.label}
+                    onClick={() => setSkinTone(t.value)}
+                    className={[
+                      "h-11 w-11 rounded-full border-2 shadow-md transition-all",
+                      skinTone === t.value
+                        ? "scale-110 border-amber-400 ring-2 ring-amber-400/50"
+                        : "border-white/15 hover:border-white/35",
+                    ].join(" ")}
+                    style={{ backgroundColor: t.hex }}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className={panelClass}>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400/90">Expression</p>
+              <p className="mt-1 text-lg font-semibold text-white">Face</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {faceStyleOptions.map((f) => (
+                  <PillButton key={f.value} active={faceStyle === f.value} onClick={() => setFaceStyle(f.value)}>
+                    {f.label}
+                  </PillButton>
+                ))}
+              </div>
+
+              <p className="mt-6 text-lg font-semibold text-white">Hair</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {hairStyleOptions.map((h) => (
+                  <PillButton key={h.value} active={hairStyle === h.value} onClick={() => setHairStyle(h.value)}>
+                    {h.label}
+                  </PillButton>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRandomize}
+                className="mt-5 w-full rounded-xl border border-white/15 bg-white/[0.04] py-2.5 text-sm font-semibold text-slate-200 transition hover:border-amber-400/30 hover:bg-white/[0.07]"
+              >
+                Randomize look
+              </button>
+            </section>
+          </div>
+
+          <div className="lg:sticky lg:top-6">
+            <div className={panelClass + " !p-0 overflow-hidden"}>
+              <div className="border-b border-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-center text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Live showcase
+                </p>
+                <p className="mt-0.5 text-center text-sm font-medium text-slate-300">Ring preview</p>
+              </div>
+              <div className="p-3 sm:p-4">
+                <BoxerDisplay
+                  fighter={{
+                    ...previewFighter,
+                    fighter_color: selectedColor || "#f0a500",
+                  }}
+                  size="medium"
+                  showcase
+                />
+                <p className="mt-3 text-center text-sm font-medium text-slate-400">{style}</p>
+                <label className="mt-4 flex items-center justify-center gap-3 text-sm text-slate-400">
+                  <span className="font-medium text-slate-300">Trunks &amp; gloves</span>
+                  <input
+                    type="color"
+                    value={selectedColor}
+                    onChange={(e) => setSelectedColor(e.target.value)}
+                    className="h-10 w-16 cursor-pointer rounded-lg border border-white/15 bg-transparent p-0.5 shadow-inner"
+                    disabled={loading}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className={panelClass + " mt-8 space-y-5"}>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400/90">Finalize</p>
+          <p className="-mt-2 text-lg font-semibold text-white">Name, style &amp; icon</p>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-400">Fighter name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Iron Mike"
-              className="w-full px-4 py-2.5 rounded-lg bg-[#0d1117] border border-white/10 text-white placeholder-[#6b7280]"
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-slate-500 outline-none ring-amber-400/0 transition focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
               maxLength={50}
               disabled={loading}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-2">Style</label>
+            <label className="mb-2 block text-sm font-medium text-slate-400">Style</label>
             <div className="flex flex-wrap gap-2">
               {styleList.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStyle(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    style === s ? "bg-[#f0a500] text-black" : "bg-[#0d1117] border border-white/10 text-white hover:bg-white/5"
-                  }`}
-                >
+                <PillButton key={s} active={style === s} onClick={() => setStyle(s)}>
                   {s}
-                </button>
+                </PillButton>
               ))}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-2">Avatar</label>
+            <label className="mb-2 block text-sm font-medium text-slate-400">Arena icon</label>
             <div className="flex flex-wrap gap-2">
               {avatarList.map((a) => (
                 <button
                   key={a}
                   type="button"
                   onClick={() => setAvatar(a)}
-                  className={`text-2xl w-12 h-12 rounded-lg border transition ${
-                    avatar === a ? "border-[#f0a500] bg-[#f0a500]/20" : "border-white/10 hover:bg-white/5"
-                  }`}
+                  className={[
+                    "flex h-12 w-12 items-center justify-center rounded-xl border text-2xl transition-all",
+                    avatar === a
+                      ? "border-amber-400 bg-amber-400/15 shadow-[0_0_16px_rgba(240,165,0,0.2)]"
+                      : "border-white/10 bg-white/[0.03] hover:border-white/20",
+                  ].join(" ")}
                 >
                   {a}
                 </button>
               ))}
             </div>
           </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <div className="flex gap-3 pt-2">
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 rounded-lg bg-[#f0a500] text-black font-bold hover:bg-[#e09500] disabled:opacity-70"
+              className="flex-1 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 py-3.5 text-base font-bold text-black shadow-[0_4px_24px_rgba(240,165,0,0.25)] transition hover:brightness-105 disabled:opacity-60"
             >
-              {loading ? "Creating…" : "Confirm Fighter"}
+              {loading ? "Creating…" : "Confirm fighter"}
             </button>
             <Link
               href="/dashboard/arena/create"
-              className="px-4 py-3 rounded-lg border border-white/20 text-white font-medium hover:bg-white/5"
+              className="rounded-xl border border-white/15 px-5 py-3.5 text-center text-sm font-semibold text-slate-200 transition hover:bg-white/[0.05]"
             >
               Back
             </Link>

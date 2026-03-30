@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 640" fill="none">
+  <defs>
+    <linearGradient id="skinBody" x1="160" y1="60" x2="260" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="SKIN_LIGHT"/>
+      <stop offset="1" stop-color="SKIN_DARK"/>
+    </linearGradient>
+    <radialGradient id="rim" cx="45%" cy="35%" r="55%">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g stroke="#141018" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round">
+    <path fill="url(#skinBody)" d="M232 292c16-8 32-6 44 8l36 58c14 24 14 54 0 78l-34 72c-10 22-8 48 6 68l40 78 8 24c6 18-2 38-20 46l-8 4c-20 8-42-2-50-24l-12-40-14-118c-4-30 0-60 12-88l22-54c8-20 4-42-10-58l-20-26c-10-12-8-30 6-40z"/>
+    <path fill="url(#skinBody)" d="M168 294c-14-10-32-8-44 6l-32 56c-12 22-10 50 4 72l38 68c14 24 18 54 8 80l-28 90-10 50c-4 20 8 40 28 46l10 2c22 4 40-10 44-32l6-48 20-152c2-28-4-56-18-80l-24-40c-12-20-10-44 6-60l16-16c12-12 10-32-4-42z"/>
+    <path fill="url(#skinBody)" d="M178 112c-6 22 0 46 14 66l56 84c16 24 46 32 72 18 10-6 18-16 22-28l34-88c8-22 6-46-6-66-18-32-54-48-88-38-42 12-70 48-64 92"/>
+    <path fill="url(#skinBody)" d="M200 32c-26 0-48 18-52 44-4 26 10 52 34 62 8 4 18 6 28 4 26-4 44-28 44-54 0-32-26-56-54-56"/>
+    <path fill="url(#skinBody)" d="M192 124l-12 24c-8 32-32 56-60 72l-8 4c-18 10-24 34-14 52l36 58c10 16 30 20 46 10l6-4c14-10 18-30 8-44l-38-58c-6-10-4-24 6-32l24-18c20-14 28-40 22-64-2-12-10-22-20-30-8-6-20-4-28 4l16 32z"/>
+    <path fill="url(#skinBody)" d="M214 120l10 20c12 28 36 48 66 56l10 2c20 6 30 28 22 48l-24 52c-8 18-28 24-44 14l-6-4c-14-10-16-28-8-42l22-44c6-12 4-26-6-34l-18-14c-18-12-24-36-16-56 4-10 12-18 22-22 10-4 20 2 24 12l-8 36z"/>
+  </g>
+  <ellipse cx="200" cy="200" rx="120" ry="180" fill="url(#rim)" pointer-events="none" opacity="0.35"/>
+</svg>

@@ -6,10 +6,11 @@ import { getFighterModelUrl } from "@/lib/meshy-assets";
 import { isArenaDebugEnabled } from "@/lib/arena-debug";
 import { safeFighterColor } from "@/lib/arena-safe-fighter";
 import type { FightAnim } from "@/components/arena/meshy/ProceduralFallbackBoxer";
-import { fighterRecordToBoxer2DProps } from "@/lib/arena-boxer2d-map";
+import { fighterRecordToLayeredAvatarConfig } from "@/lib/fighter-layered-avatar-map";
 
 const BoxerCanvas = dynamic(() => import("@/components/arena/BoxerCanvas"), { ssr: false });
-const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
+const LayeredFighterAvatar = dynamic(() => import("@/components/arena/LayeredFighterAvatar"), { ssr: false });
+const FighterShowcasePanel = dynamic(() => import("@/components/arena/FighterShowcasePanel"), { ssr: false });
 
 export type Fighter3DProps = {
   /** Raw fighter row / API object — reads `model_3d_url`, `model_url`, `glb_url`, `meshy_glb_url`. */
@@ -33,6 +34,8 @@ export type Fighter3DProps = {
   size?: "small" | "medium" | "large";
   /** Optional accent for rim light (hex). */
   fighterColor?: string;
+  /** Premium backdrop + glow for 2D layered fallback (e.g. manual builder). */
+  showcase?: boolean;
 };
 
 const heights = { small: 220, medium: 380, large: 560 };
@@ -52,6 +55,7 @@ export default function Fighter3D({
   facingRight,
   size = "medium",
   fighterColor,
+  showcase = false,
 }: Fighter3DProps) {
   void _animationState;
 
@@ -148,6 +152,13 @@ export default function Fighter3D({
       )}
       {url ? (
         <BoxerCanvas modelUrl={url} facingRight={faceRight} fighterColor={color} size={size} />
+      ) : showcase ? (
+        <FighterShowcasePanel minHeight={h}>
+          <LayeredFighterAvatar
+            config={fighterRecordToLayeredAvatarConfig(fighter as Record<string, unknown>, color)}
+            size={size}
+          />
+        </FighterShowcasePanel>
       ) : (
         <div
           style={{
@@ -156,9 +167,14 @@ export default function Fighter3D({
             justifyContent: "center",
             width: "100%",
             minHeight: h,
+            background: "linear-gradient(180deg,#0c0e14 0%,#07080c 100%)",
+            borderRadius: 8,
           }}
         >
-          <Boxer2D {...fighterRecordToBoxer2DProps(fighter as Record<string, unknown>, color, size)} />
+          <LayeredFighterAvatar
+            config={fighterRecordToLayeredAvatarConfig(fighter as Record<string, unknown>, color)}
+            size={size}
+          />
         </div>
       )}
     </div>

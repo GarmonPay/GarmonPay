@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 640" fill="none">
+  <defs>
+    <linearGradient id="gSh" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#1a1420" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">
+    <path fill="GLOVE_FILL" d="M84 286c6-14 22-22 38-18 12 4 20 14 22 28l4 38c2 16-6 32-22 40-8 4-18 4-26 0-14-8-20-24-18-40l4-42c2-8 6-14 12-18l-14 12z"/>
+    <path fill="url(#gSh)" d="M84 286c6-14 22-22 38-18 12 4 20 14 22 28l4 38c2 16-6 32-22 40-8 4-18 4-26 0-14-8-20-24-18-40l4-42c2-8 6-14 12-18l-14 12z" opacity="0.85"/>
+    <path fill="GLOVE_FILL" d="M268 274c12-10 30-10 42 2 10 10 14 26 10 40l-10 36c-4 14-16 24-30 26-10 2-20-2-28-10-12-12-14-30-8-46l12-34c4-12 14-20 26-22l-14 8z"/>
+    <path fill="url(#gSh)" d="M268 274c12-10 30-10 42 2 10 10 14 26 10 40l-10 36c-4 14-16 24-30 26-10 2-20-2-28-10-12-12-14-30-8-46l12-34c4-12 14-20 26-22l-14 8z" opacity="0.85"/>
+  </g>
+</svg>

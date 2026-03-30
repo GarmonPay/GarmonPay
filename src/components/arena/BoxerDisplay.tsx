@@ -61,9 +61,16 @@ interface BoxerDisplayProps {
   } | null;
   facingRight?: boolean;
   size?: "small" | "medium" | "large";
+  /** When true, 2D layered fallback uses premium showcase panel (no effect for GLB). */
+  showcase?: boolean;
 }
 
-export default function BoxerDisplay({ fighter, facingRight = false, size = "medium" }: BoxerDisplayProps) {
+export default function BoxerDisplay({
+  fighter,
+  facingRight = false,
+  size = "medium",
+  showcase = false,
+}: BoxerDisplayProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -115,7 +122,7 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
   if (isArenaDebugEnabled()) {
     console.log(
       "RENDER PATH:",
-      getFighterModelUrl(fighter as Record<string, unknown>) ? "Fighter3D (GLB)" : "Fighter3D (Boxer2D canvas)"
+      getFighterModelUrl(fighter as Record<string, unknown>) ? "Fighter3D (GLB)" : "Fighter3D (layered 2D)"
     );
   }
 
@@ -126,6 +133,7 @@ export default function BoxerDisplay({ fighter, facingRight = false, size = "med
       facingRight={facingRight}
       size={size}
       fighterColor={color}
+      showcase={showcase}
     />
   );
 }

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 640" fill="none">
+  <defs>
+    <linearGradient id="trStripe" x1="170" y1="318" x2="230" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#0c0a10" stroke-width="2.4" stroke-linejoin="round">
+    <path fill="SHORTS_FILL" d="M146 312c12-6 108-6 120 0 8 4 12 12 14 22l16 68c2 10-4 20-14 24l-6 2c-10 4-22 0-28-10l-8-24-4-32h-20l-6 36c-4 14-18 22-32 18l-8-2c-10-4-16-14-14-26l14-74c2-10 8-18 16-22z"/>
+    <path fill="url(#trStripe)" d="M146 312c12-6 108-6 120 0 8 4 12 12 14 22l4 20-148 6-8-26c2-10 8-18 16-22z" opacity="0.9"/>
+    <path fill="none" stroke-opacity="0.45" stroke-width="1.2" d="M162 338h84"/>
+  </g>
+</svg>
