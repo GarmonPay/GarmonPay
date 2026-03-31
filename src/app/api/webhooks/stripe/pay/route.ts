@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 /**
  * POST /api/stripe/pay
@@ -27,8 +28,14 @@ export async function POST(request: Request) {
   }
 
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : 0;
-  if (amountCents < 50) {
-    return NextResponse.json({ message: "Minimum amount is $0.50" }, { status: 400 });
+  if (amountCents < MIN_WALLET_FUND_CENTS) {
+    return NextResponse.json({ message: "Minimum amount is $5.00" }, { status: 400 });
+  }
+  if (amountCents > MAX_PAYMENT_CENTS) {
+    return NextResponse.json(
+      { message: `Maximum single payment is $${(MAX_PAYMENT_CENTS / 100).toFixed(2)}` },
+      { status: 400 }
+    );
   }
 
   const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "One-time payment";

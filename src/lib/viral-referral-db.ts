@@ -1,12 +1,9 @@
 /**
- * Viral referral system: viral_referrals, referral_rewards, gamification_rewards.
- * Double reward: $5 signup (friend), $10 first deposit (referrer). Commission by tier.
+ * Viral referral system: viral_referrals, referral_rewards (tracking).
+ * Wallet credits from signup / deposit bonuses are disabled; membership upgrade commissions use Stripe-backed flows.
  */
 
 import { createAdminClient } from "@/lib/supabase";
-
-const SIGNUP_BONUS_CENTS = 500; // $5 for referred user
-const DEPOSIT_BONUS_CENTS = 1000; // $10 for referrer when friend first deposits
 
 function supabase() {
   const c = createAdminClient();
@@ -25,12 +22,11 @@ export interface ViralReferralRow {
   created_at: string;
 }
 
-/** Create viral_referral row and optionally grant $5 signup bonus to referred user. Idempotent by referred_user_id. */
+/** Create viral_referral row. Idempotent by referred_user_id. No wallet grants. */
 export async function createReferral(params: {
   referrerUserId: string;
   referredUserId: string;
   referralCode: string;
-  grantSignupBonus?: boolean;
   referrerIp?: string | null;
   referredIp?: string | null;
   deviceFingerprint?: string | null;
@@ -71,92 +67,10 @@ export async function createReferral(params: {
     }
 
     const referralId = (inserted as { id: string })?.id;
-    if (params.grantSignupBonus && referralId) {
-      await grantSignupBonus(params.referredUserId, referralId);
-      await grantReferrerGamification(params.referrerUserId, referralId);
-    }
     return { success: true, referralId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Create referral failed";
     return { success: false, message: msg };
-  }
-}
-
-/** Grant $5 signup bonus to referred user and record in referral_rewards. */
-export async function grantSignupBonus(referredUserId: string, referralId: string): Promise<boolean> {
-  try {
-    const { error: rewardErr } = await supabase().from("referral_rewards").insert({
-      user_id: referredUserId,
-      reward_type: "signup_bonus",
-      amount: SIGNUP_BONUS_CENTS / 100,
-      referral_id: referralId,
-    });
-    if (rewardErr) return false;
-
-    const { error: ledgerErr } = await supabase().rpc("wallet_ledger_entry", {
-      p_user_id: referredUserId,
-      p_type: "referral_bonus",
-      p_amount_cents: SIGNUP_BONUS_CENTS,
-      p_reference: `signup_bonus_${referralId}`,
-    });
-    if (ledgerErr) {
-      const { data: row } = await supabase().from("users").select("balance").eq("id", referredUserId).single();
-      const cur = Number((row as { balance?: number })?.balance ?? 0);
-      await supabase().from("users").update({ balance: cur + SIGNUP_BONUS_CENTS, updated_at: new Date().toISOString() }).eq("id", referredUserId);
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Grant $10 deposit bonus to referrer when referred user makes first deposit. */
-export async function grantDepositBonus(referredUserId: string): Promise<{ granted: boolean; referrerId?: string }> {
-  try {
-    const { data: ref } = await supabase()
-      .from("viral_referrals")
-      .select("id, referrer_user_id, status")
-      .eq("referred_user_id", referredUserId)
-      .in("status", ["joined"])
-      .maybeSingle();
-    if (!ref) return { granted: false };
-    const row = ref as { id: string; referrer_user_id: string };
-    const { error: rewardErr } = await supabase().from("referral_rewards").insert({
-      user_id: row.referrer_user_id,
-      reward_type: "deposit_bonus",
-      amount: DEPOSIT_BONUS_CENTS / 100,
-      referral_id: row.id,
-    });
-    if (rewardErr) return { granted: false };
-
-    const { error: ledgerErr } = await supabase().rpc("wallet_ledger_entry", {
-      p_user_id: row.referrer_user_id,
-      p_type: "referral_bonus",
-      p_amount_cents: DEPOSIT_BONUS_CENTS,
-      p_reference: `deposit_bonus_${row.id}`,
-    });
-    if (ledgerErr) {
-      const { data: u } = await supabase().from("users").select("balance").eq("id", row.referrer_user_id).single();
-      const cur = Number((u as { balance?: number })?.balance ?? 0);
-      await supabase().from("users").update({ balance: cur + DEPOSIT_BONUS_CENTS, updated_at: new Date().toISOString() }).eq("id", row.referrer_user_id);
-    }
-
-    await supabase().from("viral_referrals").update({ status: "deposited" }).eq("id", row.id);
-    return { granted: true, referrerId: row.referrer_user_id };
-  } catch {
-    return { granted: false };
-  }
-}
-
-/** Grant 1 free spin + 1 free pinball to referrer for a successful referral. */
-async function grantReferrerGamification(referrerUserId: string, referralId: string): Promise<void> {
-  try {
-    await supabase().from("gamification_rewards").insert([
-      { user_id: referrerUserId, reward_type: "free_spin", source: "referral", referral_id: referralId },
-      { user_id: referrerUserId, reward_type: "free_pinball", source: "referral", referral_id: referralId },
-    ]);
-  } catch {
-    // optional
   }
 }
 

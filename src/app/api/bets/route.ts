@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger";
 
 /** POST /api/bets — place a bet on a fight (body: { fight_id, amount_cents, prediction: 'host' | 'opponent' }). */
 export async function POST(req: Request) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger";
 import { createAdminClient } from "@/lib/supabase";
 import {
   ensurePlayerStatusRow,
@@ -91,6 +91,10 @@ export async function POST(request: Request) {
         { error: `Stake must be between ${minS} and ${maxS} cents` },
         { status: 400 }
       );
+    }
+    const balance = await getCanonicalBalanceCents(userId);
+    if (balance < stakeCents) {
+      return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
     }
     const ref = `escape_stake_${userId}_${Date.now()}`;
     const debit = await walletLedgerEntry(userId, "game_play", -stakeCents, ref);

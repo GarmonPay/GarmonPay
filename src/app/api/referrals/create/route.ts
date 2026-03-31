@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase";
 
 /**
  * POST /api/referrals/create
- * Create viral_referral row (referrer, referred, code). Optionally grant $5 signup bonus to referred user.
- * Body: { referredUserId, referralCode, grantSignupBonus?, deviceFingerprint? }
+ * Create viral_referral row (referrer, referred, code). No wallet credits.
+ * Body: { referredUserId, referralCode, deviceFingerprint? }
  */
 export async function POST(request: Request) {
   try {
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    let body: { referredUserId?: string; referralCode?: string; grantSignupBonus?: boolean; deviceFingerprint?: string };
+    let body: { referredUserId?: string; referralCode?: string; deviceFingerprint?: string };
     try {
       body = await request.json();
     } catch {
@@ -43,7 +43,6 @@ export async function POST(request: Request) {
       referrerUserId: userId,
       referredUserId,
       referralCode: code,
-      grantSignupBonus: !!body.grantSignupBonus,
       referredIp: request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null,
       deviceFingerprint: body.deviceFingerprint ?? null,
     });

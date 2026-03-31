@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { isAdmin } from "@/lib/admin-auth";
+import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import Stripe from "stripe";
 
 /**
@@ -120,6 +121,16 @@ export async function POST(request: Request) {
 
     if (!userId) continue;
 
+    const ledgerRef = `stripe_session_${sessionId}`;
+    const ledger = await walletLedgerEntry(userId, "deposit", amountTotal, ledgerRef);
+    if (!ledger.success) {
+      if (ledger.message === "Duplicate transaction") {
+        continue;
+      }
+      console.error("[recover-stripe-payments] walletLedgerEntry:", ledger.message);
+      continue;
+    }
+
     const amountDollars = amountTotal / 100;
     const currency = (session.currency ?? "usd").toLowerCase();
     const metadata = {
@@ -210,14 +221,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // 5) users.balance and users.total_deposits
-    const { data: u } = await supabase.from("users").select("balance, total_deposits").eq("id", userId).maybeSingle();
-    const cur = (u as { balance?: number; total_deposits?: number }) ?? {};
+    const { data: u } = await supabase.from("users").select("total_deposits").eq("id", userId).maybeSingle();
+    const prevDep = Number((u as { total_deposits?: number } | null)?.total_deposits ?? 0);
     await supabase
       .from("users")
       .update({
-        balance: Number(cur.balance ?? 0) + amountTotal,
-        total_deposits: Number(cur.total_deposits ?? 0) + amountTotal,
+        total_deposits: prevDep + amountTotal,
         updated_at: new Date().toISOString(),
       })
       .eq("id", userId);

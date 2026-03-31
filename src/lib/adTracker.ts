@@ -10,8 +10,6 @@ export const MIN_BANNER_DWELL_MS = 800;
 export type MembershipPlan = "free" | "starter" | "growth" | "pro" | "elite";
 export type UpgradePlan = "starter" | "growth" | "pro" | "elite";
 
-export const REFERRAL_JOIN_BONUS_CENTS = 50;
-
 export const REFERRAL_UPGRADE_PRICE_CENTS: Record<UpgradePlan, number> = {
   starter: 999,
   growth: 2499,

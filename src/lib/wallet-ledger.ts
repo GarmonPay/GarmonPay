@@ -33,6 +33,32 @@ export interface LedgerEntryError {
   message: string;
 }
 
+function stripePaymentIdFromReference(reference: string | null | undefined): string | null {
+  if (!reference) return null;
+  if (reference.startsWith("stripe_pi_")) return reference.slice("stripe_pi_".length);
+  if (reference.startsWith("stripe_session_")) return reference.slice("stripe_session_".length);
+  return null;
+}
+
+async function appendBalanceAuditLog(params: {
+  userId: string;
+  amountCents: number;
+  reason: string;
+  reference: string | null | undefined;
+  ledgerId: string;
+}): Promise<void> {
+  const stripe_payment_id = stripePaymentIdFromReference(params.reference);
+  const { error } = await supabase().from("balance_audit_log").insert({
+    user_id: params.userId,
+    amount_cents: params.amountCents,
+    reason: params.reason,
+    stripe_payment_id,
+    reference: params.reference ?? null,
+    ledger_id: params.ledgerId,
+  });
+  if (error) console.error("[balance_audit_log] insert failed:", error.message);
+}
+
 /** Atomic ledger entry: insert row + update balance. amount_cents: positive = credit, negative = debit. */
 export async function walletLedgerEntry(
   userId: string,
@@ -49,6 +75,13 @@ export async function walletLedgerEntry(
   if (error) return { success: false, message: error.message };
   const r = data as { success?: boolean; message?: string; balance_cents?: number; ledger_id?: string };
   if (r.success && typeof r.balance_cents === "number" && r.ledger_id) {
+    await appendBalanceAuditLog({
+      userId,
+      amountCents,
+      reason: type,
+      reference,
+      ledgerId: r.ledger_id,
+    });
     return { success: true, balance_cents: r.balance_cents, ledger_id: r.ledger_id };
   }
   return { success: false, message: (r as { message?: string }).message ?? "Ledger entry failed" };

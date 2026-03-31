@@ -6,7 +6,6 @@
 import { createAdminClient } from "@/lib/supabase";
 
 const DAILY_REWARD_CENTS = 25;
-const REFERRAL_BONUS_CENTS = 50;
 
 function supabase() {
   const client = createAdminClient();
@@ -104,17 +103,13 @@ export async function canClaimDaily(userId: string): Promise<boolean> {
   return last < today;
 }
 
-/** Grant referral bonus for a referred user (idempotent, one per referred user). */
-export async function grantReferralBonusForUser(referredUserId: string): Promise<
-  { success: boolean; message?: string; referrerId?: string }
-> {
-  const { data, error } = await supabase().rpc("grant_referral_bonus_for_user", {
-    p_referred_user_id: referredUserId,
-    p_bonus_cents: REFERRAL_BONUS_CENTS,
-  });
-  if (error) return { success: false, message: error.message };
-  const r = data as { success: boolean; message?: string; referrer_id?: string };
-  return { success: r.success, message: r.message, referrerId: r.referrer_id };
+/** Referral signup bonuses disabled — balances only increase via Stripe-verified deposits and server game/ad flows. */
+export async function grantReferralBonusForUser(_referredUserId: string): Promise<{
+  success: boolean;
+  message?: string;
+  referrerId?: string;
+}> {
+  return { success: false, message: "referral_signup_bonus_disabled" };
 }
 
 /** Recent platform activities for feed. */

@@ -22,10 +22,6 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [addFundsUser, setAddFundsUser] = useState<UserRow | null>(null);
-  const [addFundsAmount, setAddFundsAmount] = useState("");
-  const [addFundsSubmitting, setAddFundsSubmitting] = useState(false);
-  const [addFundsError, setAddFundsError] = useState("");
   const [banSubmitting, setBanSubmitting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -59,34 +55,6 @@ export default function AdminUsersPage() {
       setUsers([]);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function submitAddFunds() {
-    if (!addFundsUser || !session) return;
-    const amount = parseFloat(addFundsAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setAddFundsError("Enter a valid amount (e.g. 10.00)");
-      return;
-    }
-    setAddFundsError("");
-    setAddFundsSubmitting(true);
-    try {
-      const res = await fetch("/api/admin/add-funds", {
-        method: "POST",
-        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: addFundsUser.id, amount }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAddFundsError(data.message || "Failed to add funds");
-        return;
-      }
-      setAddFundsUser(null);
-      setAddFundsAmount("");
-      load();
-    } finally {
-      setAddFundsSubmitting(false);
     }
   }
 
@@ -185,13 +153,6 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
-                          <button
-                            type="button"
-                            onClick={() => { setAddFundsUser(u); setAddFundsAmount(""); setAddFundsError(""); }}
-                            className={`${ACTION_BTN} bg-indigo-600 hover:bg-indigo-500 text-white`}
-                          >
-                            Add funds
-                          </button>
                           {u.banned ? (
                             <button
                               type="button"
@@ -227,43 +188,6 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      {addFundsUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => !addFundsSubmitting && setAddFundsUser(null)}>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-1">Add funds</h3>
-            <p className="text-sm text-[#9ca3af] mb-4 truncate">{addFundsUser.email ?? addFundsUser.id}</p>
-            <label className="block text-sm text-[#9ca3af] mb-1">Amount (USD)</label>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="e.g. 10.00"
-              value={addFundsAmount}
-              onChange={(e) => setAddFundsAmount(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] mb-4"
-            />
-            {addFundsError && <p className="text-sm text-red-400 mb-4">{addFundsError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={submitAddFunds}
-                disabled={addFundsSubmitting}
-                className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium"
-              >
-                {addFundsSubmitting ? "Adding…" : "Add"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddFundsUser(null)}
-                disabled={addFundsSubmitting}
-                className="px-4 py-2 rounded-lg border border-white/20 text-[#9ca3af] hover:bg-white/5"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

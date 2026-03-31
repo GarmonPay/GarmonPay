@@ -18,6 +18,7 @@ import {
 import { SupabaseEarningsTracker } from "@/components/dashboard/SupabaseEarningsTracker";
 import { MARKETING_PLANS, normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
+import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -394,7 +395,9 @@ export default function DashboardPage() {
           <MembershipPlanPicker currentTier={planForUi} onUpgradePaid={upgrade} />
         </div>
         <h2 className="mt-8 text-lg font-bold text-white" style={{ marginTop: "30px" }}>Wallet</h2>
-        <p className="mt-1 text-sm text-fintech-muted">Click Deposit above to add funds ($5–$1,000).</p>
+        <p className="mt-1 text-sm text-fintech-muted">
+          {`Click Deposit above to add funds ($${MIN_WALLET_FUND_CENTS / 100}–$${(MAX_PAYMENT_CENTS / 100).toLocaleString()} per transaction).`}
+        </p>
       </section>
 
       {/* ——— Deposit modal ——— */}
@@ -408,7 +411,9 @@ export default function DashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold text-white">Deposit</h3>
-            <p className="mt-1 text-sm text-fintech-muted">Enter amount between $5 and $1,000.</p>
+            <p className="mt-1 text-sm text-fintech-muted">
+              {`Enter amount between $${MIN_WALLET_FUND_CENTS / 100} and $${(MAX_PAYMENT_CENTS / 100).toLocaleString()}.`}
+            </p>
             {checkoutError && (
               <p className="mt-2 text-sm text-red-400">
                 {checkoutError}
@@ -429,8 +434,8 @@ export default function DashboardPage() {
             <input
               type="number"
               id="depositAmount"
-              min={5}
-              max={1000}
+              min={MIN_WALLET_FUND_CENTS / 100}
+              max={MAX_PAYMENT_CENTS / 100}
               step="0.01"
               placeholder="Enter amount"
               value={depositAmount}
