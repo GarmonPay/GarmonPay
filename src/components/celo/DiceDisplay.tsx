@@ -94,14 +94,14 @@ export default function DiceDisplay({ values, rolling }: DiceDisplayProps) {
   const c = values[2] ?? 1;
 
   return (
-    <div className="flex flex-row items-center justify-center gap-4">
+    <div className="flex flex-row items-center justify-center" style={{ gap: 16 }}>
       {[a, b, c].map((val, i) => (
-        <div
-          key={i}
-          className={`${styles.dieWrap} ${rolling ? rollClass[i] ?? styles.dieRolling2 : ""}`}
-          style={{ transformStyle: "preserve-3d" }}
-        >
-          <DieFace value={val} />
+        <div key={i} className={styles.perspective}>
+          <div
+            className={`${styles.dieAnimWrap} ${rolling ? rollClass[i] ?? styles.dieRolling2 : ""}`}
+          >
+            <DieFace value={val} />
+          </div>
         </div>
       ))}
     </div>

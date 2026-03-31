@@ -203,14 +203,14 @@ export default function CeloRoomPage() {
     };
   }, [detail?.you?.role, roomId, fetchChat]);
 
-  const runRevealSequence = useCallback(
+  /** After a successful API roll: show faces, roll name, payout (does not control `rolling`). */
+  const playOutcomeReveal = useCallback(
     async (
       dice: [number, number, number],
       name: string,
       outcome: string | null,
       payout: number | null
     ) => {
-      setRolling(false);
       setDiceValues(dice);
       await new Promise((r) => setTimeout(r, 500));
       setRollName(name);
@@ -226,83 +226,81 @@ export default function CeloRoomPage() {
   const handleBankerStart = useCallback(async () => {
     if (!roomId || !token || rollBusy) return;
     setRollBusy(true);
-    setRolling(true);
     setRollName(null);
     setResultLabel(null);
     setPayoutCents(null);
     setError(null);
     try {
-      const [, wrapped] = await Promise.all([
-        new Promise<void>((resolve) => setTimeout(resolve, MIN_ROLL_MS)),
-        fetch("/api/celo/round/start", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json", ...authHeaders(token) },
-          body: JSON.stringify({ room_id: roomId }),
-        }).then(async (r) => ({ ok: r.ok, j: (await r.json().catch(() => ({}))) as Record<string, unknown> })),
-      ]);
-      if (!wrapped.ok) {
-        setError((wrapped.j.error as string | undefined) ?? "Could not start round");
-        setRolling(false);
-        setRollBusy(false);
+      const res = await fetch("/api/celo/round/start", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
+        body: JSON.stringify({ room_id: roomId }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; banker_evaluation?: unknown };
+      if (!res.ok) {
+        setError(j.error ?? "Could not start round");
         return;
       }
-      const resData = wrapped.j;
-      const ev = resData?.banker_evaluation as
+      setRolling(true);
+      await new Promise<void>((r) => setTimeout(r, MIN_ROLL_MS));
+      setRolling(false);
+      const ev = j.banker_evaluation as
         | { dice?: number[]; rollName?: string; result?: string }
         | undefined;
       const dice = (ev?.dice ?? [1, 1, 1]) as [number, number, number];
       const name = ev?.rollName ?? "";
       const outcome = ev?.result ?? null;
-      await runRevealSequence(dice, name, outcome, null);
+      await playOutcomeReveal(dice, name, outcome, null);
     } catch {
       setError("Network error");
       setRolling(false);
     } finally {
       setRollBusy(false);
     }
-  }, [roomId, token, rollBusy, runRevealSequence]);
+  }, [roomId, token, rollBusy, playOutcomeReveal]);
 
   const handlePlayerRoll = useCallback(async () => {
     if (!roomId || !token || rollBusy) return;
     setRollBusy(true);
-    setRolling(true);
     setRollName(null);
     setResultLabel(null);
     setPayoutCents(null);
     setError(null);
     try {
-      const [, wrapped] = await Promise.all([
-        new Promise<void>((resolve) => setTimeout(resolve, MIN_ROLL_MS)),
-        fetch("/api/celo/round/roll", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json", ...authHeaders(token) },
-          body: JSON.stringify({ room_id: roomId }),
-        }).then(async (r) => ({ ok: r.ok, j: (await r.json().catch(() => ({}))) as Record<string, unknown> })),
-      ]);
-      if (!wrapped.ok) {
-        setRolling(false);
-        setError((wrapped.j.error as string | undefined) ?? "Roll failed");
-        setRollBusy(false);
+      const res = await fetch("/api/celo/round/roll", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
+        body: JSON.stringify({ room_id: roomId }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        roll?: { dice?: number[]; rollName?: string; outcome?: string };
+        payout_cents?: number;
+        payout?: number;
+      };
+      if (!res.ok) {
+        setError(j.error ?? "Roll failed");
         return;
       }
-      const j = wrapped.j;
-      const roll = j.roll as
-        | { dice?: number[]; rollName?: string; outcome?: string }
-        | undefined;
+      setRolling(true);
+      await new Promise<void>((r) => setTimeout(r, MIN_ROLL_MS));
+      setRolling(false);
+      const roll = j.roll;
       const dice = (roll?.dice ?? [1, 1, 1]) as [number, number, number];
       const name = roll?.rollName ?? "";
       const outcome = roll?.outcome ?? null;
-      const payout = typeof j.payout_cents === "number" ? j.payout_cents : typeof j.payout === "number" ? j.payout : 0;
-      await runRevealSequence(dice, name, outcome, payout);
+      const payout =
+        typeof j.payout_cents === "number" ? j.payout_cents : typeof j.payout === "number" ? j.payout : 0;
+      await playOutcomeReveal(dice, name, outcome, payout);
     } catch {
       setError("Network error");
       setRolling(false);
     } finally {
       setRollBusy(false);
     }
-  }, [roomId, token, rollBusy, runRevealSequence]);
+  }, [roomId, token, rollBusy, playOutcomeReveal]);
 
   const triggerRemoteRollAnimation = useCallback(
     (row: {
@@ -322,11 +320,13 @@ export default function CeloRoomPage() {
       const dice = [row.dice[0]!, row.dice[1]!, row.dice[2]!] as [number, number, number];
       const name = row.roll_name ?? "";
       const outcome = row.outcome ?? null;
+      const payout = row.payout_cents ?? 0;
       window.setTimeout(() => {
-        void runRevealSequence(dice, name, outcome, row.payout_cents ?? 0);
+        setRolling(false);
+        void playOutcomeReveal(dice, name, outcome, payout);
       }, MIN_ROLL_MS);
     },
-    [userId, runRevealSequence]
+    [userId, playOutcomeReveal]
   );
 
   useEffect(() => {
@@ -501,6 +501,10 @@ export default function CeloRoomPage() {
 
   const yourTurnBanker = isBanker && youRole === "banker" && !round;
   const yourTurnPlayer = !!round && round.status === "player_rolling" && youRole === "player" && !isBanker;
+
+  const seatedPlayersWithBet = playersOnly.filter((p) => p.bet_cents > 0);
+  const canBankerStartRound = yourTurnBanker && seatedPlayersWithBet.length > 0;
+  const canRollAsPlayer = yourTurnPlayer && yourBet > 0;
 
   return (
     <div className="min-h-[100dvh] h-[100dvh] flex flex-col bg-[#05010F] text-white overflow-hidden">
@@ -714,9 +718,21 @@ export default function CeloRoomPage() {
 
           <div className="flex flex-col items-center gap-1 flex-1">
             {yourTurnBanker ? (
-              <span className="text-xs font-bold text-amber-400 animate-pulse">YOUR TURN</span>
+              canBankerStartRound ? (
+                <span className="text-xs font-bold text-amber-400 animate-pulse">YOUR TURN</span>
+              ) : (
+                <span className="text-xs text-center text-amber-200/90 max-w-[240px] px-1">
+                  Need at least one seated player with a bet before you can roll.
+                </span>
+              )
             ) : yourTurnPlayer ? (
-              <span className="text-xs font-bold text-amber-400 animate-pulse">YOUR TURN — ROLL DICE</span>
+              canRollAsPlayer ? (
+                <span className="text-xs font-bold text-amber-400 animate-pulse">YOUR TURN — ROLL DICE</span>
+              ) : (
+                <span className="text-xs text-center text-amber-200/90 max-w-[240px] px-1">
+                  You need an active bet to roll this round.
+                </span>
+              )
             ) : (
               <span className="text-xs text-fintech-muted text-center">
                 {round?.status === "player_rolling" ? "Waiting for other players to roll…" : "Waiting for banker…"}
@@ -726,7 +742,7 @@ export default function CeloRoomPage() {
             {yourTurnBanker ? (
               <button
                 type="button"
-                disabled={rollBusy || !!busy}
+                disabled={rollBusy || !!busy || !canBankerStartRound}
                 onClick={() => void handleBankerStart()}
                 className="w-[200px] max-w-full rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 py-2.5 text-sm font-black text-black disabled:opacity-50 shadow-lg shadow-amber-900/30"
               >
@@ -735,7 +751,7 @@ export default function CeloRoomPage() {
             ) : yourTurnPlayer ? (
               <button
                 type="button"
-                disabled={rollBusy || !!busy}
+                disabled={rollBusy || !!busy || !canRollAsPlayer}
                 onClick={() => void handlePlayerRoll()}
                 className="w-[200px] max-w-full rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 py-2.5 text-sm font-black text-black disabled:opacity-50 shadow-lg shadow-amber-900/30"
               >

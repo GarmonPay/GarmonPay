@@ -16,8 +16,15 @@
   }
 }
 
-.dieWrap {
-  perspective: 400px;
+/* Perspective on a parent so 3D rotation is visible (not flattened). */
+.perspective {
+  perspective: 560px;
+  flex-shrink: 0;
+}
+
+.dieAnimWrap {
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .dieRolling1 {
@@ -30,4 +37,12 @@
 
 .dieRolling3 {
   animation: dieRoll 2.1s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dieRolling1,
+  .dieRolling2,
+  .dieRolling3 {
+    animation: dieRoll 0.01s ease-out forwards;
+  }
 }
