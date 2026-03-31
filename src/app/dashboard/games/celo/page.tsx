@@ -29,12 +29,13 @@ export default function CeloLobbyPage() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "Street Game",
     room_type: "public" as "public" | "private",
     max_players: 6 as 2 | 4 | 6,
-    min_bet_cents: 100,
-    max_bet_cents: 1000,
+    min_bet_cents: 500,
+    max_bet_cents: 1_000_000,
     speed: "regular" as "regular" | "fast" | "blitz",
   });
 
@@ -65,6 +66,16 @@ export default function CeloLobbyPage() {
     });
   }, [router, load]);
 
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/wallet", { credentials: "include", headers: { ...authHeaders(token) } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) =>
+        setBalanceCents(typeof (d as { balance_cents?: unknown })?.balance_cents === "number" ? (d as { balance_cents: number }).balance_cents : null)
+      )
+      .catch(() => setBalanceCents(null));
+  }, [token]);
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!token && typeof window === "undefined") return;
@@ -89,6 +100,13 @@ export default function CeloLobbyPage() {
       setCreating(false);
     }
   }
+
+  const requiredBankrollCents = form.max_players * form.max_bet_cents;
+  /** If balance failed to load, still allow submit — API enforces the same rule. */
+  const hasFundsForTable =
+    balanceCents === null ? true : balanceCents >= requiredBankrollCents;
+  const createDisabled =
+    creating || (balanceCents !== null && balanceCents < requiredBankrollCents);
 
   if (loading) {
     return (
@@ -161,33 +179,70 @@ export default function CeloLobbyPage() {
             <option value="blitz">Blitz</option>
           </select>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <label className="text-xs text-fintech-muted">
-            Min ¢
+        <div className="flex flex-wrap gap-3 items-end">
+          <label className="text-xs text-fintech-muted block">
+            Min ($)
             <input
               type="number"
-              min={100}
-              step={50}
-              className="ml-1 w-24 rounded border border-white/10 bg-black/30 px-2 py-1 text-white"
-              value={form.min_bet_cents}
-              onChange={(e) => setForm((f) => ({ ...f, min_bet_cents: Number(e.target.value) }))}
+              min={5}
+              max={10000}
+              step={1}
+              className="mt-1 block w-28 rounded border border-white/10 bg-black/30 px-2 py-1 text-white"
+              value={form.min_bet_cents / 100}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (!Number.isFinite(v)) return;
+                setForm((f) => ({ ...f, min_bet_cents: Math.round(v * 100) }));
+              }}
             />
           </label>
-          <label className="text-xs text-fintech-muted">
-            Max ¢
+          <label className="text-xs text-fintech-muted block">
+            Max ($)
             <input
               type="number"
-              min={100}
-              step={100}
-              className="ml-1 w-28 rounded border border-white/10 bg-black/30 px-2 py-1 text-white"
-              value={form.max_bet_cents}
-              onChange={(e) => setForm((f) => ({ ...f, max_bet_cents: Number(e.target.value) }))}
+              min={5}
+              max={10000}
+              step={1}
+              className="mt-1 block w-32 rounded border border-white/10 bg-black/30 px-2 py-1 text-white"
+              value={form.max_bet_cents / 100}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (!Number.isFinite(v)) return;
+                setForm((f) => ({ ...f, max_bet_cents: Math.round(v * 100) }));
+              }}
             />
           </label>
         </div>
+        <p className="text-[11px] text-fintech-muted">Table limits: $5 minimum · $10,000 maximum per bet.</p>
+        <div className="text-[11px] space-y-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+          <p className="text-fintech-muted">
+            <span className="text-white/90">Banker bankroll:</span> you must have at least{" "}
+            <span className="text-amber-200/90">
+              ${(requiredBankrollCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>{" "}
+            ({form.max_players} seats × max bet) in your wallet to create this room.
+          </p>
+          {balanceCents !== null ? (
+            <p className={hasFundsForTable ? "text-emerald-400/90" : "text-amber-300"}>
+              Your balance:{" "}
+              <span className="font-semibold">${(balanceCents / 100).toFixed(2)}</span>
+              {!hasFundsForTable ? (
+                <>
+                  {" "}
+                  — add funds before hosting.{" "}
+                  <Link href="/wallet" className="underline hover:text-white">
+                    Wallet
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <p className="text-fintech-muted">Checking balance…</p>
+          )}
+        </div>
         <button
           type="submit"
-          disabled={creating}
+          disabled={createDisabled}
           className="w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black disabled:opacity-50"
         >
           {creating ? "Creating…" : "Create & open room"}

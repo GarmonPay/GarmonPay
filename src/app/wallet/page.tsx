@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getSessionAsync } from "@/lib/session";
+import { MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 type LedgerEntry = { id: string; type: string; amount: number; balance_after: number; reference: string | null; created_at: string };
 
@@ -20,8 +21,9 @@ function WalletContent() {
 
   const handleDeposit = async () => {
     const amount = Number(depositAmount);
-    if (!Number.isFinite(amount) || amount < 1 || amount > 1000) {
-      setDepositError("Enter an amount between $1 and $1,000.");
+    const minDollars = MIN_WALLET_FUND_CENTS / 100;
+    if (!Number.isFinite(amount) || amount < minDollars || amount > 1000) {
+      setDepositError(`Enter an amount between $${minDollars.toFixed(2)} and $1,000.`);
       return;
     }
     setDepositError(null);
@@ -99,10 +101,10 @@ function WalletContent() {
               )}
               <input
                 type="number"
-                min={1}
+                min={MIN_WALLET_FUND_CENTS / 100}
                 max={1000}
                 step="0.01"
-                placeholder="Amount ($1–$1,000)"
+                placeholder="Amount ($5–$1,000)"
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-white placeholder:text-fintech-muted focus:border-fintech-accent focus:outline-none mb-3"

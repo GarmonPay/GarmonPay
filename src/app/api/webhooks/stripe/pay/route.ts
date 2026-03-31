@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : 0;
   if (amountCents < 50) {
-    return NextResponse.json({ message: "Minimum amount is $0.50 (50 cents)" }, { status: 400 });
+    return NextResponse.json({ message: "Minimum amount is $0.50" }, { status: 400 });
   }
 
   const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "One-time payment";

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+
+type ChatRow = { id: string; user_id: string; message: string; created_at: string };
 
 function authHeaders(token: string | null): HeadersInit {
   const h: HeadersInit = {};
@@ -28,9 +30,13 @@ export default function CeloRoomPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [joinBet, setJoinBet] = useState(100);
+  const [joinBet, setJoinBet] = useState(500);
   const [joinCode, setJoinCode] = useState("");
   const [joinRole, setJoinRole] = useState<"player" | "spectator">("player");
+  const [chatMessages, setChatMessages] = useState<ChatRow[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     if (!roomId) return;
@@ -46,6 +52,29 @@ export default function CeloRoomPage() {
       return;
     }
     setDetail(data as typeof detail);
+  }, [roomId, token]);
+
+  useEffect(() => {
+    setChatMessages([]);
+    setChatDraft("");
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!detail?.room) return;
+    const r = detail.room as { min_bet_cents: number; max_bet_cents: number };
+    setJoinBet((prev) => Math.min(r.max_bet_cents, Math.max(r.min_bet_cents, prev)));
+  }, [detail]);
+
+  const fetchChat = useCallback(async () => {
+    if (!roomId) return;
+    const res = await fetch(`/api/celo/room/${roomId}/chat`, {
+      credentials: "include",
+      headers: { ...authHeaders(token) },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray((data as { messages?: ChatRow[] }).messages)) {
+      setChatMessages((data as { messages: ChatRow[] }).messages);
+    }
   }, [roomId, token]);
 
   useEffect(() => {
@@ -87,6 +116,24 @@ export default function CeloRoomPage() {
     };
   }, [roomId, router]);
 
+  useEffect(() => {
+    if (!detail?.you?.role || !roomId) return;
+    void fetchChat();
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void fetchChat();
+      }
+    }, 10_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void fetchChat();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [detail?.you?.role, roomId, fetchChat]);
+
   async function post(path: string, body: object) {
     setBusy(path);
     setError(null);
@@ -102,12 +149,45 @@ export default function CeloRoomPage() {
         setError((data as { error?: string }).error ?? "Request failed");
         return data;
       }
+      if (path === "/api/celo/room/close" || path === "/api/celo/room/leave") {
+        router.push("/dashboard/games/celo");
+        return data;
+      }
       await load();
       return data;
     } finally {
       setBusy(null);
     }
   }
+
+  async function sendChatMessage(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatDraft.trim();
+    if (!text || !roomId || chatSending) return;
+    setChatSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/celo/room/${roomId}/chat`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? "Could not send message");
+        return;
+      }
+      setChatDraft("");
+      await fetchChat();
+    } finally {
+      setChatSending(false);
+    }
+  }
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages.length]);
 
   if (loading || !detail) {
     return (
@@ -122,6 +202,7 @@ export default function CeloRoomPage() {
     name: string;
     status: string;
     banker_id: string;
+    creator_id: string;
     room_type: string;
     join_code: string | null;
     min_bet_cents: number;
@@ -137,7 +218,11 @@ export default function CeloRoomPage() {
     round_number: number;
   } | null;
   const isBanker = userId === room.banker_id;
+  const canEndGame = !!userId && (isBanker || userId === room.creator_id);
   const youRole = detail.you?.role;
+  const mySeat = detail.players.find((p) => p.user_id === userId);
+  const leaveBlocked =
+    !!round && youRole === "player" && (mySeat?.bet_cents ?? 0) > 0;
 
   return (
     <div className="space-y-6 pb-10">
@@ -149,9 +234,45 @@ export default function CeloRoomPage() {
             Table {room.status} · banker seat
           </p>
         </div>
-        <Link href="/dashboard/games/celo" className="text-xs text-amber-400 hover:underline shrink-0">
-          Lobby
-        </Link>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <Link href="/dashboard/games/celo" className="text-xs text-amber-400 hover:underline">
+            Lobby
+          </Link>
+          {youRole && canEndGame ? (
+            <button
+              type="button"
+              disabled={!!busy || !!round}
+              title={round ? "Finish the current round before ending the game" : undefined}
+              onClick={() => {
+                if (
+                  !confirm(
+                    "End this game for everyone? Player stakes still on the table will be refunded to their wallets."
+                  )
+                ) {
+                  return;
+                }
+                post("/api/celo/room/close", { room_id: roomId });
+              }}
+              className="text-xs text-red-300 hover:text-red-200 underline disabled:opacity-50"
+            >
+              {busy === "/api/celo/room/close" ? "Closing…" : "End game"}
+            </button>
+          ) : null}
+          {youRole && youRole !== "banker" ? (
+            <button
+              type="button"
+              disabled={!!busy || leaveBlocked}
+              title={leaveBlocked ? "Wait for this round to finish before leaving with a stake" : undefined}
+              onClick={() => {
+                if (!confirm("Leave this table?")) return;
+                post("/api/celo/room/leave", { room_id: roomId });
+              }}
+              className="text-xs text-fintech-muted hover:text-white underline disabled:opacity-50"
+            >
+              {busy === "/api/celo/room/leave" ? "Leaving…" : "Leave table"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {error && (
@@ -277,6 +398,45 @@ export default function CeloRoomPage() {
               ))}
             </div>
           ) : null}
+
+          <div className="rounded-xl border border-white/10 bg-fintech-bg-card overflow-hidden flex flex-col max-h-[min(280px,45vh)]">
+            <h2 className="text-xs font-semibold text-fintech-muted uppercase px-3 pt-3 pb-1">Table chat</h2>
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 text-sm min-h-[100px]">
+              {chatMessages.length === 0 ? (
+                <p className="text-fintech-muted text-xs">No messages yet. Say hi to the table.</p>
+              ) : (
+                chatMessages.map((m) => (
+                  <div key={m.id} className="text-white/90 break-words">
+                    <span className="text-amber-400/90 text-xs font-medium">
+                      {m.user_id === userId ? "You" : `${m.user_id.slice(0, 8)}…`}
+                    </span>
+                    <span className="text-fintech-muted text-xs ml-1">
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <p className="text-white/95 mt-0.5">{m.message}</p>
+                  </div>
+                ))
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+            <form onSubmit={sendChatMessage} className="border-t border-white/10 p-2 flex gap-2">
+              <input
+                className="flex-1 min-w-0 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-fintech-muted"
+                placeholder="Message table…"
+                maxLength={500}
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                disabled={chatSending}
+              />
+              <button
+                type="submit"
+                disabled={chatSending || !chatDraft.trim()}
+                className="shrink-0 rounded-lg bg-amber-500/20 border border-amber-500/40 px-3 py-2 text-xs font-bold text-amber-200 disabled:opacity-40"
+              >
+                {chatSending ? "…" : "Send"}
+              </button>
+            </form>
+          </div>
         </>
       )}
     </div>

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
-import { MAX_PAYMENT_CENTS } from "@/lib/security";
+import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 /**
  * POST /api/wallet/fund
  * Create Stripe Checkout session to add money to user's wallet.
- * Body: { amountCents: number } (min 100 = $1)
+ * Body: { amountCents: number } (min $5)
  * On success (webhook): amount saved to Supabase, user balance updated, transaction ID stored.
  */
 export async function POST(request: Request) {
@@ -28,8 +28,8 @@ export async function POST(request: Request) {
   }
 
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : 0;
-  if (amountCents < 100) {
-    return NextResponse.json({ message: "Minimum amount is $1.00 (100 cents)" }, { status: 400 });
+  if (amountCents < MIN_WALLET_FUND_CENTS) {
+    return NextResponse.json({ message: "Minimum amount is $5.00" }, { status: 400 });
   }
   if (amountCents > MAX_PAYMENT_CENTS) {
     return NextResponse.json(

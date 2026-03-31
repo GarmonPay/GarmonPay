@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
-import { MAX_PAYMENT_CENTS } from "@/lib/security";
+import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 /**
  * POST /api/wallet/deposit
@@ -34,8 +34,8 @@ export async function POST(req: Request) {
         ? Math.round(body.amount * 100)
         : 0;
 
-  if (!Number.isFinite(amountCents) || amountCents < 100) {
-    return NextResponse.json({ error: "Minimum amount is $1.00 (100 cents)" }, { status: 400 });
+  if (!Number.isFinite(amountCents) || amountCents < MIN_WALLET_FUND_CENTS) {
+    return NextResponse.json({ error: "Minimum amount is $5.00" }, { status: 400 });
   }
   if (amountCents > MAX_PAYMENT_CENTS) {
     return NextResponse.json(

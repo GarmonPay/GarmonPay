@@ -6,6 +6,9 @@
 /** Max single payment/checkout amount in cents ($10,000). */
 export const MAX_PAYMENT_CENTS = 1_000_000;
 
+/** Min wallet deposit / add-funds in cents ($5). */
+export const MIN_WALLET_FUND_CENTS = 500;
+
 /** Min checkout amount in cents ($0.50). */
 export const MIN_PAYMENT_CENTS = 50;
 

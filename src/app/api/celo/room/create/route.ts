@@ -5,6 +5,10 @@ import { getCeloUserId, getUserTierBetLimitCents, admin } from "@/lib/celo-serve
 
 const JOIN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+/** Product limits: $5 min bet, $10,000 max bet per table (amounts in cents). */
+const MIN_BET_CENTS_FLOOR = 500;
+const MAX_BET_CENTS_CAP = 1_000_000;
+
 function randomJoinCode(): string {
   let out = "";
   for (let i = 0; i < 6; i++) {
@@ -31,25 +35,40 @@ export async function POST(request: Request) {
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
-    if (!Number.isFinite(min_bet_cents) || min_bet_cents < 100) {
-      return NextResponse.json({ error: "min_bet_cents must be at least 100" }, { status: 400 });
+    if (!Number.isFinite(min_bet_cents) || min_bet_cents < MIN_BET_CENTS_FLOOR) {
+      return NextResponse.json(
+        { error: `Minimum bet must be at least $${(MIN_BET_CENTS_FLOOR / 100).toFixed(2)}` },
+        { status: 400 }
+      );
+    }
+    if (!Number.isFinite(max_bet_cents) || max_bet_cents > MAX_BET_CENTS_CAP) {
+      return NextResponse.json(
+        { error: `Maximum bet cannot exceed $${(MAX_BET_CENTS_CAP / 100).toLocaleString()}` },
+        { status: 400 }
+      );
     }
     if (!Number.isFinite(max_bet_cents) || max_bet_cents < min_bet_cents) {
-      return NextResponse.json({ error: "max_bet_cents must be >= min_bet_cents" }, { status: 400 });
+      return NextResponse.json({ error: "Maximum bet must be greater than or equal to minimum bet" }, { status: 400 });
     }
 
     const tierLimit = await getUserTierBetLimitCents(userId);
     if (max_bet_cents > tierLimit) {
       return NextResponse.json(
-        { error: `max_bet_cents exceeds tier limit (${tierLimit} cents)` },
+        { error: `Maximum bet exceeds your tier limit ($${(tierLimit / 100).toFixed(2)})` },
         { status: 400 }
       );
     }
 
     const balance = await getCanonicalBalanceCents(userId);
-    if (balance < max_bet_cents) {
+    /** Worst case one round: every seat bets table max — banker must be solvent for that pot. */
+    const requiredBankrollCents = max_players * max_bet_cents;
+    if (balance < requiredBankrollCents) {
       return NextResponse.json(
-        { error: "Insufficient balance to cover max bet as banker", balance_cents: balance },
+        {
+          error: `You need at least $${(requiredBankrollCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in your wallet to open this table (${max_players} seats × $${(max_bet_cents / 100).toFixed(2)} max bet).`,
+          balance_cents: balance,
+          required_cents: requiredBankrollCents,
+        },
         { status: 400 }
       );
     }

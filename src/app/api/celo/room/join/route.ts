@@ -61,15 +61,20 @@ export async function POST(request: Request) {
 
     if (role === "player") {
       if (!Number.isFinite(bet_cents) || bet_cents < room.min_bet_cents || bet_cents > room.max_bet_cents) {
+        const lo = (room.min_bet_cents as number) / 100;
+        const hi = (room.max_bet_cents as number) / 100;
         return NextResponse.json(
-          { error: `bet_cents must be between ${room.min_bet_cents} and ${room.max_bet_cents}` },
+          { error: `Bet must be between $${lo.toFixed(2)} and $${hi.toFixed(2)}` },
           { status: 400 }
         );
       }
 
       const tierLimit = await getUserTierBetLimitCents(userId);
       if (bet_cents > tierLimit) {
-        return NextResponse.json({ error: `Bet exceeds tier limit (${tierLimit} cents)` }, { status: 400 });
+        return NextResponse.json(
+          { error: `Bet exceeds your tier limit ($${(tierLimit / 100).toFixed(2)})` },
+          { status: 400 }
+        );
       }
 
       const balance = await getCanonicalBalanceCents(userId);
