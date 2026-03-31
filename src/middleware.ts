@@ -7,10 +7,25 @@ const PRODUCTION_ORIGIN = "https://garmonpay.com";
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
 
-/** Host is local loopback — never force HTTPS / canonical host (avoids 301 to production when running next dev/start on a laptop). */
-function isLoopbackHost(hostHeader: string): boolean {
-  const host = hostHeader.split(":")[0]?.toLowerCase() ?? "";
-  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0";
+/**
+ * Skip production HTTPS/canonical redirect for local dev (loopback, typical LAN test IPs, or explicit opt-out).
+ * Prevents 301 → garmonpay.com when NODE_ENV=production on a laptop or phone-on-Wi‑Fi.
+ */
+function skipCanonicalRedirect(hostHeader: string): boolean {
+  if (process.env.SKIP_CANONICAL_REDIRECT === "1") return true;
+  const raw = hostHeader.trim().toLowerCase();
+  if (!raw) return false;
+  if (raw.startsWith("[")) {
+    return raw.startsWith("[::1]") || raw.startsWith("[0:0:0:0:0:0:0:1]");
+  }
+  const host = raw.split(":")[0] ?? "";
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0") {
+    return true;
+  }
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  return false;
 }
 
 /** Admin routes: redirect to login if no admin session cookie (server-set httpOnly). Layout also verifies. */
@@ -78,7 +93,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (isLoopbackHost(host)) {
+  if (skipCanonicalRedirect(host)) {
     return NextResponse.next();
   }
 

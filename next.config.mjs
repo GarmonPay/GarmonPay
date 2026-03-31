@@ -32,7 +32,8 @@ const nextConfig = {
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com",
       "object-src 'none'",
     ];
-    if (process.env.NODE_ENV === "production") {
+    // Only on Vercel: avoid upgrade-insecure-requests for local `next start` (breaks http://localhost).
+    if (process.env.VERCEL === "1") {
       cspParts.push("upgrade-insecure-requests");
     }
     const csp = cspParts.join("; ");

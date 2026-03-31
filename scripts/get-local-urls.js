@@ -42,4 +42,6 @@ if (networkIP) {
   console.log("");
 }
 console.log("  —————————————————————");
+console.log("  \x1b[33mUse http:// only (not https://) for Local and Network URLs.\x1b[0m");
+console.log("  —————————————————————");
 console.log("");
