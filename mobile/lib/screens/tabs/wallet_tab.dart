@@ -32,7 +32,9 @@ class _WalletTabState extends State<WalletTab> {
             return const Center(child: CircularProgressIndicator());
           }
           final w = snap.data!;
-          final balance = (w['balance'] as num?)?.toDouble() ?? 0.0;
+          final centsRaw = w['balance_cents'];
+          final cents = centsRaw is num ? centsRaw.round() : 0;
+          final balance = cents / 100.0;
           return RefreshIndicator(
             onRefresh: () async => setState(() {}),
             child: FutureBuilder<List<dynamic>?>(

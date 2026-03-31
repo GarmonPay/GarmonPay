@@ -59,7 +59,7 @@ export default function DashboardPage() {
     }).catch(() => setStripeStatusMessage(null));
   }, [depositModalOpen]);
 
-  // Balance comes from getDashboard (/api/dashboard) — same source as wallet and Fight Arena
+  // Available balance comes from getDashboard → `users.balance` via /api/dashboard (not ledger sums).
   const refetchParam = searchParams.get("refetch");
   useEffect(() => {
     if (refetchParam !== "1") return;

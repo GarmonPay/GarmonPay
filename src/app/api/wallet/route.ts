@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
-import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { getUsersTableBalanceCents } from "@/lib/wallet-ledger";
 /**
  * GET /api/wallet
- * Returns current wallet balance (canonical: wallet_balances then users.balance).
- * Same source as dashboard and Fight Arena betting.
+ * Returns `users.balance` (cents) for the authenticated user. Null in DB → 0.
  */
 export async function GET(req: Request) {
   const userId = await getAuthUserId(req);
@@ -12,7 +11,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const balanceCents = await getCanonicalBalanceCents(userId);
+  const balanceCents = await getUsersTableBalanceCents(userId);
   return NextResponse.json({
     balance_cents: balanceCents,
   });

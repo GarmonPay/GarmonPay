@@ -7,6 +7,12 @@ const PRODUCTION_ORIGIN = "https://garmonpay.com";
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
 
+/** Host is local loopback — never force HTTPS / canonical host (avoids 301 to production when running next dev/start on a laptop). */
+function isLoopbackHost(hostHeader: string): boolean {
+  const host = hostHeader.split(":")[0]?.toLowerCase() ?? "";
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0";
+}
+
 /** Admin routes: redirect to login if no admin session cookie (server-set httpOnly). Layout also verifies. */
 function hasAdminCookie(request: NextRequest): boolean {
   return !!request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
@@ -69,6 +75,10 @@ export function middleware(request: NextRequest) {
     process.env.NODE_ENV === "production";
 
   if (!isProduction) {
+    return NextResponse.next();
+  }
+
+  if (isLoopbackHost(host)) {
     return NextResponse.next();
   }
 

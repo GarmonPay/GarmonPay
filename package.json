@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "kill-port 3000 3001 3002 || true && node scripts/get-local-urls.js && next dev -p 3000 -H 0.0.0.0",
+    "dev": "WATCHPACK_POLLING=true kill-port 3000 3001 3002 || true && node scripts/get-local-urls.js && next dev -p 3000 -H 0.0.0.0",
     "dev:safe": "kill-port 3000 3001 3002 || true && node scripts/get-local-urls.js && next dev -H 0.0.0.0",
     "build": "next build",
     "safe": "rm -rf .next && rm -rf node_modules/.cache && next dev",

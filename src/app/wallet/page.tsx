@@ -14,6 +14,7 @@ function WalletContent() {
   const success = searchParams.get("success") === "true" || searchParams.get("funded") === "true";
   const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [balanceLoad, setBalanceLoad] = useState<"idle" | "pending" | "ok" | "err">("idle");
   const [history, setHistory] = useState<LedgerEntry[]>([]);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
@@ -58,14 +59,31 @@ function WalletContent() {
   }, []);
 
   useEffect(() => {
-    if (!user?.accessToken) return;
-    const headers: Record<string, string> = {};
-    if (user.accessToken) headers.Authorization = `Bearer ${user.accessToken}`;
+    if (!user) return;
+    if (!user.accessToken) {
+      setBalanceLoad("err");
+      setBalanceCents(null);
+      return;
+    }
+    setBalanceLoad("pending");
+    const headers: Record<string, string> = { Authorization: `Bearer ${user.accessToken}` };
     fetch("/api/wallet", { headers })
-      .then((res) => (res.ok ? res.json() : Promise.resolve({ balance_cents: 0 })))
-      .then((data) => setBalanceCents(data.balance_cents ?? 0))
-      .catch(() => setBalanceCents(0));
-  }, [user?.accessToken, success]);
+      .then(async (res) => {
+        if (!res.ok) {
+          setBalanceLoad("err");
+          setBalanceCents(null);
+          return;
+        }
+        const data = (await res.json()) as { balance_cents?: unknown };
+        const c = data.balance_cents;
+        setBalanceCents(typeof c === "number" && Number.isFinite(c) ? c : 0);
+        setBalanceLoad("ok");
+      })
+      .catch(() => {
+        setBalanceLoad("err");
+        setBalanceCents(null);
+      });
+  }, [user, success]);
 
   useEffect(() => {
     if (!user?.accessToken) return;
@@ -92,9 +110,15 @@ function WalletContent() {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-white mb-2">Wallet</h1>
-              {balanceCents !== null && (
+              {(balanceLoad === "pending" || balanceLoad === "idle") && user?.accessToken && (
+                <p className="text-fintech-muted mb-2 text-sm">Loading balance…</p>
+              )}
+              {balanceLoad === "err" && (
+                <p className="text-red-400 text-sm mb-2">Could not load balance.</p>
+              )}
+              {balanceLoad === "ok" && balanceCents !== null && (
                 <p className="text-fintech-muted mb-2">
-                  Current balance: <span className="text-white font-semibold text-xl">${((balanceCents ?? 0) / 100).toFixed(2)}</span>
+                  Current balance: <span className="text-white font-semibold text-xl">${(balanceCents / 100).toFixed(2)}</span>
                 </p>
               )}
               {depositError && (

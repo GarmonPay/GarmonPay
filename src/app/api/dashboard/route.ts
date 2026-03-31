@@ -8,8 +8,7 @@ import {
   getMonthlyReferralCommissionCents,
   getLifetimeReferralCommissionCents,
 } from "@/lib/referral-commissions-db";
-import { createServerClient, createAdminClient } from "@/lib/supabase";
-import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { createServerClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
 
 export async function GET(request: Request) {
@@ -109,16 +108,17 @@ export async function GET(request: Request) {
       }
 
       const userRow = row as {
-        balance?: number;
+        balance?: number | null;
         ad_credit_balance?: number;
         withdrawable_balance?: number;
         membership?: string;
         referral_code?: string;
       } | null;
       const membershipRaw = userRow?.membership ?? "";
-      const balanceCents = await getCanonicalBalanceCents(authUser.id);
+      const balCol = userRow?.balance;
+      const balanceCents = balCol == null ? 0 : (Number(balCol) || 0);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
-      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? balanceCents);
+      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
 
         return NextResponse.json({
           earningsTodayCents,

@@ -87,6 +87,23 @@ export async function walletLedgerEntry(
   return { success: false, message: (r as { message?: string }).message ?? "Ledger entry failed" };
 }
 
+/**
+ * Balance from `public.users.balance` only (cents). Single source for dashboard/wallet display.
+ * Null or missing column value → 0.
+ */
+export async function getUsersTableBalanceCents(userId: string): Promise<number> {
+  const { data, error } = await supabase()
+    .from("users")
+    .select("balance")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return 0;
+  const b = (data as { balance?: number | null }).balance;
+  if (b == null) return 0;
+  const n = Number(b);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Get current balance from wallet_balances (or null if table/RPC not used). */
 export async function getWalletBalanceCents(userId: string): Promise<number | null> {
   const { data, error } = await supabase()

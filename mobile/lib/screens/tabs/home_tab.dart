@@ -17,7 +17,9 @@ class HomeTab extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final w = snap.data!;
-          final balance = (w['balance'] as num?)?.toDouble() ?? 0.0;
+          final centsRaw = w['balance_cents'];
+          final cents = centsRaw is num ? centsRaw.round() : 0;
+          final balance = cents / 100.0;
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
