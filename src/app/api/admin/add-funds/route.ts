@@ -1,6 +1,8 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
+import { walletLedgerEntry } from "@/lib/wallet-ledger";
 
 /** POST /api/admin/add-funds — add balance to a user (admin only). */
 export async function POST(req: Request) {
@@ -48,13 +50,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
 
+  const reference = `admin_add_funds_${randomUUID()}`;
+  const ledger = await walletLedgerEntry(userId, "admin_adjustment", amountCents, reference);
+  if (!ledger.success) {
+    return NextResponse.json({ message: ledger.message }, { status: 400 });
+  }
+
   await supabase.from("transactions").insert({
     user_id: userId,
     type: "deposit",
     amount: amountCents,
     status: "completed",
     description: "Admin add funds",
+    reference_id: reference,
   });
 
-  return NextResponse.json({ success: true, amountCents });
+  return NextResponse.json({
+    success: true,
+    amountCents,
+    balance_cents: ledger.balance_cents,
+  });
 }
