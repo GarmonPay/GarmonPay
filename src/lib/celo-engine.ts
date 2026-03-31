@@ -120,6 +120,32 @@ export function comparePoints(
   return "banker_wins";
 }
 
+/**
+ * Resolve player roll vs banker when round is in `player_rolling` (banker established a point).
+ */
+export function resolvePlayerRoundOutcome(
+  playerEv: { result: RollResultKind; point?: number },
+  bankerRollResult: RollResultKind | null | undefined,
+  bankerPoint: number | null | undefined
+): "win" | "loss" {
+  if (playerEv.result === "instant_win") return "win";
+  if (playerEv.result === "instant_loss") return "loss";
+  if (playerEv.result === "no_count") {
+    throw new Error("Player roll must not be no_count when resolving");
+  }
+  if (playerEv.result === "point") {
+    if (
+      bankerRollResult === "point" &&
+      typeof bankerPoint === "number" &&
+      typeof playerEv.point === "number"
+    ) {
+      return comparePoints(bankerPoint, playerEv.point) === "player_wins" ? "win" : "loss";
+    }
+    return "loss";
+  }
+  return "loss";
+}
+
 export function calculatePayout(
   betCents: number,
   feePct: number = 10

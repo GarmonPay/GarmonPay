@@ -15,14 +15,44 @@ import {
   type SkinTone,
   type FaceStyle,
   type HairStyle,
-  type FighterData,
 } from "@/lib/arena-fighter-types";
-import { Arena3dDynamicFallback } from "@/components/arena/arena-3d-dynamic-fallback";
 
-const BoxerDisplay = dynamic(() => import("@/components/arena/BoxerDisplay"), {
-  ssr: false,
-  loading: () => <Arena3dDynamicFallback />,
-});
+const Boxer2D = dynamic(() => import("@/components/arena/Boxer2D"), { ssr: false });
+
+const skinToneMap: Record<number, string> = {
+  1: "light",
+  2: "light",
+  3: "medium",
+  4: "tan",
+  5: "dark",
+  6: "deep",
+};
+
+const hairStyleMap: Record<string, string> = {
+  Bald: "bald",
+  "Short Fade": "fade",
+  Dreads: "dreads",
+  Cornrows: "cornrows",
+  Afro: "afro",
+  Mohawk: "mohawk",
+  "Buzz Cut": "buzz",
+  "Long Tied": "long",
+};
+
+const bodyTypeMap: Record<string, string> = {
+  Lightweight: "lightweight",
+  Middleweight: "middleweight",
+  Heavyweight: "heavyweight",
+};
+
+const toneToSkinIndex: Record<SkinTone, number> = {
+  tone1: 1,
+  tone2: 2,
+  tone3: 3,
+  tone4: 4,
+  tone5: 5,
+  tone6: 6,
+};
 
 const styleList = ["Brawler", "Boxer", "Slugger", "Pressure Fighter", "Counterpuncher", "Swarmer"] as const;
 const avatarList = ["🥊", "👊", "💪", "🔥", "⚡", "🎯", "🦁", "🐺", "🦅", "🐲", "💀", "👑"];
@@ -76,22 +106,6 @@ export default function CreateFighterManualPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedColor, setSelectedColor] = useState("#f0a500");
-
-  const previewFighter: FighterData = {
-    name: name || "Fighter",
-    style,
-    avatar,
-    body_type: bodyType,
-    skin_tone: skinTone,
-    face_style: faceStyle,
-    hair_style: hairStyle,
-    strength: 48,
-    speed: 48,
-    stamina: 48,
-    defense: 48,
-    chin: 48,
-    special: 20,
-  };
 
   function handleRandomize() {
     setBodyType(randomChoice(bodyTypeOptions).value);
@@ -173,6 +187,30 @@ export default function CreateFighterManualPage() {
 
   const panelClass =
     "rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md";
+
+  const selectedSkinTone = toneToSkinIndex[skinTone];
+  const boxerSkinTone = skinToneMap[selectedSkinTone] as
+    | "light"
+    | "medium"
+    | "tan"
+    | "dark"
+    | "deep";
+  const hairLabel = hairStyleOptions.find((h) => h.value === hairStyle)?.label ?? "Short Fade";
+  const boxerHairStyle = (hairStyleMap[hairLabel] ?? "fade") as
+    | "bald"
+    | "fade"
+    | "dreads"
+    | "cornrows"
+    | "afro"
+    | "mohawk"
+    | "buzz"
+    | "long"
+    | "ponytail";
+  const bodyLabel = bodyTypeOptions.find((b) => b.value === bodyType)?.label ?? "Middleweight";
+  const boxerBodyType = bodyTypeMap[bodyLabel] as "lightweight" | "middleweight" | "heavyweight";
+  const selectedGender = "male" as const;
+  const fighterName = name.trim() || "FIGHTER";
+  const selectedTrunksColor = selectedColor;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-2">
@@ -263,14 +301,17 @@ export default function CreateFighterManualPage() {
                 </p>
                 <p className="mt-0.5 text-center text-sm font-medium text-slate-300">Ring preview</p>
               </div>
-              <div className="p-3 sm:p-4">
-                <BoxerDisplay
-                  fighter={{
-                    ...previewFighter,
-                    fighter_color: selectedColor || "#f0a500",
-                  }}
-                  size="medium"
-                  showcase
+              <div className="flex flex-col items-center p-3 sm:p-4">
+                <Boxer2D
+                  skinTone={boxerSkinTone}
+                  trunksColor={selectedTrunksColor || "#F59E0B"}
+                  hairStyle={boxerHairStyle}
+                  bodyType={boxerBodyType}
+                  gender={selectedGender || "male"}
+                  name={fighterName || "FIGHTER"}
+                  animate={true}
+                  width={240}
+                  height={360}
                 />
                 <p className="mt-3 text-center text-sm font-medium text-slate-400">{style}</p>
                 <label className="mt-4 flex items-center justify-center gap-3 text-sm text-slate-400">
