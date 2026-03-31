@@ -25,6 +25,8 @@
 .dieAnimWrap {
   transform-style: preserve-3d;
   will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: visible;
 }
 
 .dieRolling1 {
@@ -43,6 +45,7 @@
   .dieRolling1,
   .dieRolling2,
   .dieRolling3 {
-    animation: dieRoll 0.01s ease-out forwards;
+    /* Still show a visible tumble; avoid instant 0ms which looks like “no animation”. */
+    animation: dieRoll 1.2s ease-out forwards;
   }
 }

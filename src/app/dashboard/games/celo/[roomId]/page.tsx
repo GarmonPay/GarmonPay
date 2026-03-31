@@ -11,6 +11,15 @@ type ChatRow = { id: string; user_id: string; message: string; created_at: strin
 
 const MIN_ROLL_MS = 2500;
 
+/** Let React paint `rolling=true` before the long timeout (otherwise animation can be skipped). */
+function waitNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 function authHeaders(token: string | null): HeadersInit {
   const h: HeadersInit = {};
   if (token) (h as Record<string, string>)["Authorization"] = `Bearer ${token}`;
@@ -80,6 +89,8 @@ export default function CeloRoomPage() {
   const [payoutCents, setPayoutCents] = useState<number | null>(null);
   const [rollBusy, setRollBusy] = useState(false);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  /** Bump so dice remount and CSS @keyframes always run from t=0. */
+  const [rollAnimEpoch, setRollAnimEpoch] = useState(0);
 
   useEffect(() => {
     rollingRef.current = rolling;
@@ -87,7 +98,6 @@ export default function CeloRoomPage() {
 
   const load = useCallback(async () => {
     if (!roomId) return;
-    setError(null);
     const res = await fetch(`/api/celo/room/${roomId}`, {
       credentials: "include",
       headers: { ...authHeaders(token) },
@@ -98,6 +108,7 @@ export default function CeloRoomPage() {
       setDetail(null);
       return;
     }
+    setError(null);
     setDetail(data as typeof detail);
   }, [roomId, token]);
 
@@ -178,12 +189,12 @@ export default function CeloRoomPage() {
   }, [token, fetchBalance, detail?.room]);
 
   useEffect(() => {
-    if (!detail?.active_round || rollingRef.current || rollBusy) return;
+    if (!detail?.active_round || rolling || rollingRef.current || rollBusy) return;
     const r = detail.active_round as { banker_roll?: number[] };
     if (Array.isArray(r.banker_roll) && r.banker_roll.length === 3) {
       setDiceValues([r.banker_roll[0]!, r.banker_roll[1]!, r.banker_roll[2]!]);
     }
-  }, [detail?.active_round, rollBusy]);
+  }, [detail?.active_round, rollBusy, rolling]);
 
   useEffect(() => {
     if (!detail?.you?.role || !roomId) return;
@@ -202,6 +213,17 @@ export default function CeloRoomPage() {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [detail?.you?.role, roomId, fetchChat]);
+
+  const beginRollAnimation = useCallback(() => {
+    rollingRef.current = true;
+    setRollAnimEpoch((e) => e + 1);
+    setRolling(true);
+  }, []);
+
+  const endRollAnimation = useCallback(() => {
+    rollingRef.current = false;
+    setRolling(false);
+  }, []);
 
   /** After a successful API roll: show faces, roll name, payout (does not control `rolling`). */
   const playOutcomeReveal = useCallback(
@@ -242,9 +264,10 @@ export default function CeloRoomPage() {
         setError(j.error ?? "Could not start round");
         return;
       }
-      setRolling(true);
+      beginRollAnimation();
+      await waitNextPaint();
       await new Promise<void>((r) => setTimeout(r, MIN_ROLL_MS));
-      setRolling(false);
+      endRollAnimation();
       const ev = j.banker_evaluation as
         | { dice?: number[]; rollName?: string; result?: string }
         | undefined;
@@ -254,11 +277,11 @@ export default function CeloRoomPage() {
       await playOutcomeReveal(dice, name, outcome, null);
     } catch {
       setError("Network error");
-      setRolling(false);
+      endRollAnimation();
     } finally {
       setRollBusy(false);
     }
-  }, [roomId, token, rollBusy, playOutcomeReveal]);
+  }, [roomId, token, rollBusy, playOutcomeReveal, beginRollAnimation, endRollAnimation]);
 
   const handlePlayerRoll = useCallback(async () => {
     if (!roomId || !token || rollBusy) return;
@@ -284,9 +307,10 @@ export default function CeloRoomPage() {
         setError(j.error ?? "Roll failed");
         return;
       }
-      setRolling(true);
+      beginRollAnimation();
+      await waitNextPaint();
       await new Promise<void>((r) => setTimeout(r, MIN_ROLL_MS));
-      setRolling(false);
+      endRollAnimation();
       const roll = j.roll;
       const dice = (roll?.dice ?? [1, 1, 1]) as [number, number, number];
       const name = roll?.rollName ?? "";
@@ -296,11 +320,11 @@ export default function CeloRoomPage() {
       await playOutcomeReveal(dice, name, outcome, payout);
     } catch {
       setError("Network error");
-      setRolling(false);
+      endRollAnimation();
     } finally {
       setRollBusy(false);
     }
-  }, [roomId, token, rollBusy, playOutcomeReveal]);
+  }, [roomId, token, rollBusy, playOutcomeReveal, beginRollAnimation, endRollAnimation]);
 
   const triggerRemoteRollAnimation = useCallback(
     (row: {
@@ -313,6 +337,8 @@ export default function CeloRoomPage() {
       if (!row.user_id || row.user_id === userId) return;
       if (!Array.isArray(row.dice) || row.dice.length !== 3) return;
       if (rollingRef.current) return;
+      rollingRef.current = true;
+      setRollAnimEpoch((e) => e + 1);
       setRolling(true);
       setRollName(null);
       setResultLabel(null);
@@ -322,6 +348,7 @@ export default function CeloRoomPage() {
       const outcome = row.outcome ?? null;
       const payout = row.payout_cents ?? 0;
       window.setTimeout(() => {
+        rollingRef.current = false;
         setRolling(false);
         void playOutcomeReveal(dice, name, outcome, payout);
       }, MIN_ROLL_MS);
@@ -609,7 +636,7 @@ export default function CeloRoomPage() {
               </div>
             ) : (
               <>
-                <DiceDisplay values={diceValues} rolling={rolling} />
+                <DiceDisplay values={diceValues} rolling={rolling} animEpoch={rollAnimEpoch} />
                 {rollName ? (
                   <p className="mt-4 text-lg sm:text-2xl font-bold text-center text-amber-200 px-2">{rollName}</p>
                 ) : (

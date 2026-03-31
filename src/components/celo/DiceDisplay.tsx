@@ -86,9 +86,11 @@ export type DiceDisplayProps = {
   /** Three die values 1–6; defaults to 1,1,1 when absent. */
   values: readonly [number, number, number];
   rolling: boolean;
+  /** Increment when a new roll starts so CSS animation restarts reliably. */
+  animEpoch?: number;
 };
 
-export default function DiceDisplay({ values, rolling }: DiceDisplayProps) {
+export default function DiceDisplay({ values, rolling, animEpoch = 0 }: DiceDisplayProps) {
   const a = values[0] ?? 1;
   const b = values[1] ?? 1;
   const c = values[2] ?? 1;
@@ -98,6 +100,7 @@ export default function DiceDisplay({ values, rolling }: DiceDisplayProps) {
       {[a, b, c].map((val, i) => (
         <div key={i} className={styles.perspective}>
           <div
+            key={`${animEpoch}-${i}`}
             className={`${styles.dieAnimWrap} ${rolling ? rollClass[i] ?? styles.dieRolling2 : ""}`}
           >
             <DieFace value={val} />
