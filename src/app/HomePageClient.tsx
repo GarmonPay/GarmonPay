@@ -115,7 +115,7 @@ export default function HomePage() {
 
       <main className="relative min-h-screen overflow-x-hidden bg-[#05020a] text-white">
         {/* Hero */}
-        <section className="relative flex min-h-[92vh] flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
+        <section className="relative flex min-h-[92vh] flex-col items-center justify-center px-4 pb-20 pt-24 text-center sm:pb-24 sm:pt-28">
           <div
             className="pointer-events-none absolute inset-0 overflow-hidden"
             aria-hidden
@@ -130,7 +130,7 @@ export default function HomePage() {
               GarmonPay
             </p>
             <h1
-              className={`${cinzelDecorative.className} mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl lg:text-7xl`}
+              className={`${cinzelDecorative.className} mx-auto max-w-3xl text-3xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl lg:text-7xl`}
             >
               <span className="block bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#d97706] bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(234,179,8,0.35)]">
                 Get Seen
@@ -147,17 +147,17 @@ export default function HomePage() {
               purple-and-gold ecosystem. It is completely free to start—no credit card
               required.
             </p>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <div className="mt-10 flex w-full flex-wrap items-center justify-center gap-3 sm:w-auto sm:gap-4">
               <Link
                 href="/register"
-                className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-6 py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 sm:px-8 sm:text-base"
+                className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-6 py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 sm:w-auto sm:px-8 sm:text-base"
               >
                 <span className="hidden sm:inline">Start Earning Free — No Credit Card Needed</span>
                 <span className="sm:hidden">Start Earning Free</span>
               </Link>
               <Link
                 href="/pricing"
-                className="rounded-xl border-2 border-[#eab308] bg-transparent px-8 py-3.5 text-base font-semibold text-[#fde047] transition hover:bg-[#eab308]/10"
+                className="w-full rounded-xl border-2 border-[#eab308] bg-transparent px-8 py-3.5 text-base font-semibold text-[#fde047] transition hover:bg-[#eab308]/10 sm:w-auto"
               >
                 View Plans
               </Link>
