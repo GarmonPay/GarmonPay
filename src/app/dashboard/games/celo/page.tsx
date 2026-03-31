@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+import { createBrowserClient } from "@/lib/supabase";
 
 type RoomRow = {
   id: string;
@@ -75,6 +76,35 @@ export default function CeloLobbyPage() {
       )
       .catch(() => setBalanceCents(null));
   }, [token]);
+
+  /** Live lobby: new rooms, player counts, status — refetch list on relevant DB changes. */
+  useEffect(() => {
+    if (!token) return;
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+    let isMounted = true;
+    const lobbyChannel = supabase
+      .channel("celo-lobby")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_rooms" },
+        () => {
+          if (isMounted) void load(token);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_room_players" },
+        () => {
+          if (isMounted) void load(token);
+        }
+      )
+      .subscribe();
+    return () => {
+      isMounted = false;
+      void supabase.removeChannel(lobbyChannel);
+    };
+  }, [token, load]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

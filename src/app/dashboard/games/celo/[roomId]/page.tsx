@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import DiceDisplay from "@/components/celo/DiceDisplay";
+import seatStyles from "@/components/celo/CeloSeat.module.css";
 
 type ChatRow = { id: string; user_id: string; message: string; created_at: string };
 
@@ -30,19 +32,32 @@ function shortId(uid: string) {
   return `${uid.slice(0, 8)}…`;
 }
 
+function mapBankerRollResultLabel(r: string | null | undefined): string | null {
+  if (!r) return null;
+  if (r === "instant_win") return "Banker instant win";
+  if (r === "instant_loss") return "Players win";
+  if (r === "point") return "Point set";
+  if (r === "no_count") return "No count";
+  return r;
+}
+
 function SeatAvatar({
   label,
   sub,
   gold,
   dashed,
+  seatNew,
 }: {
   label: string;
   sub: string;
   gold?: boolean;
   dashed?: boolean;
+  seatNew?: boolean;
 }) {
   return (
-    <div className={`flex flex-col items-center gap-1 min-w-[56px] ${gold ? "ring-2 ring-amber-400/80 rounded-full p-0.5" : ""}`}>
+    <div
+      className={`flex flex-col items-center gap-1 min-w-[56px] ${gold ? "ring-2 ring-amber-400/80 rounded-full p-0.5" : ""} ${seatNew ? seatStyles.seatNew : ""}`}
+    >
       <div
         className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white ${
           dashed ? "border-2 border-dashed border-white/30 bg-transparent" : "bg-violet-700"
@@ -91,6 +106,18 @@ export default function CeloRoomPage() {
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   /** Bump so dice remount and CSS @keyframes always run from t=0. */
   const [rollAnimEpoch, setRollAnimEpoch] = useState(0);
+  const [userEmail, setUserEmail] = useState("");
+  const [rtConnected, setRtConnected] = useState(true);
+  const [onlineInRoom, setOnlineInRoom] = useState(0);
+  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
+  const [currentRollerLabel, setCurrentRollerLabel] = useState<string | null>(null);
+  const [newSeatUserIds, setNewSeatUserIds] = useState<Set<string>>(() => new Set());
+
+  const skipBankerRoundRealtimeRef = useRef(false);
+  const balanceBaselineRef = useRef<number | null>(null);
+  const mainChannelRef = useRef<RealtimeChannel | null>(null);
+  const prevPlayerIdsRef = useRef<Set<string>>(new Set());
+  const firstSeatSyncRef = useRef(true);
 
   useEffect(() => {
     rollingRef.current = rolling;
@@ -112,14 +139,27 @@ export default function CeloRoomPage() {
     setDetail(data as typeof detail);
   }, [roomId, token]);
 
-  const fetchBalance = useCallback(async () => {
-    if (!token) return;
-    const res = await fetch("/api/wallet", { credentials: "include", headers: { ...authHeaders(token) } });
-    const d = await res.json().catch(() => ({}));
-    if (res.ok && typeof (d as { balance_cents?: unknown }).balance_cents === "number") {
-      setBalanceCents((d as { balance_cents: number }).balance_cents);
-    }
-  }, [token]);
+  const fetchBalanceWithFlash = useCallback(
+    async (allowFlash: boolean) => {
+      if (!token) return;
+      const res = await fetch("/api/wallet", { credentials: "include", headers: { ...authHeaders(token) } });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || typeof (d as { balance_cents?: unknown }).balance_cents !== "number") return;
+      const next = (d as { balance_cents: number }).balance_cents;
+      if (allowFlash && balanceBaselineRef.current !== null) {
+        if (next > balanceBaselineRef.current) {
+          setBalanceFlash("up");
+          window.setTimeout(() => setBalanceFlash(null), 1000);
+        } else if (next < balanceBaselineRef.current) {
+          setBalanceFlash("down");
+          window.setTimeout(() => setBalanceFlash(null), 1000);
+        }
+      }
+      balanceBaselineRef.current = next;
+      setBalanceCents(next);
+    },
+    [token]
+  );
 
   useEffect(() => {
     setChatMessages([]);
@@ -144,6 +184,7 @@ export default function CeloRoomPage() {
     }
   }, [roomId, token]);
 
+  /** Session only — room data loads after realtime channel is SUBSCRIBED (avoids join race). */
   useEffect(() => {
     if (!roomId) {
       setLoading(false);
@@ -160,33 +201,12 @@ export default function CeloRoomPage() {
       if (cancelled) return;
       setToken(s.accessToken ?? null);
       setUserId(s.userId ?? null);
-      setLoading(true);
-      const res = await fetch(`/api/celo/room/${roomId}`, {
-        credentials: "include",
-        headers: {
-          ...(s.accessToken ? { Authorization: `Bearer ${s.accessToken}` } : {}),
-        },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (cancelled) return;
-      if (!res.ok) {
-        setError((data as { error?: string }).error ?? "Could not load room");
-        setDetail(null);
-      } else {
-        setError(null);
-        setDetail(data as typeof detail);
-      }
-      setLoading(false);
+      setUserEmail(s.email ?? "");
     })();
     return () => {
       cancelled = true;
     };
   }, [roomId, router]);
-
-  useEffect(() => {
-    if (!token) return;
-    void fetchBalance();
-  }, [token, fetchBalance, detail?.room]);
 
   useEffect(() => {
     if (!detail?.active_round || rolling || rollingRef.current || rollBusy) return;
@@ -198,20 +218,11 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     if (!detail?.you?.role || !roomId) return;
-    void fetchChat();
-    const id = window.setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        void fetchChat();
-      }
-    }, 10_000);
     const onVis = () => {
       if (document.visibilityState === "visible") void fetchChat();
     };
     document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [detail?.you?.role, roomId, fetchChat]);
 
   const beginRollAnimation = useCallback(() => {
@@ -240,10 +251,17 @@ export default function CeloRoomPage() {
       if (outcome != null) setResultLabel(outcome);
       if (payout != null) setPayoutCents(payout);
       await load();
-      await fetchBalance();
+      await fetchBalanceWithFlash(true);
     },
-    [load, fetchBalance]
+    [load, fetchBalanceWithFlash]
   );
+
+  const fetchInitialRoomData = useCallback(async () => {
+    await load();
+    await fetchChat();
+    await fetchBalanceWithFlash(false);
+    setLoading(false);
+  }, [load, fetchChat, fetchBalanceWithFlash]);
 
   const handleBankerStart = useCallback(async () => {
     if (!roomId || !token || rollBusy) return;
@@ -252,6 +270,7 @@ export default function CeloRoomPage() {
     setResultLabel(null);
     setPayoutCents(null);
     setError(null);
+    skipBankerRoundRealtimeRef.current = true;
     try {
       const res = await fetch("/api/celo/round/start", {
         method: "POST",
@@ -279,6 +298,7 @@ export default function CeloRoomPage() {
       setError("Network error");
       endRollAnimation();
     } finally {
+      skipBankerRoundRealtimeRef.current = false;
       setRollBusy(false);
     }
   }, [roomId, token, rollBusy, playOutcomeReveal, beginRollAnimation, endRollAnimation]);
@@ -326,6 +346,32 @@ export default function CeloRoomPage() {
     }
   }, [roomId, token, rollBusy, playOutcomeReveal, beginRollAnimation, endRollAnimation]);
 
+  const triggerBankerRoundFromRealtime = useCallback(
+    (row: Record<string, unknown>) => {
+      if (skipBankerRoundRealtimeRef.current) return;
+      const dice = row.banker_roll as number[] | undefined;
+      if (!Array.isArray(dice) || dice.length !== 3) return;
+      if (rollingRef.current) return;
+      rollingRef.current = true;
+      setRollAnimEpoch((e) => e + 1);
+      setRolling(true);
+      setRollName(null);
+      setResultLabel(null);
+      setPayoutCents(null);
+      setCurrentRollerLabel("Banker");
+      const name = String(row.banker_roll_name ?? "");
+      const res = String(row.banker_roll_result ?? "");
+      const label = mapBankerRollResultLabel(res);
+      window.setTimeout(() => {
+        rollingRef.current = false;
+        setRolling(false);
+        setCurrentRollerLabel(null);
+        void playOutcomeReveal([dice[0]!, dice[1]!, dice[2]!], name, label, null);
+      }, MIN_ROLL_MS);
+    },
+    [playOutcomeReveal]
+  );
+
   const triggerRemoteRollAnimation = useCallback(
     (row: {
       user_id: string;
@@ -343,6 +389,7 @@ export default function CeloRoomPage() {
       setRollName(null);
       setResultLabel(null);
       setPayoutCents(null);
+      setCurrentRollerLabel(shortId(row.user_id));
       const dice = [row.dice[0]!, row.dice[1]!, row.dice[2]!] as [number, number, number];
       const name = row.roll_name ?? "";
       const outcome = row.outcome ?? null;
@@ -350,40 +397,67 @@ export default function CeloRoomPage() {
       window.setTimeout(() => {
         rollingRef.current = false;
         setRolling(false);
+        setCurrentRollerLabel(null);
         void playOutcomeReveal(dice, name, outcome, payout);
       }, MIN_ROLL_MS);
     },
     [userId, playOutcomeReveal]
   );
 
+  const fetchSideBetsPlaceholder = useCallback(() => {
+    /* Side bets API not wired — room list still refreshes via load */
+  }, []);
+
+  /** Realtime: subscribe first, then fetch room (avoids missing joins between fetch + subscribe). */
   useEffect(() => {
     if (!roomId || !userId) return;
     const supabase = createBrowserClient();
-    if (!supabase) return;
+    if (!supabase) {
+      void fetchInitialRoomData();
+      return;
+    }
 
+    let isMounted = true;
     const channel = supabase
-      .channel(`celo-room-${roomId}`)
+      .channel(`room-${roomId}`, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: roomId },
+        },
+      })
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_rounds",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "*", schema: "public", table: "celo_room_players", filter: `room_id=eq.${roomId}` },
         () => {
+          if (!isMounted) return;
           void load();
         }
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_player_rolls",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
         (payload) => {
+          if (!isMounted) return;
+          void load();
+          const row = payload.new as Record<string, unknown> | undefined;
+          if (!row || !Array.isArray(row.banker_roll) || (row.banker_roll as number[]).length !== 3) return;
+          const ev = (payload as { eventType?: string; old?: Record<string, unknown> }).eventType;
+          if (ev === "INSERT") {
+            triggerBankerRoundFromRealtime(row);
+            return;
+          }
+          if (ev === "UPDATE") {
+            const oldRow = (payload as { old?: Record<string, unknown> }).old;
+            const had = Array.isArray(oldRow?.banker_roll) && (oldRow!.banker_roll as number[]).length === 3;
+            if (!had) triggerBankerRoundFromRealtime(row);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          if (!isMounted) return;
           const row = payload.new as Record<string, unknown>;
           triggerRemoteRollAnimation({
             user_id: String(row.user_id ?? ""),
@@ -396,35 +470,141 @@ export default function CeloRoomPage() {
       )
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "UPDATE", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
         () => {
+          if (!isMounted) return;
           void load();
         }
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_chat",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const row = payload.new as ChatRow;
-          if (row?.id) setChatMessages((prev) => [...prev, row]);
+        { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
+        () => {
+          if (!isMounted) return;
+          fetchSideBetsPlaceholder();
+          void load();
         }
       )
-      .subscribe();
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as ChatRow;
+          if (!row?.id) return;
+          setChatMessages((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [...prev, row];
+          });
+          window.setTimeout(() => {
+            chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 50);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "users", filter: `id=eq.${userId}` },
+        () => {
+          if (!isMounted) return;
+          void fetchBalanceWithFlash(true);
+        }
+      );
+
+    mainChannelRef.current = channel;
+
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        setRtConnected(true);
+        if (isMounted) void fetchInitialRoomData();
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        setRtConnected(false);
+      }
+    });
 
     return () => {
+      isMounted = false;
+      mainChannelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [roomId, userId, load, triggerRemoteRollAnimation]);
+  }, [
+    roomId,
+    userId,
+    load,
+    fetchInitialRoomData,
+    triggerRemoteRollAnimation,
+    triggerBankerRoundFromRealtime,
+    fetchSideBetsPlaceholder,
+    fetchBalanceWithFlash,
+  ]);
+
+  /** Presence: who has the room open (approximate live viewers). */
+  useEffect(() => {
+    if (!roomId || !userId) return;
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+    const ch = supabase.channel(`presence-${roomId}`, { config: { presence: { key: userId } } });
+    ch
+      .on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState();
+        setOnlineInRoom(Object.keys(state).length);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await ch.track({
+            user_id: userId,
+            name: userEmail || shortId(userId),
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+  }, [roomId, userId, userEmail]);
+
+  /** Auto-resubscribe main channel when disconnected. */
+  useEffect(() => {
+    if (rtConnected) return;
+    const id = window.setInterval(() => {
+      mainChannelRef.current?.subscribe();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [rtConnected]);
+
+  /** Highlight seats when new players appear. */
+  useEffect(() => {
+    firstSeatSyncRef.current = true;
+    prevPlayerIdsRef.current = new Set();
+    setNewSeatUserIds(new Set());
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!detail?.players) return;
+    const playerIds = detail.players.filter((p) => p.role === "player").map((p) => p.user_id);
+    if (firstSeatSyncRef.current) {
+      prevPlayerIdsRef.current = new Set(playerIds);
+      firstSeatSyncRef.current = false;
+      return;
+    }
+    const added = playerIds.filter((id) => !prevPlayerIdsRef.current.has(id));
+    prevPlayerIdsRef.current = new Set(playerIds);
+    if (added.length === 0) return;
+    setNewSeatUserIds((prev) => {
+      const next = new Set(prev);
+      added.forEach((id) => next.add(id));
+      return next;
+    });
+    added.forEach((uid) => {
+      window.setTimeout(() => {
+        setNewSeatUserIds((prev) => {
+          const next = new Set(prev);
+          next.delete(uid);
+          return next;
+        });
+      }, 2000);
+    });
+  }, [detail?.players]);
 
   async function post(path: string, body: object) {
     setBusy(path);
@@ -471,7 +651,6 @@ export default function CeloRoomPage() {
         return;
       }
       setChatDraft("");
-      await fetchChat();
     } finally {
       setChatSending(false);
     }
@@ -554,6 +733,18 @@ export default function CeloRoomPage() {
           <span className="text-fintech-muted text-xs hidden lg:inline">Timer —</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {rtConnected ? (
+            <span className="whitespace-nowrap" style={{ color: "#10B981", fontSize: 11 }}>
+              ● LIVE
+            </span>
+          ) : (
+            <span className="whitespace-nowrap" style={{ color: "#EF4444", fontSize: 11 }}>
+              ● RECONNECTING…
+            </span>
+          )}
+          <span className="text-[11px] text-white/70 hidden sm:inline whitespace-nowrap">
+            👁 {Math.max(onlineInRoom, 1)} watching
+          </span>
           <Link href="/dashboard/games/celo" className="text-xs text-amber-400 hover:underline">
             Lobby
           </Link>
@@ -637,6 +828,9 @@ export default function CeloRoomPage() {
             ) : (
               <>
                 <DiceDisplay values={diceValues} rolling={rolling} animEpoch={rollAnimEpoch} />
+                {currentRollerLabel ? (
+                  <p className="mt-2 text-xs text-violet-300/90">Rolling: {currentRollerLabel}</p>
+                ) : null}
                 {rollName ? (
                   <p className="mt-4 text-lg sm:text-2xl font-bold text-center text-amber-200 px-2">{rollName}</p>
                 ) : (
@@ -671,6 +865,7 @@ export default function CeloRoomPage() {
                   label={shortId(p.user_id)}
                   sub={`$${(p.bet_cents / 100).toFixed(2)}`}
                   gold={p.user_id === userId}
+                  seatNew={newSeatUserIds.has(p.user_id)}
                 />
               ))}
               {Array.from({ length: emptySlots }).map((_, i) => (
@@ -734,7 +929,13 @@ export default function CeloRoomPage() {
           <div className="flex flex-col text-xs text-fintech-muted">
             <span>
               Balance:{" "}
-              <span className="text-white font-semibold">
+              <span
+                className="font-bold transition-colors duration-300"
+                style={{
+                  color:
+                    balanceFlash === "up" ? "#10B981" : balanceFlash === "down" ? "#EF4444" : "#ffffff",
+                }}
+              >
                 {balanceCents != null ? `$${(balanceCents / 100).toFixed(2)}` : "—"}
               </span>
             </span>
