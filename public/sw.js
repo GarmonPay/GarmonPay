@@ -1,4 +1,4 @@
-const CACHE_NAME = "garmonpay-v2-ad-packages";
+const CACHE_NAME = "garmonpay-v3-static";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -25,8 +25,10 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (request.method !== "GET") return;
   const path = url.pathname;
+  // Do NOT cache the homepage — it must always be fetched fresh from the server
+  // so the full landing page is always served (never a stale cached splash).
+  if (path === "/") return;
   const isStatic =
-    path === "/" ||
     path === "/manifest.json" ||
     path.startsWith("/icon-") ||
     path.startsWith("/_next/static/") ||

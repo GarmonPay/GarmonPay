@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Cinzel_Decorative } from "next/font/google";
 import { MARKETING_PLANS, type MarketingPlanId } from "@/lib/garmon-plan-config";
+import { getSessionAsync } from "@/lib/session";
 
 const cinzelDecorative = Cinzel_Decorative({
   subsets: ["latin"],
@@ -71,6 +72,13 @@ export default function HomePage() {
   const [referralCount, setReferralCount] = useState(25);
   const [hoursPerReferralDay, setHoursPerReferralDay] = useState(2);
   const [plan, setPlan] = useState<MarketingPlanId>("growth");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSessionAsync().then((session) => {
+      if (session?.email) setUserEmail(session.email);
+    });
+  }, []);
 
   const projections = useMemo(() => {
     const p = MARKETING_PLANS[plan];
@@ -95,6 +103,19 @@ export default function HomePage() {
 
   return (
     <>
+      {userEmail && (
+        <div className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-violet-900/90 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-md border-b border-violet-700/60">
+          <span>
+            Welcome back, <span className="text-[#fde047]">{userEmail}</span>
+          </span>
+          <Link
+            href="/dashboard"
+            className="shrink-0 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-500"
+          >
+            Go to Dashboard →
+          </Link>
+        </div>
+      )}
       <style>{`
         @keyframes gp-float-a {
           0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.45; }
