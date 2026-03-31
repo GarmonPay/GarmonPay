@@ -4,8 +4,6 @@ import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { getCeloUserId, admin } from "@/lib/celo-server";
 import { rotateBankerAfterRound } from "@/lib/celo-banker-rotation";
 
-const MAX_BANKER_REROLLS = 24;
-
 export async function POST(request: Request) {
   try {
     const userId = await getCeloUserId(request);
@@ -81,20 +79,23 @@ export async function POST(request: Request) {
     const round_number = (lastRound?.round_number ?? 0) + 1;
     const feePct = Number(room.platform_fee_pct ?? 10);
 
-    let dice: [number, number, number] = [1, 1, 1];
+    /** Never seed with [1,1,1] — that is a real instant-win hand (ACE OUT). Always use CSPRNG first. */
+    let bankerRerolls = 0;
+    let dice: [number, number, number] = rollThreeDice();
     let ev = evaluateRoll(dice);
-    let attempts = 0;
-    while (ev.result === "no_count" && attempts < MAX_BANKER_REROLLS) {
+
+    while (ev.result === "no_count") {
+      bankerRerolls++;
+      if (bankerRerolls >= 3) {
+        ev = {
+          rollName: "Three No Counts — Banker Loses!",
+          result: "instant_loss",
+          dice: ev.dice,
+        };
+        break;
+      }
       dice = rollThreeDice();
       ev = evaluateRoll(dice);
-      attempts++;
-    }
-
-    if (ev.result === "no_count") {
-      return NextResponse.json(
-        { error: "Banker roll could not resolve — try starting the round again" },
-        { status: 500 }
-      );
     }
 
     const platform_fee_cents = Math.floor((total_pot_cents * feePct) / 100);
@@ -117,6 +118,7 @@ export async function POST(request: Request) {
         total_pot_cents,
         platform_fee_cents,
         completed_at: completedAt,
+        banker_rerolls: bankerRerolls,
       })
       .select("id")
       .single();
@@ -145,7 +147,7 @@ export async function POST(request: Request) {
         total_pot_cents,
         banker_roll: dice,
         result: ev.result,
-        attempts,
+        banker_rerolls: bankerRerolls,
       },
     });
 
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
         rollName: ev.rollName,
         result: ev.result,
         point: ev.point,
-        rerolls: attempts,
+        rerolls: bankerRerolls,
       },
     });
   } catch (e) {

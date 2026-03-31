@@ -8,11 +8,14 @@ import { randomInt } from "node:crypto";
 export type RollResultKind = "instant_win" | "instant_loss" | "point" | "no_count";
 
 export function rollThreeDice(): [number, number, number] {
-  return [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)];
-}
-
-function pickVariant(a: string, b: string): string {
-  return randomInt(0, 2) === 0 ? a : b;
+  // crypto.randomInt(min, max) — max is EXCLUSIVE
+  const d1 = randomInt(1, 7);
+  const d2 = randomInt(1, 7);
+  const d3 = randomInt(1, 7);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[celo-engine] Server dice roll:", d1, d2, d3);
+  }
+  return [d1, d2, d3];
 }
 
 export function evaluateRoll(dice: [number, number, number]): {
@@ -21,18 +24,18 @@ export function evaluateRoll(dice: [number, number, number]): {
   point?: number;
   dice: number[];
 } {
-  const sorted = [...dice].sort((a, b) => a - b) as [number, number, number];
-  const [a, b, c] = sorted;
-  const set = new Set(sorted);
+  const [a0, b0, c0] = dice;
+  const sorted = [...dice].sort((x, y) => x - y);
+  const [s1, s2, s3] = sorted as [number, number, number];
 
-  // 1. C-Lo: 4, 5, 6
-  if (set.has(4) && set.has(5) && set.has(6)) {
+  // ── INSTANT WINS ──
+
+  if (s1 === 4 && s2 === 5 && s3 === 6) {
     return { rollName: "C-LO! 🎲", result: "instant_win", dice: sorted };
   }
 
-  // 2. Trips
-  if (a === c) {
-    const tripNames: Record<number, string> = {
+  if (s1 === s2 && s2 === s3) {
+    const names: Record<number, string> = {
       1: "ACE OUT! 🎲",
       2: "TRIP DEUCES! 🎲",
       3: "TRIP THREES! 🎲",
@@ -40,73 +43,71 @@ export function evaluateRoll(dice: [number, number, number]): {
       5: "TRIP FIVES! 🎲",
       6: "TRIP SIXES - THE BOSS! 👑",
     };
-    return {
-      rollName: tripNames[a] ?? "TRIPS! 🎲",
-      result: "instant_win",
-      dice: sorted,
-    };
+    return { rollName: names[s1] ?? "TRIPS! 🎲", result: "instant_win", dice: sorted };
   }
 
-  // 3. Shit: 1, 2, 3
-  if (a === 1 && b === 2 && c === 3) {
-    return { rollName: "SHIT! 💩", result: "instant_loss", dice: sorted };
-  }
-
-  // Pair patterns (not triple)
-  let singleton: number | null = null;
-  if (a === b && c !== a) {
-    singleton = c;
-  } else if (b === c && a !== b) {
-    singleton = a;
-  } else {
-    return { rollName: "No Count - Roll Again", result: "no_count", dice: sorted };
-  }
-
-  // Hand crack: pair + singleton 6 (e.g. 1,1,6 not triple)
-  if (singleton === 6) {
+  if (
+    (a0 === b0 && c0 === 6 && a0 !== 6) ||
+    (a0 === c0 && b0 === 6 && a0 !== 6) ||
+    (b0 === c0 && a0 === 6 && b0 !== 6)
+  ) {
     return { rollName: "HAND CRACK! 💥", result: "instant_win", dice: sorted };
   }
 
-  // Dick: singleton is 1
-  if (singleton === 1) {
+  // ── INSTANT LOSSES ──
+
+  if (s1 === 1 && s2 === 2 && s3 === 3) {
+    return { rollName: "SHIT! 💩", result: "instant_loss", dice: sorted };
+  }
+
+  if (
+    (a0 === b0 && c0 === 1 && a0 !== 1) ||
+    (a0 === c0 && b0 === 1 && a0 !== 1) ||
+    (b0 === c0 && a0 === 1 && b0 !== 1)
+  ) {
     return { rollName: "DICK! 😂", result: "instant_loss", dice: sorted };
   }
 
-  // Points by singleton value
-  if (singleton === 5) {
-    return {
-      rollName: pickVariant("POUND! 🔵", "POLICE! 🚔"),
-      result: "point",
-      point: 5,
-      dice: sorted,
-    };
-  }
-  if (singleton === 4) {
-    return {
-      rollName: pickVariant("ZOE! 🇭🇹", "HAITIAN! 🇭🇹"),
-      result: "point",
-      point: 4,
-      dice: sorted,
-    };
-  }
-  if (singleton === 3) {
-    return {
-      rollName: pickVariant("GIRL! 👧", "HOE! 😅"),
-      result: "point",
-      point: 3,
-      dice: sorted,
-    };
-  }
-  if (singleton === 2) {
-    return {
-      rollName: pickVariant("SHORTLY! 👶", "JIT! 👶"),
-      result: "point",
-      point: 2,
-      dice: sorted,
-    };
+  // ── POINTS (pair + odd kicker) ──
+
+  let pairValue: number | null = null;
+  let oddValue: number | null = null;
+
+  if (a0 === b0 && c0 !== a0) {
+    pairValue = a0;
+    oddValue = c0;
+  } else if (a0 === c0 && b0 !== a0) {
+    pairValue = a0;
+    oddValue = b0;
+  } else if (b0 === c0 && a0 !== b0) {
+    pairValue = b0;
+    oddValue = a0;
   }
 
-  return { rollName: "No Count - Roll Again", result: "no_count", dice: sorted };
+  if (pairValue !== null && oddValue !== null) {
+    const pointNames: Record<number, string[]> = {
+      5: ["POUND! 🔵", "POLICE! 🚔"],
+      4: ["ZOE! 🇭🇹", "HAITIAN! 🇭🇹"],
+      3: ["GIRL! 👧", "HOE! 😅"],
+      2: ["SHORTLY! 👶", "JIT! 👶"],
+    };
+    const names = pointNames[oddValue];
+    if (names) {
+      const name = names[randomInt(0, 2)];
+      return {
+        rollName: name,
+        result: "point",
+        point: oddValue,
+        dice: sorted,
+      };
+    }
+  }
+
+  return {
+    rollName: "No Count — Roll Again",
+    result: "no_count",
+    dice: sorted,
+  };
 }
 
 /**
@@ -130,9 +131,7 @@ export function resolvePlayerRoundOutcome(
 ): "win" | "loss" {
   if (playerEv.result === "instant_win") return "win";
   if (playerEv.result === "instant_loss") return "loss";
-  if (playerEv.result === "no_count") {
-    throw new Error("Player roll must not be no_count when resolving");
-  }
+  if (playerEv.result === "no_count") return "loss";
   if (playerEv.result === "point") {
     if (
       bankerRollResult === "point" &&

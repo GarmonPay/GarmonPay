@@ -827,7 +827,12 @@ export default function CeloRoomPage() {
               </div>
             ) : (
               <>
-                <DiceDisplay values={diceValues} rolling={rolling} animEpoch={rollAnimEpoch} />
+                <DiceDisplay
+                  values={diceValues}
+                  rolling={rolling}
+                  animEpoch={rollAnimEpoch}
+                  debugShowValues={process.env.NEXT_PUBLIC_CELO_DEBUG_DICE === "1"}
+                />
                 {currentRollerLabel ? (
                   <p className="mt-2 text-xs text-violet-300/90">Rolling: {currentRollerLabel}</p>
                 ) : null}

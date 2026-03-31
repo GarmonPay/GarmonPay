@@ -16,17 +16,30 @@
   }
 }
 
-/* Perspective on a parent so 3D rotation is visible (not flattened). */
-.perspective {
-  perspective: 560px;
-  flex-shrink: 0;
+.diceRow {
+  --die-outer: 60px;
 }
 
+@media (min-width: 640px) {
+  .diceRow {
+    --die-outer: 80px;
+  }
+}
+
+.perspective {
+  perspective: 720px;
+  flex-shrink: 0;
+  width: var(--die-outer);
+  height: var(--die-outer);
+}
+
+/* Outer shell: tumbling animation while rolling */
 .dieAnimWrap {
   transform-style: preserve-3d;
   will-change: transform;
   transform: translateZ(0);
-  backface-visibility: visible;
+  width: 100%;
+  height: 100%;
 }
 
 .dieRolling1 {
@@ -45,7 +58,87 @@
   .dieRolling1,
   .dieRolling2,
   .dieRolling3 {
-    /* Still show a visible tumble; avoid instant 0ms which looks like “no animation”. */
     animation: dieRoll 1.2s ease-out forwards;
   }
+}
+
+/* --- True CSS 3D cube: six pip faces, oriented like casino dice --- */
+.cube {
+  --half: 30px;
+  --die-size: 60px;
+  width: var(--die-size);
+  height: var(--die-size);
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.35s ease-out;
+}
+
+@media (min-width: 640px) {
+  .cube {
+    --half: 40px;
+    --die-size: 80px;
+  }
+}
+
+/* Final orientation so the face with `value` faces the camera */
+.cubeShow1 {
+  transform: rotateX(0deg) rotateY(0deg);
+}
+.cubeShow2 {
+  transform: rotateX(-90deg) rotateY(0deg);
+}
+.cubeShow3 {
+  transform: rotateX(0deg) rotateY(-90deg);
+}
+.cubeShow4 {
+  transform: rotateX(0deg) rotateY(90deg);
+}
+.cubeShow5 {
+  transform: rotateX(90deg) rotateY(0deg);
+}
+.cubeShow6 {
+  transform: rotateX(0deg) rotateY(180deg);
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  width: var(--die-size);
+  height: var(--die-size);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+/* Standard die: 1 front, 6 back, 3 right, 4 left, 2 top, 5 bottom */
+.faceFront {
+  transform: rotateY(0deg) translateZ(var(--half));
+}
+.faceBack {
+  transform: rotateY(180deg) translateZ(var(--half));
+}
+.faceRight {
+  transform: rotateY(90deg) translateZ(var(--half));
+}
+.faceLeft {
+  transform: rotateY(-90deg) translateZ(var(--half));
+}
+.faceTop {
+  transform: rotateX(90deg) translateZ(var(--half));
+}
+.faceBottom {
+  transform: rotateX(-90deg) translateZ(var(--half));
+}
+
+.faceInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  border: 2px solid #d4c5a0;
+  background: linear-gradient(145deg, #faf6f0 0%, #e8dfd0 45%, #f5f0e8 100%);
+  box-shadow:
+    inset 2px 2px 4px rgba(255, 255, 255, 0.65),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.35);
 }

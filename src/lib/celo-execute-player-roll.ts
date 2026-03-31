@@ -6,8 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { evaluateRoll, resolvePlayerRoundOutcome, rollThreeDice } from "@/lib/celo-engine";
 import { settlePointRound } from "@/lib/celo-settle-point-round";
 
-const MAX_PLAYER_REROLLS = 24;
-
 export type PlayerRollSuccess = {
   ok: true;
   roll: {
@@ -83,17 +81,22 @@ export async function executePlayerRoll(
     return { ok: false, error: "You already rolled this round", status: 400 };
   }
 
+  let rerollCount = 0;
   let dice: [number, number, number] = rollThreeDice();
   let ev = evaluateRoll(dice);
-  let attempts = 0;
-  while (ev.result === "no_count" && attempts < MAX_PLAYER_REROLLS) {
+
+  while (ev.result === "no_count") {
+    rerollCount++;
+    if (rerollCount >= 3) {
+      ev = {
+        rollName: `${ev.rollName} (3rd no count — loss)`,
+        result: "instant_loss",
+        dice: ev.dice,
+      };
+      break;
+    }
     dice = rollThreeDice();
     ev = evaluateRoll(dice);
-    attempts++;
-  }
-
-  if (ev.result === "no_count") {
-    return { ok: false, error: "Roll could not resolve — try again", status: 500 };
   }
 
   const outcome = resolvePlayerRoundOutcome(ev, round.banker_roll_result, round.banker_point);
@@ -111,6 +114,7 @@ export async function executePlayerRoll(
     outcome,
     payout_cents: 0,
     platform_fee_cents: 0,
+    reroll_count: rerollCount,
   });
 
   if (insErr) {
@@ -150,12 +154,18 @@ export async function executePlayerRoll(
       betCents: Number((r as { bet_cents: number }).bet_cents),
     }));
 
-    const settle = await settlePointRound(supabase, room_id, room.banker_id, {
-      id: round.id,
-      total_pot_cents: round.total_pot_cents,
-      platform_fee_cents: round.platform_fee_cents,
-      platform_fee_pct: room.platform_fee_pct,
-    }, winnerClaims);
+    const settle = await settlePointRound(
+      supabase,
+      room_id,
+      room.banker_id,
+      {
+        id: round.id,
+        total_pot_cents: round.total_pot_cents,
+        platform_fee_cents: round.platform_fee_cents,
+        platform_fee_pct: room.platform_fee_pct,
+      },
+      winnerClaims
+    );
 
     if (!settle.ok) {
       await supabase.from("celo_audit_log").insert({
@@ -194,7 +204,7 @@ export async function executePlayerRoll(
       result: ev.result,
       point: ev.point ?? null,
       outcome,
-      rerolls: attempts,
+      rerolls: rerollCount,
     },
     round_completed: roundCompleted,
     payout_cents,

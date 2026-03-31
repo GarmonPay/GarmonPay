@@ -1,0 +1,3 @@
+-- NOTE: GarmonPay credits/debits user funds through `wallet_ledger_entry` (see wallet-ledger.ts).
+-- Do NOT add parallel `increment_balance` on `users.balance` without going through the ledger,
+-- or balances will diverge from `wallet_balances` / Stripe / admin tools.
