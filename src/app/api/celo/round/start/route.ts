@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { evaluateRoll, rollThreeDice } from "@/lib/celo-engine";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { getCeloUserId, admin } from "@/lib/celo-server";
+import { rotateBankerAfterRound } from "@/lib/celo-banker-rotation";
 
 const MAX_BANKER_REROLLS = 24;
 
@@ -189,6 +190,10 @@ export async function POST(request: Request) {
     }
 
     const { data: roundOut } = await supabase.from("celo_rounds").select("*").eq("id", roundId).single();
+
+    if (ev.result !== "point") {
+      await rotateBankerAfterRound(supabase, room_id);
+    }
 
     return NextResponse.json({
       ok: true,
