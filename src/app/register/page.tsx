@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
-import { getRegisterUrl } from "@/lib/site-url";
+import { getSiteUrl } from "@/lib/site-url";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
@@ -58,6 +58,8 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -137,7 +139,7 @@ export default function RegisterPage() {
         email: trimmedEmail,
         password,
         options: {
-          emailRedirectTo: getRegisterUrl(),
+          emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
           data: {
             full_name: trimmedName,
             ...(refCode ? { referred_by_code: refCode } : {}),
@@ -179,38 +181,71 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleResend() {
+    setResendMessage("");
+    setResendLoading(true);
+    try {
+      const supabase = createBrowserClient();
+      if (supabase) {
+        await supabase.auth.resend({ type: "signup", email });
+      }
+      setResendMessage("Email sent!");
+      setTimeout(() => setResendMessage(""), 3000);
+    } catch {
+      // ignore
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0c0618] text-white px-4 py-12">
-        <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)] text-center">
-          <div className="text-5xl mb-4">🎉</div>
-          <h2 className={`${cinzel.className} text-2xl font-bold bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent`}>
-            Welcome to GarmonPay!
-          </h2>
-          <p className="mt-3 text-violet-200/90">
-            Your account is ready. Check your email to confirm your address, then sign in.
-          </p>
-          <div className="mt-8 space-y-3 text-left text-sm text-violet-200/80">
-            <p className="font-semibold text-white text-base">Here&apos;s how to get started:</p>
-            <div className="flex items-start gap-3">
-              <span className="text-[#eab308] font-bold">1.</span>
-              <span>Confirm your email (check your inbox)</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-[#eab308] font-bold">2.</span>
-              <span>Watch your first ad and earn instantly</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-[#eab308] font-bold">3.</span>
-              <span>Share your referral link and earn $0.50 per signup</span>
-            </div>
-          </div>
-          <Link
-            href="/login"
-            className="mt-8 block w-full rounded-xl bg-gradient-to-r from-[#eab308] to-[#d97706] py-3.5 font-semibold text-[#0c0618] transition hover:from-[#fde047] hover:to-[#eab308]"
+      <div
+        className="min-h-screen flex items-center justify-center px-4 py-12"
+        style={{ background: "#0e0118", color: "#fff" }}
+      >
+        <div
+          className="w-full max-w-md rounded-2xl bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)] text-center"
+          style={{ border: "1px solid rgba(245,200,66,0.35)" }}
+        >
+          <div className="text-6xl mb-2 leading-none">📧</div>
+          <h2
+            className={`${cinzel.className} mt-4 text-2xl font-bold md:text-3xl`}
+            style={{ background: "linear-gradient(90deg,#fde047,#eab308,#a16207)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
           >
-            Go to Login
-          </Link>
+            Check your email!
+          </h2>
+          <p className="mt-4 text-sm" style={{ color: "rgba(221,214,254,0.9)" }}>
+            We sent a confirmation link to
+          </p>
+          <p className="mt-1 font-semibold" style={{ color: "#F5C842" }}>
+            {email}
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "rgba(196,181,253,0.85)" }}>
+            Click the link to activate your account
+          </p>
+          <p className="mt-2 text-xs" style={{ color: "rgba(167,139,250,0.65)" }}>
+            The link expires in 24 hours. Check your spam folder if you don&apos;t see it.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendLoading}
+              className="w-full rounded-xl py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ border: "2px solid #7C3AED", color: "#c4b5fd", background: "transparent" }}
+            >
+              {resendLoading ? "Sending…" : resendMessage || "Resend confirmation email"}
+            </button>
+            <Link
+              href="/register"
+              className="text-sm"
+              style={{ color: "rgba(167,139,250,0.7)" }}
+            >
+              Wrong email? Start over
+            </Link>
+          </div>
         </div>
       </div>
     );

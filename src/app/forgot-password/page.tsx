@@ -37,72 +37,126 @@ export default function ForgotPasswordPage() {
         redirectTo: getResetPasswordUrl(),
       });
       if (err) {
-        setError(err.message || "Failed to send reset email");
+        // Always show success (don't leak whether account exists)
+        setSent(true);
         return;
       }
       setSent(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex flex-1 flex-col items-center justify-center px-4 py-12 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
+      style={{ background: "#0e0118", color: "#fff" }}
+    >
+      <div className="w-full max-w-md rounded-2xl border bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]"
+        style={{ borderColor: "rgba(245,200,66,0.35)" }}>
+
         <h1
-          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight md:text-3xl`}
+          style={{ background: "linear-gradient(90deg,#fde047,#eab308,#a16207)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
         >
           GarmonPay
         </h1>
-        <p className="mt-2 text-center text-sm font-medium text-violet-200/90">Reset your password</p>
-        <p className="mt-1 text-center text-xs text-violet-400/70">
-          We&apos;ll email you a secure link if an account exists.
-        </p>
 
         {sent ? (
-          <p className="mt-8 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200/95">
-            If an account exists for that email, we sent a secure reset link. It expires in 15 minutes. Check your inbox
-            and spam folder.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-            <div>
-              <label htmlFor="reset-email" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
-                Email
-              </label>
-              <input
-                id="reset-email"
-                type="email"
-                autoComplete="email"
-                className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
+          <div className="mt-8 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
+              style={{ background: "rgba(34,197,94,0.12)", border: "2px solid rgba(34,197,94,0.3)" }}>
+              <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8" style={{ color: "#22c55e" }}>
+                <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
+            <h2 className="mt-4 text-lg font-semibold text-white">Check your email</h2>
+            <p className="mt-2 text-sm" style={{ color: "rgba(196,181,253,0.85)" }}>
+              We sent a password reset link to{" "}
+              <span className="font-medium text-white">{email}</span>
+            </p>
+            <p className="mt-2 text-xs" style={{ color: "rgba(167,139,250,0.7)" }}>
+              Link expires in 1 hour. Check your spam folder if you don&apos;t see it.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="mt-2 text-center text-sm font-medium" style={{ color: "rgba(221,214,254,0.9)" }}>
+              Reset your password
+            </p>
+            <p className="mt-1 text-center text-xs" style={{ color: "rgba(167,139,250,0.7)" }}>
+              Enter your email and we&apos;ll send you a reset link
+            </p>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-press w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {loading ? "Sending…" : "Send reset link"}
-            </button>
+            <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+              <div>
+                <label
+                  htmlFor="reset-email"
+                  className="block text-xs font-medium uppercase tracking-wider"
+                  style={{ color: "rgba(196,181,253,0.9)" }}
+                >
+                  Email
+                </label>
+                <input
+                  id="reset-email"
+                  type="email"
+                  autoComplete="email"
+                  className="mt-1.5 w-full rounded-xl px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition"
+                  style={{
+                    background: "rgba(0,0,0,0.4)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(245,200,66,0.6)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
+                />
+              </div>
 
-            {error && (
-              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300" role="alert">
-                {error}
-              </p>
-            )}
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl py-3.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2"
+                style={{ background: "linear-gradient(90deg,#eab308,#d97706)", color: "#0c0618" }}
+              >
+                {loading ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Sending…
+                  </>
+                ) : (
+                  "Send Reset Link"
+                )}
+              </button>
+
+              {error && (
+                <p
+                  className="rounded-lg px-3 py-2 text-center text-sm"
+                  style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
+            </form>
+          </>
         )}
 
-        <p className="mt-8 text-center text-sm text-violet-300/90">
-          <Link href="/login" className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]">
-            Back to login
+        <p className="mt-8 text-center text-sm" style={{ color: "rgba(196,181,253,0.9)" }}>
+          Remember your password?{" "}
+          <Link
+            href="/login"
+            className="font-medium underline underline-offset-2"
+            style={{ color: "#F5C842" }}
+          >
+            Login
           </Link>
         </p>
       </div>

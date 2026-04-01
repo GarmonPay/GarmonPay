@@ -14,26 +14,70 @@ const cinzel = Cinzel_Decorative({
   display: "swap",
 });
 
+/** Map raw auth error strings to user-friendly messages. */
+function friendlyLoginError(raw: string): { message: string; unconfirmed: boolean } {
+  const msg = raw.toLowerCase();
+  const unconfirmed =
+    msg.includes("confirm your email") ||
+    msg.includes("email not confirmed") ||
+    msg.includes("verify your email") ||
+    msg.includes("email_not_confirmed");
+  if (unconfirmed) {
+    return { message: "Please confirm your email first.", unconfirmed: true };
+  }
+  if (msg.includes("invalid login") || msg.includes("invalid credentials") || msg.includes("incorrect password") || msg.includes("wrong password")) {
+    return { message: "Incorrect password. Please try again.", unconfirmed: false };
+  }
+  if (msg.includes("no user") || msg.includes("user not found") || msg.includes("no account")) {
+    return { message: "No account found with that email.", unconfirmed: false };
+  }
+  if (msg.includes("locked")) {
+    return { message: raw, unconfirmed: false };
+  }
+  if (msg.includes("network") || msg.includes("fetch")) {
+    return { message: "Network error. Check your connection and try again.", unconfirmed: false };
+  }
+  if (msg.includes("error") || msg.includes("exception")) {
+    return { message: "Something went wrong. Please try again.", unconfirmed: false };
+  }
+  return { message: raw, unconfirmed: false };
+}
+
 function LoginForm() {
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+
+  async function handleResend() {
+    setResendMessage("");
+    setResendLoading(true);
+    try {
+      const supabase = createBrowserClient();
+      if (supabase) {
+        await supabase.auth.resend({ type: "signup", email: email.trim() });
+      }
+      setResendMessage("Confirmation email sent! Check your inbox.");
+    } catch {
+      setResendMessage("Could not resend. Try registering again.");
+    } finally {
+      setResendLoading(false);
+    }
+  }
 
   async function login(e?: React.FormEvent) {
     e?.preventDefault();
     setError("");
+    setUnconfirmed(false);
+    setResendMessage("");
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setError("Email is required");
-      return;
-    }
-    if (!password) {
-      setError("Password is required");
-      return;
-    }
+    if (!trimmedEmail) { setError("Email is required"); return; }
+    if (!password) { setError("Password is required"); return; }
     setLoading(true);
     try {
       const lockRes = await fetch("/api/auth/check-lock", {
@@ -48,6 +92,7 @@ function LoginForm() {
         setLoading(false);
         return;
       }
+
       const result = await authLogin(trimmedEmail, password);
       if (!result.ok) {
         try {
@@ -59,10 +104,13 @@ function LoginForm() {
         } catch {
           // ignore
         }
-        setError(result.message);
+        const parsed = friendlyLoginError(result.message);
+        setError(parsed.message);
+        setUnconfirmed(parsed.unconfirmed);
         setLoading(false);
         return;
       }
+
       const supabase = createBrowserClient();
       if (supabase) {
         const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -71,6 +119,7 @@ function LoginForm() {
           return;
         }
       }
+
       try {
         const session = await import("@/lib/session").then((m) => m.getSessionAsync());
         if (session?.accessToken) {
@@ -82,6 +131,7 @@ function LoginForm() {
       } catch {
         // best-effort
       }
+
       const safeNext =
         nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
       if (result.isAdmin) {
@@ -90,60 +140,86 @@ function LoginForm() {
         window.location.href = safeNext ?? getDashboardUrl();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex flex-1 flex-col items-center justify-center px-4 py-12 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
+      style={{ background: "#0e0118", color: "#fff" }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]"
+        style={{ border: "1px solid rgba(245,200,66,0.35)" }}
+      >
         <h1
-          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight md:text-3xl`}
+          style={{ background: "linear-gradient(90deg,#fde047,#eab308,#a16207)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
         >
           GarmonPay
         </h1>
-        <p className="mt-2 text-center text-sm font-medium text-violet-200/90">Member login</p>
-        <p className="mt-1 text-center text-xs text-violet-400/70">Sign in to your dashboard</p>
+        <p className="mt-2 text-center text-sm font-medium" style={{ color: "rgba(221,214,254,0.9)" }}>
+          Member login
+        </p>
+        <p className="mt-1 text-center text-xs" style={{ color: "rgba(167,139,250,0.7)" }}>
+          Sign in to your dashboard
+        </p>
 
         <form onSubmit={login} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="login-email" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+            <label
+              htmlFor="login-email"
+              className="block text-xs font-medium uppercase tracking-wider"
+              style={{ color: "rgba(196,181,253,0.9)" }}
+            >
               Email
             </label>
             <input
               id="login-email"
               type="email"
               autoComplete="email"
-              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              className="mt-1.5 w-full rounded-xl px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition"
+              style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.1)" }}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(245,200,66,0.6)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
             />
           </div>
 
           <div>
-            <label htmlFor="login-password" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+            <label
+              htmlFor="login-password"
+              className="block text-xs font-medium uppercase tracking-wider"
+              style={{ color: "rgba(196,181,253,0.9)" }}
+            >
               Password
             </label>
             <input
               id="login-password"
               type="password"
               autoComplete="current-password"
-              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              className="mt-1.5 w-full rounded-xl px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition"
+              style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.1)" }}
               placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(245,200,66,0.6)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
             />
           </div>
 
-          <div className="flex justify-end pt-0.5">
+          <div className="flex justify-end">
             <Link
               href="/forgot-password"
-              className="text-sm font-medium text-[#fde047]/90 underline-offset-2 hover:text-[#eab308] hover:underline"
+              className="text-xs font-medium underline-offset-2 hover:underline"
+              style={{ color: "rgba(245,200,66,0.9)" }}
             >
               Forgot password?
             </Link>
@@ -152,25 +228,71 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-press mt-2 w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-xl py-3.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2"
+            style={{ background: "linear-gradient(90deg,#eab308,#d97706)", color: "#0c0618" }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                Signing in…
+              </>
+            ) : (
+              "Login"
+            )}
           </button>
 
-          {error && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300" role="alert">
+          {/* Unconfirmed email warning */}
+          {unconfirmed && (
+            <div
+              className="rounded-xl p-4 text-sm"
+              style={{ background: "rgba(245,200,66,0.08)", border: "1px solid rgba(245,200,66,0.35)" }}
+            >
+              <p className="font-semibold" style={{ color: "#F5C842" }}>
+                Please confirm your email first.
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "rgba(253,224,71,0.75)" }}>
+                Check your inbox for the link we sent when you registered.
+              </p>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="mt-3 w-full rounded-lg py-2 text-xs font-semibold transition disabled:opacity-60"
+                style={{ border: "1px solid rgba(245,200,66,0.5)", color: "#F5C842", background: "transparent" }}
+              >
+                {resendLoading ? "Sending…" : "Resend confirmation email"}
+              </button>
+              {resendMessage && (
+                <p className="mt-2 text-center text-xs" style={{ color: "#86efac" }}>
+                  {resendMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Generic error (non-unconfirmed) */}
+          {error && !unconfirmed && (
+            <p
+              className="rounded-lg px-3 py-2 text-center text-sm"
+              style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}
+              role="alert"
+            >
               {error}
             </p>
           )}
         </form>
 
-        <p className="mt-8 text-center text-sm text-violet-300/90">
-          Don&apos;t have an account?{" "}
+        <p className="mt-8 text-center text-sm" style={{ color: "rgba(196,181,253,0.9)" }}>
+          New member?{" "}
           <Link
             href="/register"
-            className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]"
+            className="font-medium underline underline-offset-2"
+            style={{ color: "#F5C842" }}
           >
-            Create one free
+            Create free account
           </Link>
         </p>
       </div>
@@ -182,7 +304,10 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-[calc(100vh-8rem)] flex flex-1 items-center justify-center px-4 py-12 text-violet-300/80">
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{ background: "#0e0118", color: "rgba(196,181,253,0.8)" }}
+        >
           Loading…
         </div>
       }
