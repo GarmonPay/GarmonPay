@@ -17,6 +17,9 @@ export async function POST(req: Request) {
     const userPayload = body?.user ?? body;
     const { id, email } = userPayload;
     const referralCode = body?.referralCode ?? userPayload?.referralCode ?? "";
+    const fullName = typeof (body?.full_name ?? userPayload?.full_name) === "string"
+      ? (body?.full_name ?? userPayload?.full_name).trim()
+      : "";
     if (!id || typeof id !== "string") {
       return NextResponse.json({ message: "id required" }, { status: 400 });
     }
@@ -63,9 +66,11 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existing) {
+      const updatePayload: Record<string, unknown> = { email: emailVal };
+      if (fullName) updatePayload.full_name = fullName;
       const { error: updateError } = await supabase
         .from("users")
-        .update({ email: emailVal })
+        .update(updatePayload)
         .eq("id", id);
       if (updateError) {
         console.error("Sync-user update error:", updateError);
@@ -76,8 +81,10 @@ export async function POST(req: Request) {
       const { error: insertError } = await supabase.from("users").insert({
         id,
         email: emailVal,
+        full_name: fullName || null,
         role: "user",
         balance: 0,
+        balance_cents: 0,
         membership: "free",
         created_at: new Date().toISOString(),
         registration_ip: registrationIp !== "unknown" ? registrationIp : null,
