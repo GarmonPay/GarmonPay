@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
-import { getUsersTableBalanceCents } from "@/lib/wallet-ledger";
+import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 /**
  * GET /api/wallet
- * Returns `users.balance` (cents) for the authenticated user. Null in DB → 0.
+ * Returns canonical balance in cents: `wallet_balances` first (same as Stripe / ledger),
+ * then `users.balance`. Matches web dashboard and avoids stale `users.balance` when
+ * it drifts from the ledger.
  */
 export async function GET(req: Request) {
   const userId = await getAuthUserId(req);
@@ -11,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const balanceCents = await getUsersTableBalanceCents(userId);
+  const balanceCents = await getCanonicalBalanceCents(userId);
   return NextResponse.json({
     balance_cents: balanceCents,
   });
