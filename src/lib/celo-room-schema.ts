@@ -11,7 +11,8 @@ export const CELO_ROOMS_COL = {
 
 /** Normalized room shape for UI + API logic (always cents). */
 export type NormalizedCeloRoom = Record<string, unknown> & {
-  id?: string;
+  id: string;
+  name: string;
   banker_id?: string;
   status?: string;
   room_type?: string;
@@ -21,6 +22,8 @@ export type NormalizedCeloRoom = Record<string, unknown> & {
   current_bank_cents: number;
   max_bet_cents: number;
   platform_fee_pct: number;
+  /** Mirrors DB celo_rooms.total_rounds (also updated by trigger on round complete). */
+  total_rounds: number;
 };
 
 export function normalizeCeloRoomRow(row: Record<string, unknown> | null | undefined): NormalizedCeloRoom | null {
@@ -30,13 +33,17 @@ export function normalizeCeloRoomRow(row: Record<string, unknown> | null | undef
   const maxBet = Number(row.max_bet_cents ?? Math.max(min * 10, bank));
   const fee = Number(row.platform_fee_pct ?? 10);
   const maxPlayers = Number(row.max_players ?? 0);
+  const totalRounds = Number(row.total_rounds ?? 0);
   return {
     ...row,
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
     min_bet_cents: min,
     current_bank_cents: bank,
     max_bet_cents: maxBet,
     platform_fee_pct: fee,
     max_players: maxPlayers,
+    total_rounds: totalRounds,
   };
 }
 
