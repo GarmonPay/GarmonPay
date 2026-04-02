@@ -116,6 +116,37 @@ export async function getWalletBalanceCents(userId: string): Promise<number | nu
 }
 
 /**
+ * Ensures public.wallet_balances has a row for this user (ledger + canonical reads).
+ * If missing, seeds from public.users.balance (cents, same column as getCanonicalBalanceCents fallback).
+ * Does not write users table.
+ */
+export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: true } | { ok: false; message: string; code?: string }> {
+  const client = supabase();
+  const { data: existing, error: selErr } = await client
+    .from("wallet_balances")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (selErr) return { ok: false, message: selErr.message, code: selErr.code };
+  if (existing) return { ok: true };
+
+  const { data: u, error: uErr } = await client.from("users").select("balance").eq("id", userId).maybeSingle();
+  if (uErr) return { ok: false, message: uErr.message, code: uErr.code };
+  const seedRaw = (u as { balance?: number | null } | null)?.balance;
+  const seed = seedRaw == null || !Number.isFinite(Number(seedRaw)) ? 0 : Math.max(0, Math.round(Number(seedRaw)));
+
+  const { error: insErr } = await client.from("wallet_balances").insert({
+    user_id: userId,
+    balance: seed,
+  });
+  if (insErr) {
+    if (insErr.code === "23505") return { ok: true };
+    return { ok: false, message: insErr.message, code: insErr.code };
+  }
+  return { ok: true };
+}
+
+/**
  * Canonical user balance for dashboard, wallet, and betting (Fight Arena, etc.).
  * Reads wallet_balances first (same source as ledger); falls back to users.balance.
  * Use this everywhere so Stripe deposits and betting share one balance.
