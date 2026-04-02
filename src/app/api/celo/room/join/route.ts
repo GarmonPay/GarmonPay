@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -50,23 +51,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const roomRecord = room as {
-    id: string;
-    status: string;
-    room_type: string;
-    join_code: string | null;
-    max_players: number;
-    min_bet_cents: number;
-    max_bet_cents: number;
-  };
+  const roomRecord = normalizeCeloRoomRow(room as Record<string, unknown>);
+  if (!roomRecord) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  }
 
-  if (!["waiting", "active"].includes(roomRecord.status)) {
+  if (!roomRecord.status || !["waiting", "active"].includes(roomRecord.status)) {
     return NextResponse.json({ error: "Room is not open for joining" }, { status: 400 });
   }
 
   // Private room: validate join code
   if (roomRecord.room_type === "private") {
-    if (!join_code || join_code.trim() !== (roomRecord.join_code ?? "").trim()) {
+    if (!join_code || join_code.trim() !== String(roomRecord.join_code ?? "").trim()) {
       return NextResponse.json({ error: "Invalid join code" }, { status: 403 });
     }
   }

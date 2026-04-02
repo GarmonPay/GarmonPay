@@ -3,6 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
+import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
@@ -221,21 +222,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Round is already completed" }, { status: 400 });
   }
 
-  // Fetch room
-  const { data: room } = await supabase
-    .from("celo_rooms")
-    .select("banker_id, current_bank_cents, platform_fee_pct")
-    .eq("id", room_id)
-    .single();
+  // Fetch room (supports current_bank_sc / minimum_entry_sc or legacy *_cents columns)
+  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const rm = room as {
+  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as NormalizedCeloRoom & {
     banker_id: string;
-    current_bank_cents: number;
-    platform_fee_pct: number;
   };
 
   const now = new Date().toISOString();
@@ -329,13 +324,17 @@ export async function POST(req: Request) {
           completed_at: now,
         }).eq("id", round_id),
         // Update room bank + celo flag
-        supabase.from("celo_rooms").update({
-          current_bank_cents: newBankCents,
-          status: "active",
-          last_activity: now,
-          last_round_was_celo: roll.isCelo,
-          banker_celo_at: roll.isCelo ? now : null,
-        }).eq("id", room_id),
+        supabase
+          .from("celo_rooms")
+          .update(
+            mergeCeloRoomUpdate(newBankCents, {
+              status: "active",
+              last_activity: now,
+              last_round_was_celo: roll.isCelo,
+              banker_celo_at: roll.isCelo ? now : null,
+            })
+          )
+          .eq("id", room_id),
       ]);
 
       await settleOpenSideBets(supabase, round_id, room_id);
@@ -413,14 +412,18 @@ export async function POST(req: Request) {
           status: "completed",
           completed_at: now,
         }).eq("id", round_id),
-        supabase.from("celo_rooms").update({
-          current_bank_cents: newBankCents,
-          banker_id: nextBankerId,
-          status: "active",
-          last_activity: now,
-          last_round_was_celo: false,
-          banker_celo_at: null,
-        }).eq("id", room_id),
+        supabase
+          .from("celo_rooms")
+          .update(
+            mergeCeloRoomUpdate(newBankCents, {
+              banker_id: nextBankerId,
+              status: "active",
+              last_activity: now,
+              last_round_was_celo: false,
+              banker_celo_at: null,
+            })
+          )
+          .eq("id", room_id),
         // Rotate roles
         supabase.from("celo_room_players")
           .update({ role: "player" })
@@ -542,10 +545,11 @@ export async function POST(req: Request) {
       // Shrink bank
       await supabase
         .from("celo_rooms")
-        .update({
-          current_bank_cents: Math.max(0, rm.current_bank_cents - playerBet),
-          last_activity: now,
-        })
+        .update(
+          mergeCeloRoomUpdate(Math.max(0, rm.current_bank_cents - playerBet), {
+            last_activity: now,
+          })
+        )
         .eq("id", room_id);
 
       // Check if round complete
@@ -604,10 +608,11 @@ export async function POST(req: Request) {
       );
       await supabase
         .from("celo_rooms")
-        .update({
-          current_bank_cents: rm.current_bank_cents + bankerNet,
-          last_activity: now,
-        })
+        .update(
+          mergeCeloRoomUpdate(rm.current_bank_cents + bankerNet, {
+            last_activity: now,
+          })
+        )
         .eq("id", room_id);
 
       const allDone = await checkAndCompleteRound(supabase, room_id, round_id, r.covered_by);
@@ -653,10 +658,11 @@ export async function POST(req: Request) {
         );
         await supabase
           .from("celo_rooms")
-          .update({
-            current_bank_cents: Math.max(0, rm.current_bank_cents - playerBet),
-            last_activity: now,
-          })
+          .update(
+            mergeCeloRoomUpdate(Math.max(0, rm.current_bank_cents - playerBet), {
+              last_activity: now,
+            })
+          )
           .eq("id", room_id);
       } else {
         // Banker wins this individual bet
@@ -669,10 +675,11 @@ export async function POST(req: Request) {
         );
         await supabase
           .from("celo_rooms")
-          .update({
-            current_bank_cents: rm.current_bank_cents + bankerNet,
-            last_activity: now,
-          })
+          .update(
+            mergeCeloRoomUpdate(rm.current_bank_cents + bankerNet, {
+              last_activity: now,
+            })
+          )
           .eq("id", room_id);
       }
 

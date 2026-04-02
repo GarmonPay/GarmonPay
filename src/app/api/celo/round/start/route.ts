@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -25,18 +26,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "room_id required" }, { status: 400 });
   }
 
-  // Fetch room
-  const { data: room } = await supabase
-    .from("celo_rooms")
-    .select("*")
-    .eq("id", room_id)
-    .single();
+  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const roomRecord = room as {
+  const roomRecord = normalizeCeloRoomRow(room as Record<string, unknown>) as {
     id: string;
     status: string;
     banker_id: string;

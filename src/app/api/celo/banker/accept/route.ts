@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 // Player has 30 seconds after rolling C-Lo to become the banker
 const ACCEPT_BANKER_WINDOW_MS = 30_000;
@@ -70,18 +71,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // Fetch room
-  const { data: room } = await supabase
-    .from("celo_rooms")
-    .select("banker_id, current_bank_cents, min_bet_cents, status")
-    .eq("id", room_id)
-    .single();
+  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const rm = room as {
+  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as {
     banker_id: string;
     current_bank_cents: number;
     min_bet_cents: number;

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Cinzel_Decorative } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -70,12 +71,31 @@ export default function CeloLobbyPage() {
     if (!sb) return;
     const { data } = await sb
       .from("celo_rooms")
-      .select("id,name,status,room_type,max_players,min_bet_cents,current_bank_cents,platform_fee_pct,last_activity")
+      .select("*")
       .eq("room_type", "public")
       .in("status", ["waiting", "active", "rolling"])
       .order("last_activity", { ascending: false })
       .limit(30);
-    setRooms((data as Room[]) ?? []);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    setRooms(
+      rows
+        .map((r) => normalizeCeloRoomRow(r))
+        .filter(Boolean)
+        .map((n) => {
+          const raw = n as Record<string, unknown>;
+          return {
+            id: String(raw.id),
+            name: String(raw.name ?? ""),
+            status: String(raw.status ?? ""),
+            room_type: String(raw.room_type ?? ""),
+            max_players: Number(raw.max_players ?? 0),
+            min_bet_cents: Number(raw.min_bet_cents ?? 0),
+            current_bank_cents: Number(raw.current_bank_cents ?? 0),
+            platform_fee_pct: Number(raw.platform_fee_pct ?? 10),
+            last_activity: String(raw.last_activity ?? ""),
+          } as Room;
+        })
+    );
   }, []);
 
   useEffect(() => {

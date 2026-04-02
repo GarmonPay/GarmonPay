@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -65,18 +66,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Bank already covered by another player" }, { status: 400 });
   }
 
-  // Fetch room for current bank amount
-  const { data: room } = await supabase
-    .from("celo_rooms")
-    .select("current_bank_cents, min_bet_cents, banker_id")
-    .eq("id", room_id)
-    .single();
+  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const roomRecord = room as { current_bank_cents: number; min_bet_cents: number; banker_id: string };
+  const roomRecord = normalizeCeloRoomRow(room as Record<string, unknown>) as {
+    current_bank_cents: number;
+    min_bet_cents: number;
+    banker_id: string;
+  };
 
   if (userId === roomRecord.banker_id) {
     return NextResponse.json({ error: "Banker cannot cover their own bank" }, { status: 400 });

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -295,7 +296,18 @@ export default function CeloRoomPage() {
     const sb = createBrowserClient();
     if (!sb) return;
     const { data } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
-    if (data) setRoom(data as Room);
+    if (data) {
+      const raw = data as Record<string, unknown>;
+      const n = normalizeCeloRoomRow(raw);
+      if (n) {
+        setRoom({
+          ...n,
+          speed: String(raw.speed ?? "regular"),
+          last_round_was_celo: Boolean(raw.last_round_was_celo),
+          banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+        } as Room);
+      }
+    }
   }, [roomId]);
 
   const loadPlayers = useCallback(async () => {

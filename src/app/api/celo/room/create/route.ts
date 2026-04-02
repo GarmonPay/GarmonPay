@@ -6,15 +6,13 @@ import {
   getCanonicalBalanceCents,
   ensureWalletBalancesRow,
 } from "@/lib/wallet-ledger";
+import { CELO_ROOMS_COL } from "@/lib/celo-room-schema";
 
 /**
- * celo_rooms columns used here (see migrations 20260329150000, 20260401100000, 20260402000000):
- * name, creator_id, banker_id, room_type, max_players, min_bet_cents, max_bet_cents,
- * current_bank_cents, speed, join_code, status — plus DB defaults for platform_fee_pct, last_activity, etc.
+ * `celo_rooms` production columns: minimum_entry_sc, current_bank_sc (see user DB audit).
+ * Do not insert min_bet_cents / current_bank_cents unless those columns exist.
  *
- * RLS: route uses service role (admin client), which bypasses RLS. Authenticated INSERT policy exists in migration.
- *
- * Balance: public.users.balance (cents) + public.wallet_balances.balance via ensureWalletBalancesRow + getCanonicalBalanceCents.
+ * RLS: service role bypasses RLS.
  */
 
 const ALLOWED_MAX_PLAYERS = [2, 4, 6, 10] as const;
@@ -71,7 +69,6 @@ export async function POST(req: Request) {
       minimum_entry_cents,
       starting_bank_cents,
       join_code,
-      speed,
     } = body as {
       name?: string;
       room_type?: string;
@@ -79,7 +76,6 @@ export async function POST(req: Request) {
       minimum_entry_cents?: number;
       starting_bank_cents?: number;
       join_code?: string;
-      speed?: string;
     };
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -188,7 +184,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // celo_rooms: only columns that exist in schema (see migration comments at top of file)
+    // Insert only columns present on production: *_sc bank fields, no speed/max_bet unless migrated
     console.error("[celo/room/create] step: insert celo_rooms");
     let room: {
       id: string;
@@ -197,21 +193,21 @@ export async function POST(req: Request) {
       [key: string]: unknown;
     };
     try {
+      const insertPayload: Record<string, unknown> = {
+        name: name.trim(),
+        creator_id: userId,
+        banker_id: userId,
+        room_type: room_type === "private" ? "private" : "public",
+        max_players: max_players as number,
+        [CELO_ROOMS_COL.minimumEntry]: minimum_entry_cents,
+        [CELO_ROOMS_COL.currentBank]: starting_bank_cents,
+        join_code: room_type === "private" ? join_code!.trim() : null,
+        status: "waiting",
+        total_rounds: 0,
+      };
       const { data: roomData, error: roomError } = await supabase
         .from("celo_rooms")
-        .insert({
-          name: name.trim(),
-          creator_id: userId,
-          banker_id: userId,
-          room_type: room_type === "private" ? "private" : "public",
-          max_players: max_players as number,
-          min_bet_cents: minimum_entry_cents,
-          max_bet_cents: Math.max(minimum_entry_cents * 10, starting_bank_cents),
-          current_bank_cents: starting_bank_cents,
-          speed: ["regular", "fast", "blitz"].includes(speed ?? "") ? speed : "regular",
-          join_code: room_type === "private" ? join_code!.trim() : null,
-          status: "waiting",
-        })
+        .insert(insertPayload)
         .select()
         .single();
 

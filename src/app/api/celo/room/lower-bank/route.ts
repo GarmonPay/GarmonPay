@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 
 // Banker has 60 seconds after a C-Lo to lower the bank
 const LOWER_BANK_WINDOW_MS = 60_000;
@@ -36,23 +37,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "new_bank_cents required" }, { status: 400 });
   }
 
-  // Fetch room
-  const { data: room } = await supabase
-    .from("celo_rooms")
-    .select("banker_id, current_bank_cents, min_bet_cents, last_round_was_celo, banker_celo_at, status")
-    .eq("id", room_id)
-    .single();
+  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const rm = room as {
+  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as {
     banker_id: string;
     current_bank_cents: number;
     min_bet_cents: number;
-    last_round_was_celo: boolean;
-    banker_celo_at: string | null;
+    last_round_was_celo?: boolean;
+    banker_celo_at?: string | null;
     status: string;
   };
 
@@ -60,7 +56,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Only the banker can lower the bank" }, { status: 403 });
   }
 
-  if (!rm.last_round_was_celo || !rm.banker_celo_at) {
+  if (!rm.last_round_was_celo || rm.banker_celo_at == null) {
     return NextResponse.json(
       { error: "Bank can only be lowered after rolling C-Lo" },
       { status: 400 }
@@ -116,12 +112,13 @@ export async function POST(req: Request) {
 
   await supabase
     .from("celo_rooms")
-    .update({
-      current_bank_cents: new_bank_cents,
-      last_round_was_celo: false,
-      banker_celo_at: null,
-      last_activity: new Date().toISOString(),
-    })
+    .update(
+      mergeCeloRoomUpdate(new_bank_cents, {
+        last_round_was_celo: false,
+        banker_celo_at: null,
+        last_activity: new Date().toISOString(),
+      })
+    )
     .eq("id", room_id);
 
   await supabase.from("celo_audit_log").insert({
