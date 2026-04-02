@@ -139,18 +139,6 @@ export default function DashboardGamesPage() {
             Play →
           </Link>
         </div>
-        <div className="mt-3 rounded-xl border border-amber-400/30 bg-fintech-bg-card/90 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-amber-400">C-Lo Street Dice</h2>
-            <p className="text-xs text-fintech-muted mt-1">Real-money rooms · join as player or spectator · crypto dice on the server</p>
-          </div>
-          <Link
-            href="/dashboard/games/celo"
-            className="inline-flex justify-center rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-semibold text-black no-underline shrink-0"
-          >
-            Lobby →
-          </Link>
-        </div>
       </div>
 
       {noRewards && (
