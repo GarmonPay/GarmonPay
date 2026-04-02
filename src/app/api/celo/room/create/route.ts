@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 
 // Max players allowed by the celo_rooms table constraint
-const ALLOWED_MAX_PLAYERS = [2, 4, 6] as const;
+const ALLOWED_MAX_PLAYERS = [2, 4, 6, 10] as const;
 // Minimum bank bet: $5
 const MIN_BET_CENTS = 500;
 

@@ -18,18 +18,16 @@ type Room = {
   min_bet_cents: number;
   current_bank_cents: number;
   platform_fee_pct: number;
-  speed: string;
   last_activity: string;
 };
 
 type CreateForm = {
   name: string;
   room_type: "public" | "private";
-  max_players: 2 | 4 | 6;
+  max_players: 2 | 4 | 6 | 10;
   minimum_entry_cents: number;
   starting_bank_cents: number;
   join_code: string;
-  speed: "regular" | "fast" | "blitz";
 };
 
 const DEFAULT_FORM: CreateForm = {
@@ -39,7 +37,6 @@ const DEFAULT_FORM: CreateForm = {
   minimum_entry_cents: 500,
   starting_bank_cents: 2000,
   join_code: "",
-  speed: "regular",
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -54,12 +51,6 @@ const STATUS_LABEL: Record<string, string> = {
   rolling: "In Round",
 };
 
-const SPEED_LABEL: Record<string, string> = {
-  regular: "Regular",
-  fast: "Fast",
-  blitz: "Blitz",
-};
-
 export default function CeloLobbyPage() {
   const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
@@ -70,7 +61,7 @@ export default function CeloLobbyPage() {
   const [form, setForm] = useState<CreateForm>(DEFAULT_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState("");
+  const [lobbyCode, setLobbyCode] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
 
@@ -79,7 +70,7 @@ export default function CeloLobbyPage() {
     if (!sb) return;
     const { data } = await sb
       .from("celo_rooms")
-      .select("id,name,status,room_type,max_players,min_bet_cents,current_bank_cents,platform_fee_pct,speed,last_activity")
+      .select("id,name,status,room_type,max_players,min_bet_cents,current_bank_cents,platform_fee_pct,last_activity")
       .eq("room_type", "public")
       .in("status", ["waiting", "active", "rolling"])
       .order("last_activity", { ascending: false })
@@ -102,7 +93,6 @@ export default function CeloLobbyPage() {
     });
   }, [router, loadRooms]);
 
-  // Realtime: refresh room list on any celo_rooms change
   useEffect(() => {
     const sb = createBrowserClient();
     if (!sb || !session) return;
@@ -131,7 +121,6 @@ export default function CeloLobbyPage() {
           minimum_entry_cents: form.minimum_entry_cents,
           starting_bank_cents: form.starting_bank_cents,
           join_code: form.room_type === "private" ? form.join_code : undefined,
-          speed: form.speed,
         }),
       });
       const data = await res.json().catch(() => ({})) as { room?: { id: string }; error?: string };
@@ -146,7 +135,7 @@ export default function CeloLobbyPage() {
 
   async function handleJoinByCode(e: React.FormEvent) {
     e.preventDefault();
-    const code = joinCode.trim().toUpperCase();
+    const code = lobbyCode.trim().toUpperCase();
     if (!code) return;
     setJoinError(null);
     setJoining(true);
@@ -162,6 +151,23 @@ export default function CeloLobbyPage() {
     if (!data) { setJoinError("No active room with that code"); return; }
     router.push(`/games/celo/${(data as { id: string }).id}`);
   }
+
+  // Keep starting_bank_cents snapped to a multiple of minimum_entry_cents
+  function setMinEntry(v: number) {
+    setForm((f) => ({
+      ...f,
+      minimum_entry_cents: v,
+      // Round starting bank up to nearest multiple of new min entry
+      starting_bank_cents: Math.ceil(Math.max(f.starting_bank_cents, v) / v) * v,
+    }));
+  }
+
+  const canAfford = balanceCents >= form.starting_bank_cents;
+  const canSubmit =
+    !creating &&
+    canAfford &&
+    form.name.trim().length > 0 &&
+    (form.room_type === "public" || form.join_code.trim().length >= 1);
 
   if (loading || !session) {
     return (
@@ -179,6 +185,7 @@ export default function CeloLobbyPage() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-8 pb-24">
+
         {/* Top bar */}
         <div className="flex items-center justify-between mb-8">
           <Link href="/games" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
@@ -214,8 +221,8 @@ export default function CeloLobbyPage() {
             <input
               type="text"
               placeholder="Room code"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              value={lobbyCode}
+              onChange={(e) => setLobbyCode(e.target.value.toUpperCase())}
               maxLength={12}
               className="w-28 rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono text-sm"
             />
@@ -255,9 +262,6 @@ export default function CeloLobbyPage() {
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[room.status] ?? "text-gray-400 bg-gray-400/10"}`}>
                         {STATUS_LABEL[room.status] ?? room.status}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full text-violet-300/60 bg-violet-500/10">
-                        {SPEED_LABEL[room.speed] ?? room.speed}
-                      </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full text-violet-300/60 bg-white/5">
                         {room.max_players}p max
                       </span>
@@ -288,23 +292,27 @@ export default function CeloLobbyPage() {
         </div>
       </div>
 
-      {/* Create Room Modal */}
+      {/* ── Create Room Modal ──────────────────────────────────────────────── */}
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowCreate(false); } }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCreate(false); }}
         >
-          <div className="w-full max-w-md rounded-2xl border border-[#F5C842]/20 bg-[#0e0118] shadow-2xl shadow-violet-900/60 overflow-hidden">
+          <div className="w-full max-w-md rounded-2xl border border-[#F5C842]/20 bg-[#0e0118] shadow-2xl shadow-black/80 overflow-hidden">
+
+            {/* Modal header */}
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
-              <h2 className="font-bold text-[#F5C842]">Create Room</h2>
+              <h2 className="font-bold text-[#F5C842] text-lg">Create Room</h2>
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
-                className="text-violet-300/50 hover:text-white text-2xl leading-none transition-colors"
+                className="text-violet-300/40 hover:text-white text-2xl leading-none transition-colors"
               >×</button>
             </div>
-            <form onSubmit={handleCreate} className="px-6 py-5 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Name */}
+
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-5 max-h-[82vh] overflow-y-auto">
+
+              {/* ── Room Name ── */}
               <div>
                 <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Room Name</label>
                 <input
@@ -314,134 +322,161 @@ export default function CeloLobbyPage() {
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Bishop's Table"
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50"
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/30 outline-none focus:border-[#F5C842]/50"
                 />
               </div>
 
-              {/* Max players + Speed */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Max Players</label>
-                  <select
-                    value={form.max_players}
-                    onChange={(e) => setForm((f) => ({ ...f, max_players: Number(e.target.value) as 2 | 4 | 6 }))}
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#1a0a2e] px-3 py-3 text-white text-sm outline-none focus:border-[#F5C842]/50"
-                  >
-                    <option value={2}>2 Players</option>
-                    <option value={4}>4 Players</option>
-                    <option value={6}>6 Players</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Speed</label>
-                  <select
-                    value={form.speed}
-                    onChange={(e) => setForm((f) => ({ ...f, speed: e.target.value as "regular" | "fast" | "blitz" }))}
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#1a0a2e] px-3 py-3 text-white text-sm outline-none focus:border-[#F5C842]/50"
-                  >
-                    <option value="regular">Regular</option>
-                    <option value="fast">Fast</option>
-                    <option value="blitz">Blitz</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Min entry */}
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">
-                  Min Entry — <span className="text-[#F5C842]">${(form.minimum_entry_cents / 100).toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min={500}
-                  max={10000}
-                  step={500}
-                  value={form.minimum_entry_cents}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setForm((f) => ({
-                      ...f,
-                      minimum_entry_cents: v,
-                      starting_bank_cents: Math.max(f.starting_bank_cents, v),
-                    }));
-                  }}
-                  className="mt-2 w-full accent-[#F5C842]"
-                />
-              </div>
-
-              {/* Starting bank */}
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">
-                  Starting Bank — <span className="text-[#F5C842]">${(form.starting_bank_cents / 100).toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min={form.minimum_entry_cents}
-                  max={100000}
-                  step={500}
-                  value={form.starting_bank_cents}
-                  onChange={(e) => setForm((f) => ({ ...f, starting_bank_cents: Number(e.target.value) }))}
-                  className="mt-2 w-full accent-[#F5C842]"
-                />
-                <p className="text-[10px] text-violet-400/50 mt-1">
-                  Your balance: ${(balanceCents / 100).toFixed(2)}
-                </p>
-              </div>
-
-              {/* Room type */}
+              {/* ── Public / Private ── */}
               <div>
                 <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Room Type</label>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   {(["public", "private"] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, room_type: t }))}
-                      className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all capitalize ${
+                      className={`rounded-xl border py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
                         form.room_type === t
-                          ? "border-[#F5C842]/50 bg-[#F5C842]/10 text-[#F5C842]"
-                          : "border-white/10 text-violet-300/60 hover:border-white/20"
+                          ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842] shadow-[0_0_16px_rgba(245,200,66,0.15)]"
+                          : "border-white/10 text-violet-300/50 hover:border-white/20 hover:text-violet-200/70"
                       }`}
                     >
                       {t}
                     </button>
                   ))}
                 </div>
+
+                {form.room_type === "private" && (
+                  <div className="mt-3">
+                    <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Join Code</label>
+                    <input
+                      type="text"
+                      required
+                      minLength={1}
+                      maxLength={6}
+                      value={form.join_code}
+                      onChange={(e) => setForm((f) => ({ ...f, join_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))}
+                      placeholder="e.g. BALLER"
+                      className="mt-1.5 w-full rounded-xl border border-[#F5C842]/30 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/30 outline-none focus:border-[#F5C842]/60 uppercase font-mono tracking-widest"
+                    />
+                    <p className="text-[10px] text-violet-400/50 mt-1.5">Members need this code to join</p>
+                  </div>
+                )}
               </div>
 
-              {form.room_type === "private" && (
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Join Code</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={12}
-                    value={form.join_code}
-                    onChange={(e) => setForm((f) => ({ ...f, join_code: e.target.value.toUpperCase() }))}
-                    placeholder="e.g. BALLER"
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono"
-                  />
+              {/* ── Max Players ── */}
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Max Players</label>
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {([2, 4, 6, 10] as const).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, max_players: n }))}
+                      className={`rounded-xl border py-3 text-sm font-bold transition-all ${
+                        form.max_players === n
+                          ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842] shadow-[0_0_16px_rgba(245,200,66,0.15)]"
+                          : "border-white/10 text-violet-300/50 hover:border-white/20 hover:text-violet-200/70"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              {/* ── Min Entry ── */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Min Entry</label>
+                  <span className="text-sm font-bold text-[#F5C842] font-mono">
+                    ${(form.minimum_entry_cents / 100).toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={500}
+                  max={10000}
+                  step={500}
+                  value={form.minimum_entry_cents}
+                  onChange={(e) => setMinEntry(Number(e.target.value))}
+                  className="mt-2 w-full accent-[#F5C842]"
+                />
+                <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
+                  <span>$5.00</span>
+                  <span>$100.00</span>
+                </div>
+              </div>
+
+              {/* ── Starting Bank ── */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Starting Bank</label>
+                  <span className="text-sm font-bold text-[#F5C842] font-mono">
+                    ${(form.starting_bank_cents / 100).toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={form.minimum_entry_cents}
+                  max={Math.min(200000, Math.max(balanceCents, form.minimum_entry_cents * 2))}
+                  step={form.minimum_entry_cents}
+                  value={form.starting_bank_cents}
+                  onChange={(e) => setForm((f) => ({ ...f, starting_bank_cents: Number(e.target.value) }))}
+                  className="mt-2 w-full accent-[#F5C842]"
+                />
+                <p className={`text-[10px] mt-1.5 font-medium ${canAfford ? "text-violet-400/50" : "text-red-400"}`}>
+                  {canAfford
+                    ? `You need $${(form.starting_bank_cents / 100).toFixed(2)} to cover this bank`
+                    : `Insufficient balance — you have $${(balanceCents / 100).toFixed(2)}`}
+                </p>
+              </div>
+
+              {/* ── Summary ── */}
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-violet-300/70">You will reserve</span>
+                  <span className="font-bold text-[#F5C842] font-mono">${(form.starting_bank_cents / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
+                  <span className="text-violet-300/70">Your balance</span>
+                  <span className={`font-bold font-mono ${canAfford ? "text-emerald-400" : "text-red-400"}`}>
+                    ${(balanceCents / 100).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {createError && (
+                <p className="text-sm text-red-400 text-center rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5">
+                  {createError}
+                </p>
               )}
 
-              {createError && <p className="text-sm text-red-400 text-center">{createError}</p>}
-
+              {/* ── Create button ── */}
               <button
                 type="submit"
-                disabled={creating || balanceCents < form.starting_bank_cents}
-                className="w-full rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 disabled:opacity-50 transition-all hover:from-violet-500 hover:to-violet-400 text-sm"
+                disabled={!canSubmit}
+                className={`w-full rounded-xl py-4 font-bold text-sm tracking-wide shadow-lg transition-all ${
+                  canAfford
+                    ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30 hover:from-[#fde047] hover:to-[#F5C842] disabled:opacity-60"
+                    : "bg-red-900/40 border border-red-500/30 text-red-400 cursor-not-allowed"
+                }`}
               >
                 {creating
                   ? "Creating…"
-                  : `Create & Bank $${(form.starting_bank_cents / 100).toFixed(2)}`}
+                  : !canAfford
+                  ? "Insufficient Balance"
+                  : `CREATE ROOM — $${(form.starting_bank_cents / 100).toFixed(2)}`}
               </button>
 
-              {balanceCents < form.starting_bank_cents && (
-                <p className="text-[10px] text-amber-400/70 text-center">
-                  Insufficient balance for this bank size.{" "}
-                  <Link href="/dashboard/finance" className="underline">Add funds →</Link>
+              {!canAfford && (
+                <p className="text-center text-[10px] text-violet-400/50">
+                  <Link href="/dashboard/finance" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
+                    Add funds to your wallet →
+                  </Link>
                 </p>
               )}
+
             </form>
           </div>
         </div>
