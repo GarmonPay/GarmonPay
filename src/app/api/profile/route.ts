@@ -57,7 +57,7 @@ export async function GET(req: Request) {
   }
 
   const { data: row, error } = await admin
-    .from("users")
+    .from("profiles")
     .select("id, email, full_name, avatar_url, membership, referral_code")
     .eq("id", userId)
     .maybeSingle();
@@ -183,7 +183,7 @@ export async function PATCH(req: Request) {
   };
 
   const { data: updated, error } = await admin
-    .from("users")
+    .from("profiles")
     .update(payload)
     .eq("id", userId)
     .select("id, email, full_name, avatar_url, membership, referral_code")

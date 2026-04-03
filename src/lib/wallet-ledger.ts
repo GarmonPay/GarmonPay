@@ -22,13 +22,13 @@ function supabase() {
   return c;
 }
 
-/** PostgREST / Postgres when `public.users` is missing from the DB. */
-function isMissingUsersRelationError(err: { message?: string } | null): boolean {
+/** PostgREST / Postgres when `public.profiles` is missing from the DB. */
+function isMissingProfileRelationError(err: { message?: string } | null): boolean {
   const m = (err?.message ?? "").toLowerCase();
-  return m.includes("does not exist") && m.includes("users");
+  return m.includes("does not exist") && m.includes("profiles");
 }
 
-/** Latest running balance from wallet_ledger when wallet_balances/users are absent or empty. */
+/** Latest running balance from wallet_ledger when wallet_balances/profiles are absent or empty. */
 async function getLatestLedgerBalanceCents(userId: string): Promise<number | null> {
   const { data, error } = await supabase()
     .from("wallet_ledger")
@@ -108,17 +108,17 @@ export async function walletLedgerEntry(
 }
 
 /**
- * Balance from `public.users.balance` only (cents). Single source for dashboard/wallet display.
+ * Balance from `public.profiles.balance` only (cents). Single source for dashboard/wallet display.
  * Null or missing column value → 0.
  */
 export async function getUsersTableBalanceCents(userId: string): Promise<number> {
   const { data, error } = await supabase()
-    .from("users")
+    .from("profiles")
     .select("balance")
     .eq("id", userId)
     .maybeSingle();
   if (error) {
-    if (isMissingUsersRelationError(error)) {
+    if (isMissingProfileRelationError(error)) {
       return (await getLatestLedgerBalanceCents(userId)) ?? 0;
     }
     return 0;
@@ -143,8 +143,8 @@ export async function getWalletBalanceCents(userId: string): Promise<number | nu
 
 /**
  * Ensures public.wallet_balances has a row for this user (ledger + canonical reads).
- * Seeds from users.balance when present; if public.users is missing, uses latest wallet_ledger balance_after or 0.
- * Does not write users table.
+ * Seeds from profiles.balance when present; if public.profiles is missing, uses latest wallet_ledger balance_after or 0.
+ * Does not write profiles table.
  */
 export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: true } | { ok: false; message: string; code?: string }> {
   const client = supabase();
@@ -157,12 +157,12 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
   if (existing) return { ok: true };
 
   let seed = 0;
-  const { data: u, error: uErr } = await client.from("users").select("balance").eq("id", userId).maybeSingle();
+  const { data: u, error: uErr } = await client.from("profiles").select("balance").eq("id", userId).maybeSingle();
   if (!uErr && u != null) {
     const seedRaw = (u as { balance?: number | null }).balance;
     seed =
       seedRaw == null || !Number.isFinite(Number(seedRaw)) ? 0 : Math.max(0, Math.round(Number(seedRaw)));
-  } else if (uErr && isMissingUsersRelationError(uErr)) {
+  } else if (uErr && isMissingProfileRelationError(uErr)) {
     seed = (await getLatestLedgerBalanceCents(userId)) ?? 0;
   } else if (uErr) {
     return { ok: false, message: uErr.message, code: uErr.code };
@@ -181,7 +181,7 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
 
 /**
  * Canonical user balance for dashboard, wallet, and betting (Fight Arena, etc.).
- * Reads wallet_balances first (same source as ledger); falls back to users.balance.
+ * Reads wallet_balances first (same source as ledger); falls back to profiles.balance.
  * Use this everywhere so Stripe deposits and betting share one balance.
  */
 export async function getCanonicalBalanceCents(userId: string): Promise<number> {
@@ -191,17 +191,17 @@ export async function getCanonicalBalanceCents(userId: string): Promise<number> 
     return walletBalance;
   }
   const { data, error } = await supabase()
-    .from("users")
+    .from("profiles")
     .select("balance")
     .eq("id", userId)
     .maybeSingle();
   if (!error && data) {
     const userBalance = Number((data as { balance?: number }).balance ?? 0);
-    console.log("[balance] getCanonicalBalanceCents", { userId, source: "users", balanceCents: userBalance });
+    console.log("[balance] getCanonicalBalanceCents", { userId, source: "profiles", balanceCents: userBalance });
     return userBalance;
   }
-  if (error && !isMissingUsersRelationError(error)) {
-    console.warn("[balance] getCanonicalBalanceCents users read failed:", error.message);
+  if (error && !isMissingProfileRelationError(error)) {
+    console.warn("[balance] getCanonicalBalanceCents profiles read failed:", error.message);
   }
   const ledgerBalance = await getLatestLedgerBalanceCents(userId);
   if (ledgerBalance !== null) {
