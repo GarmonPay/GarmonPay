@@ -101,8 +101,8 @@ export async function POST(req: Request) {
       round_number: roundNumber,
       banker_id: roomRecord.banker_id,
       status: "banker_rolling",
-      total_pot_cents: totalPotCents,
-      platform_fee_cents: platformFeeCents,
+      prize_pool_sc: totalPotCents,
+      platform_fee_sc: platformFeeCents,
     })
     .select()
     .single();
