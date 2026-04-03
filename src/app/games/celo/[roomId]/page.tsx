@@ -8,6 +8,39 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
+async function authFetch(url: string, body: Record<string, unknown>) {
+  const supabase = createBrowserClient();
+  if (!supabase) throw new Error("Not authenticated");
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function authFetchGet(url: string) {
+  const supabase = createBrowserClient();
+  if (!supabase) throw new Error("Not authenticated");
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+  return fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Room = {
@@ -294,24 +327,6 @@ export default function CeloRoomPage() {
     return () => clearInterval(iv);
   }, []);
 
-  const tokenRef = useRef<string | undefined>(undefined);
-
-  // ── API helper ─────────────────────────────────────────────────────────────
-  const api = useCallback(
-    async (path: string, body: unknown): Promise<{ ok: boolean; data: Record<string, unknown> }> => {
-      const token = tokenRef.current;
-      if (!token) return { ok: false, data: { error: "Not authenticated" } };
-      const res = await fetch(path, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
-      return { ok: res.ok, data };
-    },
-    []
-  );
-
   // ── Data loaders ───────────────────────────────────────────────────────────
   const loadRoom = useCallback(async () => {
     const sb = createBrowserClient();
@@ -381,12 +396,14 @@ export default function CeloRoomPage() {
   }, [roomId]);
 
   const loadBalance = useCallback(async () => {
-    const token = tokenRef.current;
-    if (!token) return;
-    const res = await fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-    if (res?.ok) {
-      const d = await res.json().catch(() => ({})) as { balance_cents?: number };
-      setBalanceCents(d.balance_cents ?? 0);
+    try {
+      const res = await authFetchGet("/api/wallet/get");
+      if (res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number };
+        setBalanceCents(d.balance_cents ?? 0);
+      }
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -442,7 +459,6 @@ export default function CeloRoomPage() {
     getSessionAsync().then((s) => {
       if (!s) { router.replace(`/login?redirect=/games/celo/${roomId}`); return; }
       setSession(s);
-      tokenRef.current = s.accessToken;
       setLoading(false);
     });
   }, [router, roomId]);
@@ -691,12 +707,22 @@ export default function CeloRoomPage() {
   async function handleJoin(asSpectator = false) {
     setJoinLoading(true);
     setJoinError(null);
-    const { ok, data } = await api("/api/celo/room/join", {
-      room_id: roomId,
-      role: asSpectator ? "spectator" : "player",
-      entry_cents: asSpectator ? undefined : joinEntryCents,
-      join_code: room?.room_type === "private" ? joinCode : undefined,
-    });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/room/join", {
+        room_id: roomId,
+        role: asSpectator ? "spectator" : "player",
+        entry_cents: asSpectator ? undefined : joinEntryCents,
+        join_code: room?.room_type === "private" ? joinCode : undefined,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setJoinLoading(false);
+      setJoinError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setJoinLoading(false);
     if (!ok) { setJoinError((data.error as string) ?? "Failed to join"); return; }
     await loadAll();
@@ -705,7 +731,17 @@ export default function CeloRoomPage() {
   async function handleStartRound() {
     setActionLoading("start");
     setError(null);
-    const { ok, data } = await api("/api/celo/round/start", { room_id: roomId });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/round/start", { room_id: roomId });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setActionLoading(null);
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setActionLoading(null);
     if (!ok) { setError((data.error as string) ?? "Failed to start round"); return; }
     await loadRound();
@@ -716,7 +752,21 @@ export default function CeloRoomPage() {
     setActionLoading("roll");
     setIsRolling(true);
     setError(null);
-    const { ok, data } = await api("/api/celo/round/roll", { room_id: roomId, round_id: currentRound.id });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/round/roll", {
+        room_id: roomId,
+        round_id: currentRound.id,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setIsRolling(false);
+      setActionLoading(null);
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     // Let animation play at least 600ms
     await new Promise((r) => setTimeout(r, 600));
     setIsRolling(false);
@@ -730,7 +780,20 @@ export default function CeloRoomPage() {
     if (!currentRound) return;
     setActionLoading("cover");
     setError(null);
-    const { ok, data } = await api("/api/celo/room/cover-bank", { room_id: roomId, round_id: currentRound.id });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/room/cover-bank", {
+        room_id: roomId,
+        round_id: currentRound.id,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setActionLoading(null);
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setActionLoading(null);
     if (!ok) { setError((data.error as string) ?? "Failed to cover bank"); return; }
     await loadAll();
@@ -740,7 +803,20 @@ export default function CeloRoomPage() {
     if (!room) return;
     setLowerBankLoading(true);
     setError(null);
-    const { ok, data } = await api("/api/celo/room/lower-bank", { room_id: roomId, new_bank_cents: newBankCents });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/room/lower-bank", {
+        room_id: roomId,
+        new_bank_cents: newBankCents,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setLowerBankLoading(false);
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setLowerBankLoading(false);
     if (!ok) { setError((data.error as string) ?? "Failed to lower bank"); return; }
     setShowLowerBank(false);
@@ -751,7 +827,20 @@ export default function CeloRoomPage() {
     if (!currentRound) return;
     setActionLoading("become_banker");
     setError(null);
-    const { ok, data } = await api("/api/celo/banker/accept", { room_id: roomId, round_id: currentRound.id });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/banker/accept", {
+        room_id: roomId,
+        round_id: currentRound.id,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setActionLoading(null);
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setActionLoading(null);
     if (!ok) { setError((data.error as string) ?? "Failed to become banker"); return; }
     await loadAll();
@@ -762,13 +851,23 @@ export default function CeloRoomPage() {
     if (!currentRound) return;
     setSbLoading(true);
     setSbError(null);
-    const { ok, data } = await api("/api/celo/sidebet/create", {
-      room_id: roomId,
-      round_id: currentRound.id,
-      bet_type: sbType,
-      amount_cents: sbAmount,
-      specific_point: sbType === "specific_point" ? sbPoint : undefined,
-    });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/sidebet/create", {
+        room_id: roomId,
+        round_id: currentRound.id,
+        bet_type: sbType,
+        amount_cents: sbAmount,
+        specific_point: sbType === "specific_point" ? sbPoint : undefined,
+      });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setSbLoading(false);
+      setSbError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     setSbLoading(false);
     if (!ok) { setSbError((data.error as string) ?? "Failed to create bet"); return; }
     setSbAmount(100);
@@ -777,7 +876,16 @@ export default function CeloRoomPage() {
 
   async function handleAcceptSideBet(betId: string) {
     setError(null);
-    const { ok, data } = await api("/api/celo/sidebet/accept", { bet_id: betId });
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      res = await authFetch("/api/celo/sidebet/accept", { bet_id: betId });
+      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    } catch {
+      setError("Not authenticated");
+      return;
+    }
+    const ok = res.ok;
     if (!ok) { setError((data.error as string) ?? "Failed to accept bet"); return; }
     await loadRound();
     await loadBalance();
