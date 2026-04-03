@@ -22,6 +22,26 @@ function supabase() {
   return c;
 }
 
+/** PostgREST / Postgres when `public.users` is missing from the DB. */
+function isMissingUsersRelationError(err: { message?: string } | null): boolean {
+  const m = (err?.message ?? "").toLowerCase();
+  return m.includes("does not exist") && m.includes("users");
+}
+
+/** Latest running balance from wallet_ledger when wallet_balances/users are absent or empty. */
+async function getLatestLedgerBalanceCents(userId: string): Promise<number | null> {
+  const { data, error } = await supabase()
+    .from("wallet_ledger")
+    .select("balance_after")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const n = Number((data as { balance_after?: number }).balance_after);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
 export interface LedgerEntryResult {
   success: true;
   balance_cents: number;
@@ -97,7 +117,13 @@ export async function getUsersTableBalanceCents(userId: string): Promise<number>
     .select("balance")
     .eq("id", userId)
     .maybeSingle();
-  if (error || !data) return 0;
+  if (error) {
+    if (isMissingUsersRelationError(error)) {
+      return (await getLatestLedgerBalanceCents(userId)) ?? 0;
+    }
+    return 0;
+  }
+  if (!data) return 0;
   const b = (data as { balance?: number | null }).balance;
   if (b == null) return 0;
   const n = Number(b);
@@ -117,7 +143,7 @@ export async function getWalletBalanceCents(userId: string): Promise<number | nu
 
 /**
  * Ensures public.wallet_balances has a row for this user (ledger + canonical reads).
- * If missing, seeds from public.users.balance (cents, same column as getCanonicalBalanceCents fallback).
+ * Seeds from users.balance when present; if public.users is missing, uses latest wallet_ledger balance_after or 0.
  * Does not write users table.
  */
 export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: true } | { ok: false; message: string; code?: string }> {
@@ -130,10 +156,17 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
   if (selErr) return { ok: false, message: selErr.message, code: selErr.code };
   if (existing) return { ok: true };
 
+  let seed = 0;
   const { data: u, error: uErr } = await client.from("users").select("balance").eq("id", userId).maybeSingle();
-  if (uErr) return { ok: false, message: uErr.message, code: uErr.code };
-  const seedRaw = (u as { balance?: number | null } | null)?.balance;
-  const seed = seedRaw == null || !Number.isFinite(Number(seedRaw)) ? 0 : Math.max(0, Math.round(Number(seedRaw)));
+  if (!uErr && u != null) {
+    const seedRaw = (u as { balance?: number | null }).balance;
+    seed =
+      seedRaw == null || !Number.isFinite(Number(seedRaw)) ? 0 : Math.max(0, Math.round(Number(seedRaw)));
+  } else if (uErr && isMissingUsersRelationError(uErr)) {
+    seed = (await getLatestLedgerBalanceCents(userId)) ?? 0;
+  } else if (uErr) {
+    return { ok: false, message: uErr.message, code: uErr.code };
+  }
 
   const { error: insErr } = await client.from("wallet_balances").insert({
     user_id: userId,
@@ -162,9 +195,20 @@ export async function getCanonicalBalanceCents(userId: string): Promise<number> 
     .select("balance")
     .eq("id", userId)
     .maybeSingle();
-  const userBalance = error || !data ? 0 : Number((data as { balance?: number }).balance ?? 0);
-  console.log("[balance] getCanonicalBalanceCents", { userId, source: "users", balanceCents: userBalance });
-  return userBalance;
+  if (!error && data) {
+    const userBalance = Number((data as { balance?: number }).balance ?? 0);
+    console.log("[balance] getCanonicalBalanceCents", { userId, source: "users", balanceCents: userBalance });
+    return userBalance;
+  }
+  if (error && !isMissingUsersRelationError(error)) {
+    console.warn("[balance] getCanonicalBalanceCents users read failed:", error.message);
+  }
+  const ledgerBalance = await getLatestLedgerBalanceCents(userId);
+  if (ledgerBalance !== null) {
+    console.log("[balance] getCanonicalBalanceCents", { userId, source: "wallet_ledger", balanceCents: ledgerBalance });
+    return ledgerBalance;
+  }
+  return 0;
 }
 
 export interface WalletLedgerRow {
