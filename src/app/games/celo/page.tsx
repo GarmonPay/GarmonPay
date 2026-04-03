@@ -131,21 +131,34 @@ export default function CeloLobbyPage() {
     setCreating(true);
     setCreateError(null);
     try {
+      const body = {
+        name: form.name.trim(),
+        room_type: form.room_type,
+        max_players: form.max_players,
+        minimum_entry_cents: form.minimum_entry_cents,
+        starting_bank_cents: form.starting_bank_cents,
+        join_code: form.room_type === "private" ? form.join_code.trim() : null,
+      };
       const res = await fetch("/api/celo/room/create", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          room_type: form.room_type,
-          max_players: form.max_players,
-          minimum_entry_cents: form.minimum_entry_cents,
-          starting_bank_cents: form.starting_bank_cents,
-          join_code: form.room_type === "private" ? form.join_code : undefined,
-        }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({})) as { room?: { id: string }; error?: string };
-      if (!res.ok) { setCreateError(data.error ?? "Failed to create room"); return; }
-      router.push(`/games/celo/${data.room!.id}`);
+      const data = (await res.json().catch(() => ({}))) as {
+        room?: { id: string };
+        error?: string;
+        details?: string;
+      };
+      console.log("Create room response:", data);
+
+      if (!res.ok) {
+        console.error("Create room error:", data);
+        setCreateError(data.details || data.error || "Failed to create room");
+        return;
+      }
+      if (data.room?.id) {
+        router.push(`/games/celo/${data.room.id}`);
+      }
     } catch {
       setCreateError("Network error — try again");
     } finally {
