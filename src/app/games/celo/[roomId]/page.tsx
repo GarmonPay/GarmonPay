@@ -81,6 +81,7 @@ type Round = {
   bank_covered: boolean;
   covered_by: string | null;
   completed_at: string | null;
+  current_player_seat?: number | null;
 };
 
 type PlayerRoll = {
@@ -107,6 +108,17 @@ type SideBet = {
   specific_point: number | null;
 };
 
+type RoundSummaryPayload = {
+  playerResults: Array<{
+    userId: string;
+    outcome: string;
+    amountCents: number;
+    label: string;
+  }>;
+  bankerNetCents: number;
+  bankerLabel: string;
+};
+
 type RollResponse = {
   dice?: number[];
   rollName?: string;
@@ -120,6 +132,7 @@ type RollResponse = {
   banker_can_lower_bank?: boolean;
   player_can_become_banker?: boolean;
   roundComplete?: boolean;
+  summary?: RoundSummaryPayload;
   error?: string;
 };
 
@@ -294,6 +307,7 @@ export default function CeloRoomPage() {
   const [chatSending, setChatSending] = useState(false);
   const [remoteRollCue, setRemoteRollCue] = useState<PlayerRoll | null>(null);
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
+  const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const balanceRef = useRef(0);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
@@ -453,6 +467,12 @@ export default function CeloRoomPage() {
     const t = setTimeout(() => setRemoteRollCue(null), 1400);
     return () => clearTimeout(t);
   }, [remoteRollCue]);
+
+  useEffect(() => {
+    if (!roundSummary) return;
+    const t = window.setTimeout(() => setRoundSummary(null), 5000);
+    return () => clearTimeout(t);
+  }, [roundSummary]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -682,9 +702,17 @@ export default function CeloRoomPage() {
     .filter((p) => !currentRound?.bank_covered || p.user_id === currentRound.covered_by)
     .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0));
 
-  const currentTurnPlayer = currentRound?.status === "player_rolling"
-    ? activePlayers.find((p) => !resolvedIds.has(p.user_id))
-    : null;
+  const currentTurnPlayer =
+    currentRound?.status === "player_rolling"
+      ? (() => {
+          const seat = currentRound.current_player_seat;
+          if (seat != null) {
+            const bySeat = activePlayers.find((p) => p.seat_number === seat);
+            if (bySeat) return bySeat;
+          }
+          return activePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
+        })()
+      : null;
   const isMyTurn = currentTurnPlayer?.user_id === userId;
 
   // Timer: lower bank (60s after banker C-Lo)
@@ -772,7 +800,11 @@ export default function CeloRoomPage() {
     setIsRolling(false);
     setActionLoading(null);
     if (!ok) { setError((data.error as string) ?? "Roll failed"); return; }
-    setLastRollResult(data as unknown as RollResponse);
+    const rollData = data as unknown as RollResponse;
+    setLastRollResult(rollData);
+    if (rollData.roundComplete && rollData.summary) {
+      setRoundSummary(rollData.summary);
+    }
     await loadAll();
   }
 
@@ -1040,15 +1072,35 @@ export default function CeloRoomPage() {
     !currentRound.bank_covered &&
     room.banker_id !== userId;
 
-  const canRoll =
-    (amIBanker && isBankerRolling) ||
-    (amIPlayer && isPlayerRolling && isMyTurn);
+  const canRollBanker = amIBanker && isBankerRolling;
+  const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
+  const showPlayerRollButton = amIPlayer && isPlayerRolling;
 
   const lastDice = lastRollResult?.dice ?? [];
   const lastResult = lastRollResult?.result;
 
   return (
     <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
+      {roundSummary && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <div className="max-w-md w-full rounded-2xl border border-[#F5C842]/35 bg-[#12081f] p-6 shadow-2xl shadow-black/50">
+            <p className="text-center text-sm font-bold text-[#F5C842] tracking-wide mb-4">Round complete</p>
+            <ul className="space-y-2 text-sm">
+              {roundSummary.playerResults.map((r, i) => (
+                <li
+                  key={`${r.userId}-${i}`}
+                  className={`font-mono ${r.outcome === "win" ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {r.userId.slice(0, 8)} — {r.label}
+                </li>
+              ))}
+            </ul>
+            <p className="text-center text-xs text-violet-300/80 mt-5 border-t border-white/10 pt-4">
+              {roundSummary.bankerLabel}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute -left-20 top-10 h-80 w-80 rounded-full bg-violet-700/15 blur-[110px]" />
         <div className="absolute right-0 bottom-20 h-72 w-72 rounded-full bg-[#F5C842]/6 blur-[100px]" />
@@ -1103,6 +1155,22 @@ export default function CeloRoomPage() {
             <p>Players <span className="text-white">{players.filter((p) => p.role === "player").length}/{room.max_players}</span></p>
           </div>
         </div>
+
+        {/* Banker point — player phase */}
+        {isPlayerRolling && currentRound && currentRound.banker_point != null && (
+          <div className="rounded-2xl border-2 border-[#F5C842]/35 bg-gradient-to-b from-[#1a0a2e] to-[#12081f] p-5 text-center space-y-2 shadow-lg shadow-[#F5C842]/10">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/70">Banker&apos;s roll</p>
+            {currentRound.banker_roll_name && (
+              <p className="text-base font-semibold text-white">{currentRound.banker_roll_name}</p>
+            )}
+            <p className="text-3xl font-black text-[#F5C842] font-mono tracking-tight">
+              Point is {currentRound.banker_point}
+            </p>
+            <p className="text-sm text-violet-200/90">
+              Roll to beat <span className="text-white font-bold">{currentRound.banker_point}</span>
+            </p>
+          </div>
+        )}
 
         {remoteRollCue && (
           <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-center text-xs text-violet-200">
@@ -1178,12 +1246,11 @@ export default function CeloRoomPage() {
               )}
               {isPlayerRolling && (
                 <span className={isMyTurn ? "text-[#F5C842] font-semibold" : "text-violet-300/70"}>
-                  {isMyTurn ? "Your turn to roll!" : `Waiting for player ${currentTurnPlayer?.user_id.slice(0, 6).toUpperCase() ?? "?"}`}
-                </span>
-              )}
-              {currentRound.banker_point && (
-                <span className="ml-2 text-xs text-violet-400/70">
-                  · Banker&apos;s point: <span className="text-violet-300 font-bold">{currentRound.banker_point}</span>
+                  {isMyTurn && currentRound.banker_point != null
+                    ? `YOUR TURN — Beat ${currentRound.banker_point}!`
+                    : currentTurnPlayer
+                      ? `Seat ${currentTurnPlayer.seat_number ?? "?"}\u2019s turn — ${currentTurnPlayer.user_id.slice(0, 6).toUpperCase()}`
+                      : "Waiting for next player…"}
                 </span>
               )}
             </div>
@@ -1207,8 +1274,8 @@ export default function CeloRoomPage() {
             </button>
           )}
 
-          {/* Roll dice */}
-          {canRoll && (
+          {/* Banker roll */}
+          {canRollBanker && (
             <button
               type="button"
               disabled={!!actionLoading}
@@ -1216,6 +1283,22 @@ export default function CeloRoomPage() {
               className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-4 font-bold text-black shadow-lg shadow-amber-900/30 disabled:opacity-60 transition-all text-sm"
             >
               {actionLoading === "roll" ? "Rolling…" : "🎲 Roll Dice"}
+            </button>
+          )}
+
+          {/* Player roll — always visible to players in rolling phase; gold only on your turn */}
+          {showPlayerRollButton && (
+            <button
+              type="button"
+              disabled={!canRollPlayer || !!actionLoading}
+              onClick={handleRoll}
+              className={`flex-1 rounded-xl py-4 font-bold shadow-lg transition-all text-sm ${
+                canRollPlayer
+                  ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30"
+                  : "border border-white/10 bg-white/5 text-violet-400/80 shadow-none cursor-not-allowed opacity-70"
+              } disabled:opacity-50`}
+            >
+              {actionLoading === "roll" ? "Rolling…" : canRollPlayer ? "🎲 ROLL" : "⏳ Not your turn"}
             </button>
           )}
 
@@ -1259,7 +1342,13 @@ export default function CeloRoomPage() {
           )}
 
           {/* Waiting state */}
-          {!canStartRound && !canRoll && !canCoverBank && !canLowerBank && !canBecomeBanker && noActiveRound && (
+          {!canStartRound &&
+            !canRollBanker &&
+            !showPlayerRollButton &&
+            !canCoverBank &&
+            !canLowerBank &&
+            !canBecomeBanker &&
+            noActiveRound && (
             <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.02] py-4 text-center text-sm text-violet-300/50">
               {amIBanker
                 ? players.filter((p) => p.role === "player" && p.bet_cents > 0).length === 0

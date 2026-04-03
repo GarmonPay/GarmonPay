@@ -9,45 +9,32 @@ import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } fr
 
 type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
 
-/** Returns the next player who hasn't resolved their roll in this round. */
-async function getNextPlayer(
+type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number | null };
+
+function roundTotalPotCents(roundRow: Record<string, unknown>): number {
+  return Number(roundRow.total_pot_cents ?? roundRow.prize_pool_sc ?? 0);
+}
+
+/** Players who roll vs the banker this round (seat order). */
+async function getEligiblePlayers(
   supabase: SupabaseClient,
   roomId: string,
-  roundId: string,
   coveredBy: string | null
-): Promise<{ user_id: string; bet_cents: number; seat_number: number } | null> {
-  // Build player query — if bank_covered only the covering player rolls
-  let playerQuery = supabase
+): Promise<EligiblePlayer[]> {
+  let q = supabase
     .from("celo_room_players")
     .select("user_id, bet_cents, seat_number")
     .eq("room_id", roomId)
     .eq("role", "player")
+    .gt("bet_cents", 0)
     .order("seat_number", { ascending: true });
 
   if (coveredBy) {
-    playerQuery = playerQuery.eq("user_id", coveredBy);
+    q = q.eq("user_id", coveredBy);
   }
 
-  const { data: players } = await playerQuery;
-
-  if (!players || players.length === 0) return null;
-
-  // Find players who have already resolved (outcome = win or loss)
-  const { data: resolvedRolls } = await supabase
-    .from("celo_player_rolls")
-    .select("user_id")
-    .eq("round_id", roundId)
-    .in("outcome", ["win", "loss"]);
-
-  const resolvedIds = new Set(
-    (resolvedRolls ?? []).map((r: { user_id: string }) => r.user_id)
-  );
-
-  const next = (
-    players as { user_id: string; bet_cents: number; seat_number: number }[]
-  ).find((p) => !resolvedIds.has(p.user_id));
-
-  return next ?? null;
+  const { data: players } = await q;
+  return (players ?? []) as EligiblePlayer[];
 }
 
 /** Get the latest reroll_count for a player in this round. */
@@ -69,34 +56,95 @@ async function getPlayerRerollCount(
   return (data as { reroll_count?: number }).reroll_count ?? 0;
 }
 
-/** Check if all players have resolved rolls; if so, complete the round. */
-async function checkAndCompleteRound(
+async function finalizePlayerRollingRound(
   supabase: SupabaseClient,
   roomId: string,
   roundId: string,
-  coveredBy: string | null
-): Promise<boolean> {
-  let playerQuery = supabase
-    .from("celo_room_players")
-    .select("user_id")
-    .eq("room_id", roomId)
-    .eq("role", "player");
+  now: string
+) {
+  await Promise.all([
+    supabase
+      .from("celo_rounds")
+      .update({ status: "completed", completed_at: now })
+      .eq("id", roundId),
+    supabase
+      .from("celo_rooms")
+      .update({ status: "active", last_activity: now })
+      .eq("id", roomId),
+  ]);
+  await settleOpenSideBets(supabase, roundId, roomId);
+}
 
-  if (coveredBy) {
-    playerQuery = playerQuery.eq("user_id", coveredBy);
+async function buildRoundSummary(supabase: SupabaseClient, roundId: string) {
+  const { data: rolls } = await supabase
+    .from("celo_player_rolls")
+    .select("user_id, outcome, payout_cents, bet_cents")
+    .eq("round_id", roundId)
+    .in("outcome", ["win", "loss"])
+    .order("created_at", { ascending: true });
+
+  const list = (rolls ?? []) as {
+    user_id: string;
+    outcome: string;
+    payout_cents: number;
+    bet_cents: number;
+  }[];
+
+  let bankerNetCents = 0;
+  const playerResults = list.map((row) => {
+    if (row.outcome === "win") {
+      bankerNetCents -= row.payout_cents;
+      return {
+        userId: row.user_id,
+        outcome: "win" as const,
+        amountCents: row.payout_cents,
+        label: `Won $${(row.payout_cents / 100).toFixed(2)}`,
+      };
+    }
+    bankerNetCents += row.bet_cents;
+    return {
+      userId: row.user_id,
+      outcome: "loss" as const,
+      amountCents: row.bet_cents,
+      label: `Lost $${(row.bet_cents / 100).toFixed(2)}`,
+    };
+  });
+
+  return {
+    playerResults,
+    bankerNetCents,
+    bankerLabel:
+      bankerNetCents >= 0
+        ? `Banker up $${(bankerNetCents / 100).toFixed(2)} this round`
+        : `Bank paid out $${(Math.abs(bankerNetCents) / 100).toFixed(2)} net`,
+  };
+}
+
+/** After a resolving player roll, move to next seat or complete the round. */
+async function advanceAfterResolvingPlayerRoll(
+  supabase: SupabaseClient,
+  roomId: string,
+  roundId: string,
+  rollerUserId: string,
+  coveredBy: string | null,
+  now: string
+): Promise<{ roundComplete: boolean; summary?: Record<string, unknown> }> {
+  const eligible = await getEligiblePlayers(supabase, roomId, coveredBy);
+  const idx = eligible.findIndex((p) => p.user_id === rollerUserId);
+  const next = idx >= 0 ? eligible[idx + 1] : null;
+
+  if (!next) {
+    await finalizePlayerRollingRound(supabase, roomId, roundId, now);
+    const summary = await buildRoundSummary(supabase, roundId);
+    return { roundComplete: true, summary: summary as unknown as Record<string, unknown> };
   }
 
-  const { data: allPlayers } = await playerQuery;
-  const totalPlayers = allPlayers?.length ?? 0;
-  if (totalPlayers === 0) return false;
+  await supabase
+    .from("celo_rounds")
+    .update({ current_player_seat: next.seat_number ?? 1 })
+    .eq("id", roundId);
 
-  const { count: resolvedCount } = await supabase
-    .from("celo_player_rolls")
-    .select("id", { count: "exact", head: true })
-    .eq("round_id", roundId)
-    .in("outcome", ["win", "loss"]);
-
-  return (resolvedCount ?? 0) >= totalPlayers;
+  return { roundComplete: false };
 }
 
 /** Settle open side bets for a completed round. */
@@ -216,6 +264,7 @@ export async function POST(req: Request) {
     bank_covered: boolean;
     covered_by: string | null;
     completed_at: string | null;
+    current_player_seat: number | null;
   };
 
   if (r.completed_at || r.status === "completed") {
@@ -277,6 +326,9 @@ export async function POST(req: Request) {
 
     // ── POINT ──
     if (roll.result === "point") {
+      const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
+      const firstSeat = eligible[0]?.seat_number ?? 1;
+
       await supabase
         .from("celo_rounds")
         .update({
@@ -285,6 +337,7 @@ export async function POST(req: Request) {
           banker_roll_result: roll.result,
           banker_point: roll.point,
           status: "player_rolling",
+          current_player_seat: firstSeat,
         })
         .eq("id", round_id);
 
@@ -294,12 +347,13 @@ export async function POST(req: Request) {
         result: "point",
         bankerPoint: roll.point,
         status: "player_rolling",
+        currentPlayerSeat: firstSeat,
       });
     }
 
     // ── INSTANT WIN (banker) ──
     if (roll.result === "instant_win") {
-      const totalPot = r.total_pot_cents;
+      const totalPot = roundTotalPotCents(round as Record<string, unknown>);
       const platformFee = Math.floor((totalPot * feePct) / 100);
       const bankerWins = totalPot - platformFee;
 
@@ -456,11 +510,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No banker point set" }, { status: 400 });
     }
 
-    // Determine whose turn it is
-    const currentPlayer = await getNextPlayer(supabase, room_id, round_id, r.covered_by);
-    if (!currentPlayer) {
+    const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
+    if (eligible.length === 0) {
       return NextResponse.json({ error: "No players remaining to roll" }, { status: 400 });
     }
+
+    let currentSeat = r.current_player_seat;
+    if (currentSeat == null) {
+      const firstSeat = eligible[0]?.seat_number ?? 1;
+      await supabase
+        .from("celo_rounds")
+        .update({ current_player_seat: firstSeat })
+        .eq("id", round_id);
+      currentSeat = firstSeat;
+    }
+
+    const currentPlayer =
+      eligible.find((p) => p.seat_number === currentSeat) ?? eligible[0];
 
     if (currentPlayer.user_id !== userId) {
       return NextResponse.json({ error: "Not your turn to roll" }, { status: 403 });
@@ -552,20 +618,14 @@ export async function POST(req: Request) {
         )
         .eq("id", room_id);
 
-      // Check if round complete
-      const allDone = await checkAndCompleteRound(supabase, room_id, round_id, r.covered_by);
-
-      if (allDone) {
-        await Promise.all([
-          supabase.from("celo_rounds")
-            .update({ status: "completed", completed_at: now })
-            .eq("id", round_id),
-          supabase.from("celo_rooms")
-            .update({ status: "active" })
-            .eq("id", room_id),
-        ]);
-        await settleOpenSideBets(supabase, round_id, room_id);
-      }
+      const adv = await advanceAfterResolvingPlayerRoll(
+        supabase,
+        room_id,
+        round_id,
+        userId,
+        r.covered_by,
+        now
+      );
 
       return NextResponse.json({
         dice,
@@ -575,7 +635,8 @@ export async function POST(req: Request) {
         outcome: "win",
         payoutCents: payout,
         feeCents: fee,
-        roundComplete: allDone,
+        roundComplete: adv.roundComplete,
+        summary: adv.summary,
         // Offer banker switch only if player rolled C-Lo
         player_can_become_banker: roll.isCelo,
         player_must_have_cents: roll.isCelo ? rm.current_bank_cents : undefined,
@@ -615,25 +676,22 @@ export async function POST(req: Request) {
         )
         .eq("id", room_id);
 
-      const allDone = await checkAndCompleteRound(supabase, room_id, round_id, r.covered_by);
-      if (allDone) {
-        await Promise.all([
-          supabase.from("celo_rounds")
-            .update({ status: "completed", completed_at: now })
-            .eq("id", round_id),
-          supabase.from("celo_rooms")
-            .update({ status: "active" })
-            .eq("id", room_id),
-        ]);
-        await settleOpenSideBets(supabase, round_id, room_id);
-      }
+      const adv = await advanceAfterResolvingPlayerRoll(
+        supabase,
+        room_id,
+        round_id,
+        userId,
+        r.covered_by,
+        now
+      );
 
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "instant_loss",
         outcome: "loss",
-        roundComplete: allDone,
+        roundComplete: adv.roundComplete,
+        summary: adv.summary,
       });
     }
 
@@ -699,18 +757,14 @@ export async function POST(req: Request) {
         reroll_count: rerollCount,
       });
 
-      const allDone = await checkAndCompleteRound(supabase, room_id, round_id, r.covered_by);
-      if (allDone) {
-        await Promise.all([
-          supabase.from("celo_rounds")
-            .update({ status: "completed", completed_at: now })
-            .eq("id", round_id),
-          supabase.from("celo_rooms")
-            .update({ status: "active" })
-            .eq("id", room_id),
-        ]);
-        await settleOpenSideBets(supabase, round_id, room_id);
-      }
+      const adv = await advanceAfterResolvingPlayerRoll(
+        supabase,
+        room_id,
+        round_id,
+        userId,
+        r.covered_by,
+        now
+      );
 
       return NextResponse.json({
         dice,
@@ -721,7 +775,8 @@ export async function POST(req: Request) {
         outcome: playerWins ? "win" : "loss",
         payoutCents,
         feeCents,
-        roundComplete: allDone,
+        roundComplete: adv.roundComplete,
+        summary: adv.summary,
       });
     }
   }
