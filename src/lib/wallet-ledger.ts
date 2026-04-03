@@ -180,35 +180,22 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
 }
 
 /**
- * Canonical user balance for dashboard, wallet, and betting (Fight Arena, etc.).
- * Reads wallet_balances first (same source as ledger); falls back to profiles.balance.
- * Use this everywhere so Stripe deposits and betting share one balance.
+ * Canonical balance in cents from `wallet_balances` only (same source as `wallet_ledger_entry`).
+ * Returns 0 if no row or error. Call `ensureWalletBalancesRow` first when a row may be missing.
  */
 export async function getCanonicalBalanceCents(userId: string): Promise<number> {
-  const walletBalance = await getWalletBalanceCents(userId);
-  if (walletBalance !== null) {
-    console.log("[balance] getCanonicalBalanceCents", { userId, source: "wallet_balances", balanceCents: walletBalance });
-    return walletBalance;
-  }
-  const { data, error } = await supabase()
-    .from("profiles")
+  const client = createAdminClient();
+  if (!client) return 0;
+  const { data, error } = await client
+    .from("wallet_balances")
     .select("balance")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!error && data) {
-    const userBalance = Number((data as { balance?: number }).balance ?? 0);
-    console.log("[balance] getCanonicalBalanceCents", { userId, source: "profiles", balanceCents: userBalance });
-    return userBalance;
-  }
-  if (error && !isMissingProfileRelationError(error)) {
-    console.warn("[balance] getCanonicalBalanceCents profiles read failed:", error.message);
-  }
-  const ledgerBalance = await getLatestLedgerBalanceCents(userId);
-  if (ledgerBalance !== null) {
-    console.log("[balance] getCanonicalBalanceCents", { userId, source: "wallet_ledger", balanceCents: ledgerBalance });
-    return ledgerBalance;
-  }
-  return 0;
+    .eq("user_id", userId)
+    .single();
+  if (error || !data) return 0;
+  const raw = (data as { balance?: number | null }).balance;
+  if (raw == null) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
 }
 
 export interface WalletLedgerRow {
