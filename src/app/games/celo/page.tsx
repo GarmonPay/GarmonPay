@@ -20,6 +20,8 @@ type Room = {
   current_bank_cents: number;
   platform_fee_pct: number;
   last_activity: string;
+  /** Filled when available from realtime player counts */
+  player_count?: number;
 };
 
 type CreateForm = {
@@ -66,6 +68,24 @@ export default function CeloLobbyPage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
 
+  const mapRowToLobbyRoom = useCallback((raw: Record<string, unknown>, playerCount?: number): Room | null => {
+    const n = normalizeCeloRoomRow(raw);
+    if (!n) return null;
+    const r = raw;
+    return {
+      id: String(r.id),
+      name: String(r.name ?? n.name ?? ""),
+      status: String(r.status ?? ""),
+      room_type: String(r.room_type ?? ""),
+      max_players: Number(r.max_players ?? n.max_players ?? 0),
+      min_bet_cents: n.min_bet_cents,
+      current_bank_cents: n.current_bank_cents,
+      platform_fee_pct: n.platform_fee_pct,
+      last_activity: String(r.last_activity ?? ""),
+      player_count: playerCount,
+    };
+  }, []);
+
   const loadRooms = useCallback(async () => {
     const sb = createBrowserClient();
     if (!sb) return;
@@ -79,24 +99,10 @@ export default function CeloLobbyPage() {
     const rows = (data ?? []) as Record<string, unknown>[];
     setRooms(
       rows
-        .map((r) => normalizeCeloRoomRow(r))
-        .filter(Boolean)
-        .map((n) => {
-          const raw = n as Record<string, unknown>;
-          return {
-            id: String(raw.id),
-            name: String(raw.name ?? ""),
-            status: String(raw.status ?? ""),
-            room_type: String(raw.room_type ?? ""),
-            max_players: Number(raw.max_players ?? 0),
-            min_bet_cents: Number(raw.min_bet_cents ?? 0),
-            current_bank_cents: Number(raw.current_bank_cents ?? 0),
-            platform_fee_pct: Number(raw.platform_fee_pct ?? 10),
-            last_activity: String(raw.last_activity ?? ""),
-          } as Room;
-        })
+        .map((row) => mapRowToLobbyRoom(row))
+        .filter((x): x is Room => x !== null)
     );
-  }, []);
+  }, [mapRowToLobbyRoom]);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -116,14 +122,101 @@ export default function CeloLobbyPage() {
   useEffect(() => {
     const sb = createBrowserClient();
     if (!sb || !session) return;
-    const ch = sb
-      .channel("celo-lobby-rooms")
-      .on("postgres_changes", { event: "*", schema: "public", table: "celo_rooms" }, () => {
-        void loadRooms();
-      })
+    let cancelled = false;
+
+    const lobby = sb
+      .channel("celo-lobby")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_rooms" },
+        async (payload) => {
+          if (cancelled) return;
+          const ev = payload.eventType;
+          const pubStatuses = new Set(["waiting", "active", "rolling"]);
+
+          if (ev === "INSERT") {
+            const row = payload.new as Record<string, unknown>;
+            if (row.room_type === "public" && pubStatuses.has(String(row.status ?? ""))) {
+              const mapped = mapRowToLobbyRoom(row);
+              if (mapped) {
+                setRooms((prev) => {
+                  if (prev.some((r) => r.id === mapped.id)) return prev;
+                  return [mapped, ...prev];
+                });
+              }
+            }
+            return;
+          }
+
+          if (ev === "UPDATE") {
+            const row = payload.new as Record<string, unknown>;
+            const id = String(row.id ?? "");
+            const isPublic = row.room_type === "public";
+            const st = String(row.status ?? "");
+            if (!isPublic || !pubStatuses.has(st)) {
+              setTimeout(() => {
+                if (!cancelled) {
+                  setRooms((prev) => prev.filter((r) => r.id !== id));
+                }
+              }, 0);
+              return;
+            }
+            const mapped = mapRowToLobbyRoom(row);
+            if (!mapped) return;
+            setRooms((prev) => {
+              const idx = prev.findIndex((r) => r.id === id);
+              if (idx === -1) return [mapped, ...prev];
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...mapped };
+              return next;
+            });
+            if (st === "cancelled" || st === "completed") {
+              setTimeout(() => {
+                if (!cancelled) {
+                  setRooms((prev) => prev.filter((r) => r.id !== id));
+                }
+              }, 3000);
+            }
+            return;
+          }
+
+          if (ev === "DELETE") {
+            const oldId = (payload.old as { id?: string } | null)?.id;
+            if (oldId) {
+              setRooms((prev) => prev.filter((r) => r.id !== oldId));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_room_players" },
+        async (payload) => {
+          if (cancelled) return;
+          const affectedRoomId =
+            (payload.new as { room_id?: string } | null)?.room_id ??
+            (payload.old as { room_id?: string } | null)?.room_id;
+          if (!affectedRoomId) return;
+          const { count } = await sb
+            .from("celo_room_players")
+            .select("*", { count: "exact", head: true })
+            .eq("room_id", affectedRoomId)
+            .neq("role", "spectator");
+          if (cancelled) return;
+          setRooms((prev) =>
+            prev.map((r) =>
+              r.id === affectedRoomId ? { ...r, player_count: count ?? 0 } : r
+            )
+          );
+        }
+      )
       .subscribe();
-    return () => { sb.removeChannel(ch); };
-  }, [session, loadRooms]);
+
+    return () => {
+      cancelled = true;
+      sb.removeChannel(lobby);
+    };
+  }, [session, mapRowToLobbyRoom]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

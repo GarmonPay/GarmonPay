@@ -1,5 +1,6 @@
 "use client";
 
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -87,6 +88,13 @@ type RollResponse = {
   player_can_become_banker?: boolean;
   roundComplete?: boolean;
   error?: string;
+};
+
+type ChatMessage = {
+  id: string;
+  user_id: string;
+  message: string;
+  created_at: string;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -244,6 +252,19 @@ export default function CeloRoomPage() {
   const [lastRollResult, setLastRollResult] = useState<RollResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const [initialSyncDone, setInitialSyncDone] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [remoteRollCue, setRemoteRollCue] = useState<PlayerRoll | null>(null);
+  const [systemFeed, setSystemFeed] = useState<string[]>([]);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const balanceRef = useRef(0);
+  const roomChannelRef = useRef<RealtimeChannel | null>(null);
+
   // Join form state — default to min_bet_cents once room loads
   const [joinEntryCents, setJoinEntryCents] = useState(0);
   useEffect(() => {
@@ -369,9 +390,52 @@ export default function CeloRoomPage() {
     }
   }, []);
 
+  const loadChat = useCallback(async () => {
+    const sb = createBrowserClient();
+    if (!sb) return;
+    const { data } = await sb
+      .from("celo_chat")
+      .select("id,user_id,message,created_at")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true })
+      .limit(200);
+    setChatMessages(((data ?? []) as ChatMessage[]) ?? []);
+  }, [roomId]);
+
   const loadAll = useCallback(async () => {
-    await Promise.all([loadRoom(), loadPlayers(), loadRound(), loadBalance()]);
-  }, [loadRoom, loadPlayers, loadRound, loadBalance]);
+    await Promise.all([loadRoom(), loadPlayers(), loadRound(), loadBalance(), loadChat()]);
+  }, [loadRoom, loadPlayers, loadRound, loadBalance, loadChat]);
+
+  const loadRoomRef = useRef(loadRoom);
+  const loadPlayersRef = useRef(loadPlayers);
+  const loadRoundRef = useRef(loadRound);
+  const loadBalanceRef = useRef(loadBalance);
+  const loadChatRef = useRef(loadChat);
+  const loadAllRef = useRef(loadAll);
+  loadRoomRef.current = loadRoom;
+  loadPlayersRef.current = loadPlayers;
+  loadRoundRef.current = loadRound;
+  loadBalanceRef.current = loadBalance;
+  loadChatRef.current = loadChat;
+  loadAllRef.current = loadAll;
+
+  const addSystemMessage = useCallback((line: string) => {
+    setSystemFeed((prev) => [...prev.slice(-25), line]);
+  }, []);
+
+  useEffect(() => {
+    balanceRef.current = balanceCents;
+  }, [balanceCents]);
+
+  useEffect(() => {
+    setInitialSyncDone(false);
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!remoteRollCue) return;
+    const t = setTimeout(() => setRemoteRollCue(null), 1400);
+    return () => clearTimeout(t);
+  }, [remoteRollCue]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -383,37 +447,207 @@ export default function CeloRoomPage() {
     });
   }, [router, roomId]);
 
-  useEffect(() => {
-    if (!session) return;
-    void loadAll();
-  }, [session, loadAll]);
-
-  // ── Realtime subscriptions ─────────────────────────────────────────────────
+  // ── Realtime + presence (initial fetch runs after SUBSCRIBED) ─────────────────
   useEffect(() => {
     const sb = createBrowserClient();
-    if (!sb || !session) return;
+    if (!sb || !session?.userId) return;
+    let isMounted = true;
+    const uid = session.userId;
+    const displayName = session.email?.split("@")[0] ?? "Player";
 
-    const ch = sb
+    const fetchInitialRoomData = async () => {
+      await loadAllRef.current();
+      if (isMounted) setInitialSyncDone(true);
+    };
+
+    const triggerDiceAnimation = (row: Record<string, unknown>) => {
+      setRemoteRollCue(row as unknown as PlayerRoll);
+    };
+
+    const roomChannel = sb
       .channel(`celo-room-${roomId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` }, () => {
-        void loadRoom();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "celo_room_players", filter: `room_id=eq.${roomId}` }, () => {
-        void loadPlayers();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` }, () => {
-        void loadRound();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` }, () => {
-        void loadRound();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "users", filter: `id=eq.${session.userId}` }, () => {
-        void loadBalance();
-      })
-      .subscribe();
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "celo_room_players",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async () => {
+          if (!isMounted) return;
+          await loadPlayersRef.current();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "celo_rooms",
+          filter: `id=eq.${roomId}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as Record<string, unknown>;
+          const n = normalizeCeloRoomRow(row);
+          if (n) {
+            setRoom({
+              ...n,
+              speed: String(row.speed ?? "regular"),
+              last_round_was_celo: Boolean(row.last_round_was_celo),
+              banker_celo_at: (row.banker_celo_at as string | null) ?? null,
+            } as Room);
+          } else {
+            void loadRoomRef.current();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "celo_rounds",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async () => {
+          if (!isMounted) return;
+          await loadRoundRef.current();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "celo_player_rolls",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as Record<string, unknown>;
+          if (row.user_id && String(row.user_id) !== uid) {
+            triggerDiceAnimation(row);
+          }
+          void loadRoundRef.current();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "celo_side_bets",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async () => {
+          if (!isMounted) return;
+          await loadRoundRef.current();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "celo_chat",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const msg = payload.new as ChatMessage;
+          if (!msg?.id) return;
+          setChatMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "wallet_balances",
+          filter: `user_id=eq.${uid}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const next = Number((payload.new as { balance?: number }).balance ?? 0);
+          const prevBal = balanceRef.current;
+          setBalanceCents(next);
+          if (next > prevBal) setBalanceFlash("up");
+          else if (next < prevBal) setBalanceFlash("down");
+          setTimeout(() => {
+            if (isMounted) setBalanceFlash(null);
+          }, 1500);
+        }
+      )
+      .subscribe((status) => {
+        if (!isMounted) return;
+        setRealtimeConnected(status === "SUBSCRIBED");
+        if (status === "SUBSCRIBED") {
+          void fetchInitialRoomData();
+        }
+      });
 
-    return () => { sb.removeChannel(ch); };
-  }, [session, roomId, loadRoom, loadPlayers, loadRound, loadBalance]);
+    roomChannelRef.current = roomChannel;
+
+    const presenceChannel = sb.channel(`presence-celo-${roomId}`, {
+      config: { presence: { key: uid } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        if (!isMounted) return;
+        const state = presenceChannel.presenceState();
+        setOnlineCount(Object.keys(state).length);
+      })
+      .on("presence", { event: "join" }, ({ newPresences }) => {
+        if (!isMounted) return;
+        newPresences.forEach((p) => {
+          const meta = (p as unknown as { metas?: Array<{ name?: string }> }).metas?.[0];
+          const name = meta?.name ?? "Someone";
+          addSystemMessage(`${name} joined the room`);
+        });
+      })
+      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+        if (!isMounted) return;
+        leftPresences.forEach((p) => {
+          const meta = (p as unknown as { metas?: Array<{ name?: string }> }).metas?.[0];
+          const name = meta?.name ?? "Someone";
+          addSystemMessage(`${name} left the room`);
+        });
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED" && isMounted) {
+          await presenceChannel.track({
+            user_id: uid,
+            name: displayName,
+            joined_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      roomChannelRef.current = null;
+      setRealtimeConnected(false);
+      sb.removeChannel(roomChannel);
+      sb.removeChannel(presenceChannel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loaders via refs; only reconnect when room or user changes
+  }, [session?.userId, roomId, addSystemMessage]);
+
+  useEffect(() => {
+    if (realtimeConnected) return;
+    const id = window.setInterval(() => {
+      roomChannelRef.current?.subscribe();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [realtimeConnected]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const userId = session?.userId ?? "";
@@ -549,11 +783,38 @@ export default function CeloRoomPage() {
     await loadBalance();
   }
 
+  async function handleSendChat(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || !session?.userId) return;
+    const sb = createBrowserClient();
+    if (!sb) return;
+    setChatSending(true);
+    const { error } = await sb.from("celo_chat").insert({
+      room_id: roomId,
+      user_id: session.userId,
+      message: text.slice(0, 500),
+    });
+    setChatSending(false);
+    if (!error) setChatInput("");
+  }
+
   // ── Render: loading ───────────────────────────────────────────────────────
   if (loading || !session) {
     return (
       <div className="min-h-screen bg-[#0e0118] flex items-center justify-center">
         <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!initialSyncDone) {
+    return (
+      <div className="min-h-screen bg-[#0e0118] flex flex-col items-center justify-center gap-3">
+        <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
+        <p className="text-xs text-violet-400/60">
+          {realtimeConnected ? "Syncing room…" : "Connecting to live channel…"}
+        </p>
       </div>
     );
   }
@@ -696,9 +957,27 @@ export default function CeloRoomPage() {
             <h1 className="font-bold text-[#F5C842] truncate text-lg">{room.name}</h1>
             <p className="text-[10px] text-violet-400/60 uppercase tracking-widest">{room.speed}</p>
           </div>
-          <div className="text-right shrink-0">
+          <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+            <span
+              className={`text-[10px] font-semibold ${realtimeConnected ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {realtimeConnected ? "● LIVE" : "● RECONNECTING…"}
+            </span>
+            {onlineCount > 0 && (
+              <span className="text-[10px] text-violet-400/70">{onlineCount} online</span>
+            )}
             <p className="text-[10px] text-violet-400/50">Balance</p>
-            <p className="text-sm font-bold text-emerald-400 font-mono">${(balanceCents / 100).toFixed(2)}</p>
+            <p
+              className={`text-sm font-bold font-mono transition-colors ${
+                balanceFlash === "up"
+                  ? "text-emerald-300"
+                  : balanceFlash === "down"
+                    ? "text-red-400"
+                    : "text-emerald-400"
+              }`}
+            >
+              ${(balanceCents / 100).toFixed(2)}
+            </p>
           </div>
         </div>
 
@@ -716,6 +995,20 @@ export default function CeloRoomPage() {
             <p>Players <span className="text-white">{players.filter((p) => p.role === "player").length}/{room.max_players}</span></p>
           </div>
         </div>
+
+        {remoteRollCue && (
+          <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-center text-xs text-violet-200">
+            Another player rolled…
+          </div>
+        )}
+
+        {systemFeed.length > 0 && (
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2 max-h-20 overflow-y-auto text-[10px] text-violet-400/80 space-y-0.5">
+            {systemFeed.slice(-5).map((line, i) => (
+              <p key={`${line}-${i}`}>{line}</p>
+            ))}
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -1084,6 +1377,43 @@ export default function CeloRoomPage() {
             <p className="text-sm text-violet-300/50">Waiting for the banker to start a round…</p>
           </div>
         )}
+
+        {/* Live chat */}
+        <div className="rounded-2xl border border-white/[0.07] bg-[#12081f]/80 overflow-hidden">
+          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 px-4 pt-3">Room chat</p>
+          <div className="max-h-40 overflow-y-auto px-4 py-2 space-y-1.5 text-xs">
+            {chatMessages.length === 0 ? (
+              <p className="text-violet-500/40 text-center py-2">No messages yet</p>
+            ) : (
+              chatMessages.map((m) => (
+                <div key={m.id} className="text-violet-200/90">
+                  <span className="text-violet-500/60 font-mono text-[10px]">
+                    {m.user_id === userId ? "You" : m.user_id.slice(0, 6)}:
+                  </span>{" "}
+                  <span className="break-words">{m.message}</span>
+                </div>
+              ))
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <form onSubmit={handleSendChat} className="flex gap-2 border-t border-white/[0.06] p-3">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Message…"
+              maxLength={500}
+              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-violet-500/40 outline-none focus:border-[#F5C842]/40"
+            />
+            <button
+              type="submit"
+              disabled={chatSending || !chatInput.trim()}
+              className="rounded-xl bg-[#F5C842]/20 border border-[#F5C842]/40 px-4 py-2 text-xs font-semibold text-[#F5C842] disabled:opacity-40"
+            >
+              Send
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );
