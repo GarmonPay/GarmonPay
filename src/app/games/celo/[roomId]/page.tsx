@@ -414,6 +414,37 @@ export default function CeloRoomPage() {
   }, [roomId]);
 
   const fetchPlayers = useCallback(async () => {
+    try {
+      const res = await authFetchGet(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`);
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          players?: Player[];
+          room?: Record<string, unknown>;
+        };
+        if (data.players) {
+          const plist = data.players;
+          setPlayers(plist);
+          if (session?.userId) {
+            setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
+          }
+        }
+        if (data.room) {
+          const raw = data.room;
+          const n = normalizeCeloRoomRow(raw);
+          if (n) {
+            setRoom({
+              ...n,
+              speed: String(raw.speed ?? "regular"),
+              last_round_was_celo: Boolean(raw.last_round_was_celo),
+              banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+            } as Room);
+          }
+        }
+        return;
+      }
+    } catch {
+      /* fallback to direct Supabase */
+    }
     const sb = createBrowserClient();
     if (!sb) return;
     const { data } = await sb
@@ -514,48 +545,12 @@ export default function CeloRoomPage() {
 
   // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
   useEffect(() => {
-    const sb = createBrowserClient();
-    if (!sb || !roomId) return;
-    const poll = setInterval(async () => {
-      const { data } = await sb
-        .from("celo_room_players")
-        .select(
-          `
-          *,
-          users (
-            id,
-            full_name,
-            email
-          )
-        `
-        )
-        .eq("room_id", roomId)
-        .order("seat_number", { ascending: true });
-
-      if (data) {
-        const plist = data as Player[];
-        setPlayers(plist);
-        if (session?.userId) {
-          setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
-        }
-      }
-
-      const { data: roomData } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
-      if (roomData) {
-        const raw = roomData as Record<string, unknown>;
-        const n = normalizeCeloRoomRow(raw);
-        if (n) {
-          setRoom({
-            ...n,
-            speed: String(raw.speed ?? "regular"),
-            last_round_was_celo: Boolean(raw.last_round_was_celo),
-            banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
-          } as Room);
-        }
-      }
+    if (!roomId) return;
+    const poll = setInterval(() => {
+      void loadPlayersRef.current();
     }, 5000);
     return () => clearInterval(poll);
-  }, [roomId, session?.userId]);
+  }, [roomId]);
 
   useEffect(() => {
     const sb = createBrowserClient();
@@ -635,6 +630,8 @@ export default function CeloRoomPage() {
       if (isMounted) setInitialSyncDone(true);
     };
 
+    let presenceSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
     const triggerDiceAnimation = (row: Record<string, unknown>) => {
       setRemoteRollCue(row as unknown as PlayerRoll);
     };
@@ -647,6 +644,7 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_room_players",
+          filter: `room_id=eq.${roomId}`,
         },
         async (payload) => {
           if (!isMounted) return;
@@ -679,6 +677,7 @@ export default function CeloRoomPage() {
           event: "UPDATE",
           schema: "public",
           table: "celo_rooms",
+          filter: `id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
@@ -703,6 +702,7 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_rounds",
+          filter: `room_id=eq.${roomId}`,
         },
         async (payload) => {
           if (!isMounted) return;
@@ -747,6 +747,7 @@ export default function CeloRoomPage() {
           event: "INSERT",
           schema: "public",
           table: "celo_player_rolls",
+          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
@@ -764,6 +765,7 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_side_bets",
+          filter: `room_id=eq.${roomId}`,
         },
         async (payload) => {
           if (!isMounted) return;
@@ -778,6 +780,7 @@ export default function CeloRoomPage() {
           event: "INSERT",
           schema: "public",
           table: "celo_chat",
+          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
@@ -842,6 +845,12 @@ export default function CeloRoomPage() {
           const name = meta?.name ?? "Someone";
           addSystemMessage(`${name} joined the room`);
         });
+        if (presenceSyncTimer) clearTimeout(presenceSyncTimer);
+        presenceSyncTimer = setTimeout(() => {
+          presenceSyncTimer = null;
+          if (!isMounted) return;
+          void loadPlayersRef.current();
+        }, 400);
       })
       .on("presence", { event: "leave" }, ({ leftPresences }) => {
         if (!isMounted) return;
@@ -863,6 +872,7 @@ export default function CeloRoomPage() {
 
     return () => {
       isMounted = false;
+      if (presenceSyncTimer) clearTimeout(presenceSyncTimer);
       roomChannelRef.current = null;
       setRealtimeConnected(false);
       sb.removeChannel(roomChannel);
@@ -973,7 +983,12 @@ export default function CeloRoomPage() {
     }
     const ok = res.ok;
     setActionLoading(null);
-    if (!ok) { setError((data.error as string) ?? "Failed to start round"); return; }
+    if (!ok) {
+      const msg = (data.error as string) ?? "Failed to start round";
+      const det = data.details as string | undefined;
+      setError(det ? `${msg}: ${det}` : msg);
+      return;
+    }
     await loadRound();
   }
 

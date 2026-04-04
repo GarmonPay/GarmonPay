@@ -108,7 +108,14 @@ export async function POST(req: Request) {
     .single();
 
   if (roundErr || !newRound) {
-    return NextResponse.json({ error: "Failed to start round" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Failed to start round",
+        details: roundErr?.message ?? null,
+        code: roundErr?.code ?? null,
+      },
+      { status: 500 }
+    );
   }
 
   // Update room status
