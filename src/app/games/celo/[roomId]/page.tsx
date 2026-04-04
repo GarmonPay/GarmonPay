@@ -83,6 +83,7 @@ type Player = {
 
 type Round = {
   id: string;
+  room_id?: string;
   status: string;
   banker_id: string;
   banker_roll: number[] | null;
@@ -153,6 +154,7 @@ type RollResponse = {
 
 type ChatMessage = {
   id: string;
+  room_id?: string;
   user_id: string;
   message: string;
   created_at: string;
@@ -356,6 +358,8 @@ export default function CeloRoomPage() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const balanceRef = useRef(0);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
+  /** Dedupe banker-roll remote animations when the same round row is re-delivered */
+  const lastBankerRollAnimKeyRef = useRef<string>("");
 
   // Join form state — default to min_bet_cents once room loads
   const [joinEntryCents, setJoinEntryCents] = useState(0);
@@ -570,6 +574,7 @@ export default function CeloRoomPage() {
     let isMounted = true;
     const uid = session.userId;
     const displayName = session.email?.split("@")[0] ?? "Player";
+    lastBankerRollAnimKeyRef.current = "";
 
     const fetchInitialRoomData = async () => {
       await loadAllRef.current();
@@ -588,10 +593,11 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_room_players",
-          filter: `room_id=eq.${roomId}`,
         },
-        async () => {
+        async (payload) => {
           if (!isMounted) return;
+          const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
+          if (!row || String(row.room_id) !== roomId) return;
           const { data } = await sb
             .from("celo_room_players")
             .select(
@@ -634,11 +640,11 @@ export default function CeloRoomPage() {
           event: "UPDATE",
           schema: "public",
           table: "celo_rooms",
-          filter: `id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
-          const row = payload.new as Record<string, unknown>;
+          const row = payload.new as Record<string, unknown> | undefined;
+          if (!row || String(row.id) !== roomId) return;
           const n = normalizeCeloRoomRow(row);
           if (n) {
             setRoom({
@@ -658,10 +664,12 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_rounds",
-          filter: `room_id=eq.${roomId}`,
         },
         async (payload) => {
           if (!isMounted) return;
+          const raw = (payload.new ?? payload.old) as Record<string, unknown> | null;
+          if (!raw || String(raw.room_id) !== roomId) return;
+
           if (payload.new) {
             const n = payload.new as Round;
             setCurrentRound((prev) => {
@@ -669,7 +677,28 @@ export default function CeloRoomPage() {
               if (payload.eventType === "INSERT") return n;
               return prev;
             });
+
+            const br = n.banker_roll;
+            if (
+              Array.isArray(br) &&
+              br.length === 3 &&
+              n.banker_id &&
+              String(n.banker_id) !== uid
+            ) {
+              const key = `${n.id}:${JSON.stringify(br)}`;
+              if (lastBankerRollAnimKeyRef.current !== key) {
+                lastBankerRollAnimKeyRef.current = key;
+                triggerDiceAnimation({
+                  dice: br,
+                  roll_name: n.banker_roll_name,
+                  roll_result: n.banker_roll_result,
+                  outcome: null,
+                  payout_cents: 0,
+                });
+              }
+            }
           }
+
           await loadRoundRef.current();
         }
       )
@@ -679,11 +708,11 @@ export default function CeloRoomPage() {
           event: "INSERT",
           schema: "public",
           table: "celo_player_rolls",
-          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
           const row = payload.new as Record<string, unknown>;
+          if (!row || String(row.room_id) !== roomId) return;
           if (row.user_id && String(row.user_id) !== uid) {
             triggerDiceAnimation(row);
           }
@@ -696,10 +725,11 @@ export default function CeloRoomPage() {
           event: "*",
           schema: "public",
           table: "celo_side_bets",
-          filter: `room_id=eq.${roomId}`,
         },
-        async () => {
+        async (payload) => {
           if (!isMounted) return;
+          const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
+          if (row && String(row.room_id) !== roomId) return;
           await loadRoundRef.current();
         }
       )
@@ -709,12 +739,12 @@ export default function CeloRoomPage() {
           event: "INSERT",
           schema: "public",
           table: "celo_chat",
-          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
           const msg = payload.new as ChatMessage;
           if (!msg?.id) return;
+          if (String(msg.room_id ?? "") !== roomId) return;
           setChatMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev;
             return [...prev, msg];
