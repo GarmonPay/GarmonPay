@@ -413,7 +413,7 @@ export default function CeloRoomPage() {
     }
   }, [roomId]);
 
-  const loadPlayers = useCallback(async () => {
+  const fetchPlayers = useCallback(async () => {
     const sb = createBrowserClient();
     if (!sb) return;
     const { data } = await sb
@@ -496,17 +496,17 @@ export default function CeloRoomPage() {
   }, [roomId]);
 
   const loadAll = useCallback(async () => {
-    await Promise.all([loadRoom(), loadPlayers(), loadRound(), loadBalance(), loadChat()]);
-  }, [loadRoom, loadPlayers, loadRound, loadBalance, loadChat]);
+    await Promise.all([loadRoom(), fetchPlayers(), loadRound(), loadBalance(), loadChat()]);
+  }, [loadRoom, fetchPlayers, loadRound, loadBalance, loadChat]);
 
   const loadRoomRef = useRef(loadRoom);
-  const loadPlayersRef = useRef(loadPlayers);
+  const loadPlayersRef = useRef(fetchPlayers);
   const loadRoundRef = useRef(loadRound);
   const loadBalanceRef = useRef(loadBalance);
   const loadChatRef = useRef(loadChat);
   const loadAllRef = useRef(loadAll);
   loadRoomRef.current = loadRoom;
-  loadPlayersRef.current = loadPlayers;
+  loadPlayersRef.current = fetchPlayers;
   loadRoundRef.current = loadRound;
   loadBalanceRef.current = loadBalance;
   loadChatRef.current = loadChat;
@@ -598,30 +598,15 @@ export default function CeloRoomPage() {
           if (!isMounted) return;
           const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
           if (!row || String(row.room_id) !== roomId) return;
-          const { data } = await sb
-            .from("celo_room_players")
-            .select(
-              `
-              *,
-              users (
-                id,
-                full_name,
-                email
-              )
-            `
-            )
-            .eq("room_id", roomId)
-            .order("seat_number", { ascending: true });
-          if (data && isMounted) {
-            const plist = data as Player[];
-            setPlayers(plist);
-            if (session?.userId) {
-              setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
-            }
-          }
-          const { data: roomData } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
-          if (roomData && isMounted) {
-            const raw = roomData as Record<string, unknown>;
+
+          await new Promise((r) => setTimeout(r, 200));
+          if (!isMounted) return;
+
+          await loadPlayersRef.current();
+
+          const { data: freshRoom } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+          if (freshRoom && isMounted) {
+            const raw = freshRoom as Record<string, unknown>;
             const n = normalizeCeloRoomRow(raw);
             if (n) {
               setRoom({
@@ -776,7 +761,11 @@ export default function CeloRoomPage() {
         if (!isMounted) return;
         setRealtimeConnected(status === "SUBSCRIBED");
         if (status === "SUBSCRIBED") {
-          void fetchInitialRoomData();
+          void (async () => {
+            await fetchInitialRoomData();
+            if (!isMounted) return;
+            await loadPlayersRef.current();
+          })();
         }
       });
 
@@ -912,6 +901,7 @@ export default function CeloRoomPage() {
     setJoinLoading(false);
     if (!ok) { setJoinError((data.error as string) ?? "Failed to join"); return; }
     await loadAll();
+    await fetchPlayers();
   }
 
   async function handleStartRound() {
