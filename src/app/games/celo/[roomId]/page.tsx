@@ -135,6 +135,7 @@ type RollResponse = {
   newBankerId?: string;
   banker_can_lower_bank?: boolean;
   player_can_become_banker?: boolean;
+  player_must_have_cents?: number;
   roundComplete?: boolean;
   summary?: RoundSummaryPayload;
   error?: string;
@@ -275,6 +276,10 @@ export default function CeloRoomPage() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
+
+  // C-Lo become-banker modal state
+  const [showBecomeBankerModal, setShowBecomeBankerModal] = useState(false);
+  const [becomeBankerCostCents, setBecomeBankerCostCents] = useState(0);
 
   // Side bet form state
   const [showSideBets, setShowSideBets] = useState(false);
@@ -419,7 +424,20 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     if (!remoteRollCue) return;
-    const t = setTimeout(() => setRemoteRollCue(null), 1400);
+    // Trigger the full dice animation for remote rolls
+    setIsRolling(true);
+    setLastRollResult(null);
+    const t = setTimeout(() => {
+      setIsRolling(false);
+      setLastRollResult({
+        dice: remoteRollCue.dice,
+        rollName: remoteRollCue.roll_name ?? undefined,
+        result: remoteRollCue.roll_result ?? undefined,
+        outcome: remoteRollCue.outcome ?? undefined,
+        payoutCents: remoteRollCue.payout_cents,
+      });
+      setRemoteRollCue(null);
+    }, 2600);
     return () => clearTimeout(t);
   }, [remoteRollCue]);
 
@@ -428,6 +446,7 @@ export default function CeloRoomPage() {
     const t = window.setTimeout(() => setRoundSummary(null), 5000);
     return () => clearTimeout(t);
   }, [roundSummary]);
+
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -502,8 +521,15 @@ export default function CeloRoomPage() {
           table: "celo_rounds",
           filter: `room_id=eq.${roomId}`,
         },
-        async () => {
+        async (payload) => {
           if (!isMounted) return;
+          // Immediately patch local round state for instant UI response (BUG 1)
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updated = payload.new as Round;
+            setCurrentRound((prev) =>
+              prev && prev.id === updated.id ? { ...prev, ...updated } : prev
+            );
+          }
           await loadRoundRef.current();
         }
       )
@@ -685,6 +711,13 @@ export default function CeloRoomPage() {
     : 0;
   const canBecomeBanker = amIPlayer && !!myLastCeloRoll && becomeBankerSecondsLeft > 0;
 
+  // Auto-close become-banker modal when the 30s window expires
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!showBecomeBankerModal) return;
+    if (becomeBankerSecondsLeft <= 0) setShowBecomeBankerModal(false);
+  }, [showBecomeBankerModal, becomeBankerSecondsLeft]);
+
   // ── Action handlers ───────────────────────────────────────────────────────
 
   async function handleJoin(asSpectator = false) {
@@ -760,6 +793,19 @@ export default function CeloRoomPage() {
     if (rollData.roundComplete && rollData.summary) {
       setRoundSummary(rollData.summary);
     }
+    // Show C-Lo banker offer modal immediately
+    if (rollData.player_can_become_banker) {
+      setBecomeBankerCostCents(rollData.player_must_have_cents ?? room?.current_bank_cents ?? 0);
+      setShowBecomeBankerModal(true);
+    }
+    // If banker rolled a point, immediately sync the round so other state derives correctly
+    if (rollData.result === "point" && rollData.bankerPoint) {
+      setCurrentRound((prev) =>
+        prev
+          ? { ...prev, status: "player_rolling", banker_point: rollData.bankerPoint ?? null, current_player_seat: 1 }
+          : prev
+      );
+    }
     await loadAll();
   }
 
@@ -829,6 +875,7 @@ export default function CeloRoomPage() {
     }
     const ok = res.ok;
     setActionLoading(null);
+    setShowBecomeBankerModal(false);
     if (!ok) { setError((data.error as string) ?? "Failed to become banker"); return; }
     await loadAll();
   }
@@ -1063,6 +1110,48 @@ export default function CeloRoomPage() {
           </div>
         </div>
       )}
+      {/* ── C-Lo Banker Offer Modal (BUG 2) ── */}
+      {showBecomeBankerModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
+          <div className="max-w-sm w-full rounded-2xl border-2 border-[#F5C842]/50 bg-[#12081f] p-6 shadow-2xl shadow-[#F5C842]/20 text-center space-y-4">
+            <p className="text-2xl font-black text-[#F5C842]" style={{ textShadow: "0 0 20px #F5C842aa" }}>
+              🎲 C-Lo!
+            </p>
+            <p className="text-base font-semibold text-white">You rolled 4-5-6!</p>
+            <p className="text-sm text-violet-200/80">Want to become the banker?</p>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
+              <p className="text-xs text-violet-300/60">Bank coverage required</p>
+              <p className="text-xl font-bold text-[#F5C842] font-mono">
+                ${(becomeBankerCostCents / 100).toFixed(2)}
+              </p>
+              <p className="text-xs text-violet-300/50">
+                Your balance: ${(balanceCents / 100).toFixed(2)}
+              </p>
+            </div>
+            <p className="text-xs text-violet-400/60">
+              {becomeBankerSecondsLeft}s remaining
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={actionLoading === "become_banker" || balanceCents < becomeBankerCostCents}
+                onClick={handleBecomeBanker}
+                className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-3 font-bold text-black disabled:opacity-50 transition-all text-sm"
+              >
+                {actionLoading === "become_banker" ? "Claiming…" : "Become Banker"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBecomeBankerModal(false)}
+                className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 font-medium text-violet-300 text-sm hover:bg-white/10 transition-all"
+              >
+                No Thanks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute -left-20 top-10 h-80 w-80 rounded-full bg-violet-700/15 blur-[110px]" />
         <div className="absolute right-0 bottom-20 h-72 w-72 rounded-full bg-[#F5C842]/6 blur-[100px]" />
@@ -1118,25 +1207,35 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        {/* Banker point — player phase */}
+        {/* Banker point — player phase (BUG 1: big prominent display) */}
         {isPlayerRolling && currentRound && currentRound.banker_point != null && (
-          <div className="rounded-2xl border-2 border-[#F5C842]/35 bg-gradient-to-b from-[#1a0a2e] to-[#12081f] p-5 text-center space-y-2 shadow-lg shadow-[#F5C842]/10">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/70">Banker&apos;s roll</p>
+          <div
+            style={{ background: "rgba(245,200,66,0.15)", border: "1px solid #F5C842", borderRadius: 12, padding: 16 }}
+            className="text-center space-y-1 shadow-lg shadow-[#F5C842]/20"
+          >
+            <p className="text-[10px] uppercase tracking-[0.25em] text-[#F5C842]/70">Banker Point</p>
+            <p
+              className="font-black font-mono text-[#F5C842] leading-none"
+              style={{ fontSize: 72, textShadow: "0 0 24px #F5C842, 0 0 48px #F5C842aa" }}
+            >
+              {currentRound.banker_point}
+            </p>
             {currentRound.banker_roll_name && (
-              <p className="text-base font-semibold text-white">{currentRound.banker_roll_name}</p>
+              <p className="text-sm font-semibold text-white/90">{currentRound.banker_roll_name}</p>
             )}
-            <p className="text-3xl font-black text-[#F5C842] font-mono tracking-tight">
-              Point is {currentRound.banker_point}
+            <p className="text-sm text-violet-200/80">
+              Players must beat <span className="text-[#F5C842] font-bold">{currentRound.banker_point}</span>
             </p>
-            <p className="text-sm text-violet-200/90">
-              Roll to beat <span className="text-white font-bold">{currentRound.banker_point}</span>
-            </p>
-          </div>
-        )}
-
-        {remoteRollCue && (
-          <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-center text-xs text-violet-200">
-            Another player rolled…
+            {/* Turn indicator */}
+            {isMyTurn ? (
+              <p className="text-sm font-bold text-emerald-400 animate-pulse mt-1">
+                YOUR TURN — Beat {currentRound.banker_point}!
+              </p>
+            ) : currentTurnPlayer ? (
+              <p className="text-sm text-violet-300/70 mt-1">
+                {currentTurnPlayer.user_id.slice(0, 6).toUpperCase()} is rolling…
+              </p>
+            ) : null}
           </div>
         )}
 
