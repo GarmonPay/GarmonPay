@@ -86,9 +86,9 @@ type Round = {
   room_id?: string;
   status: string;
   banker_id: string;
-  banker_roll: number[] | null;
-  banker_roll_name: string | null;
-  banker_roll_result: string | null;
+  banker_dice: number[] | null;
+  banker_dice_name: string | null;
+  banker_dice_result: string | null;
   banker_point: number | null;
   banker_rerolls: number;
   total_pot_cents: number;
@@ -678,7 +678,7 @@ export default function CeloRoomPage() {
               return prev;
             });
 
-            const br = n.banker_roll;
+            const br = n.banker_dice;
             if (
               Array.isArray(br) &&
               br.length === 3 &&
@@ -690,8 +690,8 @@ export default function CeloRoomPage() {
                 lastBankerRollAnimKeyRef.current = key;
                 triggerDiceAnimation({
                   dice: br,
-                  roll_name: n.banker_roll_name,
-                  roll_result: n.banker_roll_result,
+                  roll_name: n.banker_dice_name,
+                  roll_result: n.banker_dice_result,
                   outcome: null,
                   payout_cents: 0,
                 });
@@ -1417,8 +1417,8 @@ export default function CeloRoomPage() {
                 >
                   {currentRound.banker_point}
                 </p>
-                {currentRound.banker_roll_name && (
-                  <p className="text-lg font-semibold text-white/95">{currentRound.banker_roll_name}</p>
+                {currentRound.banker_dice_name && (
+                  <p className="text-lg font-semibold text-white/95">{currentRound.banker_dice_name}</p>
                 )}
                 <p className="text-sm text-violet-200/90 pt-1">
                   Waiting for{" "}
@@ -1450,8 +1450,8 @@ export default function CeloRoomPage() {
                 >
                   {currentRound.banker_point}
                 </p>
-                {currentRound.banker_roll_name && (
-                  <p className="text-base font-medium text-violet-200/90">{currentRound.banker_roll_name}</p>
+                {currentRound.banker_dice_name && (
+                  <p className="text-base font-medium text-violet-200/90">{currentRound.banker_dice_name}</p>
                 )}
               </div>
             ) : (
@@ -1466,8 +1466,8 @@ export default function CeloRoomPage() {
                 >
                   {currentRound.banker_point}
                 </p>
-                {currentRound.banker_roll_name && (
-                  <p className="text-sm font-semibold text-white/85">{currentRound.banker_roll_name}</p>
+                {currentRound.banker_dice_name && (
+                  <p className="text-sm font-semibold text-white/85">{currentRound.banker_dice_name}</p>
                 )}
                 <p className="text-sm text-violet-200/85 pt-1">
                   {currentTurnPlayer

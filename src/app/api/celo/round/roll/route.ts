@@ -343,9 +343,9 @@ export async function POST(req: Request) {
 
     // Persist dice + outcome immediately so Supabase realtime notifies all clients before payouts
     const roundUpdate: Record<string, unknown> = {
-      banker_roll: dice,
-      banker_roll_name: roll.rollName,
-      banker_roll_result: roll.result,
+      banker_dice: dice,
+      banker_dice_name: roll.rollName,
+      banker_dice_result: roll.result,
       banker_point: bankerPointValue,
       status: statusAfterRoll,
       current_player_seat: roll.result === "point" ? firstSeatForPoint : null,
