@@ -4,9 +4,12 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+
+const DiceThrow = dynamic(() => import("@/components/celo/DiceThrow"), { ssr: false });
 
 async function authFetch(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
@@ -65,6 +68,7 @@ type Player = {
   role: string;
   bet_cents: number;
   seat_number: number | null;
+  dice_type?: string;
 };
 
 type Round = {
@@ -145,7 +149,6 @@ type ChatMessage = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DICE_FACES = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
 const SIDE_BET_OPTIONS = [
   { value: "celo", label: "C-Lo (4-5-6)", odds: 8 },
@@ -163,54 +166,6 @@ const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }>
   point: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/30" },
   no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
 };
-
-// ── Dice component ────────────────────────────────────────────────────────────
-
-function DiceDisplay({
-  dice,
-  rolling,
-  result,
-}: {
-  dice: number[];
-  rolling: boolean;
-  result?: string;
-}) {
-  const [display, setDisplay] = useState<number[]>(dice.length > 0 ? dice : [1, 1, 1]);
-
-  useEffect(() => {
-    if (!rolling) {
-      if (dice.length > 0) setDisplay(dice);
-      return;
-    }
-    const iv = setInterval(() => {
-      setDisplay([
-        Math.ceil(Math.random() * 6),
-        Math.ceil(Math.random() * 6),
-        Math.ceil(Math.random() * 6),
-      ]);
-    }, 80);
-    return () => clearInterval(iv);
-  }, [rolling, dice]);
-
-  const style = result ? RESULT_STYLE[result] : RESULT_STYLE.no_count;
-
-  return (
-    <div className="flex gap-3 justify-center">
-      {display.map((d, i) => (
-        <div
-          key={i}
-          className={`w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center rounded-2xl text-5xl sm:text-6xl select-none transition-all duration-200 border-2 ${
-            rolling
-              ? "border-[#F5C842] bg-[#F5C842]/10 animate-pulse"
-              : `${style.border} ${style.bg}`
-          }`}
-        >
-          {DICE_FACES[d] ?? d}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── Seat display ──────────────────────────────────────────────────────────────
 
@@ -1079,6 +1034,13 @@ export default function CeloRoomPage() {
   const lastDice = lastRollResult?.dice ?? [];
   const lastResult = lastRollResult?.result;
 
+  const myDiceType = (myPlayer?.dice_type as "standard" | "gold" | "street" | "midnight") ?? "standard";
+  const currentDice: [number, number, number] | null =
+    lastRollResult?.dice?.length === 3
+      ? (lastRollResult.dice as [number, number, number])
+      : null;
+  const handleAnimationComplete = () => {};
+
   return (
     <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
       {roundSummary && (
@@ -1196,41 +1158,39 @@ export default function CeloRoomPage() {
 
         {/* Dice display zone */}
         {(isRolling || lastDice.length > 0) && (
-          <div
-            className={`rounded-2xl border p-5 text-center space-y-3 ${
-              lastResult ? (RESULT_STYLE[lastResult]?.border ?? "border-white/10") : "border-white/10"
-            } ${lastResult ? (RESULT_STYLE[lastResult]?.bg ?? "bg-white/5") : "bg-white/[0.02]"}`}
-          >
-            <DiceDisplay dice={lastDice} rolling={isRolling} result={lastResult} />
+          <div className="space-y-2">
+            <DiceThrow
+              rolling={isRolling}
+              dice={currentDice}
+              diceType={myDiceType}
+              onAnimationComplete={handleAnimationComplete}
+            />
             {!isRolling && lastRollResult?.rollName && (
-              <div>
+              <div className="text-center space-y-1">
                 <p className={`text-lg font-bold ${RESULT_STYLE[lastResult ?? "no_count"]?.text ?? "text-white"}`}>
                   {lastRollResult.rollName}
                 </p>
                 {lastRollResult.bankerPoint && (
-                  <p className="text-sm text-violet-300/70 mt-1">
+                  <p className="text-sm text-violet-300/70">
                     Banker&apos;s point: <span className="text-violet-300 font-bold">{lastRollResult.bankerPoint}</span>
                   </p>
                 )}
                 {lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0 && (
-                  <p className="text-sm text-emerald-400 mt-1 font-semibold">
+                  <p className="text-sm text-emerald-400 font-semibold">
                     +${(lastRollResult.payoutCents / 100).toFixed(2)} payout
                   </p>
                 )}
                 {lastRollResult.banker_can_lower_bank && canLowerBank && (
-                  <p className="text-xs text-[#F5C842] mt-2 animate-pulse">
+                  <p className="text-xs text-[#F5C842] animate-pulse">
                     C-Lo! You can lower your bank — {lowerBankSecondsLeft}s left
                   </p>
                 )}
                 {lastRollResult.player_can_become_banker && canBecomeBanker && (
-                  <p className="text-xs text-[#F5C842] mt-2 animate-pulse">
+                  <p className="text-xs text-[#F5C842] animate-pulse">
                     C-Lo! You can take over as banker — {becomeBankerSecondsLeft}s left
                   </p>
                 )}
               </div>
-            )}
-            {isRolling && (
-              <p className="text-sm text-violet-300/60 animate-pulse">Rolling…</p>
             )}
           </div>
         )}
