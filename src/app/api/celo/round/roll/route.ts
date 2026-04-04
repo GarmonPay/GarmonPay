@@ -12,7 +12,9 @@ type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
 type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number | null };
 
 function roundTotalPotCents(roundRow: Record<string, unknown>): number {
-  return Number(roundRow.total_pot_cents ?? roundRow.prize_pool_sc ?? 0);
+  return Number(
+    roundRow.total_pot_sc ?? roundRow.total_pot_cents ?? roundRow.prize_pool_sc ?? 0
+  );
 }
 
 /** Players who roll vs the banker this round (seat order). */
@@ -78,7 +80,7 @@ async function finalizePlayerRollingRound(
 async function buildRoundSummary(supabase: SupabaseClient, roundId: string) {
   const { data: rolls } = await supabase
     .from("celo_player_rolls")
-    .select("user_id, outcome, payout_cents, bet_cents")
+    .select("user_id, outcome, payout_sc, entry_sc")
     .eq("round_id", roundId)
     .in("outcome", ["win", "loss"])
     .order("created_at", { ascending: true });
@@ -86,27 +88,27 @@ async function buildRoundSummary(supabase: SupabaseClient, roundId: string) {
   const list = (rolls ?? []) as {
     user_id: string;
     outcome: string;
-    payout_cents: number;
-    bet_cents: number;
+    payout_sc: number;
+    entry_sc: number;
   }[];
 
   let bankerNetCents = 0;
   const playerResults = list.map((row) => {
     if (row.outcome === "win") {
-      bankerNetCents -= row.payout_cents;
+      bankerNetCents -= row.payout_sc;
       return {
         userId: row.user_id,
         outcome: "win" as const,
-        amountCents: row.payout_cents,
-        label: `Won $${(row.payout_cents / 100).toFixed(2)}`,
+        amountCents: row.payout_sc,
+        label: `Won $${(row.payout_sc / 100).toFixed(2)}`,
       };
     }
-    bankerNetCents += row.bet_cents;
+    bankerNetCents += row.entry_sc;
     return {
       userId: row.user_id,
       outcome: "loss" as const,
-      amountCents: row.bet_cents,
-      label: `Lost $${(row.bet_cents / 100).toFixed(2)}`,
+      amountCents: row.entry_sc,
+      label: `Lost $${(row.entry_sc / 100).toFixed(2)}`,
     };
   });
 
@@ -279,8 +281,6 @@ export async function POST(req: Request) {
     banker_id: string;
     banker_point: number | null;
     banker_rerolls: number;
-    total_pot_cents: number;
-    platform_fee_cents: number;
     bank_covered: boolean;
     covered_by: string | null;
     completed_at: string | null;
@@ -356,7 +356,7 @@ export async function POST(req: Request) {
       roundUpdate.banker_rerolls = r.banker_rerolls + 1;
     }
     if (roll.result === "instant_win" && platformFeeForRound !== undefined) {
-      roundUpdate.platform_fee_cents = platformFeeForRound;
+      roundUpdate.platform_fee_sc = platformFeeForRound;
     }
 
     const { error: bankerRoundUpErr } = await supabase
@@ -589,9 +589,9 @@ export async function POST(req: Request) {
         dice,
         roll_name: roll.rollName,
         roll_result: roll.result,
-        bet_cents: playerBet,
+        entry_sc: playerBet,
         outcome: "reroll",
-        payout_cents: 0,
+        payout_sc: 0,
         reroll_count: rerollCount + 1,
       });
 
@@ -626,10 +626,10 @@ export async function POST(req: Request) {
         dice,
         roll_name: roll.rollName,
         roll_result: roll.result,
-        bet_cents: playerBet,
+        entry_sc: playerBet,
         outcome: "win",
-        payout_cents: payout,
-        platform_fee_cents: fee,
+        payout_sc: payout,
+        platform_fee_sc: fee,
         reroll_count: rerollCount,
         player_celo_at: playerCeloAt,
       });
@@ -679,9 +679,9 @@ export async function POST(req: Request) {
         dice,
         roll_name: roll.rollName,
         roll_result: roll.result,
-        bet_cents: playerBet,
+        entry_sc: playerBet,
         outcome: "loss",
-        payout_cents: 0,
+        payout_sc: 0,
         reroll_count: rerollCount,
       });
 
@@ -776,10 +776,10 @@ export async function POST(req: Request) {
         roll_name: roll.rollName,
         roll_result: roll.result,
         point: roll.point,
-        bet_cents: playerBet,
+        entry_sc: playerBet,
         outcome: playerWins ? "win" : "loss",
-        payout_cents: payoutCents,
-        platform_fee_cents: feeCents,
+        payout_sc: payoutCents,
+        platform_fee_sc: feeCents,
         reroll_count: rerollCount,
       });
 

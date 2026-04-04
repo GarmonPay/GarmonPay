@@ -91,8 +91,8 @@ type Round = {
   banker_dice_result: string | null;
   banker_point: number | null;
   banker_rerolls: number;
-  total_pot_cents: number;
-  platform_fee_cents: number;
+  total_pot_sc: number;
+  platform_fee_sc: number;
   bank_covered: boolean;
   covered_by: string | null;
   completed_at: string | null;
@@ -106,8 +106,8 @@ type PlayerRoll = {
   roll_name: string | null;
   roll_result: string | null;
   outcome: string | null;
-  payout_cents: number;
-  platform_fee_cents: number;
+  payout_sc: number;
+  platform_fee_sc: number;
   player_celo_at: string | null;
   created_at: string;
 };
@@ -288,7 +288,7 @@ function SeatCard({
           )}
           {outcome === "win" && (
             <span className="text-xs text-emerald-400 font-semibold">
-              +${(resolvedRoll!.payout_cents / 100).toFixed(2)} ✓
+              +${(resolvedRoll!.payout_sc / 100).toFixed(2)} ✓
             </span>
           )}
           {outcome === "loss" && (
@@ -536,7 +536,7 @@ export default function CeloRoomPage() {
         rollName: remoteRollCue.roll_name ?? undefined,
         result: remoteRollCue.roll_result ?? undefined,
         outcome: remoteRollCue.outcome ?? undefined,
-        payoutCents: remoteRollCue.payout_cents,
+        payoutCents: remoteRollCue.payout_sc,
       });
       setRemoteRollCue(null);
     }, 2600);
@@ -693,7 +693,7 @@ export default function CeloRoomPage() {
                   roll_name: n.banker_dice_name,
                   roll_result: n.banker_dice_result,
                   outcome: null,
-                  payout_cents: 0,
+                  payout_sc: 0,
                 });
               }
             }

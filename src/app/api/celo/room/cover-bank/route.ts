@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     status: string;
     bank_covered: boolean;
     covered_by: string | null;
-    total_pot_cents: number;
+    total_pot_sc: number;
   };
 
   if (!["betting", "banker_rolling"].includes(roundRecord.status)) {
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
     .update({
       bank_covered: true,
       covered_by: userId,
-      total_pot_cents: coverAmount,
+      total_pot_sc: coverAmount,
     })
     .eq("id", round_id)
     .select()
