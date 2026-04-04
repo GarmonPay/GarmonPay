@@ -224,9 +224,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { room_id, round_id } = body as { room_id?: string; round_id?: string };
-  if (!room_id || !round_id) {
-    return NextResponse.json({ error: "room_id and round_id required" }, { status: 400 });
+  const parsed = body as { room_id?: string; round_id?: string };
+  const { room_id } = parsed;
+  if (!room_id) {
+    return NextResponse.json({ error: "room_id required" }, { status: 400 });
+  }
+
+  let round_id: string;
+  if (parsed.round_id) {
+    round_id = parsed.round_id;
+  } else {
+    const { data: activeRound } = await supabase
+      .from("celo_rounds")
+      .select("id, status, banker_point, current_player_seat")
+      .eq("room_id", room_id)
+      .neq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!activeRound?.id) {
+      return NextResponse.json({ error: "No active round for this room" }, { status: 400 });
+    }
+    round_id = activeRound.id;
   }
 
   // Verify user is in this room
@@ -295,7 +315,60 @@ export async function POST(req: Request) {
     const roll = evaluateRoll(dice);
     const feePct = rm.platform_fee_pct;
 
-    // Always record the banker's roll in audit
+    // First eligible seat when transitioning to player_rolling (must match game rules)
+    let firstSeatForPoint: number | null = null;
+    if (roll.result === "point") {
+      const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
+      firstSeatForPoint = eligible[0]?.seat_number ?? 1;
+    }
+
+    let platformFeeForRound: number | undefined;
+    if (roll.result === "instant_win") {
+      const totalPot = roundTotalPotCents(round as Record<string, unknown>);
+      platformFeeForRound = Math.floor((totalPot * feePct) / 100);
+    }
+
+    const completedAtInstant =
+      roll.result === "instant_win" || roll.result === "instant_loss" ? now : null;
+
+    const statusAfterRoll =
+      roll.result === "point"
+        ? "player_rolling"
+        : roll.result === "no_count"
+          ? "banker_rolling"
+          : "completed";
+
+    const bankerPointValue =
+      roll.result === "point" && roll.point !== undefined ? roll.point : null;
+
+    // Persist dice + outcome immediately so Supabase realtime notifies all clients before payouts
+    const roundUpdate: Record<string, unknown> = {
+      banker_roll: dice,
+      banker_roll_name: roll.rollName,
+      banker_roll_result: roll.result,
+      banker_point: bankerPointValue,
+      status: statusAfterRoll,
+      current_player_seat: roll.result === "point" ? firstSeatForPoint : null,
+      completed_at: completedAtInstant,
+    };
+
+    if (roll.result === "no_count") {
+      roundUpdate.banker_rerolls = r.banker_rerolls + 1;
+    }
+    if (roll.result === "instant_win" && platformFeeForRound !== undefined) {
+      roundUpdate.platform_fee_cents = platformFeeForRound;
+    }
+
+    const { error: bankerRoundUpErr } = await supabase
+      .from("celo_rounds")
+      .update(roundUpdate)
+      .eq("id", round_id);
+
+    if (bankerRoundUpErr) {
+      console.error("celo_rounds banker roll update:", bankerRoundUpErr);
+      return NextResponse.json({ error: "Failed to save banker roll" }, { status: 500 });
+    }
+
     await supabase.from("celo_audit_log").insert({
       room_id,
       round_id,
@@ -304,18 +377,7 @@ export async function POST(req: Request) {
       details: { dice, roll_name: roll.rollName, result: roll.result, is_celo: roll.isCelo },
     });
 
-    // ── NO COUNT ──
     if (roll.result === "no_count") {
-      await supabase
-        .from("celo_rounds")
-        .update({
-          banker_roll: dice,
-          banker_roll_name: roll.rollName,
-          banker_roll_result: roll.result,
-          banker_rerolls: r.banker_rerolls + 1,
-        })
-        .eq("id", round_id);
-
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
@@ -324,40 +386,23 @@ export async function POST(req: Request) {
       });
     }
 
-    // ── POINT ──
     if (roll.result === "point") {
-      const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
-      const firstSeat = eligible[0]?.seat_number ?? 1;
-
-      await supabase
-        .from("celo_rounds")
-        .update({
-          banker_roll: dice,
-          banker_roll_name: roll.rollName,
-          banker_roll_result: roll.result,
-          banker_point: roll.point,
-          status: "player_rolling",
-          current_player_seat: firstSeat,
-        })
-        .eq("id", round_id);
-
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "point",
         bankerPoint: roll.point,
         status: "player_rolling",
-        currentPlayerSeat: firstSeat,
+        currentPlayerSeat: firstSeatForPoint,
       });
     }
 
-    // ── INSTANT WIN (banker) ──
+    // ── INSTANT WIN (banker) — round row already completed above ──
     if (roll.result === "instant_win") {
       const totalPot = roundTotalPotCents(round as Record<string, unknown>);
-      const platformFee = Math.floor((totalPot * feePct) / 100);
+      const platformFee = platformFeeForRound ?? Math.floor((totalPot * feePct) / 100);
       const bankerWins = totalPot - platformFee;
 
-      // Credit banker
       await walletLedgerEntry(
         rm.banker_id,
         "game_win",
@@ -367,29 +412,17 @@ export async function POST(req: Request) {
 
       const newBankCents = rm.current_bank_cents + bankerWins;
 
-      await Promise.all([
-        // Complete round
-        supabase.from("celo_rounds").update({
-          banker_roll: dice,
-          banker_roll_name: roll.rollName,
-          banker_roll_result: roll.result,
-          status: "completed",
-          platform_fee_cents: platformFee,
-          completed_at: now,
-        }).eq("id", round_id),
-        // Update room bank + celo flag
-        supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(newBankCents, {
-              status: "active",
-              last_activity: now,
-              last_round_was_celo: roll.isCelo,
-              banker_celo_at: roll.isCelo ? now : null,
-            })
-          )
-          .eq("id", room_id),
-      ]);
+      await supabase
+        .from("celo_rooms")
+        .update(
+          mergeCeloRoomUpdate(newBankCents, {
+            status: "active",
+            last_activity: now,
+            last_round_was_celo: roll.isCelo,
+            banker_celo_at: roll.isCelo ? now : null,
+          })
+        )
+        .eq("id", room_id);
 
       await settleOpenSideBets(supabase, round_id, room_id);
 
@@ -406,7 +439,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // ── INSTANT LOSS (banker) ──
+    // ── INSTANT LOSS (banker) — round row already completed above ──
     if (roll.result === "instant_loss") {
       // Fetch all players in this round
       let playerQuery = supabase
@@ -459,13 +492,6 @@ export async function POST(req: Request) {
       const nextBankerId = sorted[nextBankerIdx]?.user_id ?? rm.banker_id;
 
       await Promise.all([
-        supabase.from("celo_rounds").update({
-          banker_roll: dice,
-          banker_roll_name: roll.rollName,
-          banker_roll_result: roll.result,
-          status: "completed",
-          completed_at: now,
-        }).eq("id", round_id),
         supabase
           .from("celo_rooms")
           .update(
