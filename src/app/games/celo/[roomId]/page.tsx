@@ -512,6 +512,60 @@ export default function CeloRoomPage() {
   loadChatRef.current = loadChat;
   loadAllRef.current = loadAll;
 
+  // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
+  useEffect(() => {
+    const sb = createBrowserClient();
+    if (!sb || !roomId) return;
+    const poll = setInterval(async () => {
+      const { data } = await sb
+        .from("celo_room_players")
+        .select(
+          `
+          *,
+          users (
+            id,
+            full_name,
+            email
+          )
+        `
+        )
+        .eq("room_id", roomId)
+        .order("seat_number", { ascending: true });
+
+      if (data) {
+        const plist = data as Player[];
+        setPlayers(plist);
+        if (session?.userId) {
+          setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
+        }
+      }
+
+      const { data: roomData } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+      if (roomData) {
+        const raw = roomData as Record<string, unknown>;
+        const n = normalizeCeloRoomRow(raw);
+        if (n) {
+          setRoom({
+            ...n,
+            speed: String(raw.speed ?? "regular"),
+            last_round_was_celo: Boolean(raw.last_round_was_celo),
+            banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+          } as Room);
+        }
+      }
+    }, 5000);
+    return () => clearInterval(poll);
+  }, [roomId, session?.userId]);
+
+  useEffect(() => {
+    const sb = createBrowserClient();
+    if (!sb || !roomId) return;
+    const poll = setInterval(() => {
+      void loadRoundRef.current();
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [roomId]);
+
   const addSystemMessage = useCallback((line: string) => {
     setSystemFeed((prev) => [...prev.slice(-25), line]);
   }, []);
