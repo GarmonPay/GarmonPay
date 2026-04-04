@@ -167,7 +167,12 @@ export default function CeloLobbyPage() {
               const idx = prev.findIndex((r) => r.id === id);
               if (idx === -1) return [mapped, ...prev];
               const next = [...prev];
-              next[idx] = { ...next[idx], ...mapped };
+              const prevCount = next[idx].player_count;
+              next[idx] = {
+                ...next[idx],
+                ...mapped,
+                player_count: mapped.player_count ?? prevCount,
+              };
               return next;
             });
             if (st === "cancelled" || st === "completed") {

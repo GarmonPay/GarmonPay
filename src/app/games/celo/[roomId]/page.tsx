@@ -62,6 +62,12 @@ type Room = {
   banker_celo_at: string | null;
 };
 
+type PlayerProfileEmbed = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
 type Player = {
   id: string;
   user_id: string;
@@ -69,6 +75,10 @@ type Player = {
   bet_cents: number;
   seat_number: number | null;
   dice_type?: string;
+  /** From PostgREST embed (FK user_id → public.users) */
+  users?: PlayerProfileEmbed | null;
+  /** If FK to profiles exists in DB */
+  profiles?: PlayerProfileEmbed | null;
 };
 
 type Round = {
@@ -168,6 +178,41 @@ const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }>
   no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
 };
 
+function profileFromPlayer(player: Player | null | undefined): PlayerProfileEmbed | null {
+  if (!player) return null;
+  return player.profiles ?? player.users ?? null;
+}
+
+function getBankerName(player: Player | null | undefined) {
+  if (!player) return "Banker";
+  const profile = profileFromPlayer(player);
+  if (profile?.full_name && profile.full_name.trim() !== "") {
+    return profile.full_name;
+  }
+  if (profile?.email) {
+    return profile.email.split("@")[0];
+  }
+  if (player.user_id) {
+    return player.user_id.substring(0, 8).toUpperCase();
+  }
+  return "Banker";
+}
+
+function getPlayerName(player: Player | null | undefined) {
+  if (!player) return "Player";
+  const profile = profileFromPlayer(player);
+  if (profile?.full_name && profile.full_name.trim() !== "") {
+    return profile.full_name;
+  }
+  if (profile?.email) {
+    return profile.email.split("@")[0];
+  }
+  if (player.user_id) {
+    return player.user_id.substring(0, 8).toUpperCase();
+  }
+  return "Player";
+}
+
 // ── Seat display ──────────────────────────────────────────────────────────────
 
 function SeatCard({
@@ -183,7 +228,7 @@ function SeatCard({
   isCurrentTurn: boolean;
   resolvedRoll: PlayerRoll | null;
 }) {
-  const shortId = player.user_id.slice(0, 6).toUpperCase();
+  const displayName = isBanker ? getBankerName(player) : getPlayerName(player);
   const label = player.role === "banker" ? "🏦 Banker" : `Seat ${player.seat_number ?? "?"}`;
   const outcome = resolvedRoll?.outcome;
 
@@ -200,8 +245,8 @@ function SeatCard({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs text-violet-300/60">{label}</p>
-          <p className="text-sm font-mono font-medium text-white truncate">
-            {isMe ? "You" : shortId}
+          <p className="text-sm font-medium text-white truncate">
+            {isMe ? "You" : displayName}
             {isBanker && <span className="ml-1 text-[#F5C842]">👑</span>}
           </p>
         </div>
@@ -325,7 +370,16 @@ export default function CeloRoomPage() {
     if (!sb) return;
     const { data } = await sb
       .from("celo_room_players")
-      .select("id,user_id,role,bet_cents,seat_number")
+      .select(
+        `
+        *,
+        users (
+          id,
+          full_name,
+          email
+        )
+      `
+      )
       .eq("room_id", roomId)
       .order("seat_number", { ascending: true });
     const plist = (data as Player[]) ?? [];
@@ -486,7 +540,40 @@ export default function CeloRoomPage() {
         },
         async () => {
           if (!isMounted) return;
-          await loadPlayersRef.current();
+          const { data } = await sb
+            .from("celo_room_players")
+            .select(
+              `
+              *,
+              users (
+                id,
+                full_name,
+                email
+              )
+            `
+            )
+            .eq("room_id", roomId)
+            .order("seat_number", { ascending: true });
+          if (data && isMounted) {
+            const plist = data as Player[];
+            setPlayers(plist);
+            if (session?.userId) {
+              setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
+            }
+          }
+          const { data: roomData } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+          if (roomData && isMounted) {
+            const raw = roomData as Record<string, unknown>;
+            const n = normalizeCeloRoomRow(raw);
+            if (n) {
+              setRoom({
+                ...n,
+                speed: String(raw.speed ?? "regular"),
+                last_round_was_celo: Boolean(raw.last_round_was_celo),
+                banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+              } as Room);
+            }
+          }
         }
       )
       .on(
@@ -1203,7 +1290,12 @@ export default function CeloRoomPage() {
           <div className="text-right text-xs text-violet-300/60 space-y-0.5">
             <p>Min entry <span className="text-white font-mono">${(room.min_bet_cents / 100).toFixed(2)}</span></p>
             <p>Fee <span className="text-white">{room.platform_fee_pct}%</span></p>
-            <p>Players <span className="text-white">{players.filter((p) => p.role === "player").length}/{room.max_players}</span></p>
+            <p>
+              Players{" "}
+              <span className="text-white">
+                {players.filter((p) => p.role !== "spectator").length}/{room.max_players}
+              </span>
+            </p>
           </div>
         </div>
 
@@ -1233,7 +1325,7 @@ export default function CeloRoomPage() {
               </p>
             ) : currentTurnPlayer ? (
               <p className="text-sm text-violet-300/70 mt-1">
-                {currentTurnPlayer.user_id.slice(0, 6).toUpperCase()} is rolling…
+                {getPlayerName(currentTurnPlayer)}&apos;s turn — roll to beat {currentRound.banker_point}
               </p>
             ) : null}
           </div>
@@ -1308,7 +1400,7 @@ export default function CeloRoomPage() {
                   {isMyTurn && currentRound.banker_point != null
                     ? `YOUR TURN — Beat ${currentRound.banker_point}!`
                     : currentTurnPlayer
-                      ? `Seat ${currentTurnPlayer.seat_number ?? "?"}\u2019s turn — ${currentTurnPlayer.user_id.slice(0, 6).toUpperCase()}`
+                      ? `Seat ${currentTurnPlayer.seat_number ?? "?"}\u2019s turn — ${getPlayerName(currentTurnPlayer)}`
                       : "Waiting for next player…"}
                 </span>
               )}
