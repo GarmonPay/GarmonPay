@@ -44,6 +44,22 @@ async function authFetchGet(url: string) {
   });
 }
 
+async function authFetchDelete(url: string) {
+  const supabase = createBrowserClient();
+  if (!supabase) throw new Error("Not authenticated");
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+  return fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Room = {
@@ -377,6 +393,7 @@ export default function CeloRoomPage() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
+  const [deleteRoomLoading, setDeleteRoomLoading] = useState(false);
 
   // C-Lo become-banker modal state
   const [showBecomeBankerModal, setShowBecomeBankerModal] = useState(false);
@@ -1004,6 +1021,27 @@ export default function CeloRoomPage() {
     await loadRound();
   }
 
+  async function handleDeleteRoom() {
+    if (!window.confirm("Delete this room? You can only do this while you are alone. This cannot be undone.")) {
+      return;
+    }
+    setDeleteRoomLoading(true);
+    setError(null);
+    try {
+      const res = await authFetchDelete(`/api/celo/room/${encodeURIComponent(roomId)}/delete`);
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Failed to delete room");
+        return;
+      }
+      router.push("/games/celo");
+    } catch {
+      setError("Not authenticated");
+    } finally {
+      setDeleteRoomLoading(false);
+    }
+  }
+
   async function handleRoll() {
     if (!currentRound) return;
     setActionLoading("roll");
@@ -1308,6 +1346,13 @@ export default function CeloRoomPage() {
     noActiveRound &&
     players.filter((p) => p.role === "player" && ((p.entry_sc ?? 0) + p.bet_cents) > 0).length > 0;
 
+  const canDeleteRoom =
+    amIBanker &&
+    noActiveRound &&
+    players.length === 1 &&
+    players[0]?.role === "banker" &&
+    sameCeloUserId(players[0].user_id, userId);
+
   const canCoverBank =
     amIPlayer &&
     isBankerRolling &&
@@ -1460,6 +1505,19 @@ export default function CeloRoomPage() {
             </p>
           </div>
         </div>
+
+        {canDeleteRoom && (
+          <div className="flex justify-end -mt-1">
+            <button
+              type="button"
+              disabled={deleteRoomLoading}
+              onClick={() => void handleDeleteRoom()}
+              className="text-xs text-red-400/90 hover:text-red-300 underline disabled:opacity-50"
+            >
+              {deleteRoomLoading ? "Deleting room…" : "Delete room"}
+            </button>
+          </div>
+        )}
 
         {/* Bank bar */}
         <div
