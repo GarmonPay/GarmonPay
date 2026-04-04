@@ -1,7 +1,7 @@
 "use client";
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -159,11 +159,13 @@ type RollResponse = {
   outcome?: string;
   payoutCents?: number;
   bankerWinCents?: number;
+  newBankSC?: number;
+  newBankCents?: number;
   bankerPoint?: number;
   newBankerId?: string;
-  banker_can_lower_bank?: boolean;
+  banker_can_adjust_bank?: boolean;
   player_can_become_banker?: boolean;
-  player_must_have_cents?: number;
+  banker_cost_sc?: number;
   roundComplete?: boolean;
   summary?: RoundSummaryPayload;
   error?: string;
@@ -204,6 +206,17 @@ function sameCeloUserId(a: string | null | undefined, b: string | null | undefin
 }
 
 /** Display name from embedded profile/users or id fallback (replaces UUID fragments in UI). */
+function getPlayerBetCents(player: { entry_sc?: number; bet_cents?: number }): number {
+  const n = Number(player.entry_sc ?? player.bet_cents ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Display stake for seat cards (supports `entry_sc` or legacy `bet_cents`). */
+function getPlayerEntry(player: { entry_sc?: number; bet_cents?: number }): string {
+  const amount = getPlayerBetCents(player);
+  return `$${(amount / 100).toFixed(2)}`;
+}
+
 function getDisplayName(
   player:
     | Player
@@ -281,7 +294,6 @@ function SeatCard({
 }) {
   const displayName = getDisplayName(player);
   const label = player.role === "banker" ? "🏦 Banker" : `Seat ${player.seat_number || 1}`;
-  const entryAmount = (player.entry_sc ?? 0) > 0 ? player.entry_sc! : player.bet_cents;
   const outcome = resolvedRoll?.outcome;
   const hasResolved = outcome === "win" || outcome === "loss";
   const showBankerRollingPulse = !phasePlayerRolling && isCurrentTurn && !hasResolved;
@@ -306,9 +318,7 @@ function SeatCard({
         </div>
         <div className="text-right shrink-0">
           {player.role !== "banker" && (
-            <p className="text-sm font-bold text-[#F5C842] font-mono">
-              ${(entryAmount / 100).toFixed(2)}
-            </p>
+            <p className="text-sm font-bold text-[#F5C842] font-mono">{getPlayerEntry(player)}</p>
           )}
           {outcome === "win" && (
             <span className="text-xs text-emerald-400 font-semibold">
@@ -384,6 +394,7 @@ export default function CeloRoomPage() {
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
   /** Dedupe banker-roll remote animations when the same round row is re-delivered */
   const lastBankerRollAnimKeyRef = useRef<string>("");
+  const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Join form state — default to min_bet_cents once room loads
   const [joinEntryCents, setJoinEntryCents] = useState(0);
@@ -395,9 +406,16 @@ export default function CeloRoomPage() {
   const [joinCode, setJoinCode] = useState("");
   const [deleteRoomLoading, setDeleteRoomLoading] = useState(false);
 
-  // C-Lo become-banker modal state
+  // C-Lo become-banker modal state (cover-bank or other offers)
   const [showBecomeBankerModal, setShowBecomeBankerModal] = useState(false);
   const [becomeBankerCostCents, setBecomeBankerCostCents] = useState(0);
+  const [becomeBankerDeadline, setBecomeBankerDeadline] = useState<number | null>(null);
+
+  // Banker C-Lo bank / min adjustment modal
+  const [showCeloBankModal, setShowCeloBankModal] = useState(false);
+  const [adjustedBank, setAdjustedBank] = useState(0);
+  const [adjustedMinBet, setAdjustedMinBet] = useState(500);
+  const [celoModalBankSC, setCeloModalBankSC] = useState(0);
 
   // Side bet form state
   const [showSideBets, setShowSideBets] = useState(false);
@@ -407,10 +425,7 @@ export default function CeloRoomPage() {
   const [sbLoading, setSbLoading] = useState(false);
   const [sbError, setSbError] = useState<string | null>(null);
 
-  // Lower bank form state
-  const [showLowerBank, setShowLowerBank] = useState(false);
-  const [newBankCents, setNewBankCents] = useState(0);
-  const [lowerBankLoading, setLowerBankLoading] = useState(false);
+  const [bankAdjustLoading, setBankAdjustLoading] = useState(false);
 
   // Ticker for countdowns (1s)
   const [, tick] = useState(0);
@@ -914,6 +929,12 @@ export default function CeloRoomPage() {
     return () => clearInterval(id);
   }, [realtimeConnected]);
 
+  useEffect(() => {
+    return () => {
+      if (celoBankModalCloseTimerRef.current) clearTimeout(celoBankModalCloseTimerRef.current);
+    };
+  }, []);
+
   // ── Derived state ─────────────────────────────────────────────────────────
   const userId = session?.userId ?? "";
   const amIBanker = myPlayer?.role === "banker" || sameCeloUserId(room?.banker_id, userId);
@@ -948,26 +969,18 @@ export default function CeloRoomPage() {
       : null;
   const isMyTurn = sameCeloUserId(currentTurnPlayer?.user_id, userId);
 
-  // Timer: lower bank (60s after banker C-Lo)
-  const lowerBankSecondsLeft = room?.banker_celo_at
-    ? Math.max(0, 60 - Math.floor((Date.now() - new Date(room.banker_celo_at).getTime()) / 1000))
-    : 0;
-  const canLowerBank = amIBanker && room?.last_round_was_celo === true && lowerBankSecondsLeft > 0;
+  const becomeBankerSecondsLeft = useMemo(() => {
+    if (becomeBankerDeadline == null) return 0;
+    void tick;
+    return Math.max(0, Math.ceil((becomeBankerDeadline - Date.now()) / 1000));
+  }, [becomeBankerDeadline, tick]);
 
-  // Timer: become banker (30s after player rolled C-Lo this round)
-  const myLastCeloRoll = playerRolls
-    .filter((r) => sameCeloUserId(r.user_id, userId) && r.player_celo_at !== null)
-    .sort((a, b) => new Date(b.player_celo_at!).getTime() - new Date(a.player_celo_at!).getTime())[0];
-  const becomeBankerSecondsLeft = myLastCeloRoll?.player_celo_at
-    ? Math.max(0, 30 - Math.floor((Date.now() - new Date(myLastCeloRoll.player_celo_at).getTime()) / 1000))
-    : 0;
-  const canBecomeBanker = amIPlayer && !!myLastCeloRoll && becomeBankerSecondsLeft > 0;
-
-  // Auto-close become-banker modal when the 30s window expires
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!showBecomeBankerModal) return;
-    if (becomeBankerSecondsLeft <= 0) setShowBecomeBankerModal(false);
+    if (becomeBankerSecondsLeft <= 0) {
+      setShowBecomeBankerModal(false);
+      setBecomeBankerDeadline(null);
+    }
   }, [showBecomeBankerModal, becomeBankerSecondsLeft]);
 
   // ── Action handlers ───────────────────────────────────────────────────────
@@ -1072,10 +1085,25 @@ export default function CeloRoomPage() {
     if (rollData.roundComplete && rollData.summary) {
       setRoundSummary(rollData.summary);
     }
-    // Show C-Lo banker offer modal immediately
     if (rollData.player_can_become_banker) {
-      setBecomeBankerCostCents(rollData.player_must_have_cents ?? room?.current_bank_cents ?? 0);
+      setBecomeBankerCostCents(
+        Number(rollData.banker_cost_sc ?? room?.current_bank_cents ?? 0)
+      );
+      setBecomeBankerDeadline(Date.now() + 30_000);
       setShowBecomeBankerModal(true);
+    }
+    if (
+      rollData.banker_can_adjust_bank &&
+      room &&
+      sameCeloUserId(room.banker_id, session?.userId ?? "")
+    ) {
+      const nb = Number(rollData.newBankSC ?? rollData.newBankCents ?? 0);
+      setCeloModalBankSC(nb);
+      setAdjustedBank(nb);
+      setAdjustedMinBet(room.min_bet_cents || 500);
+      setShowCeloBankModal(true);
+      if (celoBankModalCloseTimerRef.current) clearTimeout(celoBankModalCloseTimerRef.current);
+      celoBankModalCloseTimerRef.current = setTimeout(() => setShowCeloBankModal(false), 60_000);
     }
     // If banker rolled a point, immediately sync the round so other state derives correctly
     if (rollData.result === "point" && rollData.bankerPoint) {
@@ -1111,27 +1139,40 @@ export default function CeloRoomPage() {
     await loadAll();
   }
 
-  async function handleLowerBank() {
+  async function handleAdjustBank(newBank: number, newMinBet: number) {
     if (!room) return;
-    setLowerBankLoading(true);
+    setBankAdjustLoading(true);
     setError(null);
     let res: Response;
     let data: Record<string, unknown>;
     try {
       res = await authFetch("/api/celo/room/lower-bank", {
         room_id: roomId,
-        new_bank_cents: newBankCents,
+        new_bank_sc: newBank,
+        new_minimum_sc: newMinBet,
       });
       data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     } catch {
-      setLowerBankLoading(false);
+      setBankAdjustLoading(false);
       setError("Not authenticated");
       return;
     }
     const ok = res.ok;
-    setLowerBankLoading(false);
-    if (!ok) { setError((data.error as string) ?? "Failed to lower bank"); return; }
-    setShowLowerBank(false);
+    setBankAdjustLoading(false);
+    if (!ok) {
+      setError((data.error as string) ?? "Failed to adjust bank");
+      return;
+    }
+    setShowCeloBankModal(false);
+    setRoom((prev) =>
+      prev
+        ? {
+            ...prev,
+            current_bank_cents: newBank,
+            min_bet_cents: newMinBet,
+          }
+        : prev
+    );
     await loadAll();
   }
 
@@ -1155,6 +1196,7 @@ export default function CeloRoomPage() {
     const ok = res.ok;
     setActionLoading(null);
     setShowBecomeBankerModal(false);
+    setBecomeBankerDeadline(null);
     if (!ok) { setError((data.error as string) ?? "Failed to become banker"); return; }
     await loadAll();
   }
@@ -1344,7 +1386,7 @@ export default function CeloRoomPage() {
     amIBanker &&
     (room.status === "active" || room.status === "waiting") &&
     noActiveRound &&
-    players.filter((p) => p.role === "player" && ((p.entry_sc ?? 0) + p.bet_cents) > 0).length > 0;
+    players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length > 0;
 
   const canDeleteRoom =
     amIBanker &&
@@ -1431,7 +1473,11 @@ export default function CeloRoomPage() {
             <p className="text-2xl font-black text-[#F5C842]" style={{ textShadow: "0 0 20px #F5C842aa" }}>
               🎲 C-Lo!
             </p>
-            <p className="text-base font-semibold text-white">You rolled 4-5-6!</p>
+            <p className="text-base font-semibold text-white">
+              {currentRound?.bank_covered
+                ? "You covered the bank and won!"
+                : "You rolled 4-5-6!"}
+            </p>
             <p className="text-sm text-violet-200/80">Want to become the banker?</p>
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
               <p className="text-xs text-violet-300/60">Bank coverage required</p>
@@ -1456,12 +1502,185 @@ export default function CeloRoomPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowBecomeBankerModal(false)}
+                onClick={() => {
+                  setShowBecomeBankerModal(false);
+                  setBecomeBankerDeadline(null);
+                }}
                 className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 font-medium text-violet-300 text-sm hover:bg-white/10 transition-all"
               >
                 No Thanks
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCeloBankModal && room && sameCeloUserId(room.banker_id, userId) && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 120,
+          }}
+        >
+          <div
+            style={{
+              background: "#0D0520",
+              border: "2px solid #F5C842",
+              borderRadius: 20,
+              padding: 32,
+              maxWidth: 400,
+              width: "90%",
+              textAlign: "center",
+              boxShadow: "0 0 40px rgba(245,200,66,0.3)",
+            }}
+          >
+            <div style={{ fontSize: 48 }}>🎲</div>
+            <h2
+              style={{
+                color: "#F5C842",
+                fontFamily: "Cinzel Decorative, Georgia, serif",
+                fontSize: 24,
+                margin: "16px 0",
+              }}
+            >
+              C-LO! You Win!
+            </h2>
+
+            <p style={{ color: "#aaa", marginBottom: 24 }}>Adjust your bank and minimum bet</p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ color: "#F5C842", fontSize: 12 }}>NEW BANK AMOUNT</label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 8,
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                {[0.25, 0.5, 0.75, 1].map((fraction) => {
+                  const amount = Math.round(celoModalBankSC * fraction);
+                  return (
+                    <button
+                      key={fraction}
+                      type="button"
+                      onClick={() => setAdjustedBank(amount)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        border:
+                          adjustedBank === amount ? "2px solid #F5C842" : "1px solid #333",
+                        background:
+                          adjustedBank === amount ? "rgba(245,200,66,0.2)" : "transparent",
+                        color: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ${(amount / 100).toFixed(0)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <input
+                type="number"
+                value={adjustedBank / 100}
+                onChange={(e) => setAdjustedBank(Number(e.target.value) * 100)}
+                style={{
+                  width: "100%",
+                  marginTop: 12,
+                  padding: 12,
+                  background: "#1a0535",
+                  border: "1px solid #7C3AED",
+                  borderRadius: 8,
+                  color: "#fff",
+                  fontSize: 18,
+                  textAlign: "center",
+                }}
+                placeholder="Custom amount"
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ color: "#F5C842", fontSize: 12 }}>NEW MINIMUM BET</label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 8,
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                {[500, 1000, 2000, 5000, 10000].map((min) => (
+                  <button
+                    key={min}
+                    type="button"
+                    onClick={() => setAdjustedMinBet(min)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border:
+                        adjustedMinBet === min ? "2px solid #F5C842" : "1px solid #333",
+                      background:
+                        adjustedMinBet === min ? "rgba(245,200,66,0.2)" : "transparent",
+                      color: "#fff",
+                      cursor: "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    ${(min / 100).toFixed(0)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => void handleAdjustBank(adjustedBank, adjustedMinBet)}
+                disabled={bankAdjustLoading}
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                  color: "#0e0118",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: "bold",
+                  fontSize: 16,
+                  cursor: bankAdjustLoading ? "wait" : "pointer",
+                  opacity: bankAdjustLoading ? 0.7 : 1,
+                }}
+              >
+                {bankAdjustLoading ? "…" : "LOCK IT IN"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCeloBankModal(false)}
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  background: "transparent",
+                  color: "#aaa",
+                  border: "1px solid #333",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                }}
+              >
+                KEEP ${(celoModalBankSC / 100).toFixed(0)}
+              </button>
+            </div>
+
+            <p style={{ color: "#666", fontSize: 11, marginTop: 12 }}>
+              This option expires in 60 seconds
+            </p>
           </div>
         </div>
       )}
@@ -1667,14 +1886,9 @@ export default function CeloRoomPage() {
                     +${(lastRollResult.payoutCents / 100).toFixed(2)} payout
                   </p>
                 )}
-                {lastRollResult.banker_can_lower_bank && canLowerBank && (
+                {lastRollResult.banker_can_adjust_bank && showCeloBankModal && (
                   <p className="text-xs text-[#F5C842] animate-pulse">
-                    C-Lo! You can lower your bank — {lowerBankSecondsLeft}s left
-                  </p>
-                )}
-                {lastRollResult.player_can_become_banker && canBecomeBanker && (
-                  <p className="text-xs text-[#F5C842] animate-pulse">
-                    C-Lo! You can take over as banker — {becomeBankerSecondsLeft}s left
+                    C-Lo! Use the bank adjustment modal — offer expires in 60s
                   </p>
                 )}
               </div>
@@ -1784,80 +1998,22 @@ export default function CeloRoomPage() {
             </button>
           )}
 
-          {/* Lower bank */}
-          {canLowerBank && !showLowerBank && (
-            <button
-              type="button"
-              onClick={() => { setShowLowerBank(true); setNewBankCents(room.min_bet_cents); }}
-              className="flex-1 rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 py-4 font-semibold text-[#F5C842] text-sm hover:bg-[#F5C842]/20 transition-all"
-            >
-              Lower Bank ({lowerBankSecondsLeft}s)
-            </button>
-          )}
-
-          {/* Become banker */}
-          {canBecomeBanker && (
-            <button
-              type="button"
-              disabled={actionLoading === "become_banker" || balanceCents < room.current_bank_cents}
-              onClick={handleBecomeBanker}
-              className="flex-1 rounded-xl border border-[#F5C842]/50 bg-[#F5C842]/10 py-4 font-semibold text-[#F5C842] text-sm hover:bg-[#F5C842]/20 transition-all disabled:opacity-50"
-            >
-              {actionLoading === "become_banker"
-                ? "Claiming…"
-                : `Become Banker (${becomeBankerSecondsLeft}s)`}
-            </button>
-          )}
-
           {/* Waiting state */}
           {!canStartRound &&
             !canRollBanker &&
             !(amIBanker && isPlayerRolling) &&
             !showPlayerRollButton &&
             !canCoverBank &&
-            !canLowerBank &&
-            !canBecomeBanker &&
             noActiveRound && (
             <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.02] py-4 text-center text-sm text-violet-300/50">
               {amIBanker
-                ? players.filter((p) => p.role === "player" && p.bet_cents > 0).length === 0
+                ? players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length === 0
                   ? "Waiting for players to join…"
                   : "Ready — press Start Round"
                 : "Waiting for banker to start…"}
             </div>
           )}
         </div>
-
-        {/* Lower bank form */}
-        {showLowerBank && canLowerBank && (
-          <div className="rounded-2xl border border-[#F5C842]/20 bg-[#12081f]/80 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-[#F5C842]">Lower Bank ({lowerBankSecondsLeft}s remaining)</p>
-              <button type="button" onClick={() => setShowLowerBank(false)} className="text-violet-300/50 hover:text-white text-xl leading-none">×</button>
-            </div>
-            <p className="text-[10px] text-violet-400/60 mb-3">
-              New bank — <span className="text-[#F5C842]">${(newBankCents / 100).toFixed(2)}</span>
-              {" "}(current: ${(room.current_bank_cents / 100).toFixed(2)})
-            </p>
-            <input
-              type="range"
-              min={room.min_bet_cents}
-              max={room.current_bank_cents - room.min_bet_cents}
-              step={room.min_bet_cents}
-              value={newBankCents}
-              onChange={(e) => setNewBankCents(Number(e.target.value))}
-              className="w-full accent-[#F5C842] mb-4"
-            />
-            <button
-              type="button"
-              disabled={lowerBankLoading || newBankCents >= room.current_bank_cents}
-              onClick={handleLowerBank}
-              className="w-full rounded-xl bg-[#F5C842]/20 border border-[#F5C842]/40 py-3 font-semibold text-[#F5C842] text-sm disabled:opacity-50 hover:bg-[#F5C842]/30 transition-all"
-            >
-              {lowerBankLoading ? "Lowering…" : `Set Bank to $${(newBankCents / 100).toFixed(2)}`}
-            </button>
-          </div>
-        )}
 
         {/* Players grid */}
         <div>

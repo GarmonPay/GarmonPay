@@ -2,14 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
-import {
-  rollThreeDice,
-  evaluateRoll,
-  comparePoints,
-  isBankerShitRoll,
-  isBankerDickRoll,
-  calculatePayout,
-} from "@/lib/celo-engine";
+import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
@@ -17,6 +10,12 @@ import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } fr
 type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
 
 type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number | null };
+
+function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
+  const fromEntry = Number(row.entry_sc ?? 0);
+  const fromBet = Number(row.bet_cents ?? 0);
+  return fromEntry > 0 ? fromEntry : fromBet;
+}
 
 function roundTotalPotCents(roundRow: Record<string, unknown>): number {
   return Number(
@@ -32,10 +31,9 @@ async function getEligiblePlayers(
 ): Promise<EligiblePlayer[]> {
   let q = supabase
     .from("celo_room_players")
-    .select("user_id, bet_cents, seat_number")
+    .select("user_id, bet_cents, entry_sc, seat_number")
     .eq("room_id", roomId)
     .eq("role", "player")
-    .gt("bet_cents", 0)
     .order("seat_number", { ascending: true });
 
   if (coveredBy) {
@@ -43,7 +41,19 @@ async function getEligiblePlayers(
   }
 
   const { data: players } = await q;
-  return (players ?? []) as EligiblePlayer[];
+  const rows = (players ?? []) as {
+    user_id: string;
+    bet_cents?: number;
+    entry_sc?: number;
+    seat_number: number | null;
+  }[];
+  return rows
+    .filter((p) => playerBetCents(p) > 0)
+    .map((p) => ({
+      user_id: p.user_id,
+      bet_cents: playerBetCents(p),
+      seat_number: p.seat_number,
+    }));
 }
 
 /** Get the latest reroll_count for a player in this round. */
@@ -433,81 +443,50 @@ export async function POST(req: Request) {
 
       await settleOpenSideBets(supabase, round_id, room_id);
 
-      return NextResponse.json({
+      const instantWinPayload: Record<string, unknown> = {
         dice,
         rollName: roll.rollName,
         result: "instant_win",
         isCelo: roll.isCelo,
-        outcome: "banker_wins",
+        bankerWinSC: bankerWins,
         bankerWinCents: bankerWins,
         platformFeeCents: platformFee,
+        newBankSC: newBankCents,
         newBankCents,
-        banker_can_lower_bank: roll.isCelo,
-      });
+      };
+
+      if (roll.isCelo) {
+        instantWinPayload.outcome = "celo_banker_wins";
+        instantWinPayload.banker_can_adjust_bank = true;
+      } else {
+        instantWinPayload.outcome = "banker_wins";
+        instantWinPayload.banker_can_adjust_bank = false;
+      }
+
+      return NextResponse.json(instantWinPayload);
     }
 
-    // ── INSTANT LOSS (banker) — round row already completed above ──
+    // ── INSTANT LOSS (banker) — Shit / Dick: pay table, bank drops by total payouts; banker stays unless broke ──
     if (roll.result === "instant_loss") {
-      // Dick (pair + 1): small bank hit only — no table payout, no banker change
-      if (isBankerDickRoll(dice)) {
-        const lossAmount = Math.min(rm.current_bank_cents, rm.min_bet_cents);
-        const newBankCents = Math.max(0, rm.current_bank_cents - lossAmount);
-
-        await supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(newBankCents, {
-              status: "active",
-              last_activity: now,
-              last_round_was_celo: false,
-              banker_celo_at: null,
-            })
-          )
-          .eq("id", room_id);
-
-        await settleOpenSideBets(supabase, round_id, room_id);
-
-        return NextResponse.json({
-          dice,
-          rollName: roll.rollName,
-          result: "instant_loss",
-          outcome: "dick",
-          bankLossCents: lossAmount,
-          newBankCents,
-        });
-      }
-
-      // Shit (1-2-3): full table win; bank drops by total loss; banker only rotates
-      // when someone covered the bank — then the covering player becomes banker.
-      if (!isBankerShitRoll(dice)) {
-        return NextResponse.json({ error: "Unexpected instant_loss roll" }, { status: 500 });
-      }
-
-      let playerQuery = supabase
+      const { data: activePlayers } = await supabase
         .from("celo_room_players")
-        .select("user_id, bet_cents")
+        .select("user_id, bet_cents, entry_sc")
         .eq("room_id", room_id)
-        .eq("role", "player")
-        .gt("bet_cents", 0);
+        .eq("role", "player");
 
-      if (r.bank_covered && r.covered_by) {
-        playerQuery = playerQuery.eq("user_id", r.covered_by);
-      }
-
-      const { data: activePlayers } = await playerQuery;
-      const players = (activePlayers ?? []) as { user_id: string; bet_cents: number }[];
+      const players = ((activePlayers ?? []) as { user_id: string; bet_cents?: number; entry_sc?: number }[])
+        .map((row) => ({ user_id: row.user_id, bet: playerBetCents(row) }))
+        .filter((p) => p.bet > 0);
 
       const payouts: { user_id: string; payout: number; fee: number }[] = [];
-      let totalBankDecrease = 0;
+      let totalPaidOut = 0;
 
       for (const player of players) {
-        const { netPayoutCents, platformFeeCents } = calculatePayout(player.bet_cents, feePct);
-        payouts.push({
-          user_id: player.user_id,
-          payout: netPayoutCents,
-          fee: platformFeeCents,
-        });
-        totalBankDecrease += player.bet_cents;
+        const gross = player.bet * 2;
+        const fee = Math.floor(gross * 0.1);
+        const payout = gross - fee;
+        payouts.push({ user_id: player.user_id, payout, fee });
+        totalPaidOut += payout;
       }
 
       await Promise.all(
@@ -516,35 +495,68 @@ export async function POST(req: Request) {
         )
       );
 
-      const newBankCents = Math.max(0, rm.current_bank_cents - totalBankDecrease);
+      let newBankCents = Math.max(0, rm.current_bank_cents - totalPaidOut);
 
-      const coverTakeover = Boolean(r.bank_covered && r.covered_by);
-      const nextBankerId = coverTakeover ? r.covered_by! : rm.banker_id;
+      await supabase
+        .from("celo_rooms")
+        .update(
+          mergeCeloRoomUpdate(newBankCents, {
+            status: "active",
+            last_activity: now,
+            last_round_was_celo: false,
+            banker_celo_at: null,
+          })
+        )
+        .eq("id", room_id);
 
-      const roomUpdate = mergeCeloRoomUpdate(newBankCents, {
-        banker_id: nextBankerId,
-        status: "active",
-        last_activity: now,
-        last_round_was_celo: false,
-        banker_celo_at: null,
-      });
+      let bankerChanged = false;
+      let newBankerId: string | null = null;
 
-      if (coverTakeover && nextBankerId !== rm.banker_id) {
-        await Promise.all([
-          supabase.from("celo_rooms").update(roomUpdate).eq("id", room_id),
-          supabase
-            .from("celo_room_players")
-            .update({ role: "player" })
-            .eq("room_id", room_id)
-            .eq("user_id", rm.banker_id),
-          supabase
-            .from("celo_room_players")
-            .update({ role: "banker" })
-            .eq("room_id", room_id)
-            .eq("user_id", nextBankerId),
-        ]);
-      } else {
-        await supabase.from("celo_rooms").update(roomUpdate).eq("id", room_id);
+      const minimumEntry = rm.min_bet_cents;
+
+      if (newBankCents < minimumEntry) {
+        const { data: allPlayers } = await supabase
+          .from("celo_room_players")
+          .select("user_id, seat_number, role")
+          .eq("room_id", room_id)
+          .neq("role", "spectator")
+          .order("seat_number", { ascending: true });
+
+        for (const row of allPlayers ?? []) {
+          const player = row as { user_id: string; seat_number: number | null; role: string };
+          if (player.user_id === rm.banker_id) continue;
+
+          const { data: wb } = await supabase
+            .from("wallet_balances")
+            .select("balance")
+            .eq("user_id", player.user_id)
+            .maybeSingle();
+
+          const balance = Number((wb as { balance?: number } | null)?.balance ?? 0);
+          if (balance >= newBankCents) {
+            await supabase
+              .from("celo_room_players")
+              .update({ role: "player" })
+              .eq("room_id", room_id)
+              .eq("user_id", rm.banker_id);
+
+            await supabase
+              .from("celo_room_players")
+              .update({ role: "banker" })
+              .eq("room_id", room_id)
+              .eq("user_id", player.user_id);
+
+            await supabase.from("celo_rooms").update({ banker_id: player.user_id }).eq("id", room_id);
+
+            bankerChanged = true;
+            newBankerId = player.user_id;
+            break;
+          }
+        }
+
+        if (!bankerChanged) {
+          await supabase.from("celo_rooms").update({ status: "cancelled" }).eq("id", room_id);
+        }
       }
 
       await settleOpenSideBets(supabase, round_id, room_id);
@@ -553,11 +565,13 @@ export async function POST(req: Request) {
         dice,
         rollName: roll.rollName,
         result: "instant_loss",
-        outcome: "banker_loses_all_win",
+        outcome: "banker_loses_players_win",
         payouts,
+        newBankSC: newBankCents,
         newBankCents,
-        newBankerId: nextBankerId,
-        bankerChanged: coverTakeover && nextBankerId !== rm.banker_id,
+        bankerChanged,
+        newBankerId: newBankerId ?? undefined,
+        bankerBroke: newBankCents < minimumEntry,
       });
     }
   }
@@ -667,8 +681,6 @@ export async function POST(req: Request) {
         player_celo_at: playerCeloAt,
       });
 
-      // Player wins are paid from the round pot / ledger — do not shrink the room bank
-      // (bank only moves on banker wins/losses on the bank itself).
       await supabase.from("celo_rooms").update({ last_activity: now }).eq("id", room_id);
 
       const adv = await advanceAfterResolvingPlayerRoll(
@@ -680,6 +692,8 @@ export async function POST(req: Request) {
         now
       );
 
+      const coverOffer = Boolean(r.bank_covered && r.covered_by && userId === r.covered_by);
+
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
@@ -690,9 +704,8 @@ export async function POST(req: Request) {
         feeCents: fee,
         roundComplete: adv.roundComplete,
         summary: adv.summary,
-        // Offer banker switch only if player rolled C-Lo
-        player_can_become_banker: roll.isCelo,
-        player_must_have_cents: roll.isCelo ? rm.current_bank_cents : undefined,
+        player_can_become_banker: coverOffer,
+        banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
       });
     }
 
@@ -712,8 +725,8 @@ export async function POST(req: Request) {
         reroll_count: rerollCount,
       });
 
-      // Banker wins this bet
-      const bankerNet = Math.floor((playerBet * (100 - feePct)) / 100);
+      const bankerFee = Math.floor((playerBet * feePct) / 100);
+      const bankerNet = playerBet - bankerFee;
       await walletLedgerEntry(
         rm.banker_id,
         "game_win",
@@ -767,10 +780,18 @@ export async function POST(req: Request) {
           payoutCents,
           `celo_player_win_${round_id}_${userId}`
         );
-        await supabase.from("celo_rooms").update({ last_activity: now }).eq("id", room_id);
+        const bankAfterPlayerWin = Math.max(0, rm.current_bank_cents - playerBet);
+        await supabase
+          .from("celo_rooms")
+          .update(
+            mergeCeloRoomUpdate(bankAfterPlayerWin, {
+              last_activity: now,
+            })
+          )
+          .eq("id", room_id);
       } else {
-        // Banker wins this individual bet
-        const bankerNet = Math.floor((playerBet * (100 - feePct)) / 100);
+        const bankerFee = Math.floor((playerBet * feePct) / 100);
+        const bankerNet = playerBet - bankerFee;
         await walletLedgerEntry(
           rm.banker_id,
           "game_win",
@@ -812,6 +833,10 @@ export async function POST(req: Request) {
         now
       );
 
+      const coverOffer = Boolean(
+        playerWins && r.bank_covered && r.covered_by && userId === r.covered_by
+      );
+
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
@@ -823,6 +848,8 @@ export async function POST(req: Request) {
         feeCents,
         roundComplete: adv.roundComplete,
         summary: adv.summary,
+        player_can_become_banker: coverOffer,
+        banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
       });
     }
   }
