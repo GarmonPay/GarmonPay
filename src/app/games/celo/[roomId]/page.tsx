@@ -73,6 +73,7 @@ type Player = {
   user_id: string;
   role: string;
   bet_cents: number;
+  entry_sc?: number;
   seat_number: number | null;
   dice_type?: string;
   /** From PostgREST embed (FK user_id → public.users) */
@@ -263,7 +264,8 @@ function SeatCard({
   phasePlayerRolling?: boolean;
 }) {
   const displayName = getDisplayName(player);
-  const label = player.role === "banker" ? "🏦 Banker" : `Seat ${player.seat_number ?? "?"}`;
+  const label = player.role === "banker" ? "🏦 Banker" : `Seat ${player.seat_number || 1}`;
+  const entryAmount = (player.entry_sc ?? 0) > 0 ? player.entry_sc! : player.bet_cents;
   const outcome = resolvedRoll?.outcome;
   const hasResolved = outcome === "win" || outcome === "loss";
   const showBankerRollingPulse = !phasePlayerRolling && isCurrentTurn && !hasResolved;
@@ -289,7 +291,7 @@ function SeatCard({
         <div className="text-right shrink-0">
           {player.role !== "banker" && (
             <p className="text-sm font-bold text-[#F5C842] font-mono">
-              ${(player.bet_cents / 100).toFixed(2)}
+              ${(entryAmount / 100).toFixed(2)}
             </p>
           )}
           {outcome === "win" && (
@@ -1304,7 +1306,7 @@ export default function CeloRoomPage() {
     amIBanker &&
     (room.status === "active" || room.status === "waiting") &&
     noActiveRound &&
-    players.filter((p) => p.role === "player" && p.bet_cents > 0).length > 0;
+    players.filter((p) => p.role === "player" && ((p.entry_sc ?? 0) + p.bet_cents) > 0).length > 0;
 
   const canCoverBank =
     amIPlayer &&
@@ -1340,7 +1342,20 @@ export default function CeloRoomPage() {
     (isRolling || lastDice.length > 0) && !(isPlayerRolling && amIBanker);
 
   return (
-    <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
+    <main
+      className="text-white relative overflow-x-hidden"
+      style={{
+        minHeight: "100vh",
+        background: `
+          radial-gradient(ellipse at top, rgba(124,58,237,0.15) 0%, transparent 50%),
+          radial-gradient(ellipse at bottom, rgba(245,200,66,0.08) 0%, transparent 50%),
+          repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px),
+          #050208
+        `,
+        color: "#fff",
+        fontFamily: "DM Sans, sans-serif",
+      }}
+    >
       {roundSummary && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
           <div className="max-w-md w-full rounded-2xl border border-[#F5C842]/35 bg-[#12081f] p-6 shadow-2xl shadow-black/50">
@@ -1406,10 +1421,10 @@ export default function CeloRoomPage() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -left-20 top-10 h-80 w-80 rounded-full bg-violet-700/15 blur-[110px]" />
-        <div className="absolute right-0 bottom-20 h-72 w-72 rounded-full bg-[#F5C842]/6 blur-[100px]" />
-      </div>
+      {/* ── Underground neon walls + spotlight ── */}
+      <div style={{ position: "fixed", left: 0, top: 0, width: 60, height: "100vh", background: "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))", filter: "blur(30px)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", right: 0, top: 0, width: 60, height: "100vh", background: "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))", filter: "blur(30px)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: 500, height: 500, background: "radial-gradient(ellipse at top, rgba(245,200,66,0.12) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
 
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-5 pb-24 space-y-4">
 
@@ -1447,13 +1462,19 @@ export default function CeloRoomPage() {
         </div>
 
         {/* Bank bar */}
-        <div className="rounded-2xl border border-[#F5C842]/20 bg-[#12081f]/80 p-4 flex items-center justify-between gap-4">
+        <div
+          style={{ background: "rgba(13,5,32,0.8)", border: "1px solid rgba(124,58,237,0.5)", borderRadius: 16, padding: 20, backdropFilter: "blur(10px)", boxShadow: "0 0 20px rgba(124,58,237,0.2)" }}
+          className="flex items-center justify-between gap-4"
+        >
           <div>
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Current Bank</p>
             <p className="text-[10px] text-violet-400/55 mt-0.5">
               Banker {getDisplayName(bankerPlayer ?? { user_id: room.banker_id })}
             </p>
-            <p className="text-3xl font-bold text-[#F5C842] font-mono mt-0.5">
+            <p
+              className="font-bold font-mono mt-0.5"
+              style={{ fontSize: 48, fontWeight: "bold", color: "#F5C842", textShadow: "0 0 10px #F5C842, 0 0 20px #F5C842, 0 0 40px rgba(245,200,66,0.5)" }}
+            >
               ${(room.current_bank_cents / 100).toFixed(2)}
             </p>
           </div>
@@ -1631,9 +1652,23 @@ export default function CeloRoomPage() {
               type="button"
               disabled={actionLoading === "start"}
               onClick={handleStartRound}
-              className="flex-1 rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 py-4 font-bold text-white shadow-lg shadow-violet-900/40 disabled:opacity-60 transition-all text-sm"
+              style={{
+                flex: 1,
+                padding: "16px",
+                background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                color: "#0e0118",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 18,
+                fontWeight: "bold",
+                cursor: actionLoading === "start" ? "not-allowed" : "pointer",
+                fontFamily: "Courier New, monospace",
+                letterSpacing: 2,
+                opacity: actionLoading === "start" ? 0.6 : 1,
+                boxShadow: "0 0 24px rgba(245,200,66,0.4)",
+              }}
             >
-              {actionLoading === "start" ? "Starting…" : "▶ Start Round"}
+              {actionLoading === "start" ? "Starting…" : "🎲 START ROUND"}
             </button>
           )}
 
