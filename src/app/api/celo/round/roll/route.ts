@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
-import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
+import {
+  rollThreeDice,
+  evaluateRoll,
+  comparePoints,
+  isBankerShitRoll,
+  isBankerDickRoll,
+  calculatePayout,
+} from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
@@ -441,7 +448,41 @@ export async function POST(req: Request) {
 
     // ── INSTANT LOSS (banker) — round row already completed above ──
     if (roll.result === "instant_loss") {
-      // Fetch all players in this round
+      // Dick (pair + 1): small bank hit only — no table payout, no banker change
+      if (isBankerDickRoll(dice)) {
+        const lossAmount = Math.min(rm.current_bank_cents, rm.min_bet_cents);
+        const newBankCents = Math.max(0, rm.current_bank_cents - lossAmount);
+
+        await supabase
+          .from("celo_rooms")
+          .update(
+            mergeCeloRoomUpdate(newBankCents, {
+              status: "active",
+              last_activity: now,
+              last_round_was_celo: false,
+              banker_celo_at: null,
+            })
+          )
+          .eq("id", room_id);
+
+        await settleOpenSideBets(supabase, round_id, room_id);
+
+        return NextResponse.json({
+          dice,
+          rollName: roll.rollName,
+          result: "instant_loss",
+          outcome: "dick",
+          bankLossCents: lossAmount,
+          newBankCents,
+        });
+      }
+
+      // Shit (1-2-3): full table win; bank drops by total loss; banker only rotates
+      // when someone covered the bank — then the covering player becomes banker.
+      if (!isBankerShitRoll(dice)) {
+        return NextResponse.json({ error: "Unexpected instant_loss roll" }, { status: 500 });
+      }
+
       let playerQuery = supabase
         .from("celo_room_players")
         .select("user_id, bet_cents")
@@ -456,18 +497,19 @@ export async function POST(req: Request) {
       const { data: activePlayers } = await playerQuery;
       const players = (activePlayers ?? []) as { user_id: string; bet_cents: number }[];
 
-      let totalBankDecrease = 0;
       const payouts: { user_id: string; payout: number; fee: number }[] = [];
+      let totalBankDecrease = 0;
 
       for (const player of players) {
-        const gross = player.bet_cents * 2;
-        const fee = Math.floor((gross * feePct) / 100);
-        const payout = gross - fee;
-        payouts.push({ user_id: player.user_id, payout, fee });
+        const { netPayoutCents, platformFeeCents } = calculatePayout(player.bet_cents, feePct);
+        payouts.push({
+          user_id: player.user_id,
+          payout: netPayoutCents,
+          fee: platformFeeCents,
+        });
         totalBankDecrease += player.bet_cents;
       }
 
-      // Credit all players
       await Promise.all(
         payouts.map(({ user_id, payout }) =>
           walletLedgerEntry(user_id, "game_win", payout, `celo_player_win_${round_id}_${user_id}`)
@@ -476,44 +518,34 @@ export async function POST(req: Request) {
 
       const newBankCents = Math.max(0, rm.current_bank_cents - totalBankDecrease);
 
-      // Find next banker (next player in seat order, wrapping)
-      const { data: allPlayers } = await supabase
-        .from("celo_room_players")
-        .select("user_id, seat_number, role")
-        .eq("room_id", room_id)
-        .order("seat_number", { ascending: true });
+      const coverTakeover = Boolean(r.bank_covered && r.covered_by);
+      const nextBankerId = coverTakeover ? r.covered_by! : rm.banker_id;
 
-      const sorted = (
-        allPlayers as { user_id: string; seat_number: number; role: string }[]
-      ).filter((p) => p.role !== "spectator");
+      const roomUpdate = mergeCeloRoomUpdate(newBankCents, {
+        banker_id: nextBankerId,
+        status: "active",
+        last_activity: now,
+        last_round_was_celo: false,
+        banker_celo_at: null,
+      });
 
-      const currentBankerIdx = sorted.findIndex((p) => p.user_id === rm.banker_id);
-      const nextBankerIdx = (currentBankerIdx + 1) % sorted.length;
-      const nextBankerId = sorted[nextBankerIdx]?.user_id ?? rm.banker_id;
-
-      await Promise.all([
-        supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(newBankCents, {
-              banker_id: nextBankerId,
-              status: "active",
-              last_activity: now,
-              last_round_was_celo: false,
-              banker_celo_at: null,
-            })
-          )
-          .eq("id", room_id),
-        // Rotate roles
-        supabase.from("celo_room_players")
-          .update({ role: "player" })
-          .eq("room_id", room_id)
-          .eq("user_id", rm.banker_id),
-        supabase.from("celo_room_players")
-          .update({ role: "banker" })
-          .eq("room_id", room_id)
-          .eq("user_id", nextBankerId),
-      ]);
+      if (coverTakeover && nextBankerId !== rm.banker_id) {
+        await Promise.all([
+          supabase.from("celo_rooms").update(roomUpdate).eq("id", room_id),
+          supabase
+            .from("celo_room_players")
+            .update({ role: "player" })
+            .eq("room_id", room_id)
+            .eq("user_id", rm.banker_id),
+          supabase
+            .from("celo_room_players")
+            .update({ role: "banker" })
+            .eq("room_id", room_id)
+            .eq("user_id", nextBankerId),
+        ]);
+      } else {
+        await supabase.from("celo_rooms").update(roomUpdate).eq("id", room_id);
+      }
 
       await settleOpenSideBets(supabase, round_id, room_id);
 
@@ -525,6 +557,7 @@ export async function POST(req: Request) {
         payouts,
         newBankCents,
         newBankerId: nextBankerId,
+        bankerChanged: coverTakeover && nextBankerId !== rm.banker_id,
       });
     }
   }
@@ -634,15 +667,9 @@ export async function POST(req: Request) {
         player_celo_at: playerCeloAt,
       });
 
-      // Shrink bank
-      await supabase
-        .from("celo_rooms")
-        .update(
-          mergeCeloRoomUpdate(Math.max(0, rm.current_bank_cents - playerBet), {
-            last_activity: now,
-          })
-        )
-        .eq("id", room_id);
+      // Player wins are paid from the round pot / ledger — do not shrink the room bank
+      // (bank only moves on banker wins/losses on the bank itself).
+      await supabase.from("celo_rooms").update({ last_activity: now }).eq("id", room_id);
 
       const adv = await advanceAfterResolvingPlayerRoll(
         supabase,
@@ -740,14 +767,7 @@ export async function POST(req: Request) {
           payoutCents,
           `celo_player_win_${round_id}_${userId}`
         );
-        await supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(Math.max(0, rm.current_bank_cents - playerBet), {
-              last_activity: now,
-            })
-          )
-          .eq("id", room_id);
+        await supabase.from("celo_rooms").update({ last_activity: now }).eq("id", room_id);
       } else {
         // Banker wins this individual bet
         const bankerNet = Math.floor((playerBet * (100 - feePct)) / 100);

@@ -157,6 +157,26 @@ export function comparePoints(
   return "banker_wins"; // ties go to banker
 }
 
+/** 1-2-3 — worst banker roll (full table loss path). */
+export function isBankerShitRoll(dice: [number, number, number]): boolean {
+  const sorted = [...dice].sort((x, y) => x - y);
+  return sorted[0] === 1 && sorted[1] === 2 && sorted[2] === 3;
+}
+
+/**
+ * Pair + 1 ("Dick") — bad roll, banker loses a small amount from the bank only;
+ * does not rotate banker or pay the whole table like shit.
+ */
+export function isBankerDickRoll(dice: [number, number, number]): boolean {
+  if (isBankerShitRoll(dice)) return false;
+  const [a, b, c] = dice;
+  return (
+    (a === b && c === 1 && a !== 1) ||
+    (a === c && b === 1 && a !== 1) ||
+    (b === c && a === 1 && b !== 1)
+  );
+}
+
 // ── CALCULATE PAYOUT ──────────────────────────────────────────────────────────
 
 export function calculatePayout(
