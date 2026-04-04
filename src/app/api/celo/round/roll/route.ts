@@ -13,7 +13,7 @@ type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number 
 
 function roundTotalPotCents(roundRow: Record<string, unknown>): number {
   return Number(
-    roundRow.total_pot_sc ?? roundRow.total_pot_cents ?? roundRow.prize_pool_sc ?? 0
+    roundRow.prize_pool_sc ?? roundRow.total_pot_sc ?? roundRow.total_pot_cents ?? 0
   );
 }
 

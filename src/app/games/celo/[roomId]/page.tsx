@@ -91,7 +91,7 @@ type Round = {
   banker_dice_result: string | null;
   banker_point: number | null;
   banker_rerolls: number;
-  total_pot_sc: number;
+  prize_pool_sc: number;
   platform_fee_sc: number;
   bank_covered: boolean;
   covered_by: string | null;
