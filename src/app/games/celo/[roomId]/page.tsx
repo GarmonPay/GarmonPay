@@ -180,6 +180,12 @@ const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }>
   no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
 };
 
+/** Compare Supabase auth user ids to FK uuids (avoids strict === misses from formatting). */
+function sameCeloUserId(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
 /** Display name from embedded profile/users or id fallback (replaces UUID fragments in UI). */
 function getDisplayName(
   player:
@@ -425,7 +431,7 @@ export default function CeloRoomPage() {
           const plist = data.players;
           setPlayers(plist);
           if (session?.userId) {
-            setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
+            setMyPlayer(plist.find((p) => sameCeloUserId(p.user_id, session.userId)) ?? null);
           }
         }
         if (data.room) {
@@ -464,7 +470,7 @@ export default function CeloRoomPage() {
     const plist = (data as Player[]) ?? [];
     setPlayers(plist);
     if (session?.userId) {
-      setMyPlayer(plist.find((p) => p.user_id === session.userId) ?? null);
+      setMyPlayer(plist.find((p) => sameCeloUserId(p.user_id, session.userId)) ?? null);
     }
   }, [roomId, session?.userId]);
 
@@ -595,7 +601,7 @@ export default function CeloRoomPage() {
   /** After banker sets a point, leave banker "dice zone" so UI shows player phase, not endless Rolling… */
   useEffect(() => {
     if (currentRound?.status !== "player_rolling") return;
-    if (room?.banker_id !== session?.userId) return;
+    if (!sameCeloUserId(room?.banker_id, session?.userId)) return;
     setIsRolling(false);
     setLastRollResult(null);
   }, [currentRound?.status, currentRound?.id, room?.banker_id, session?.userId]);
@@ -891,7 +897,7 @@ export default function CeloRoomPage() {
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const userId = session?.userId ?? "";
-  const amIBanker = room?.banker_id === userId;
+  const amIBanker = myPlayer?.role === "banker" || sameCeloUserId(room?.banker_id, userId);
   const amIPlayer = myPlayer?.role === "player";
   const isInRoom = myPlayer !== null;
 
@@ -903,7 +909,11 @@ export default function CeloRoomPage() {
   // Active players for this round (respects bank_covered)
   const activePlayers = players
     .filter((p) => p.role === "player")
-    .filter((p) => !currentRound?.bank_covered || p.user_id === currentRound.covered_by)
+    .filter(
+      (p) =>
+        !currentRound?.bank_covered ||
+        sameCeloUserId(p.user_id, currentRound.covered_by as string | null | undefined)
+    )
     .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0));
 
   const currentTurnPlayer =
@@ -917,7 +927,7 @@ export default function CeloRoomPage() {
           return activePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
         })()
       : null;
-  const isMyTurn = currentTurnPlayer?.user_id === userId;
+  const isMyTurn = sameCeloUserId(currentTurnPlayer?.user_id, userId);
 
   // Timer: lower bank (60s after banker C-Lo)
   const lowerBankSecondsLeft = room?.banker_celo_at
@@ -927,7 +937,7 @@ export default function CeloRoomPage() {
 
   // Timer: become banker (30s after player rolled C-Lo this round)
   const myLastCeloRoll = playerRolls
-    .filter((r) => r.user_id === userId && r.player_celo_at !== null)
+    .filter((r) => sameCeloUserId(r.user_id, userId) && r.player_celo_at !== null)
     .sort((a, b) => new Date(b.player_celo_at!).getTime() - new Date(a.player_celo_at!).getTime())[0];
   const becomeBankerSecondsLeft = myLastCeloRoll?.player_celo_at
     ? Math.max(0, 30 - Math.floor((Date.now() - new Date(myLastCeloRoll.player_celo_at).getTime()) / 1000))
@@ -1301,7 +1311,7 @@ export default function CeloRoomPage() {
     isBankerRolling &&
     currentRound &&
     !currentRound.bank_covered &&
-    room.banker_id !== userId;
+    !sameCeloUserId(room.banker_id, userId);
 
   const canRollBanker = amIBanker && isBankerRolling;
   const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
@@ -1317,7 +1327,7 @@ export default function CeloRoomPage() {
       : null;
   const handleAnimationComplete = () => {};
 
-  const bankerPlayer = players.find((p) => p.user_id === room.banker_id) ?? null;
+  const bankerPlayer = players.find((p) => sameCeloUserId(p.user_id, room.banker_id)) ?? null;
   const statusLine = getRoundStatusLine({
     round: currentRound,
     amIBanker,
@@ -1769,9 +1779,9 @@ export default function CeloRoomPage() {
                 <SeatCard
                   key={p.id}
                   player={p}
-                  isMe={p.user_id === userId}
+                  isMe={sameCeloUserId(p.user_id, userId)}
                   isBanker={true}
-                  isCurrentTurn={isBankerRolling && p.user_id === userId}
+                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
                   resolvedRoll={null}
                 />
               ))}
@@ -1787,9 +1797,9 @@ export default function CeloRoomPage() {
                   <SeatCard
                     key={p.id}
                     player={p}
-                    isMe={p.user_id === userId}
+                    isMe={sameCeloUserId(p.user_id, userId)}
                     isBanker={false}
-                    isCurrentTurn={currentTurnPlayer?.user_id === p.user_id}
+                    isCurrentTurn={sameCeloUserId(currentTurnPlayer?.user_id, p.user_id)}
                     resolvedRoll={roll}
                     phasePlayerRolling={isPlayerRolling}
                   />
@@ -1822,11 +1832,11 @@ export default function CeloRoomPage() {
               <div className="px-5 pb-5 space-y-4 border-t border-white/[0.05]">
 
                 {/* Open bets to accept */}
-                {openSideBets.filter((b) => b.creator_id !== userId).length > 0 && (
+                {openSideBets.filter((b) => !sameCeloUserId(b.creator_id, userId)).length > 0 && (
                   <div className="space-y-2 pt-4">
                     <p className="text-[10px] uppercase tracking-widest text-violet-400/50">Open Bets</p>
                     {openSideBets
-                      .filter((b) => b.creator_id !== userId)
+                      .filter((b) => !sameCeloUserId(b.creator_id, userId))
                       .map((b) => (
                         <div
                           key={b.id}
@@ -1856,11 +1866,11 @@ export default function CeloRoomPage() {
                 )}
 
                 {/* My open bets */}
-                {openSideBets.filter((b) => b.creator_id === userId).length > 0 && (
+                {openSideBets.filter((b) => sameCeloUserId(b.creator_id, userId)).length > 0 && (
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase tracking-widest text-violet-400/50">My Open Bets</p>
                     {openSideBets
-                      .filter((b) => b.creator_id === userId)
+                      .filter((b) => sameCeloUserId(b.creator_id, userId))
                       .map((b) => (
                         <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.01] px-4 py-3">
                           <p className="text-xs text-violet-300/70 capitalize">{b.bet_type.replace(/_/g, " ")}</p>
@@ -1952,7 +1962,7 @@ export default function CeloRoomPage() {
               chatMessages.map((m) => (
                 <div key={m.id} className="text-violet-200/90">
                   <span className="text-violet-500/60 font-mono text-[10px]">
-                    {m.user_id === userId
+                    {sameCeloUserId(m.user_id, userId)
                       ? "You"
                       : getDisplayName(players.find((pl) => pl.user_id === m.user_id) ?? { user_id: m.user_id })}
                     :
