@@ -86,6 +86,7 @@ export default function SocialTasksEarnPage() {
   const [modalTask, setModalTask] = useState<SocialTask | null>(null);
   const [step, setStep] = useState(1);
   const [proofUrl, setProofUrl] = useState("");
+  const [claimStartedAt, setClaimStartedAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
@@ -168,6 +169,7 @@ export default function SocialTasksEarnPage() {
     setStep(1);
     setProofUrl("");
     setError(null);
+    setClaimStartedAt(new Date().toISOString());
   }
 
   async function submitClaim() {
@@ -178,6 +180,7 @@ export default function SocialTasksEarnPage() {
       const res = await authFetchSocial("/api/social/submit", {
         task_id: modalTask.id,
         proof_url: proofUrl,
+        ...(claimStartedAt ? { claimed_at: claimStartedAt } : {}),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!res.ok) {
@@ -185,6 +188,7 @@ export default function SocialTasksEarnPage() {
         return;
       }
       setModalTask(null);
+      setClaimStartedAt(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");

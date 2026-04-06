@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { userMeetsMinTier } from "@/lib/social-tier";
+import { runFraudChecks } from "@/lib/social-fraud-detection";
+import { ensureWalletBalancesRow, walletLedgerEntry } from "@/lib/wallet-ledger";
+
+const GENERIC_OK = {
+  success: true,
+  message: "Submitted! Most tasks reviewed within 2 hours.",
+  status: "pending" as const,
+};
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -14,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { task_id?: string; proof_url?: string };
+  let body: { task_id?: string; proof_url?: string; claimed_at?: string };
   try {
     body = await req.json();
   } catch {
@@ -23,6 +31,7 @@ export async function POST(req: Request) {
 
   const task_id = body.task_id?.trim();
   const proof_url = typeof body.proof_url === "string" ? body.proof_url.trim() : "";
+  const claimed_at = typeof body.claimed_at === "string" ? body.claimed_at.trim() : undefined;
 
   if (!task_id) {
     return NextResponse.json({ error: "task_id required" }, { status: 400 });
@@ -30,9 +39,13 @@ export async function POST(req: Request) {
 
   const { data: userRow } = await supabase
     .from("users")
-    .select("membership")
+    .select("membership, social_banned")
     .eq("id", userId)
     .maybeSingle();
+
+  if ((userRow as { social_banned?: boolean } | null)?.social_banned) {
+    return NextResponse.json({ error: "Unable to submit right now." }, { status: 403 });
+  }
 
   const membership = (userRow as { membership?: string } | null)?.membership ?? "free";
 
@@ -54,6 +67,8 @@ export async function POST(req: Request) {
     completions: number;
     min_tier: string;
     proof_required: boolean;
+    platform: string;
+    task_type: string;
   };
 
   if (t.status !== "active") {
@@ -83,27 +98,73 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json(
-      { error: "You have already submitted this task" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "You have already submitted this task" }, { status: 400 });
   }
 
-  const { error: insErr } = await supabase.from("social_task_completions").insert({
-    task_id,
-    user_id: userId,
-    proof_url: proof_url || null,
-    status: "pending",
-    reward_cents: t.reward_cents,
-  });
+  const { data: inserted, error: insErr } = await supabase
+    .from("social_task_completions")
+    .insert({
+      task_id,
+      user_id: userId,
+      proof_url: proof_url || null,
+      status: "pending",
+      reward_cents: t.reward_cents,
+      claimed_at: claimed_at ?? null,
+    })
+    .select("id")
+    .single();
 
-  if (insErr) {
+  if (insErr || !inserted?.id) {
     console.error("[social/submit] insert:", insErr);
-    return NextResponse.json({ error: insErr.message ?? "Failed to submit" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to submit. Try again later." }, { status: 500 });
   }
 
-  return NextResponse.json({
-    success: true,
-    message: "Submission received. You will be credited after approval.",
-  });
+  const completionId = inserted.id as string;
+  const submittedAt = new Date().toISOString();
+
+  let fraudResult;
+  try {
+    fraudResult = await runFraudChecks({
+      userId,
+      taskId: task_id,
+      completionId,
+      proofUrl: proof_url,
+      proofRequired: t.proof_required,
+      submittedAt,
+      claimedAt: claimed_at ?? null,
+      platform: t.platform,
+      taskType: t.task_type,
+    });
+  } catch (e) {
+    console.error("[social/submit] fraud checks:", e);
+    return NextResponse.json(GENERIC_OK);
+  }
+
+  if (fraudResult.action === "approve" && fraudResult.shouldCredit) {
+    const ensured = await ensureWalletBalancesRow(userId);
+    if (ensured.ok) {
+      const credit = await walletLedgerEntry(
+        userId,
+        "ad_earning",
+        t.reward_cents,
+        `social_task_${completionId}`
+      );
+      if (credit.success) {
+        await supabase.from("social_task_completions").update({ status: "approved" }).eq("id", completionId);
+        await supabase
+          .from("social_tasks")
+          .update({ completions: t.completions + 1 })
+          .eq("id", task_id);
+      } else {
+        console.error("[social/submit] ledger:", credit.message);
+      }
+    }
+  }
+
+  if (fraudResult.action === "ban") {
+    const { error: banErr } = await supabase.from("users").update({ social_banned: true }).eq("id", userId);
+    if (banErr) console.error("[social/submit] social_banned:", banErr.message);
+  }
+
+  return NextResponse.json(GENERIC_OK);
 }
