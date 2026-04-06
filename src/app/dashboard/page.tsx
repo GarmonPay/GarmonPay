@@ -19,6 +19,7 @@ import { SupabaseEarningsTracker } from "@/components/dashboard/SupabaseEarnings
 import { MARKETING_PLANS, normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
+import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-prices";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -50,6 +51,9 @@ export default function DashboardPage() {
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [stripeStatusMessage, setStripeStatusMessage] = useState<string | null>(null);
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewBusy, setRenewBusy] = useState(false);
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!depositModalOpen) return;
@@ -123,6 +127,9 @@ export default function DashboardPage() {
               totalEarningsCents: 0,
               totalWithdrawnCents: 0,
               membershipTier: "free",
+              membershipExpiresAt: null,
+              membershipPaymentSource: null,
+              stripeSubscriptionId: null,
               referralCode: "",
               referralEarningsCents: 0,
               totalReferrals: 0,
@@ -292,6 +299,54 @@ export default function DashboardPage() {
 
   const planForUi = normalizeUserMembershipTier(data.membershipTier);
   const tierDbRaw = (data as { membershipTierDb?: string }).membershipTierDb ?? "";
+  const membershipExpiresAt = (data as { membershipExpiresAt?: string | null }).membershipExpiresAt ?? null;
+  const membershipPaymentSource = (data as { membershipPaymentSource?: string | null }).membershipPaymentSource ?? null;
+  const stripeSubscriptionId = (data as { stripeSubscriptionId?: string | null }).stripeSubscriptionId ?? null;
+  const expDate = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
+  const expValid = expDate && !Number.isNaN(expDate.getTime());
+  const daysUntilExpiry =
+    expValid && expDate
+      ? Math.ceil((expDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+      : null;
+  const paidViaStripe = membershipPaymentSource === "stripe" || (!!stripeSubscriptionId && membershipPaymentSource !== "balance");
+  const renewalPriceCents =
+    isPaidTierId(planForUi) ? PAID_TIER_PRICES_CENTS[planForUi] : 0;
+  const shortfallCents = Math.max(0, renewalPriceCents - balanceCents);
+  const showExpiryWarning =
+    membershipPaymentSource === "balance" &&
+    planForUi !== "free" &&
+    daysUntilExpiry != null &&
+    daysUntilExpiry >= 0 &&
+    daysUntilExpiry <= 7;
+
+  async function renewWithBalance() {
+    const session = await getSessionAsync();
+    if (!session?.accessToken || !isPaidTierId(planForUi)) return;
+    setRenewBusy(true);
+    setRenewError(null);
+    try {
+      const res = await fetch("/api/membership/upgrade-with-balance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ tier: planForUi, renew: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRenewError((json as { error?: string }).error ?? "Renewal failed.");
+        return;
+      }
+      setRenewOpen(false);
+      const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
+      setData(dash);
+    } catch {
+      setRenewError("Network error.");
+    } finally {
+      setRenewBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-5 tablet:space-y-6">
@@ -305,6 +360,100 @@ export default function DashboardPage() {
           referralEarningsCents: data.referralEarningsCents ?? 0,
         }}
       />
+
+      {(planForUi !== "free" || membershipExpiresAt || paidViaStripe) && (
+        <section className="animate-slide-up card-lux p-5 tablet:p-6">
+          <h2 className="text-lg font-bold text-white">Membership status</h2>
+          <p className="mt-1 text-sm text-fintech-muted">
+            Current tier:{" "}
+            <span className="font-semibold text-white">{MARKETING_PLANS[planForUi].label}</span>
+          </p>
+          <p className="mt-2 text-sm text-fintech-muted">
+            {paidViaStripe && !expValid ? (
+              <>Billing: Paid via Stripe</>
+            ) : expValid && expDate ? (
+              <>
+                Expires:{" "}
+                <span className="text-white">
+                  {expDate.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+                {paidViaStripe ? (
+                  <span className="text-fintech-muted"> (Stripe subscription)</span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-fintech-muted">Renewal date will appear after your next balance upgrade.</span>
+            )}
+          </p>
+          {showExpiryWarning && (
+            <p className="mt-3 text-sm font-medium text-red-400">
+              Expires in {daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"} — Renew now
+            </p>
+          )}
+          {membershipPaymentSource === "balance" && planForUi !== "free" && shortfallCents > 0 && showExpiryWarning && (
+            <p className="mt-2 text-sm text-amber-200/90">
+              Add {formatCents(shortfallCents)} to auto-renew at your current tier.
+            </p>
+          )}
+          <div className="mt-4 flex flex-col gap-2 tablet:flex-row">
+            {membershipPaymentSource === "balance" && planForUi !== "free" && showExpiryWarning && (
+              <button
+                type="button"
+                onClick={() => { setRenewError(null); setRenewOpen(true); }}
+                className="btn-press min-h-touch rounded-xl bg-fintech-accent px-5 py-3 font-semibold text-white hover:opacity-90"
+              >
+                Renew with balance
+              </button>
+            )}
+            {paidViaStripe && (
+              <Link
+                href="/pricing"
+                className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white hover:bg-white/10"
+              >
+                Update payment method
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
+
+      {renewOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="card-lux max-w-md p-6">
+            <h3 className="text-lg font-bold text-white">Renew {MARKETING_PLANS[planForUi].label}</h3>
+            <p className="mt-2 text-sm text-fintech-muted">
+              {formatCents(renewalPriceCents)} will be deducted from your balance. Your term extends by 30 days from your
+              current expiry.
+            </p>
+            {renewError && <p className="mt-2 text-sm text-red-400">{renewError}</p>}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setRenewOpen(false)}
+                className="rounded-xl border border-white/20 px-4 py-2.5 text-sm text-white hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={renewBusy}
+                onClick={() => void renewWithBalance()}
+                className="rounded-xl bg-fintech-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {renewBusy ? "Processing…" : "Confirm renewal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ——— Wallet-style Balance Card ——— */}
       <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">

@@ -8,6 +8,14 @@ import {
   catalogFeaturesToStrings,
   getEmbeddedMembershipCatalog,
 } from "@/lib/membership-plans";
+import { getSessionAsync } from "@/lib/session";
+import {
+  MARKETING_PLANS,
+  membershipTierRank,
+  normalizeUserMembershipTier,
+  type MarketingPlanId,
+} from "@/lib/garmon-plan-config";
+import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -83,10 +91,22 @@ function num(v: number | string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatUsdFromCents(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 export default function PricingPage() {
   const [catalog, setCatalog] = useState<MembershipPlanCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<"supabase" | "fallback">("fallback");
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [membershipTierUi, setMembershipTierUi] = useState<MarketingPlanId>("free");
+  const [dashLoading, setDashLoading] = useState(false);
+  const [confirmTier, setConfirmTier] = useState<PaidMembershipTierId | null>(null);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [stripeBusyId, setStripeBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +139,102 @@ export default function PricingPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSessionAsync().then((session) => {
+      if (!session || cancelled) {
+        if (!cancelled) {
+          setBalanceCents(null);
+          setMembershipTierUi("free");
+        }
+        return;
+      }
+      setDashLoading(true);
+      const headers: Record<string, string> = {};
+      if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+      else if (session.userId) headers["X-User-Id"] = session.userId;
+      fetch("/api/dashboard", { headers, cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled) return;
+          setBalanceCents(typeof d.balanceCents === "number" ? d.balanceCents : 0);
+          setMembershipTierUi(normalizeUserMembershipTier(d.membershipTier ?? "free"));
+        })
+        .catch(() => {
+          if (!cancelled) setBalanceCents(null);
+        })
+        .finally(() => {
+          if (!cancelled) setDashLoading(false);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function subscribeWithCard(tierId: string) {
+    if (!isPaidTierId(tierId)) return;
+    const session = await getSessionAsync();
+    if (!session) {
+      window.location.href = "/login?next=/pricing";
+      return;
+    }
+    setStripeBusyId(tierId);
+    setUpgradeError(null);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+      else if (session.userId) headers["X-User-Id"] = session.userId;
+      const res = await fetch("/api/stripe/create-membership-session", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ tier: tierId }),
+      });
+      const data = await res.json();
+      if (data?.url) window.location.href = data.url;
+      else setUpgradeError(data?.error ?? "Checkout could not start.");
+    } catch {
+      setUpgradeError("Network error. Try again.");
+    } finally {
+      setStripeBusyId(null);
+    }
+  }
+
+  async function confirmPayWithBalance() {
+    if (!confirmTier) return;
+    const session = await getSessionAsync();
+    if (!session?.accessToken) {
+      setUpgradeError("Please sign in again to use your balance.");
+      return;
+    }
+    setUpgradeBusy(true);
+    setUpgradeError(null);
+    try {
+      const res = await fetch("/api/membership/upgrade-with-balance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ tier: confirmTier }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUpgradeError((data as { error?: string }).error ?? "Upgrade failed.");
+        return;
+      }
+      const label = MARKETING_PLANS[confirmTier].label;
+      setSuccessMsg(`You're now a ${label} member!`);
+      setConfirmTier(null);
+      setBalanceCents(typeof data.newBalance === "number" ? data.newBalance : null);
+      setMembershipTierUi(normalizeUserMembershipTier(confirmTier));
+    } catch {
+      setUpgradeError("Network error. Try again.");
+    } finally {
+      setUpgradeBusy(false);
+    }
+  }
 
   const orderedPlans = useMemo(() => {
     return [...catalog].sort((a, b) => num(a.display_order) - num(b.display_order));
@@ -193,6 +309,14 @@ export default function PricingPage() {
                 ? "Plans synced from Supabase `membership_plan_catalog` (Free always first)."
                 : "Showing embedded membership defaults — apply Supabase `membership_plan_catalog` migrations and ensure `/api/membership-plans` is reachable."}
           </p>
+          {successMsg && (
+            <p className="mx-auto mt-4 max-w-lg rounded-xl border border-[#eab308]/50 bg-[#eab308]/15 px-4 py-3 text-sm font-medium text-[#fde047]">
+              {successMsg}
+            </p>
+          )}
+          {upgradeError && (
+            <p className="mx-auto mt-2 max-w-lg text-sm text-red-400">{upgradeError}</p>
+          )}
         </header>
 
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -236,13 +360,88 @@ export default function PricingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href="/register"
-                    className="mt-8 block w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400 sm:text-base"
-                  >
-                    <span className="hidden sm:inline">Start Earning Free — No Credit Card Needed</span>
-                    <span className="sm:hidden">Start Earning Free</span>
-                  </Link>
+                  <div className="mt-8 flex flex-col gap-2">
+                    {p.id === "free" ? (
+                      <Link
+                        href="/register"
+                        className="block w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400 sm:text-base"
+                      >
+                        <span className="hidden sm:inline">Start Earning Free — No Credit Card Needed</span>
+                        <span className="sm:hidden">Start Earning Free</span>
+                      </Link>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          disabled={stripeBusyId === p.id}
+                          onClick={() => subscribeWithCard(p.id)}
+                          className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400 disabled:opacity-60 sm:text-base"
+                        >
+                          {stripeBusyId === p.id ? "Redirecting…" : "Subscribe with card"}
+                        </button>
+                        {dashLoading && balanceCents == null ? (
+                          <p className="text-center text-xs text-violet-500">Loading balance…</p>
+                        ) : balanceCents != null && !dashLoading && isPaidTierId(p.id) ? (
+                          (() => {
+                            const rankCurrent = membershipTierRank(membershipTierUi);
+                            const rankCard = membershipTierRank(p.id as MarketingPlanId);
+                            if (rankCard < rankCurrent) {
+                              return (
+                                <p className="text-center text-xs text-violet-500">Lower than your current plan</p>
+                              );
+                            }
+                            if (rankCard === rankCurrent) {
+                              return (
+                                <p className="text-center text-xs font-medium text-emerald-400/90">Your current plan</p>
+                              );
+                            }
+                            const priceC = PAID_TIER_PRICES_CENTS[p.id];
+                            const ok = balanceCents >= priceC;
+                            const short = priceC - balanceCents;
+                            return (
+                              <div className="flex flex-col gap-1">
+                                {ok ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setUpgradeError(null);
+                                      if (isPaidTierId(p.id)) setConfirmTier(p.id);
+                                    }}
+                                    className="w-full rounded-xl border border-[#eab308]/60 bg-gradient-to-r from-[#a16207] via-[#eab308] to-[#fde047] py-3 text-center text-sm font-semibold text-[#0c0618] shadow-md shadow-[#eab308]/20 transition hover:opacity-95 sm:text-base"
+                                  >
+                                    Pay with Balance ({formatUsdFromCents(balanceCents)} available)
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-white/5 py-3 text-center text-sm font-semibold text-violet-400/80 sm:text-base"
+                                    >
+                                      Insufficient Balance (need {formatUsdFromCents(short)} more)
+                                    </button>
+                                    <p className="text-center text-xs text-violet-400/90">
+                                      Add funds to use balance.{" "}
+                                      <Link href="/wallet" className="text-[#eab308] underline-offset-2 hover:underline">
+                                        Deposit
+                                      </Link>
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : p.id !== "free" ? (
+                          <p className="text-center text-xs text-violet-500">
+                            <Link href="/login?next=/pricing" className="text-[#eab308] hover:underline">
+                              Sign in
+                            </Link>{" "}
+                            to pay with balance.
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -320,6 +519,59 @@ export default function PricingPage() {
           </ul>
         </section>
       </div>
+
+      {confirmTier && balanceCents != null && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upgrade-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#0c0618] p-6 shadow-xl">
+            <h2 id="upgrade-modal-title" className="text-lg font-bold text-white">
+              Upgrade to {MARKETING_PLANS[confirmTier].label}
+            </h2>
+            {(() => {
+              const priceC = PAID_TIER_PRICES_CENTS[confirmTier];
+              const after = balanceCents - priceC;
+              return (
+                <div className="mt-4 space-y-2 text-sm text-violet-200/90">
+                  <p>
+                    Amount: <span className="text-white">{formatUsdFromCents(priceC)}</span>
+                  </p>
+                  <p>
+                    Your balance: <span className="text-white">{formatUsdFromCents(balanceCents)}</span>
+                  </p>
+                  <p>
+                    Balance after: <span className="text-[#fde047]">{formatUsdFromCents(after)}</span>
+                  </p>
+                  <p className="pt-3 text-violet-300/90">
+                    Your membership renews in 30 days. You can cancel anytime.
+                  </p>
+                </div>
+              );
+            })()}
+            {upgradeError && <p className="mt-3 text-sm text-red-400">{upgradeError}</p>}
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => { setConfirmTier(null); setUpgradeError(null); }}
+                className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-violet-200 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={upgradeBusy}
+                onClick={() => void confirmPayWithBalance()}
+                className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
+              >
+                {upgradeBusy ? "Processing…" : "Confirm upgrade"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

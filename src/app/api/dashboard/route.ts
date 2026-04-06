@@ -28,6 +28,9 @@ export async function GET(request: Request) {
     totalDepositsCents: 0,
     membershipTier: "free",
     membershipTierDb: "",
+    membershipExpiresAt: null as string | null,
+    membershipPaymentSource: null as string | null,
+    stripeSubscriptionId: null as string | null,
     referralCode: "",
     referralEarningsCents: 0,
     totalReferrals: 0,
@@ -51,7 +54,9 @@ export async function GET(request: Request) {
         }
         const { data: row, error: rowError } = await supabase
           .from("users")
-          .select("id, email, role, membership, balance, ad_credit_balance, withdrawable_balance, referral_code")
+          .select(
+            "id, email, role, membership, membership_expires_at, membership_payment_source, stripe_subscription_id, balance, ad_credit_balance, withdrawable_balance, referral_code"
+          )
           .eq("id", authUser.id)
           .single();
 
@@ -112,6 +117,9 @@ export async function GET(request: Request) {
         ad_credit_balance?: number;
         withdrawable_balance?: number;
         membership?: string;
+        membership_expires_at?: string | null;
+        membership_payment_source?: string | null;
+        stripe_subscription_id?: string | null;
         referral_code?: string;
       } | null;
       const membershipRaw = userRow?.membership ?? "";
@@ -132,6 +140,9 @@ export async function GET(request: Request) {
           totalDepositsCents,
           membershipTier: normalizeUserMembershipTier(membershipRaw),
           membershipTierDb: membershipRaw,
+          membershipExpiresAt: userRow?.membership_expires_at ?? null,
+          membershipPaymentSource: userRow?.membership_payment_source ?? null,
+          stripeSubscriptionId: userRow?.stripe_subscription_id ?? null,
           referralCode: userRow?.referral_code ?? "",
           referralEarningsCents,
           totalReferrals,
@@ -162,6 +173,9 @@ export async function GET(request: Request) {
       totalDepositsCents: 0,
       membershipTier: "free",
       membershipTierDb: "",
+      membershipExpiresAt: null,
+      membershipPaymentSource: null,
+      stripeSubscriptionId: null,
       referralCode: user.referralCode,
       referralEarningsCents: 0,
       totalReferrals: 0,

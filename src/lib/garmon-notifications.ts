@@ -8,7 +8,11 @@ export type GarmonNotificationType =
   | "ad_budget_low"
   | "ad_budget_out"
   | "ad_milestone_views"
-  | "ad_followers";
+  | "ad_followers"
+  | "membership_renewed_balance"
+  | "membership_expiring_soon"
+  | "membership_expired"
+  | "membership_renew_failed";
 
 export async function createGarmonNotification(
   userId: string,

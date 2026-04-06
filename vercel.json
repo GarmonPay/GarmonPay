@@ -1,5 +1,11 @@
 {
   "buildCommand": "rm -rf .next && npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/membership-renewal",
+      "schedule": "0 8 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

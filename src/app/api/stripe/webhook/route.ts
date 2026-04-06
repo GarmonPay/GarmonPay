@@ -31,15 +31,26 @@ function tierFromPriceId(priceId: string | null | undefined): PaidMembershipTier
 async function safeMembershipUpdate(
   supabase: NonNullable<ReturnType<typeof createAdminClient>>,
   userId: string,
-  payload: { membership: string; stripe_subscription_id?: string | null; subscription_status?: string | null }
+  payload: {
+    membership: string;
+    stripe_subscription_id?: string | null;
+    subscription_status?: string | null;
+    membership_tier?: string | null;
+    membership_expires_at?: string | null;
+    membership_payment_source?: string | null;
+  }
 ) {
   const now = new Date().toISOString();
+  const tier = payload.membership_tier ?? payload.membership;
   const extended = await supabase
     .from("users")
     .update({
       membership: payload.membership,
+      membership_tier: tier,
       stripe_subscription_id: payload.stripe_subscription_id ?? null,
       subscription_status: payload.subscription_status ?? "active",
+      membership_expires_at: payload.membership_expires_at ?? null,
+      membership_payment_source: payload.membership_payment_source ?? null,
       updated_at: now,
     })
     .eq("id", userId);
@@ -48,6 +59,7 @@ async function safeMembershipUpdate(
     .from("users")
     .update({
       membership: payload.membership,
+      membership_tier: tier,
       updated_at: now,
     })
     .eq("id", userId);
@@ -120,10 +132,16 @@ export async function POST(req: Request) {
       const userId = (sub.metadata?.user_id as string) || null;
       const tier = ((sub.metadata?.membership_tier as string) || (sub.metadata?.tier as string) || "starter").toLowerCase();
       if (userId) {
+        const periodEnd = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null;
         await safeMembershipUpdate(supabaseForWebhook, userId, {
           membership: tier,
+          membership_tier: tier,
           stripe_subscription_id: sub.id,
           subscription_status: eventType === "customer.subscription.deleted" ? "canceled" : sub.status,
+          membership_expires_at: periodEnd,
+          membership_payment_source: "stripe",
         });
       }
       return new Response("OK", { status: 200 });
@@ -224,8 +242,11 @@ export async function POST(req: Request) {
 
     await safeMembershipUpdate(supabase, user_id, {
       membership: targetTier,
+      membership_tier: targetTier,
       stripe_subscription_id: subId,
       subscription_status: "active",
+      membership_expires_at: null,
+      membership_payment_source: "stripe",
     });
 
     await supabase.from("transactions").insert({
