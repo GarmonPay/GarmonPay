@@ -118,6 +118,7 @@ type Round = {
 
 type PlayerRoll = {
   id: string;
+  room_id?: string;
   user_id: string;
   dice: number[];
   roll_name: string | null;
@@ -386,14 +387,18 @@ export default function CeloRoomPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
-  const [remoteRollCue, setRemoteRollCue] = useState<PlayerRoll | null>(null);
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
+  /** Shown above dice during shared realtime animation */
+  const [currentRollerName, setCurrentRollerName] = useState("");
+  /** True after Roll API succeeds until realtime dice animation sequence finishes */
+  const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
   const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const balanceRef = useRef(0);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
-  /** Dedupe banker-roll remote animations when the same round row is re-delivered */
-  const lastBankerRollAnimKeyRef = useRef<string>("");
+  /** Dedupe dice animations when realtime delivers duplicates */
+  const lastAnimKeyRef = useRef<string>("");
+  const playersRef = useRef<Player[]>([]);
   const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Join form state — default to min_bet_cents once room loads
@@ -610,41 +615,25 @@ export default function CeloRoomPage() {
   }, [balanceCents]);
 
   useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
+
+  useEffect(() => {
     setInitialSyncDone(false);
   }, [roomId]);
-
-  useEffect(() => {
-    if (!remoteRollCue) return;
-    // Trigger the full dice animation for remote rolls
-    setIsRolling(true);
-    setLastRollResult(null);
-    const t = setTimeout(() => {
-      setIsRolling(false);
-      setLastRollResult({
-        dice: remoteRollCue.dice,
-        rollName: remoteRollCue.roll_name ?? undefined,
-        result: remoteRollCue.roll_result ?? undefined,
-        outcome: remoteRollCue.outcome ?? undefined,
-        payoutCents: remoteRollCue.payout_sc,
-      });
-      setRemoteRollCue(null);
-    }, 2600);
-    return () => clearTimeout(t);
-  }, [remoteRollCue]);
-
-  /** After banker sets a point, leave banker "dice zone" so UI shows player phase, not endless Rolling… */
-  useEffect(() => {
-    if (currentRound?.status !== "player_rolling") return;
-    if (!sameCeloUserId(room?.banker_id, session?.userId)) return;
-    setIsRolling(false);
-    setLastRollResult(null);
-  }, [currentRound?.status, currentRound?.id, room?.banker_id, session?.userId]);
 
   useEffect(() => {
     if (!roundSummary) return;
     const t = window.setTimeout(() => setRoundSummary(null), 5000);
     return () => clearTimeout(t);
   }, [roundSummary]);
+
+  /** If realtime is delayed or missed, never leave the roll button stuck disabled */
+  useEffect(() => {
+    if (!rollInteractionBusy) return;
+    const t = window.setTimeout(() => setRollInteractionBusy(false), 15_000);
+    return () => clearTimeout(t);
+  }, [rollInteractionBusy]);
 
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -663,7 +652,7 @@ export default function CeloRoomPage() {
     let isMounted = true;
     const uid = session.userId;
     const displayName = session.email?.split("@")[0] ?? "Player";
-    lastBankerRollAnimKeyRef.current = "";
+    lastAnimKeyRef.current = "";
 
     const fetchInitialRoomData = async () => {
       await loadAllRef.current();
@@ -672,8 +661,10 @@ export default function CeloRoomPage() {
 
     let presenceSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const triggerDiceAnimation = (row: Record<string, unknown>) => {
-      setRemoteRollCue(row as unknown as PlayerRoll);
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const raf2 = async () => {
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
     };
 
     const roomChannel = sb
@@ -746,39 +737,75 @@ export default function CeloRoomPage() {
         },
         async (payload) => {
           if (!isMounted) return;
-          const raw = (payload.new ?? payload.old) as Record<string, unknown> | null;
-          if (!raw || String(raw.room_id) !== roomId) return;
+          const newRound = payload.new as Round | null;
+          if (!newRound || String(newRound.room_id) !== roomId) return;
+          const oldRound = (payload.old ?? {}) as Partial<Round>;
 
-          if (payload.new) {
-            const n = payload.new as Round;
-            setCurrentRound((prev) => {
-              if (prev && prev.id === n.id) return { ...prev, ...n };
-              if (payload.eventType === "INSERT") return n;
-              return prev;
-            });
+          setCurrentRound((prev) => {
+            if (prev && prev.id === newRound.id) return { ...prev, ...newRound };
+            if (payload.eventType === "INSERT") return newRound;
+            return prev;
+          });
 
-            const br = n.banker_dice;
-            if (
-              Array.isArray(br) &&
-              br.length === 3 &&
-              n.banker_id &&
-              String(n.banker_id) !== uid
-            ) {
-              const key = `${n.id}:${JSON.stringify(br)}`;
-              if (lastBankerRollAnimKeyRef.current !== key) {
-                lastBankerRollAnimKeyRef.current = key;
-                triggerDiceAnimation({
-                  dice: br,
-                  roll_name: n.banker_dice_name,
-                  roll_result: n.banker_dice_result,
-                  outcome: null,
-                  payout_sc: 0,
-                });
-              }
+          const br = newRound.banker_dice;
+          const bankerDiceJustSet =
+            Array.isArray(br) &&
+            br.length === 3 &&
+            (!oldRound.banker_dice ||
+              !Array.isArray(oldRound.banker_dice) ||
+              oldRound.banker_dice.length !== 3);
+
+          if (bankerDiceJustSet) {
+            const animKey = `banker_${newRound.id}_${br.join("")}`;
+            if (lastAnimKeyRef.current === animKey) {
+              setRollInteractionBusy(false);
+              void loadRoundRef.current();
+              return;
             }
+            lastAnimKeyRef.current = animKey;
+
+            void (async () => {
+              setCurrentRollerName("Banker");
+              setIsRolling(true);
+              setLastRollResult(null);
+              await raf2();
+              await sleep(2500);
+              if (!isMounted) return;
+              setIsRolling(false);
+              setLastRollResult({
+                dice: br as [number, number, number],
+                rollName: undefined,
+                result: undefined,
+                bankerPoint: newRound.banker_point ?? undefined,
+              });
+              await sleep(300);
+              if (!isMounted) return;
+              setLastRollResult((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      rollName: newRound.banker_dice_name ?? undefined,
+                      result: newRound.banker_dice_result ?? undefined,
+                    }
+                  : null
+              );
+              await sleep(1500);
+              if (!isMounted) return;
+              setCurrentRollerName("");
+              setRollInteractionBusy(false);
+              void loadRoundRef.current();
+            })();
+            return;
           }
 
-          await loadRoundRef.current();
+          if (newRound.status === "completed") {
+            setRollInteractionBusy(false);
+            setTimeout(() => {
+              if (isMounted) void loadRoundRef.current();
+            }, 1000);
+          } else {
+            void loadRoundRef.current();
+          }
         }
       )
       .on(
@@ -791,12 +818,64 @@ export default function CeloRoomPage() {
         },
         (payload) => {
           if (!isMounted) return;
-          const row = payload.new as Record<string, unknown>;
-          if (!row || String(row.room_id) !== roomId) return;
-          if (row.user_id && String(row.user_id) !== uid) {
-            triggerDiceAnimation(row);
+          const roll = payload.new as PlayerRoll;
+          if (!roll || String(roll.room_id) !== roomId) return;
+
+          const animKey = `player_${roll.id}`;
+          if (lastAnimKeyRef.current === animKey) {
+            setRollInteractionBusy(false);
+            void loadRoundRef.current();
+            return;
           }
-          void loadRoundRef.current();
+          lastAnimKeyRef.current = animKey;
+
+          void (async () => {
+            const roller = playersRef.current.find((p) => p.user_id === roll.user_id);
+            setCurrentRollerName(getDisplayName(roller ?? null) || "Player");
+            setIsRolling(true);
+            setLastRollResult(null);
+            await raf2();
+            await sleep(2500);
+            if (!isMounted) return;
+            setIsRolling(false);
+            setLastRollResult({
+              dice: roll.dice as [number, number, number],
+              rollName: undefined,
+              result: undefined,
+              outcome: undefined,
+              payoutCents: roll.payout_sc,
+            });
+            await sleep(300);
+            if (!isMounted) return;
+            setLastRollResult((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rollName: roll.roll_name ?? undefined,
+                    result: roll.roll_result ?? undefined,
+                    outcome: roll.outcome ?? undefined,
+                  }
+                : null
+            );
+            await sleep(1500);
+            if (!isMounted) return;
+            setCurrentRollerName("");
+            setRollInteractionBusy(false);
+
+            const { data: roundData } = await sb
+              .from("celo_rounds")
+              .select("*")
+              .eq("room_id", roomId)
+              .neq("status", "completed")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (roundData && isMounted) {
+              setCurrentRound(roundData as Round);
+            }
+            void loadRoundRef.current();
+          })();
         }
       )
       .on(
@@ -1058,7 +1137,7 @@ export default function CeloRoomPage() {
   async function handleRoll() {
     if (!currentRound) return;
     setActionLoading("roll");
-    setIsRolling(true);
+    setRollInteractionBusy(true);
     setError(null);
     let res: Response;
     let data: Record<string, unknown>;
@@ -1069,19 +1148,20 @@ export default function CeloRoomPage() {
       });
       data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     } catch {
-      setIsRolling(false);
+      setRollInteractionBusy(false);
       setActionLoading(null);
       setError("Not authenticated");
       return;
     }
     const ok = res.ok;
-    // Let animation play at least 600ms
-    await new Promise((r) => setTimeout(r, 600));
-    setIsRolling(false);
     setActionLoading(null);
-    if (!ok) { setError((data.error as string) ?? "Roll failed"); return; }
+    if (!ok) {
+      setRollInteractionBusy(false);
+      setError((data.error as string) ?? "Roll failed");
+      return;
+    }
     const rollData = data as unknown as RollResponse;
-    setLastRollResult(rollData);
+    // Dice animation is driven only by Supabase realtime (celo_rounds / celo_player_rolls).
     if (rollData.roundComplete && rollData.summary) {
       setRoundSummary(rollData.summary);
     }
@@ -1105,15 +1185,8 @@ export default function CeloRoomPage() {
       if (celoBankModalCloseTimerRef.current) clearTimeout(celoBankModalCloseTimerRef.current);
       celoBankModalCloseTimerRef.current = setTimeout(() => setShowCeloBankModal(false), 60_000);
     }
-    // If banker rolled a point, immediately sync the round so other state derives correctly
-    if (rollData.result === "point" && rollData.bankerPoint) {
-      setCurrentRound((prev) =>
-        prev
-          ? { ...prev, status: "player_rolling", banker_point: rollData.bankerPoint ?? null, current_player_seat: 1 }
-          : prev
-      );
-    }
     await loadAll();
+    // rollInteractionBusy clears when realtime animation sequence finishes (or safety timeout below).
   }
 
   async function handleCoverBank() {
@@ -1443,6 +1516,15 @@ export default function CeloRoomPage() {
         fontFamily: "DM Sans, sans-serif",
       }}
     >
+      {isRolling && currentRollerName ? (
+        <div
+          className="pointer-events-none absolute left-1/2 top-5 z-[20] -translate-x-1/2 whitespace-nowrap rounded-full border border-[#F5C842] bg-violet-600/90 px-5 py-2 text-sm font-bold text-white shadow-lg"
+          role="status"
+          aria-live="polite"
+        >
+          🎲 {currentRollerName} is rolling...
+        </div>
+      ) : null}
       {roundSummary && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
           <div className="max-w-md w-full rounded-2xl border border-[#F5C842]/35 bg-[#12081f] p-6 shadow-2xl shadow-black/50">
@@ -1948,11 +2030,11 @@ export default function CeloRoomPage() {
           {canRollBanker && (
             <button
               type="button"
-              disabled={!!actionLoading}
+              disabled={!!actionLoading || rollInteractionBusy}
               onClick={handleRoll}
               className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-4 font-bold text-black shadow-lg shadow-amber-900/30 disabled:opacity-60 transition-all text-sm"
             >
-              {actionLoading === "roll" ? "Rolling…" : "🎲 Roll Dice"}
+              {actionLoading === "roll" || rollInteractionBusy ? "Rolling…" : "🎲 Roll Dice"}
             </button>
           )}
 
@@ -1966,7 +2048,7 @@ export default function CeloRoomPage() {
           {showPlayerRollButton && (
             <button
               type="button"
-              disabled={!canRollPlayer || !!actionLoading}
+              disabled={!canRollPlayer || !!actionLoading || rollInteractionBusy}
               onClick={handleRoll}
               className={`flex-1 rounded-xl py-4 font-bold shadow-lg transition-all text-sm ${
                 canRollPlayer
@@ -1974,7 +2056,7 @@ export default function CeloRoomPage() {
                   : "border border-white/10 bg-white/5 text-violet-400/80 shadow-none cursor-not-allowed opacity-70"
               } disabled:opacity-50`}
             >
-              {actionLoading === "roll"
+              {actionLoading === "roll" || rollInteractionBusy
                 ? "Rolling…"
                 : canRollPlayer
                   ? "🎲 ROLL DICE"
