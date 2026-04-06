@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
+import { getEligibleUpgradeBalance } from "@/lib/balance-eligibility";
 import {
   ensureWalletBalancesRow,
   getCanonicalBalanceCents,
@@ -78,10 +79,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: ensured.message }, { status: 500 });
   }
 
-  const balanceBefore = await getCanonicalBalanceCents(userId);
-  if (balanceBefore < tierPrice) {
+  const {
+    totalBalance,
+    eligibleBalance,
+    heldBalance,
+    heldUntil,
+  } = await getEligibleUpgradeBalance(userId);
+
+  if (eligibleBalance < tierPrice) {
+    const shortfall = tierPrice - eligibleBalance;
+    let message = "Insufficient eligible balance";
+
+    if (heldBalance > 0 && heldUntil) {
+      const daysUntilClear = Math.max(
+        0,
+        Math.ceil((heldUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      );
+      message = `$${(heldBalance / 100).toFixed(2)} of your balance is on a ${daysUntilClear}-day hold for security. Your eligible balance is $${(eligibleBalance / 100).toFixed(2)}.`;
+    }
+
     return NextResponse.json(
-      { error: "Insufficient balance", requiredCents: tierPrice, balanceCents: balanceBefore },
+      {
+        error: message,
+        totalBalance,
+        eligibleBalance,
+        heldBalance,
+        heldUntil: heldUntil ? heldUntil.toISOString() : null,
+        shortfall,
+      },
       { status: 400 }
     );
   }

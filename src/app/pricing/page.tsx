@@ -100,8 +100,19 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<"supabase" | "fallback">("fallback");
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [balanceInfo, setBalanceInfo] = useState<{
+    totalBalance: number;
+    eligibleBalance: number;
+    heldBalance: number;
+    heldUntil: string | null;
+  }>({
+    totalBalance: 0,
+    eligibleBalance: 0,
+    heldBalance: 0,
+    heldUntil: null,
+  });
   const [membershipTierUi, setMembershipTierUi] = useState<MarketingPlanId>("free");
-  const [dashLoading, setDashLoading] = useState(false);
+  const [dashLoading, setDashLoading] = useState(true);
   const [confirmTier, setConfirmTier] = useState<PaidMembershipTierId | null>(null);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
@@ -142,11 +153,18 @@ export default function PricingPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getSessionAsync().then((session) => {
+    getSessionAsync().then(async (session) => {
       if (!session || cancelled) {
         if (!cancelled) {
           setBalanceCents(null);
           setMembershipTierUi("free");
+          setBalanceInfo({
+            totalBalance: 0,
+            eligibleBalance: 0,
+            heldBalance: 0,
+            heldUntil: null,
+          });
+          setDashLoading(false);
         }
         return;
       }
@@ -154,19 +172,54 @@ export default function PricingPage() {
       const headers: Record<string, string> = {};
       if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
       else if (session.userId) headers["X-User-Id"] = session.userId;
-      fetch("/api/dashboard", { headers, cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (cancelled) return;
-          setBalanceCents(typeof d.balanceCents === "number" ? d.balanceCents : 0);
-          setMembershipTierUi(normalizeUserMembershipTier(d.membershipTier ?? "free"));
-        })
-        .catch(() => {
-          if (!cancelled) setBalanceCents(null);
-        })
-        .finally(() => {
-          if (!cancelled) setDashLoading(false);
-        });
+      try {
+        const dashRes = await fetch("/api/dashboard", { headers, cache: "no-store" });
+        const d = await dashRes.json().catch(() => ({}));
+        if (cancelled) return;
+        const bc = typeof d.balanceCents === "number" ? d.balanceCents : 0;
+        setBalanceCents(bc);
+        setMembershipTierUi(normalizeUserMembershipTier(d.membershipTier ?? "free"));
+
+        if (session.accessToken) {
+          const eligRes = await fetch("/api/membership/balance-eligibility", {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+            cache: "no-store",
+          });
+          const elig = await eligRes.json().catch(() => ({}));
+          if (!cancelled && eligRes.ok && typeof (elig as { eligibleBalance?: number }).eligibleBalance === "number") {
+            const e = elig as {
+              totalBalance?: number;
+              eligibleBalance?: number;
+              heldBalance?: number;
+              heldUntil?: string | null;
+            };
+            setBalanceInfo({
+              totalBalance: e.totalBalance ?? 0,
+              eligibleBalance: e.eligibleBalance ?? 0,
+              heldBalance: e.heldBalance ?? 0,
+              heldUntil: e.heldUntil ?? null,
+            });
+          } else if (!cancelled) {
+            setBalanceInfo({
+              totalBalance: bc,
+              eligibleBalance: bc,
+              heldBalance: 0,
+              heldUntil: null,
+            });
+          }
+        } else if (!cancelled) {
+          setBalanceInfo({
+            totalBalance: bc,
+            eligibleBalance: bc,
+            heldBalance: 0,
+            heldUntil: null,
+          });
+        }
+      } catch {
+        if (!cancelled) setBalanceCents(null);
+      } finally {
+        if (!cancelled) setDashLoading(false);
+      }
     });
     return () => {
       cancelled = true;
@@ -229,6 +282,28 @@ export default function PricingPage() {
       setConfirmTier(null);
       setBalanceCents(typeof data.newBalance === "number" ? data.newBalance : null);
       setMembershipTierUi(normalizeUserMembershipTier(confirmTier));
+      const s2 = await getSessionAsync();
+      if (s2?.accessToken) {
+        const er = await fetch("/api/membership/balance-eligibility", {
+          headers: { Authorization: `Bearer ${s2.accessToken}` },
+          cache: "no-store",
+        });
+        const elig = await er.json().catch(() => ({}));
+        if (er.ok && typeof (elig as { eligibleBalance?: number }).eligibleBalance === "number") {
+          const e = elig as {
+            totalBalance?: number;
+            eligibleBalance?: number;
+            heldBalance?: number;
+            heldUntil?: string | null;
+          };
+          setBalanceInfo({
+            totalBalance: e.totalBalance ?? 0,
+            eligibleBalance: e.eligibleBalance ?? 0,
+            heldBalance: e.heldBalance ?? 0,
+            heldUntil: e.heldUntil ?? null,
+          });
+        }
+      }
     } catch {
       setUpgradeError("Network error. Try again.");
     } finally {
@@ -396,11 +471,12 @@ export default function PricingPage() {
                               );
                             }
                             const priceC = PAID_TIER_PRICES_CENTS[p.id];
-                            const ok = balanceCents >= priceC;
-                            const short = priceC - balanceCents;
+                            const eligible = balanceInfo.eligibleBalance;
+                            const canAffordWithBalance = eligible >= priceC;
+                            const short = Math.max(0, priceC - eligible);
                             return (
                               <div className="flex flex-col gap-1">
-                                {ok ? (
+                                {canAffordWithBalance ? (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -409,23 +485,37 @@ export default function PricingPage() {
                                     }}
                                     className="w-full rounded-xl border border-[#eab308]/60 bg-gradient-to-r from-[#a16207] via-[#eab308] to-[#fde047] py-3 text-center text-sm font-semibold text-[#0c0618] shadow-md shadow-[#eab308]/20 transition hover:opacity-95 sm:text-base"
                                   >
-                                    Pay with Balance ({formatUsdFromCents(balanceCents)} available)
+                                    Pay with Balance ({formatUsdFromCents(eligible)} eligible)
                                   </button>
                                 ) : (
                                   <>
                                     <button
                                       type="button"
                                       disabled
-                                      className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-white/5 py-3 text-center text-sm font-semibold text-violet-400/80 sm:text-base"
+                                      className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-[#1a1a1a] py-3 text-center text-sm font-semibold text-violet-500/90 sm:text-base"
                                     >
-                                      Insufficient Balance (need {formatUsdFromCents(short)} more)
+                                      Pay with Balance ({formatUsdFromCents(eligible)} eligible)
                                     </button>
-                                    <p className="text-center text-xs text-violet-400/90">
-                                      Add funds to use balance.{" "}
-                                      <Link href="/wallet" className="text-[#eab308] underline-offset-2 hover:underline">
-                                        Deposit
-                                      </Link>
-                                    </p>
+                                    {balanceInfo.heldBalance > 0 ? (
+                                      <p className="text-center text-[11px] leading-snug text-violet-400/90">
+                                        {formatUsdFromCents(balanceInfo.heldBalance)} on 7-day security hold from recent
+                                        deposit.
+                                        {balanceInfo.heldUntil ? (
+                                          <>
+                                            {" "}
+                                            Full eligible access from{" "}
+                                            {new Date(balanceInfo.heldUntil).toLocaleDateString()}.
+                                          </>
+                                        ) : null}
+                                      </p>
+                                    ) : (
+                                      <p className="text-center text-xs text-violet-400/90">
+                                        Need {formatUsdFromCents(short)} more eligible balance.{" "}
+                                        <Link href="/wallet" className="text-[#eab308] underline-offset-2 hover:underline">
+                                          Add funds
+                                        </Link>
+                                      </p>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -520,7 +610,7 @@ export default function PricingPage() {
         </section>
       </div>
 
-      {confirmTier && balanceCents != null && (
+      {confirmTier && !dashLoading && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           role="dialog"
@@ -533,17 +623,25 @@ export default function PricingPage() {
             </h2>
             {(() => {
               const priceC = PAID_TIER_PRICES_CENTS[confirmTier];
-              const after = balanceCents - priceC;
+              const total =
+                balanceInfo.totalBalance > 0 ? balanceInfo.totalBalance : (balanceCents ?? 0);
+              const after = total - priceC;
               return (
                 <div className="mt-4 space-y-2 text-sm text-violet-200/90">
                   <p>
                     Amount: <span className="text-white">{formatUsdFromCents(priceC)}</span>
                   </p>
                   <p>
-                    Your balance: <span className="text-white">{formatUsdFromCents(balanceCents)}</span>
+                    Your balance: <span className="text-white">{formatUsdFromCents(total)}</span>
                   </p>
+                  {balanceInfo.heldBalance > 0 ? (
+                    <p className="text-xs text-violet-400/90">
+                      Eligible for membership: {formatUsdFromCents(balanceInfo.eligibleBalance)} (
+                      {formatUsdFromCents(balanceInfo.heldBalance)} on deposit hold)
+                    </p>
+                  ) : null}
                   <p>
-                    Balance after: <span className="text-[#fde047]">{formatUsdFromCents(after)}</span>
+                    Balance after: <span className="text-[#fde047]">{formatUsdFromCents(Math.max(0, after))}</span>
                   </p>
                   <p className="pt-3 text-violet-300/90">
                     Your membership renews in 30 days. You can cancel anytime.
