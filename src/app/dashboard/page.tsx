@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -20,6 +20,8 @@ import { MARKETING_PLANS, normalizeUserMembershipTier, type MarketingPlanId } fr
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-prices";
+import { createBrowserClient } from "@/lib/supabase";
+import { resolveProfileBalanceCents } from "@/lib/profile-balance";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -54,6 +56,46 @@ export default function DashboardPage() {
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewBusy, setRenewBusy] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
+  /** Client read of `profiles` — source of truth; overrides API when set. */
+  const [profileBalanceCents, setProfileBalanceCents] = useState<number | null>(null);
+  const [profileBalanceError, setProfileBalanceError] = useState<string | null>(null);
+
+  const fetchProfileBalanceFromSupabase = useCallback(async () => {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      console.warn("[dashboard] Supabase browser client not configured");
+      return;
+    }
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    console.log("AUTH USER:", user);
+    if (userErr || !user) {
+      console.log("PROFILE:", null, userErr);
+      setProfileBalanceError(userErr?.message ?? "Not authenticated");
+      setProfileBalanceCents(null);
+      return;
+    }
+    const { data: row, error: qErr } = await supabase
+      .from("profiles")
+      .select("balance, balance_cents")
+      .eq("id", user.id)
+      .maybeSingle();
+    console.log("PROFILE:", row, qErr);
+    if (qErr) {
+      setProfileBalanceError(qErr.message);
+      setProfileBalanceCents(null);
+      return;
+    }
+    const resolved = resolveProfileBalanceCents(row);
+    if (!resolved.ok) {
+      setProfileBalanceError(resolved.message);
+      setProfileBalanceCents(null);
+      return;
+    }
+    const displayBalance = resolved.cents / 100;
+    console.log("BALANCE USED:", displayBalance);
+    setProfileBalanceError(null);
+    setProfileBalanceCents(resolved.cents);
+  }, []);
 
   useEffect(() => {
     if (!depositModalOpen) return;
@@ -63,7 +105,7 @@ export default function DashboardPage() {
     }).catch(() => setStripeStatusMessage(null));
   }, [depositModalOpen]);
 
-  // Available balance comes from getDashboard → `users.balance` via /api/dashboard (not ledger sums).
+  // Available balance: `profiles.balance` / `balance_cents` via /api/dashboard + client Supabase refresh.
   const refetchParam = searchParams.get("refetch");
   useEffect(() => {
     if (refetchParam !== "1") return;
@@ -73,11 +115,12 @@ export default function DashboardPage() {
           const tokenOrId = session.accessToken ?? session.userId;
           const isToken = !!session.accessToken;
           getDashboard(tokenOrId, isToken).then(setData);
+          void fetchProfileBalanceFromSupabase();
         }
       });
     }, 2500);
     return () => clearTimeout(t);
-  }, [refetchParam]);
+  }, [refetchParam, fetchProfileBalanceFromSupabase]);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([
@@ -90,6 +133,7 @@ export default function DashboardPage() {
       setWithdrawals(w.withdrawals ?? []);
       setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
       setActivities("activities" in a ? a.activities : []);
+      void fetchProfileBalanceFromSupabase();
     });
   }
 
@@ -116,29 +160,8 @@ export default function DashboardPage() {
             setData(dashRes.value);
             setError(null);
           } else {
-            setError(null);
-            setData({
-              earningsTodayCents: 0,
-              earningsWeekCents: 0,
-              earningsMonthCents: 0,
-              balanceCents: 0,
-              adCreditBalanceCents: 0,
-              withdrawableCents: 0,
-              totalEarningsCents: 0,
-              totalWithdrawnCents: 0,
-              membershipTier: "free",
-              membershipExpiresAt: null,
-              membershipPaymentSource: null,
-              stripeSubscriptionId: null,
-              referralCode: "",
-              referralEarningsCents: 0,
-              totalReferrals: 0,
-              activeReferralSubscriptions: 0,
-              monthlyReferralCommissionCents: 0,
-              lifetimeReferralCommissionCents: 0,
-              announcements: [],
-              availableAds: [],
-            } as Awaited<ReturnType<typeof getDashboard>>);
+            setError("Dashboard data could not be loaded. Try again.");
+            setData(null);
           }
           if (wRes.status === "fulfilled") {
             setWithdrawals(wRes.value?.withdrawals ?? []);
@@ -163,6 +186,18 @@ export default function DashboardPage() {
       });
     return () => { cancelled = true; };
   }, [router]);
+
+  useEffect(() => {
+    void fetchProfileBalanceFromSupabase();
+  }, [fetchProfileBalanceFromSupabase]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") void fetchProfileBalanceFromSupabase();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [fetchProfileBalanceFromSupabase]);
 
   const [session, setSessionState] = useState<ClientSession | null | "pending">("pending");
   useEffect(() => {
@@ -203,7 +238,17 @@ export default function DashboardPage() {
     );
   }
 
-  const balanceCents = data?.balanceCents ?? 0;
+  const apiBalanceErr = (data as { balanceError?: string | null } | null)?.balanceError ?? null;
+  const balanceCents =
+    profileBalanceCents !== null
+      ? profileBalanceCents
+      : data?.balanceCents != null
+        ? data.balanceCents
+        : null;
+  const balanceDisplayError =
+    balanceCents === null
+      ? (profileBalanceError ?? apiBalanceErr ?? "Balance unavailable")
+      : null;
   const adCreditBalanceCents = (data as { adCreditBalanceCents?: number }).adCreditBalanceCents ?? 0;
   const totalEarningsCents = (data as { totalEarningsCents?: number }).totalEarningsCents ?? 0;
   const totalWithdrawnCents = (data as { totalWithdrawnCents?: number }).totalWithdrawnCents ?? 0;
@@ -225,7 +270,12 @@ export default function DashboardPage() {
     const session = await getSessionAsync();
     if (!session || !convertAmount.trim()) return;
     const amountCents = Math.round(parseFloat(convertAmount) * 100);
-    if (!Number.isFinite(amountCents) || amountCents <= 0 || amountCents > balanceCents) {
+    if (
+      balanceCents == null ||
+      !Number.isFinite(amountCents) ||
+      amountCents <= 0 ||
+      amountCents > balanceCents
+    ) {
       setConvertError("Enter a valid amount not exceeding your balance");
       return;
     }
@@ -237,6 +287,7 @@ export default function DashboardPage() {
       setConvertAmount("");
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
+      await fetchProfileBalanceFromSupabase();
     } catch (err) {
       setConvertError(err instanceof Error ? err.message : "Conversion failed");
     } finally {
@@ -311,7 +362,8 @@ export default function DashboardPage() {
   const paidViaStripe = membershipPaymentSource === "stripe" || (!!stripeSubscriptionId && membershipPaymentSource !== "balance");
   const renewalPriceCents =
     isPaidTierId(planForUi) ? PAID_TIER_PRICES_CENTS[planForUi] : 0;
-  const shortfallCents = Math.max(0, renewalPriceCents - balanceCents);
+  const shortfallCents =
+    balanceCents == null ? 0 : Math.max(0, renewalPriceCents - balanceCents);
   const showExpiryWarning =
     membershipPaymentSource === "balance" &&
     planForUi !== "free" &&
@@ -341,6 +393,7 @@ export default function DashboardPage() {
       setRenewOpen(false);
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
+      await fetchProfileBalanceFromSupabase();
     } catch {
       setRenewError("Network error.");
     } finally {
@@ -458,9 +511,13 @@ export default function DashboardPage() {
       {/* ——— Wallet-style Balance Card ——— */}
       <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
         <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
-        <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
-          {formatCents(balanceCents)}
-        </p>
+        {balanceDisplayError ? (
+          <p className="mt-1 text-lg font-semibold text-red-400 tablet:text-xl">{balanceDisplayError}</p>
+        ) : (
+          <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
+            {balanceCents != null ? formatCents(balanceCents) : "—"}
+          </p>
+        )}
         <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
           <button
             type="button"
@@ -479,7 +536,7 @@ export default function DashboardPage() {
             type="button"
             onClick={() => setConvertModal(true)}
             className="btn-press min-h-touch flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50"
-            disabled={balanceCents < 100}
+            disabled={balanceCents == null || balanceCents < 100}
           >
             Transfer
           </button>
@@ -668,7 +725,7 @@ export default function DashboardPage() {
                 type="number"
                 step="0.01"
                 min="1"
-                max={balanceCents / 100}
+                max={balanceCents != null ? balanceCents / 100 : 0}
                 value={convertAmount}
                 onChange={(e) => setConvertAmount(e.target.value)}
                 placeholder="Amount (USD)"

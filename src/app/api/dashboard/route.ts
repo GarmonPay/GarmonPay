@@ -8,8 +8,9 @@ import {
   getMonthlyReferralCommissionCents,
   getLifetimeReferralCommissionCents,
 } from "@/lib/referral-commissions-db";
-import { createServerClient } from "@/lib/supabase";
+import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
+import { resolveProfileBalanceCents } from "@/lib/profile-balance";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -20,9 +21,10 @@ export async function GET(request: Request) {
     earningsTodayCents: 0,
     earningsWeekCents: 0,
     earningsMonthCents: 0,
-    balanceCents: 0,
+    balanceCents: null as number | null,
+    balanceError: "Unable to load dashboard" as string | null,
     adCreditBalanceCents: 0,
-    withdrawableCents: 0,
+    withdrawableCents: null as number | null,
     totalEarningsCents: 0,
     totalWithdrawnCents: 0,
     totalDepositsCents: 0,
@@ -52,13 +54,33 @@ export async function GET(request: Request) {
         if (authError || !authUser) {
           return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
+        const { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
+          .select("balance, balance_cents")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        let balanceCents: number | null = null;
+        let balanceError: string | null = null;
+        if (profileError) {
+          console.error("Dashboard profiles fetch error:", profileError);
+          balanceError = profileError.message;
+        } else {
+          const resolved = resolveProfileBalanceCents(profileRow);
+          if (resolved.ok) {
+            balanceCents = resolved.cents;
+          } else {
+            balanceError = resolved.message;
+          }
+        }
+
         const { data: row, error: rowError } = await supabase
           .from("users")
           .select(
             "id, email, role, membership, membership_expires_at, membership_payment_source, stripe_subscription_id, balance, ad_credit_balance, withdrawable_balance, referral_code"
           )
           .eq("id", authUser.id)
-          .single();
+          .maybeSingle();
 
         if (rowError) {
           console.error("Dashboard users fetch error:", rowError);
@@ -123,16 +145,16 @@ export async function GET(request: Request) {
         referral_code?: string;
       } | null;
       const membershipRaw = userRow?.membership ?? "";
-      const balCol = userRow?.balance;
-      const balanceCents = balCol == null ? 0 : (Number(balCol) || 0);
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
-      const withdrawableCents = Number(userRow?.withdrawable_balance ?? userRow?.balance ?? 0);
+      const withdrawableCents =
+        balanceCents !== null ? balanceCents : null;
 
         return NextResponse.json({
           earningsTodayCents,
           earningsWeekCents,
           earningsMonthCents,
           balanceCents,
+          balanceError,
           adCreditBalanceCents,
           withdrawableCents,
           totalEarningsCents,
@@ -164,12 +186,35 @@ export async function GET(request: Request) {
     if (!user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+    const admin = createAdminClient();
+    let balanceCents: number | null = null;
+    let balanceError: string | null = null;
+    if (admin) {
+      const { data: prof, error: pe } = await admin
+        .from("profiles")
+        .select("balance, balance_cents")
+        .eq("id", userIdHeader)
+        .maybeSingle();
+      if (pe) {
+        balanceError = pe.message;
+      } else {
+        const resolved = resolveProfileBalanceCents(prof);
+        if (resolved.ok) balanceCents = resolved.cents;
+        else balanceError = resolved.message;
+      }
+    } else {
+      balanceError = "Balance unavailable (server configuration)";
+    }
     return NextResponse.json({
       earningsTodayCents: 0,
       earningsWeekCents: 0,
       earningsMonthCents: 0,
-      balanceCents: 0,
-      withdrawableCents: 0,
+      balanceCents,
+      balanceError,
+      adCreditBalanceCents: 0,
+      withdrawableCents: balanceCents,
+      totalEarningsCents: 0,
+      totalWithdrawnCents: 0,
       totalDepositsCents: 0,
       membershipTier: "free",
       membershipTierDb: "",
@@ -179,6 +224,9 @@ export async function GET(request: Request) {
       referralCode: user.referralCode,
       referralEarningsCents: 0,
       totalReferrals: 0,
+      activeReferralSubscriptions: 0,
+      monthlyReferralCommissionCents: 0,
+      lifetimeReferralCommissionCents: 0,
       announcements: [],
       availableAds: [],
     });

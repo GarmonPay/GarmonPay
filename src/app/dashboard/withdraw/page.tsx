@@ -60,7 +60,7 @@ export default function WithdrawPage() {
         getWithdrawals(tokenOrId, isToken),
       ])
         .then(([dash, w]) => {
-          setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? 0);
+          setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? null);
           setMinCents(w.minWithdrawalCents);
           setWithdrawals(w.withdrawals);
         })
@@ -79,7 +79,11 @@ export default function WithdrawPage() {
       setError(`Minimum withdrawal is ${formatCents(minCents)}`);
       return;
     }
-    if (withdrawableCents != null && amountCents > withdrawableCents) {
+    if (withdrawableCents == null) {
+      setError("Could not verify your balance. Refresh the page and try again.");
+      return;
+    }
+    if (amountCents > withdrawableCents) {
       setError("Amount exceeds your withdrawable balance");
       return;
     }
@@ -99,7 +103,7 @@ export default function WithdrawPage() {
       const w = await getWithdrawals(session.tokenOrId, session.isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 }));
       setWithdrawals(w?.withdrawals ?? []);
       const dash = await getDashboard(session.tokenOrId, session.isToken).catch(() => null);
-      if (dash) setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? 0);
+      if (dash) setWithdrawableCents(dash.withdrawableCents ?? dash.balanceCents ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {

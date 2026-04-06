@@ -176,7 +176,7 @@ export default function PricingPage() {
         const dashRes = await fetch("/api/dashboard", { headers, cache: "no-store" });
         const d = await dashRes.json().catch(() => ({}));
         if (cancelled) return;
-        const bc = typeof d.balanceCents === "number" ? d.balanceCents : 0;
+        const bc = d.balanceCents != null ? d.balanceCents : null;
         setBalanceCents(bc);
         setMembershipTierUi(normalizeUserMembershipTier(d.membershipTier ?? "free"));
 

@@ -286,9 +286,11 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     earningsTodayCents: number;
     earningsWeekCents: number;
     earningsMonthCents: number;
-    balanceCents: number;
+    /** Cents from `profiles.balance` / `profiles.balance_cents`; null if unreadable. */
+    balanceCents: number | null;
+    balanceError?: string | null;
     adCreditBalanceCents: number;
-    withdrawableCents: number;
+    withdrawableCents: number | null;
     totalEarningsCents: number;
     totalWithdrawnCents: number;
     totalDepositsCents?: number;

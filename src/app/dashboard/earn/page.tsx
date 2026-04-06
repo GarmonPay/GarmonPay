@@ -44,7 +44,7 @@ export default function EarnPage() {
   const [ads, setAds] = useState<FeedAd[]>([]);
   const [todayDollars, setTodayDollars] = useState(0);
   const [totalDollars, setTotalDollars] = useState(0);
-  const [balanceCents, setBalanceCents] = useState(0);
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string } | null>(null);
   const [engagedToday, setEngagedToday] = useState<Set<string>>(new Set());
@@ -84,7 +84,7 @@ export default function EarnPage() {
       setAds(feedRes?.ads ?? []);
       setTodayDollars(earningsRes?.todayDollars ?? 0);
       setTotalDollars(earningsRes?.totalDollars ?? 0);
-      setBalanceCents(dashRes?.balanceCents ?? 0);
+      setBalanceCents(dashRes?.balanceCents ?? null);
       setStreakDays(streakRes?.streakDays ?? 0);
       setLeaderboard(leaderRes?.leaderboard ?? []);
     } catch {
@@ -111,7 +111,7 @@ export default function EarnPage() {
         setEngagedToday((prev) => new Set(prev).add(adId));
         setTodayDollars((t) => t + (res.userEarnedDollars ?? 0));
         setTotalDollars((t) => t + (res.userEarnedDollars ?? 0));
-        setBalanceCents((c) => c + (res.userEarnedCents ?? 0));
+        setBalanceCents((c) => (c ?? 0) + (res.userEarnedCents ?? 0));
         showToast(`+$${(res.userEarnedDollars ?? 0).toFixed(3)} earned! 💰`);
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3000);
@@ -199,7 +199,7 @@ export default function EarnPage() {
             <p className="text-xs text-fintech-muted uppercase">All time</p>
             <p className="text-lg font-bold text-fintech-money">${totalDollars.toFixed(2)}</p>
           </div>
-          {balanceCents >= 2000 && (
+          {(balanceCents ?? 0) >= 2000 && (
             <Link
               href="/dashboard/withdraw"
               className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"

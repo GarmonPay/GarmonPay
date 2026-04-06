@@ -24,6 +24,7 @@ export default function FinancePage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [balanceFetchError, setBalanceFetchError] = useState<string | null>(null);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,8 @@ export default function FinancePage() {
           getDashboard(tokenOrId, isToken),
           getWithdrawals(tokenOrId, isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 })),
         ]).then(([dash, w]) => {
-          setBalanceCents(dash.balanceCents ?? 0);
+          setBalanceCents(dash.balanceCents ?? null);
+          setBalanceFetchError(dash.balanceError ?? null);
           setWithdrawals(w?.withdrawals ?? []);
           setMembershipPlan(normalizeUserMembershipTier(dash.membershipTier));
         });
@@ -116,7 +118,13 @@ export default function FinancePage() {
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Available Balance</p>
             <p className="text-2xl font-bold text-fintech-money mt-1">
-              {formatCents(balanceCents ?? 0)}
+              {balanceFetchError ? (
+                <span className="text-red-400 text-base font-medium">{balanceFetchError}</span>
+              ) : balanceCents != null ? (
+                formatCents(balanceCents)
+              ) : (
+                "—"
+              )}
             </p>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">

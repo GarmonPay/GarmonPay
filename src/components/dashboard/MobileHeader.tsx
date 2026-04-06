@@ -31,7 +31,7 @@ export function MobileHeader({ onMenuClick, balanceCents }: MobileHeaderProps) {
         headers: isToken ? { Authorization: `Bearer ${tokenOrId}` } : { "X-User-Id": tokenOrId },
       })
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => (d && typeof d.balanceCents === "number" ? setBalance(d.balanceCents) : null))
+        .then((d) => (d && d.balanceCents != null ? setBalance(d.balanceCents) : null))
         .catch(() => {});
     });
   }, [balanceCents]);
