@@ -225,7 +225,7 @@ export default function PricingPage() {
         return;
       }
       const label = MARKETING_PLANS[confirmTier].label;
-      setSuccessMsg(`You're now a ${label} member!`);
+      setSuccessMsg(`You're now a ${label} member! 🎉`);
       setConfirmTier(null);
       setBalanceCents(typeof data.newBalance === "number" ? data.newBalance : null);
       setMembershipTierUi(normalizeUserMembershipTier(confirmTier));
