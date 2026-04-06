@@ -54,23 +54,34 @@ export async function GET(request: Request) {
         if (authError || !authUser) {
           return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
-        const { data: profileRow, error: profileError } = await supabase
-          .from("profiles")
-          .select("balance, balance_cents")
-          .eq("id", authUser.id)
-          .maybeSingle();
-
         let balanceCents: number | null = null;
         let balanceError: string | null = null;
-        if (profileError) {
-          console.error("Dashboard profiles fetch error:", profileError);
-          balanceError = profileError.message;
-        } else {
-          const resolved = resolveProfileBalanceCents(profileRow);
-          if (resolved.ok) {
-            balanceCents = resolved.cents;
+        {
+          const r1 = await supabase
+            .from("profiles")
+            .select("balance, balance_cents")
+            .eq("id", authUser.id)
+            .maybeSingle();
+          const missingCol =
+            r1.error &&
+            (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
+              (r1.error as { code?: string }).code === "42703");
+          const r2 = missingCol
+            ? await supabase.from("profiles").select("balance").eq("id", authUser.id).maybeSingle()
+            : null;
+          const profileRow = missingCol && r2 ? r2.data : r1.data;
+          const profileErr = missingCol && r2 ? r2.error : r1.error;
+
+          if (profileErr) {
+            console.error("Dashboard profiles fetch error:", profileErr);
+            balanceError = profileErr.message;
           } else {
-            balanceError = resolved.message;
+            const resolved = resolveProfileBalanceCents(profileRow);
+            if (resolved.ok) {
+              balanceCents = resolved.cents;
+            } else {
+              balanceError = resolved.message;
+            }
           }
         }
 
@@ -190,11 +201,16 @@ export async function GET(request: Request) {
     let balanceCents: number | null = null;
     let balanceError: string | null = null;
     if (admin) {
-      const { data: prof, error: pe } = await admin
-        .from("profiles")
-        .select("balance, balance_cents")
-        .eq("id", userIdHeader)
-        .maybeSingle();
+      const r1 = await admin.from("profiles").select("balance, balance_cents").eq("id", userIdHeader).maybeSingle();
+      const missingCol =
+        r1.error &&
+        (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
+          (r1.error as { code?: string }).code === "42703");
+      const r2 = missingCol
+        ? await admin.from("profiles").select("balance").eq("id", userIdHeader).maybeSingle()
+        : null;
+      const prof = missingCol && r2 ? r2.data : r1.data;
+      const pe = missingCol && r2 ? r2.error : r1.error;
       if (pe) {
         balanceError = pe.message;
       } else {

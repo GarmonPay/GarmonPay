@@ -74,14 +74,26 @@ export default function DashboardPage() {
       setProfileBalanceCents(null);
       return;
     }
-    const { data: row, error: qErr } = await supabase
-      .from("profiles")
-      .select("balance, balance_cents")
-      .eq("id", user.id)
-      .maybeSingle();
+    let row: { balance?: unknown; balance_cents?: unknown } | null = null;
+    let qErr: { message?: string } | null | undefined;
+    {
+      const r1 = await supabase.from("profiles").select("balance, balance_cents").eq("id", user.id).maybeSingle();
+      const missingCol =
+        r1.error &&
+        (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
+          (r1.error as { code?: string }).code === "42703");
+      if (missingCol) {
+        const r2 = await supabase.from("profiles").select("balance").eq("id", user.id).maybeSingle();
+        row = r2.data;
+        qErr = r2.error;
+      } else {
+        row = r1.data;
+        qErr = r1.error;
+      }
+    }
     console.log("PROFILE:", row, qErr);
     if (qErr) {
-      setProfileBalanceError(qErr.message);
+      setProfileBalanceError(qErr.message ?? "Profile query failed");
       setProfileBalanceCents(null);
       return;
     }
