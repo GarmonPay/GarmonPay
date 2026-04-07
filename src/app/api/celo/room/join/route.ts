@@ -160,7 +160,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Insert player
+  // Insert player — persist stake in both columns for players (spectators: 0)
   const { data: playerRow, error: insertErr } = await supabase
     .from("celo_room_players")
     .insert({
@@ -168,6 +168,7 @@ export async function POST(req: Request) {
       user_id: userId,
       role: playerRole,
       bet_cents: betCents,
+      entry_sc: playerRole === "player" ? betCents : 0,
       seat_number: seatNumber,
     })
     .select()

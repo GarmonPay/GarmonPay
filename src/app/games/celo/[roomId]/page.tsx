@@ -44,22 +44,6 @@ async function authFetchGet(url: string) {
   });
 }
 
-async function authFetchDelete(url: string) {
-  const supabase = createBrowserClient();
-  if (!supabase) throw new Error("Not authenticated");
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("Not authenticated");
-  return fetch(url, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Room = {
@@ -207,16 +191,20 @@ function sameCeloUserId(a: string | null | undefined, b: string | null | undefin
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
-/** Display name from embedded profile/users or id fallback (replaces UUID fragments in UI). */
-function getPlayerBetCents(player: { entry_sc?: number; bet_cents?: number }): number {
+/** Stake in cents from row (join writes both entry_sc and bet_cents). */
+function getEntryAmount(player: { entry_sc?: number; bet_cents?: number }): number {
   const n = Number(player.entry_sc ?? player.bet_cents ?? 0);
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Display stake for seat cards (supports `entry_sc` or legacy `bet_cents`). */
+/** Alias for round / action logic */
+function getPlayerBetCents(player: { entry_sc?: number; bet_cents?: number }): number {
+  return getEntryAmount(player);
+}
+
+/** Display stake for seat cards */
 function getPlayerEntry(player: { entry_sc?: number; bet_cents?: number }): string {
-  const amount = getPlayerBetCents(player);
-  return `$${(amount / 100).toFixed(2)}`;
+  return `$${(getEntryAmount(player) / 100).toFixed(2)}`;
 }
 
 function getDisplayName(
@@ -241,6 +229,21 @@ function getDisplayName(
   return "Player";
 }
 
+/** Lobby / between-rounds copy (banker vs player; uses seated players + stakes). */
+function getLobbyStatusLine(opts: {
+  isBanker: boolean;
+  activePlayers: Player[];
+  playersWithBets: Player[];
+}): string {
+  const { isBanker, activePlayers, playersWithBets } = opts;
+  if (isBanker) {
+    if (activePlayers.length === 0) return "Waiting for players to join…";
+    if (playersWithBets.length === 0) return "Players joined but no bets placed yet";
+    return `Ready! ${playersWithBets.length} player(s) ready`;
+  }
+  return "Waiting for banker to start…";
+}
+
 function getRoundStatusLine(opts: {
   round: Round | null;
   amIBanker: boolean;
@@ -251,7 +254,7 @@ function getRoundStatusLine(opts: {
 }): string {
   const { round, amIBanker, amIPlayer, currentTurnPlayer, isMyTurn, noActiveRound } = opts;
   if (noActiveRound || !round) {
-    return amIBanker ? "Start a new round when ready." : "Waiting for banker to start…";
+    return "";
   }
   const st = round.status;
   if (st === "completed") {
@@ -275,6 +278,39 @@ function getRoundStatusLine(opts: {
     return `Waiting for ${name} to roll…`;
   }
   return amIBanker ? "Start a new round when ready." : "Waiting for banker to start…";
+}
+
+function getCeloRoomStatusLine(opts: {
+  noActiveRound: boolean;
+  round: Round | null;
+  isBanker: boolean;
+  amIPlayer: boolean;
+  currentTurnPlayer: Player | null;
+  isMyTurn: boolean;
+  activePlayers: Player[];
+  playersWithBets: Player[];
+}): string {
+  const {
+    noActiveRound,
+    round,
+    isBanker,
+    amIPlayer,
+    currentTurnPlayer,
+    isMyTurn,
+    activePlayers,
+    playersWithBets,
+  } = opts;
+  if (noActiveRound || !round) {
+    return getLobbyStatusLine({ isBanker, activePlayers, playersWithBets });
+  }
+  return getRoundStatusLine({
+    round,
+    amIBanker: isBanker,
+    amIPlayer,
+    currentTurnPlayer,
+    isMyTurn,
+    noActiveRound: false,
+  });
 }
 
 // ── Seat display ──────────────────────────────────────────────────────────────
@@ -410,7 +446,7 @@ export default function CeloRoomPage() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
-  const [deleteRoomLoading, setDeleteRoomLoading] = useState(false);
+  const [closeRoomLoading, setCloseRoomLoading] = useState(false);
 
   // C-Lo become-banker modal state (cover-bank or other offers)
   const [showBecomeBankerModal, setShowBecomeBankerModal] = useState(false);
@@ -1018,7 +1054,6 @@ export default function CeloRoomPage() {
   // ── Derived state ─────────────────────────────────────────────────────────
   const userId = session?.userId ?? "";
   const amIBanker = myPlayer?.role === "banker" || sameCeloUserId(room?.banker_id, userId);
-  const amICreator = room ? sameCeloUserId(room.creator_id, userId) : false;
   const amIPlayer = myPlayer?.role === "player";
   const isInRoom = myPlayer !== null;
 
@@ -1027,8 +1062,8 @@ export default function CeloRoomPage() {
     playerRolls.filter((r) => r.outcome === "win" || r.outcome === "loss").map((r) => r.user_id)
   );
 
-  // Active players for this round (respects bank_covered)
-  const activePlayers = players
+  // Seated players eligible to roll this round (respects bank_covered)
+  const roundEligiblePlayers = players
     .filter((p) => p.role === "player")
     .filter(
       (p) =>
@@ -1042,10 +1077,10 @@ export default function CeloRoomPage() {
       ? (() => {
           const seat = currentRound.current_player_seat;
           if (seat != null) {
-            const bySeat = activePlayers.find((p) => p.seat_number === seat);
+            const bySeat = roundEligiblePlayers.find((p) => p.seat_number === seat);
             if (bySeat) return bySeat;
           }
-          return activePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
+          return roundEligiblePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
         })()
       : null;
   const isMyTurn = sameCeloUserId(currentTurnPlayer?.user_id, userId);
@@ -1115,24 +1150,30 @@ export default function CeloRoomPage() {
     await loadRound();
   }
 
-  async function handleDeleteRoom() {
-    if (!window.confirm("Delete this room? You can only do this while you are alone. This cannot be undone.")) {
+  async function handleCloseRoom() {
+    if (
+      !window.confirm(
+        "Are you sure you want to close this room? All players will be refunded their entries."
+      )
+    ) {
       return;
     }
-    setDeleteRoomLoading(true);
+    setCloseRoomLoading(true);
     setError(null);
     try {
-      const res = await authFetchDelete(`/api/celo/room/${encodeURIComponent(roomId)}/delete`);
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const res = await authFetch("/api/celo/room/close", { room_id: roomId });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!res.ok) {
-        setError(data.error ?? "Failed to delete room");
+        setError(data.error ?? "Failed to close room");
+        window.alert(data.error ?? "Failed to close room");
         return;
       }
       router.push("/games/celo");
     } catch {
       setError("Not authenticated");
+      window.alert("Not authenticated");
     } finally {
-      setDeleteRoomLoading(false);
+      setCloseRoomLoading(false);
     }
   }
 
@@ -1457,18 +1498,14 @@ export default function CeloRoomPage() {
   const roundActive = isBankerRolling || isPlayerRolling;
   const noActiveRound = !currentRound;
 
+  const seatedPlayers = players.filter((p) => p.role === "player");
+  const playersWithBets = seatedPlayers.filter((p) => getEntryAmount(p) > 0);
+
   const canStartRound =
     amIBanker &&
     (room.status === "active" || room.status === "waiting") &&
     noActiveRound &&
-    players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length > 0;
-
-  const canDeleteRoom =
-    (amIBanker || amICreator) &&
-    noActiveRound &&
-    players.length === 1 &&
-    sameCeloUserId(players[0].user_id, userId) &&
-    (players[0]?.role === "banker" || amICreator);
+    playersWithBets.length > 0;
 
   const canCoverBank =
     amIPlayer &&
@@ -1492,13 +1529,15 @@ export default function CeloRoomPage() {
   const handleAnimationComplete = () => {};
 
   const bankerPlayer = players.find((p) => sameCeloUserId(p.user_id, room.banker_id)) ?? null;
-  const statusLine = getRoundStatusLine({
+  const statusLine = getCeloRoomStatusLine({
+    noActiveRound,
     round: currentRound,
-    amIBanker,
+    isBanker: amIBanker,
     amIPlayer,
     currentTurnPlayer,
     isMyTurn,
-    noActiveRound,
+    activePlayers: seatedPlayers,
+    playersWithBets,
   });
   const showDiceZone =
     (isRolling || lastDice.length > 0) && !(isPlayerRolling && amIBanker);
@@ -1812,15 +1851,25 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        {canDeleteRoom && (
-          <div className="flex justify-end -mt-1">
+        {amIBanker && noActiveRound && (
+          <div className="flex justify-end mt-3">
             <button
               type="button"
-              disabled={deleteRoomLoading}
-              onClick={() => void handleDeleteRoom()}
-              className="text-xs text-red-400/90 hover:text-red-300 underline disabled:opacity-50"
+              disabled={closeRoomLoading}
+              onClick={() => void handleCloseRoom()}
+              style={{
+                padding: "10px 20px",
+                background: "transparent",
+                border: "1px solid #EF4444",
+                borderRadius: 8,
+                color: "#EF4444",
+                cursor: closeRoomLoading ? "wait" : "pointer",
+                fontSize: 13,
+                fontWeight: "bold",
+              }}
+              className="disabled:opacity-50 hover:bg-red-500/10 transition-colors"
             >
-              {deleteRoomLoading ? "Deleting room…" : "Delete room"}
+              {closeRoomLoading ? "Closing…" : "🗑️ Close Room"}
             </button>
           </div>
         )}
@@ -2111,9 +2160,11 @@ export default function CeloRoomPage() {
             noActiveRound &&
             amIBanker && (
             <div className="flex-1 min-w-[140px] rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
-              {players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length === 0
+              {seatedPlayers.length === 0
                 ? "Waiting for players to join…"
-                : "Ready — press Start Round"}
+                : playersWithBets.length === 0
+                  ? "Players joined but no bets placed yet"
+                  : "Ready — press Start Round"}
             </div>
           )}
         </div>

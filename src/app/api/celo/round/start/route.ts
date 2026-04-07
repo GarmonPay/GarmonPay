@@ -61,26 +61,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "A round is already in progress" }, { status: 400 });
   }
 
-  // Get all players with bets
-  const { data: players } = await supabase
+  // Get seated players; stake may be in entry_sc and/or bet_cents
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
-    .select("user_id, bet_cents, role")
+    .select("user_id, bet_cents, entry_sc, role")
     .eq("room_id", room_id)
-    .eq("role", "player")
-    .gt("bet_cents", 0);
+    .eq("role", "player");
 
-  if (!players || players.length === 0) {
+  const players = (playerRows ?? []).filter((p) => {
+    const n = Number((p as { entry_sc?: number; bet_cents?: number }).entry_sc ?? (p as { bet_cents?: number }).bet_cents ?? 0);
+    return Number.isFinite(n) && n > 0;
+  }) as { user_id: string; bet_cents?: number; entry_sc?: number }[];
+
+  if (players.length === 0) {
     return NextResponse.json(
       { error: "At least one player with an entry is required to start a round" },
       { status: 400 }
     );
   }
 
-  // Calculate prize pool
-  const totalPotCents = (players as { bet_cents: number }[]).reduce(
-    (sum, p) => sum + p.bet_cents,
-    0
-  );
+  const entryForPot = (p: { bet_cents?: number; entry_sc?: number }) =>
+    Math.round(Number(p.entry_sc ?? p.bet_cents ?? 0));
+
+  const totalPotCents = players.reduce((sum, p) => sum + entryForPot(p), 0);
   const platformFeeCents = Math.floor(
     (totalPotCents * roomRecord.platform_fee_pct) / 100
   );
