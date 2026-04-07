@@ -10,6 +10,8 @@
 
 import { createBrowserClient } from "@/core/supabase";
 import { setSession, clearSession } from "@/lib/session";
+import { isAtLeastAge } from "@/lib/signup-compliance";
+import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
 
 export interface AuthUser {
   id: string;
@@ -71,6 +73,11 @@ export interface RegisterOptions {
   email: string;
   password: string;
   referralCode?: string;
+  fullName?: string;
+  /** ISO date YYYY-MM-DD; must be 18+. */
+  dateOfBirth: string;
+  /** US state code (e.g. CA). Washington (WA) is not eligible. */
+  residenceState: string;
 }
 
 export type RegisterResult =
@@ -83,11 +90,30 @@ export async function register(options: RegisterOptions): Promise<RegisterResult
   if (!supabase) {
     return { ok: false, message: "Auth not configured" };
   }
-  const { email, password, referralCode } = options;
+  const { email, password, referralCode, fullName, dateOfBirth, residenceState } = options;
+  const dob = dateOfBirth.trim();
+  const state = residenceState.trim().toUpperCase();
+  if (!dob || !isAtLeastAge(dob, 18)) {
+    return { ok: false, message: "You must be 18 or older to register." };
+  }
+  if (!state || !isValidUsStateCode(state)) {
+    return { ok: false, message: "Please select a valid US state." };
+  }
+  if (isStateExcludedFromParticipation(state)) {
+    return { ok: false, message: "Residents of Washington state are not eligible to register." };
+  }
+  const trimmedName = fullName?.trim() ?? "";
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
-    options: referralCode ? { data: { referred_by_code: referralCode } } : undefined,
+    options: {
+      data: {
+        ...(trimmedName ? { full_name: trimmedName } : {}),
+        date_of_birth: dob,
+        residence_state: state,
+        ...(referralCode ? { referred_by_code: referralCode } : {}),
+      },
+    },
   });
   if (error) return { ok: false, message: error.message };
   if (!data.user) return { ok: false, message: "Signup failed" };
@@ -104,13 +130,29 @@ export async function register(options: RegisterOptions): Promise<RegisterResult
     // Insert may fail (e.g. RLS); sync-user with service role will ensure row exists
   }
   try {
-    await fetch(`${typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sync-user`, {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (data.session?.access_token) {
+      headers.Authorization = `Bearer ${data.session.access_token}`;
+    }
+    const syncRes = await fetch(`${origin}/api/auth/sync-user`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: data.user.id, email: data.user.email }),
+      headers,
+      body: JSON.stringify({
+        id: data.user.id,
+        email: data.user.email,
+        full_name: trimmedName || undefined,
+        date_of_birth: dob,
+        residence_state: state,
+        referralCode: referralCode?.trim() || undefined,
+      }),
     });
+    if (!syncRes.ok) {
+      const j = (await syncRes.json().catch(() => ({}))) as { message?: string };
+      return { ok: false, message: j.message || "Could not complete registration." };
+    }
   } catch {
-    // Best-effort sync
+    return { ok: false, message: "Could not complete registration. Try again." };
   }
   if (referralCode) {
     await supabase.from("users").update({ referred_by_code: referralCode }).eq("id", data.user.id);

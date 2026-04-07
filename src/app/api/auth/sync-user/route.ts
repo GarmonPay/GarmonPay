@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { getClientIp } from "@/lib/rate-limit";
+import { isAtLeastAge } from "@/lib/signup-compliance";
+import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
 
 const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
@@ -20,6 +22,14 @@ export async function POST(req: Request) {
     const fullName = typeof (body?.full_name ?? userPayload?.full_name) === "string"
       ? (body?.full_name ?? userPayload?.full_name).trim()
       : "";
+    const rawDob =
+      typeof (body?.date_of_birth ?? userPayload?.date_of_birth) === "string"
+        ? (body?.date_of_birth ?? userPayload?.date_of_birth).trim()
+        : "";
+    const rawState =
+      typeof (body?.residence_state ?? userPayload?.residence_state) === "string"
+        ? (body?.residence_state ?? userPayload?.residence_state).trim().toUpperCase()
+        : "";
     if (!id || typeof id !== "string") {
       return NextResponse.json({ message: "id required" }, { status: 400 });
     }
@@ -59,14 +69,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    if (!rawDob || !isAtLeastAge(rawDob, 18)) {
+      return NextResponse.json(
+        { message: "Valid date of birth (18+) is required." },
+        { status: 400 },
+      );
+    }
+    if (!rawState || !isValidUsStateCode(rawState)) {
+      return NextResponse.json({ message: "A valid US state is required." }, { status: 400 });
+    }
+    if (isStateExcludedFromParticipation(rawState)) {
+      return NextResponse.json(
+        { message: "Residents of Washington state are not eligible to register." },
+        { status: 403 },
+      );
+    }
+
     const { data: existing } = await supabase
       .from("users")
       .select("id")
       .eq("id", id)
       .maybeSingle();
 
+    const complianceFields = {
+      date_of_birth: rawDob,
+      residence_state: rawState,
+    };
+
     if (existing) {
-      const updatePayload: Record<string, unknown> = { email: emailVal };
+      const updatePayload: Record<string, unknown> = {
+        email: emailVal,
+        ...complianceFields,
+      };
       if (fullName) updatePayload.full_name = fullName;
       const { error: updateError } = await supabase
         .from("users")
@@ -82,6 +116,7 @@ export async function POST(req: Request) {
         id,
         email: emailVal,
         full_name: fullName || null,
+        ...complianceFields,
         role: "user",
         balance: 0,
         balance_cents: 0,
@@ -114,6 +149,23 @@ export async function POST(req: Request) {
       } catch {
         // ignore
       }
+    }
+
+    const { error: profileUpsertErr } = await supabase.from("profiles").upsert(
+      {
+        id,
+        email: emailVal || null,
+        date_of_birth: rawDob,
+        residence_state: rawState,
+      },
+      { onConflict: "id" },
+    );
+    if (profileUpsertErr) {
+      console.error("Sync-user profiles upsert:", profileUpsertErr);
+      return NextResponse.json(
+        { success: false, message: profileUpsertErr.message },
+        { status: 500 },
+      );
     }
 
     if (refCode) {

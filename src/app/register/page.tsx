@@ -6,6 +6,8 @@ import { Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
+import { US_STATE_OPTIONS, isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
+import { isAtLeastAge, maxDateOfBirthForMinimumAge } from "@/lib/signup-compliance";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
@@ -53,6 +55,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [residenceState, setResidenceState] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
@@ -111,6 +115,17 @@ export default function RegisterPage() {
     const trimmedEmail = email.trim();
     const trimmedName = fullName.trim();
     if (!trimmedName) { setError("Full name is required."); return; }
+    if (!dateOfBirth.trim()) { setError("Date of birth is required."); return; }
+    if (!isAtLeastAge(dateOfBirth.trim(), 18)) {
+      setError("You must be 18 or older to register.");
+      return;
+    }
+    if (!residenceState) { setError("Please select your state."); return; }
+    if (!isValidUsStateCode(residenceState)) { setError("Please select a valid state."); return; }
+    if (isStateExcludedFromParticipation(residenceState)) {
+      setError("Residents of Washington state are not eligible to register.");
+      return;
+    }
     if (!trimmedEmail) { setError("Email is required."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
@@ -142,6 +157,8 @@ export default function RegisterPage() {
           emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
           data: {
             full_name: trimmedName,
+            date_of_birth: dateOfBirth.trim(),
+            residence_state: residenceState.trim().toUpperCase(),
             ...(refCode ? { referred_by_code: refCode } : {}),
           },
         },
@@ -158,19 +175,24 @@ export default function RegisterPage() {
         if (data.session?.access_token) {
           headers.Authorization = `Bearer ${data.session.access_token}`;
         }
-        // Best-effort sync — don't block the user if this fails
-        await fetch("/api/auth/sync-user", {
+        const syncRes = await fetch("/api/auth/sync-user", {
           method: "POST",
           headers,
           body: JSON.stringify({
             id: data.user.id,
             email: data.user.email ?? trimmedEmail,
             full_name: trimmedName,
+            date_of_birth: dateOfBirth.trim(),
+            residence_state: residenceState.trim().toUpperCase(),
             referralCode: refCode || undefined,
           }),
-        }).catch(() => {
-          // Non-critical: trigger already created the user row; sync-user is a fallback
         });
+        const syncJson = (await syncRes.json().catch(() => ({}))) as { message?: string };
+        if (!syncRes.ok) {
+          setError(friendlyError(syncJson.message || "Could not complete registration. Please try again or contact support."));
+          setLoading(false);
+          return;
+        }
       }
 
       setSuccess(true);
@@ -276,6 +298,74 @@ export default function RegisterPage() {
               disabled={loading}
             />
           </div>
+          <div style={{ marginBottom: 16 }}>
+            <label
+              style={{
+                color: "#F5C842",
+                fontSize: 12,
+                letterSpacing: 1,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              DATE OF BIRTH *
+            </label>
+            <input
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              max={maxDateOfBirthForMinimumAge(18)}
+              required
+              disabled={loading}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                background: "#1a0535",
+                border: "1px solid rgba(124,58,237,0.5)",
+                borderRadius: 8,
+                color: "#fff",
+                fontSize: 16,
+              }}
+            />
+            <p style={{ color: "#666", fontSize: 11, marginTop: 4 }}>
+              Must be 18 or older to participate
+            </p>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label
+              style={{
+                color: "#F5C842",
+                fontSize: 12,
+                letterSpacing: 1,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              STATE *
+            </label>
+            <select
+              value={residenceState}
+              onChange={(e) => setResidenceState(e.target.value)}
+              required
+              disabled={loading}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                background: "#1a0535",
+                border: "1px solid rgba(124,58,237,0.5)",
+                borderRadius: 8,
+                color: "#fff",
+                fontSize: 16,
+              }}
+            >
+              <option value="">Select your state</option>
+              {US_STATE_OPTIONS.map(({ code, label }) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
               Email <span className="text-red-400">*</span>
@@ -357,7 +447,7 @@ export default function RegisterPage() {
             <Link href="/terms" className="text-[#fde047] underline underline-offset-2 hover:text-[#eab308]">
               Terms of Service
             </Link>{" "}
-            and confirm I am 18 years of age or older.
+            and confirm I am 18 years of age or older, and that my date of birth and state of residence are accurate.
           </span>
         </label>
 
