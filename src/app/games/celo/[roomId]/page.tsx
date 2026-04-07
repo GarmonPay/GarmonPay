@@ -1774,29 +1774,32 @@ export default function CeloRoomPage() {
       <div style={{ position: "fixed", right: 0, top: 0, width: 60, height: "100vh", background: "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))", filter: "blur(30px)", pointerEvents: "none", zIndex: 0 }} />
       <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: 500, height: 500, background: "radial-gradient(ellipse at top, rgba(245,200,66,0.12) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
 
-      <div className="relative z-10 mx-auto max-w-2xl px-4 py-5 pb-24 space-y-4">
+      <div className="relative z-10 mx-auto max-w-2xl px-4 py-4 pb-24 space-y-3">
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3">
-          <Link href="/games/celo" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors shrink-0">
+        {/* Header — balanced grid so lobby / title / status share one baseline */}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+          <Link
+            href="/games/celo"
+            className="justify-self-start text-violet-300/80 text-sm hover:text-[#F5C842] transition-colors shrink-0 pt-0.5"
+          >
             ← Lobby
           </Link>
-          <div className="text-center min-w-0">
-            <h1 className="font-bold text-[#F5C842] truncate text-lg">{room.name}</h1>
-            <p className="text-[10px] text-violet-400/60 uppercase tracking-widest">{room.speed}</p>
+          <div className="text-center min-w-0 max-w-[55%] sm:max-w-none mx-auto">
+            <h1 className="font-bold text-[#F5C842] truncate text-base sm:text-lg leading-tight">{room.name}</h1>
+            <p className="text-[10px] text-violet-400/70 uppercase tracking-widest mt-0.5">{room.speed}</p>
           </div>
-          <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+          <div className="justify-self-end text-right shrink-0 flex flex-col items-end gap-0 leading-tight">
             <span
               className={`text-[10px] font-semibold ${realtimeConnected ? "text-emerald-400" : "text-red-400"}`}
             >
               {realtimeConnected ? "● LIVE" : "● RECONNECTING…"}
             </span>
             {onlineCount > 0 && (
-              <span className="text-[10px] text-violet-400/70">{onlineCount} online</span>
+              <span className="text-[10px] text-violet-300/75">{onlineCount} online</span>
             )}
-            <p className="text-[10px] text-violet-400/50">Balance</p>
+            <p className="text-[10px] text-violet-400/60 mt-1">Balance</p>
             <p
-              className={`text-sm font-bold font-mono transition-colors ${
+              className={`text-sm font-bold font-mono tabular-nums transition-colors ${
                 balanceFlash === "up"
                   ? "text-emerald-300"
                   : balanceFlash === "down"
@@ -1824,27 +1827,42 @@ export default function CeloRoomPage() {
 
         {/* Bank bar */}
         <div
-          style={{ background: "rgba(13,5,32,0.8)", border: "1px solid rgba(124,58,237,0.5)", borderRadius: 16, padding: 20, backdropFilter: "blur(10px)", boxShadow: "0 0 20px rgba(124,58,237,0.2)" }}
-          className="flex items-center justify-between gap-4"
+          style={{
+            background: "linear-gradient(145deg, rgba(18,8,35,0.92) 0%, rgba(13,5,32,0.88) 100%)",
+            border: "1px solid rgba(124,58,237,0.35)",
+            borderRadius: 16,
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+          }}
+          className="flex items-center justify-between gap-4 min-w-0 px-4 py-4 sm:px-5 sm:py-5"
         >
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Current Bank</p>
-            <p className="text-[10px] text-violet-400/55 mt-0.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-widest text-violet-300/70 font-medium">Current Bank</p>
+            <p className="text-[10px] text-violet-300/65 mt-0.5 truncate">
               Banker {getDisplayName(bankerPlayer ?? { user_id: room.banker_id })}
             </p>
             <p
-              className="font-bold font-mono mt-0.5"
-              style={{ fontSize: 48, fontWeight: "bold", color: "#F5C842", textShadow: "0 0 10px #F5C842, 0 0 20px #F5C842, 0 0 40px rgba(245,200,66,0.5)" }}
+              className="font-bold font-mono mt-1 tabular-nums tracking-tight text-[#F5C842]"
+              style={{
+                fontSize: "clamp(2rem, 8vw, 2.75rem)",
+                lineHeight: 1.05,
+                textShadow:
+                  "0 2px 8px rgba(0,0,0,0.45), 0 0 24px rgba(245,200,66,0.25)",
+              }}
             >
               ${(room.current_bank_cents / 100).toFixed(2)}
             </p>
           </div>
-          <div className="text-right text-xs text-violet-300/60 space-y-0.5">
-            <p>Min entry <span className="text-white font-mono">${(room.min_bet_cents / 100).toFixed(2)}</span></p>
-            <p>Fee <span className="text-white">{room.platform_fee_pct}%</span></p>
+          <div className="text-right text-xs text-violet-200/75 space-y-1 shrink-0 pl-3 border-l border-white/[0.08] min-w-[7.5rem]">
+            <p>
+              Min entry <span className="text-white/95 font-mono tabular-nums">${(room.min_bet_cents / 100).toFixed(2)}</span>
+            </p>
+            <p>
+              Fee <span className="text-white/95 font-medium">{room.platform_fee_pct}%</span>
+            </p>
             <p>
               Players{" "}
-              <span className="text-white">
+              <span className="text-white/95 font-medium tabular-nums">
                 {players.filter((p) => p.role !== "spectator").length}/{room.max_players}
               </span>
             </p>
@@ -1931,7 +1949,7 @@ export default function CeloRoomPage() {
         )}
 
         {systemFeed.length > 0 && (
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2 max-h-20 overflow-y-auto text-[10px] text-violet-400/80 space-y-0.5">
+          <div className="rounded-xl border border-violet-500/20 bg-violet-950/40 px-3 py-2.5 max-h-24 overflow-y-auto text-[11px] text-violet-100/90 space-y-1.5 leading-snug">
             {systemFeed.slice(-5).map((line, i) => (
               <p key={`${line}-${i}`}>{line}</p>
             ))}
@@ -1980,23 +1998,25 @@ export default function CeloRoomPage() {
           </div>
         )}
 
-        {/* Round status bar */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 flex items-center justify-between gap-3 text-sm">
-          <div>
+        {/* Round status — primary game message (avoid duplicating below in action row) */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 flex items-center justify-between gap-3 text-sm shadow-sm">
+          <div className="min-w-0">
             <span
               className={
                 isPlayerRolling && amIPlayer && isMyTurn
                   ? "text-[#F5C842] font-semibold"
                   : isBankerRolling && amIBanker
                     ? "text-amber-300 font-medium"
-                    : "text-violet-200/90"
+                    : "text-violet-100/90"
               }
             >
               {statusLine}
             </span>
           </div>
           {currentRound?.bank_covered && (
-            <span className="text-[10px] text-violet-300/60 bg-violet-500/10 px-2 py-0.5 rounded-full">1v1</span>
+            <span className="text-[10px] text-violet-200/80 bg-violet-500/15 px-2.5 py-1 rounded-full border border-violet-500/20 shrink-0">
+              1v1
+            </span>
           )}
         </div>
 
@@ -2082,19 +2102,18 @@ export default function CeloRoomPage() {
             </button>
           )}
 
-          {/* Waiting state */}
+          {/* Banker-only waiting hints (non-bankers see status in round bar above — no duplicate) */}
           {!canStartRound &&
             !canRollBanker &&
             !(amIBanker && isPlayerRolling) &&
             !showPlayerRollButton &&
             !canCoverBank &&
-            noActiveRound && (
-            <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.02] py-4 text-center text-sm text-violet-300/50">
-              {amIBanker
-                ? players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length === 0
-                  ? "Waiting for players to join…"
-                  : "Ready — press Start Round"
-                : "Waiting for banker to start…"}
+            noActiveRound &&
+            amIBanker && (
+            <div className="flex-1 min-w-[140px] rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
+              {players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length === 0
+                ? "Waiting for players to join…"
+                : "Ready — press Start Round"}
             </div>
           )}
         </div>
@@ -2275,13 +2294,6 @@ export default function CeloRoomPage() {
                 </form>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Round history / no round */}
-        {noActiveRound && !canStartRound && !amIBanker && (
-          <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] px-4 py-5 text-center">
-            <p className="text-sm text-violet-300/50">Waiting for the banker to start a round…</p>
           </div>
         )}
 
