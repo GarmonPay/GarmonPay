@@ -11,6 +11,8 @@ import {
 import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
 import { resolveProfileBalanceCents } from "@/lib/profile-balance";
+import { computeTaxInfoRequired } from "@/lib/reportable-earnings";
+import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -41,6 +43,10 @@ export async function GET(request: Request) {
     lifetimeReferralCommissionCents: 0,
     announcements: [] as { id: string; title: string; body: string; publishedAt: string }[],
     availableAds: [] as { id: string; title: string; rewardCents: number }[],
+    reportableEarningsCents: 0,
+    taxInfoSubmittedAt: null as string | null,
+    taxInfoRequired: false,
+    irsReportableThresholdCents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
   };
 
   if (bearerToken) {
@@ -96,6 +102,27 @@ export async function GET(request: Request) {
         if (rowError) {
           console.error("Dashboard users fetch error:", rowError);
         }
+
+        let reportableEarningsCents = 0;
+        let taxInfoSubmittedAt: string | null = null;
+        {
+          const tr = await supabase
+            .from("profiles")
+            .select("reportable_earnings_cents, tax_info_submitted_at")
+            .eq("id", authUser.id)
+            .maybeSingle();
+          const colMissing =
+            tr.error &&
+            (/does not exist/i.test(tr.error.message ?? "") || (tr.error as { code?: string }).code === "42703");
+          if (!colMissing && tr.data) {
+            reportableEarningsCents = Number(
+              (tr.data as { reportable_earnings_cents?: number }).reportable_earnings_cents ?? 0,
+            );
+            const ts = (tr.data as { tax_info_submitted_at?: string | null }).tax_info_submitted_at;
+            taxInfoSubmittedAt = typeof ts === "string" && ts.length > 0 ? ts : null;
+          }
+        }
+        const taxInfoRequired = computeTaxInfoRequired(reportableEarningsCents, taxInfoSubmittedAt);
 
         let earningsTodayCents = 0;
       let earningsWeekCents = 0;
@@ -184,6 +211,10 @@ export async function GET(request: Request) {
           lifetimeReferralCommissionCents,
           announcements: [],
           availableAds,
+          reportableEarningsCents,
+          taxInfoSubmittedAt,
+          taxInfoRequired,
+          irsReportableThresholdCents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
         });
       } catch (err) {
         console.error("Supabase connection failed", err);
@@ -245,6 +276,10 @@ export async function GET(request: Request) {
       lifetimeReferralCommissionCents: 0,
       announcements: [],
       availableAds: [],
+      reportableEarningsCents: 0,
+      taxInfoSubmittedAt: null,
+      taxInfoRequired: false,
+      irsReportableThresholdCents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
     });
   }
 

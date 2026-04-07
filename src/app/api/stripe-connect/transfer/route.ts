@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import { isAdmin } from "@/lib/admin-auth";
+import { incrementReportableEarningsCents } from "@/lib/reportable-earnings";
 
 /**
  * Create a transfer to a user's Stripe Connect account (payout).
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       description: "GarmonPay payout",
       metadata: { user_id: userId },
     });
+    await incrementReportableEarningsCents(userId, amountCents);
     return NextResponse.json({ transferId: transfer.id, amount: amountCents, currency });
   } catch (err) {
     console.error("Stripe transfer error:", err);

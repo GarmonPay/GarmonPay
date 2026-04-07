@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { computeTaxInfoRequired } from "@/lib/reportable-earnings";
+import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 
 /** Display name: length and charset (no control chars). */
 const MAX_FULL_NAME_LEN = 120;
@@ -56,15 +58,48 @@ export async function GET(req: Request) {
     }
   }
 
-  const { data: row, error } = await admin
+  let row:
+    | {
+        id?: string;
+        email?: string | null;
+        full_name?: string | null;
+        avatar_url?: string | null;
+        membership?: string | null;
+        referral_code?: string | null;
+        reportable_earnings_cents?: number | null;
+        tax_info_submitted_at?: string | null;
+      }
+    | null = null;
+
+  const fullSelect = await admin
     .from("profiles")
-    .select("id, email, full_name, avatar_url, membership, referral_code")
+    .select(
+      "id, email, full_name, avatar_url, membership, referral_code, reportable_earnings_cents, tax_info_submitted_at",
+    )
     .eq("id", userId)
     .maybeSingle();
 
-  if (error) {
-    console.error("[profile GET]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const colMissing =
+    fullSelect.error &&
+    (/does not exist/i.test(fullSelect.error.message ?? "") ||
+      (fullSelect.error as { code?: string }).code === "42703");
+
+  if (colMissing) {
+    const basic = await admin
+      .from("profiles")
+      .select("id, email, full_name, avatar_url, membership, referral_code")
+      .eq("id", userId)
+      .maybeSingle();
+    if (basic.error) {
+      console.error("[profile GET]", basic.error);
+      return NextResponse.json({ error: basic.error.message }, { status: 500 });
+    }
+    row = basic.data as typeof row;
+  } else if (fullSelect.error) {
+    console.error("[profile GET]", fullSelect.error);
+    return NextResponse.json({ error: fullSelect.error.message }, { status: 500 });
+  } else {
+    row = fullSelect.data as typeof row;
   }
 
   const r = row as {
@@ -74,7 +109,16 @@ export async function GET(req: Request) {
     avatar_url?: string | null;
     membership?: string | null;
     referral_code?: string | null;
+    reportable_earnings_cents?: number | null;
+    tax_info_submitted_at?: string | null;
   } | null;
+
+  const reportableEarningsCents = Number(r?.reportable_earnings_cents ?? 0);
+  const taxSubmitted =
+    typeof r?.tax_info_submitted_at === "string" && r.tax_info_submitted_at.length > 0
+      ? r.tax_info_submitted_at
+      : null;
+  const taxInfoRequired = computeTaxInfoRequired(reportableEarningsCents, taxSubmitted);
 
   return NextResponse.json({
     id: userId,
@@ -83,6 +127,10 @@ export async function GET(req: Request) {
     avatar_url: typeof r?.avatar_url === "string" ? r.avatar_url : "",
     membership: typeof r?.membership === "string" ? r.membership : null,
     referral_code: typeof r?.referral_code === "string" ? r.referral_code : null,
+    reportable_earnings_cents: reportableEarningsCents,
+    tax_info_submitted_at: taxSubmitted,
+    tax_info_required: taxInfoRequired,
+    irs_reportable_threshold_cents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
     limits: {
       maxFullNameLen: MAX_FULL_NAME_LEN,
       maxAvatarUrlLen: MAX_AVATAR_URL_LEN,

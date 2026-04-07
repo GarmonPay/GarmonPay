@@ -22,6 +22,8 @@ import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-prices";
 import { createBrowserClient } from "@/lib/supabase";
 import { resolveProfileBalanceCents } from "@/lib/profile-balance";
+import { TaxInfoBanner } from "@/components/dashboard/TaxInfoBanner";
+import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -415,6 +417,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 tablet:space-y-6">
+      <TaxInfoBanner
+        visible={Boolean(data.taxInfoRequired)}
+        reportableEarningsCents={data.reportableEarningsCents ?? 0}
+        thresholdCents={data.irsReportableThresholdCents ?? IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS}
+        onCertified={() => {
+          const tokenOrId = session.accessToken ?? session.userId;
+          loadDashboardData(tokenOrId, !!session.accessToken);
+        }}
+      />
       <SupabaseEarningsTracker
         userId={session.userId}
         membershipTier={planForUi}

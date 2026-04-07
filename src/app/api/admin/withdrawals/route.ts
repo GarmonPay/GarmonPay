@@ -9,6 +9,7 @@ import {
 } from "@/lib/withdrawals-db";
 import { markWithdrawalTransactionCompleted } from "@/lib/transactions-db";
 import { createAdminClient } from "@/lib/supabase";
+import { incrementReportableEarningsCents } from "@/lib/reportable-earnings";
 
 /** GET /api/admin/withdrawals — list all withdrawals with user email. */
 export async function GET(request: Request) {
@@ -73,6 +74,12 @@ export async function PATCH(request: Request) {
   }
   if (status === "paid") {
     await markWithdrawalTransactionCompleted(id).catch(() => {});
+    const row = updated as { user_id?: string; net_amount?: number; amount?: number };
+    const uid = typeof row.user_id === "string" ? row.user_id : "";
+    const net = Number(row.net_amount ?? row.amount ?? 0);
+    if (uid && net > 0) {
+      await incrementReportableEarningsCents(uid, net);
+    }
   }
   return NextResponse.json({ withdrawal: updated });
 }

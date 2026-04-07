@@ -308,7 +308,22 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     lifetimeReferralCommissionCents?: number;
     announcements: { id: string; title: string; body: string; publishedAt: string }[];
     availableAds: { id: string; title: string; rewardCents: number }[];
+    /** Cumulative paid-out reportable amount (e.g. withdrawals marked paid). */
+    reportableEarningsCents?: number;
+    taxInfoSubmittedAt?: string | null;
+    /** True when reportable earnings meet IRS-style $600 threshold and tax info not certified. */
+    taxInfoRequired?: boolean;
+    irsReportableThresholdCents?: number;
   }>("/dashboard", { headers: authHeaders(accessTokenOrUserId, isToken) });
+}
+
+/** Certify that tax information (e.g. W-9) is on file — clears dashboard banner when over $600 reportable. */
+export async function certifyTaxInfoSubmitted(accessTokenOrUserId: string, isToken = false) {
+  return api<{ success: boolean }>("/profile/tax-info", {
+    method: "POST",
+    headers: authHeaders(accessTokenOrUserId, isToken),
+    body: JSON.stringify({ certify: true }),
+  });
 }
 
 export async function getReferralCommissions(accessTokenOrUserId: string, isToken: boolean) {

@@ -4,13 +4,11 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-
-const DiceThrow = dynamic(() => import("@/components/celo/DiceThrow"), { ssr: false });
+import { SimpleDice } from "@/components/celo/SimpleDice";
 
 async function authFetch(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
@@ -668,10 +666,19 @@ export default function CeloRoomPage() {
   /** If realtime is delayed or missed, never leave the roll button stuck disabled */
   useEffect(() => {
     if (!rollInteractionBusy) return;
-    const t = window.setTimeout(() => setRollInteractionBusy(false), 15_000);
+    const t = window.setTimeout(() => {
+      setRollInteractionBusy(false);
+      setIsRolling(false);
+    }, 15_000);
     return () => clearTimeout(t);
   }, [rollInteractionBusy]);
 
+  useEffect(() => {
+    const d = lastRollResult?.dice;
+    console.log("Rolling state:", isRolling);
+    console.log("Current dice:", d);
+    console.log("Roll name:", lastRollResult?.rollName);
+  }, [isRolling, lastRollResult?.dice, lastRollResult?.rollName]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -699,11 +706,6 @@ export default function CeloRoomPage() {
     let presenceSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-    const raf2 = async () => {
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    };
-
     const roomChannel = sb
       .channel(`celo-room-${roomId}`)
       .on(
@@ -805,7 +807,7 @@ export default function CeloRoomPage() {
               setCurrentRollerName("Banker");
               setIsRolling(true);
               setLastRollResult(null);
-              await raf2();
+              await sleep(100);
               await sleep(2500);
               if (!isMounted) return;
               setIsRolling(false);
@@ -815,7 +817,7 @@ export default function CeloRoomPage() {
                 result: undefined,
                 bankerPoint: newRound.banker_point ?? undefined,
               });
-              await sleep(300);
+              await sleep(400);
               if (!isMounted) return;
               setLastRollResult((prev) =>
                 prev
@@ -871,7 +873,7 @@ export default function CeloRoomPage() {
             setCurrentRollerName(getDisplayName(roller ?? null) || "Player");
             setIsRolling(true);
             setLastRollResult(null);
-            await raf2();
+            await sleep(100);
             await sleep(2500);
             if (!isMounted) return;
             setIsRolling(false);
@@ -882,7 +884,7 @@ export default function CeloRoomPage() {
               outcome: undefined,
               payoutCents: roll.payout_sc,
             });
-            await sleep(300);
+            await sleep(400);
             if (!isMounted) return;
             setLastRollResult((prev) =>
               prev
@@ -1181,6 +1183,8 @@ export default function CeloRoomPage() {
     if (!currentRound) return;
     setActionLoading("roll");
     setRollInteractionBusy(true);
+    setLastRollResult(null);
+    setIsRolling(true);
     setError(null);
     let res: Response;
     let data: Record<string, unknown>;
@@ -1192,6 +1196,7 @@ export default function CeloRoomPage() {
       data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     } catch {
       setRollInteractionBusy(false);
+      setIsRolling(false);
       setActionLoading(null);
       setError("Not authenticated");
       return;
@@ -1200,6 +1205,7 @@ export default function CeloRoomPage() {
     setActionLoading(null);
     if (!ok) {
       setRollInteractionBusy(false);
+      setIsRolling(false);
       setError((data.error as string) ?? "Roll failed");
       return;
     }
@@ -1518,15 +1524,22 @@ export default function CeloRoomPage() {
   const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
   const showPlayerRollButton = amIPlayer && isPlayerRolling;
 
-  const lastDice = lastRollResult?.dice ?? [];
   const lastResult = lastRollResult?.result;
 
-  const myDiceType = (myPlayer?.dice_type as "standard" | "gold" | "street" | "midnight") ?? "standard";
-  const currentDice: [number, number, number] | null =
-    lastRollResult?.dice?.length === 3
-      ? (lastRollResult.dice as [number, number, number])
-      : null;
-  const handleAnimationComplete = () => {};
+  /**
+   * Values on dice when not tumbling; null = face-down / blank in SimpleDice.
+   * While waiting for the realtime animation after our own roll, do not read banker_dice from DB
+   * (avoids flashing final faces before the shared animation).
+   */
+  const simpleDiceValues: number[] | null = isRolling
+    ? null
+    : lastRollResult?.dice?.length === 3
+      ? lastRollResult.dice
+      : rollInteractionBusy
+        ? null
+        : currentRound?.banker_dice?.length === 3
+          ? [...currentRound.banker_dice]
+          : null;
 
   const bankerPlayer = players.find((p) => sameCeloUserId(p.user_id, room.banker_id)) ?? null;
   const statusLine = getCeloRoomStatusLine({
@@ -1539,9 +1552,6 @@ export default function CeloRoomPage() {
     activePlayers: seatedPlayers,
     playersWithBets,
   });
-  const showDiceZone =
-    (isRolling || lastDice.length > 0) && !(isPlayerRolling && amIBanker);
-
   return (
     <main
       className="text-white relative overflow-x-hidden"
@@ -1557,15 +1567,6 @@ export default function CeloRoomPage() {
         fontFamily: "DM Sans, sans-serif",
       }}
     >
-      {isRolling && currentRollerName ? (
-        <div
-          className="pointer-events-none absolute left-1/2 top-5 z-[20] -translate-x-1/2 whitespace-nowrap rounded-full border border-[#F5C842] bg-violet-600/90 px-5 py-2 text-sm font-bold text-white shadow-lg"
-          role="status"
-          aria-live="polite"
-        >
-          🎲 {currentRollerName} is rolling...
-        </div>
-      ) : null}
       {roundSummary && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
           <div className="max-w-md w-full rounded-2xl border border-[#F5C842]/35 bg-[#12081f] p-6 shadow-2xl shadow-black/50">
@@ -1918,84 +1919,96 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        {/* Banker point — player phase */}
-        {isPlayerRolling && currentRound && currentRound.banker_point != null && (
-          <>
-            {amIBanker ? (
-              <div
-                style={{ background: "rgba(245,200,66,0.15)", border: "1px solid #F5C842", borderRadius: 12, padding: 16 }}
-                className="text-center space-y-2 shadow-lg shadow-[#F5C842]/20"
+        {statusLine ? (
+          <p
+            className={`text-center text-xs sm:text-sm px-2 ${
+              isPlayerRolling && amIPlayer && isMyTurn
+                ? "text-[#F5C842] font-semibold"
+                : isBankerRolling && amIBanker
+                  ? "text-amber-300/95 font-medium"
+                  : "text-violet-200/85"
+            }`}
+          >
+            {statusLine}
+          </p>
+        ) : null}
+
+        {/* CENTERPIECE — dice always visible (blank / tumbling / final faces) */}
+        <div
+          className="rounded-2xl border-2 border-[#F5C842]/35 bg-[#0a0612]/95 py-6 px-3 sm:px-6 shadow-[0_0_40px_rgba(124,58,237,0.2)] min-h-[200px] flex flex-col items-center justify-center"
+          style={{ zIndex: 1 }}
+        >
+          <p className="text-[10px] uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">Dice</p>
+          <SimpleDice dice={simpleDiceValues} rolling={isRolling} />
+          {isRolling && currentRollerName ? (
+            <p className="text-center text-sm font-bold text-[#F5C842] mt-2" role="status" aria-live="polite">
+              🎲 {currentRollerName} is rolling…
+            </p>
+          ) : null}
+          {!isRolling && lastRollResult?.rollName ? (
+            <div className="text-center space-y-1 mt-2 w-full max-w-md">
+              <p
+                className={`text-xl sm:text-2xl font-bold ${
+                  RESULT_STYLE[lastResult ?? "no_count"]?.text ?? "text-white"
+                }`}
               >
-                <p className="text-[10px] uppercase tracking-[0.25em] text-[#F5C842]/80 font-semibold">
-                  BANKER POINT: {currentRound.banker_point}
+                {lastRollResult.rollName}
+              </p>
+              {lastRollResult.bankerPoint != null && (
+                <p className="text-sm text-violet-300/80">
+                  Banker&apos;s point:{" "}
+                  <span className="text-violet-200 font-bold">{lastRollResult.bankerPoint}</span>
                 </p>
-                <p
-                  className="font-black font-mono text-[#F5C842] leading-none"
-                  style={{ fontSize: 72, textShadow: "0 0 24px #F5C842, 0 0 48px #F5C842aa" }}
-                >
-                  {currentRound.banker_point}
+              )}
+              {lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0 && (
+                <p className="text-sm text-emerald-400 font-semibold">
+                  +${(lastRollResult.payoutCents / 100).toFixed(2)} payout
                 </p>
-                {currentRound.banker_dice_name && (
-                  <p className="text-lg font-semibold text-white/95">{currentRound.banker_dice_name}</p>
-                )}
-                <p className="text-sm text-violet-200/90 pt-1">
+              )}
+              {lastRollResult.banker_can_adjust_bank && showCeloBankModal && (
+                <p className="text-xs text-[#F5C842] animate-pulse">
+                  C-Lo! Use the bank adjustment modal — offer expires in 60s
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {isPlayerRolling && currentRound && currentRound.banker_point != null && (
+            <div className="mt-5 w-full max-w-md text-center space-y-2 border-t border-white/10 pt-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[#F5C842]/75 font-semibold">
+                Banker point
+              </p>
+              <p
+                className="font-black font-mono text-[#F5C842] leading-none"
+                style={{ fontSize: "clamp(2.5rem, 10vw, 3.5rem)", textShadow: "0 0 24px #F5C842, 0 0 48px #F5C842aa" }}
+              >
+                {currentRound.banker_point}
+              </p>
+              {currentRound.banker_dice_name && (
+                <p className="text-sm font-medium text-violet-200/90">{currentRound.banker_dice_name}</p>
+              )}
+              {amIBanker ? (
+                <p className="text-sm text-violet-200/90">
                   Waiting for{" "}
                   <span className="text-white font-medium">
                     {currentTurnPlayer ? getDisplayName(currentTurnPlayer) : "the next player"}
                   </span>{" "}
                   to roll…
                 </p>
-              </div>
-            ) : amIPlayer && isMyTurn ? (
-              <div
-                className="rounded-2xl border-2 border-[#F5C842]/60 p-5 text-center space-y-2 shadow-[0_0_32px_rgba(245,200,66,0.25)]"
-                style={{
-                  background: "linear-gradient(180deg, rgba(245,200,66,0.18) 0%, rgba(18,8,31,0.95) 100%)",
-                }}
-              >
-                <p
-                  className="text-2xl font-black tracking-tight text-[#F5C842]"
-                  style={{ textShadow: "0 0 20px #F5C842aa" }}
-                >
-                  YOUR TURN!
+              ) : amIPlayer && isMyTurn ? (
+                <p className="text-base font-bold text-[#F5C842]" style={{ textShadow: "0 0 12px rgba(245,200,66,0.4)" }}>
+                  YOUR TURN — Beat {currentRound.banker_point}!
                 </p>
-                <p className="text-sm font-semibold text-white/90">
-                  Beat {currentRound.banker_point} to win!
-                </p>
-                <p
-                  className="font-black font-mono text-[#F5C842] leading-none pt-1"
-                  style={{ fontSize: 64, textShadow: "0 0 28px #F5C842, 0 0 56px #F5C84299" }}
-                >
-                  {currentRound.banker_point}
-                </p>
-                {currentRound.banker_dice_name && (
-                  <p className="text-base font-medium text-violet-200/90">{currentRound.banker_dice_name}</p>
-                )}
-              </div>
-            ) : (
-              <div
-                style={{ background: "rgba(245,200,66,0.12)", border: "1px solid #F5C842", borderRadius: 12, padding: 16 }}
-                className="text-center space-y-1 shadow-lg shadow-[#F5C842]/15"
-              >
-                <p className="text-[10px] uppercase tracking-[0.25em] text-[#F5C842]/70">Banker point</p>
-                <p
-                  className="font-black font-mono text-[#F5C842] leading-none"
-                  style={{ fontSize: 56, textShadow: "0 0 20px #F5C842, 0 0 40px #F5C842aa" }}
-                >
-                  {currentRound.banker_point}
-                </p>
-                {currentRound.banker_dice_name && (
-                  <p className="text-sm font-semibold text-white/85">{currentRound.banker_dice_name}</p>
-                )}
-                <p className="text-sm text-violet-200/85 pt-1">
+              ) : (
+                <p className="text-sm text-violet-200/85">
                   {currentTurnPlayer
                     ? `${getDisplayName(currentTurnPlayer)} is rolling…`
                     : "Waiting for next player…"}
                 </p>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </div>
+          )}
+        </div>
 
         {systemFeed.length > 0 && (
           <div className="rounded-xl border border-violet-500/20 bg-violet-950/40 px-3 py-2.5 max-h-24 overflow-y-auto text-[11px] text-violet-100/90 space-y-1.5 leading-snug">
@@ -2013,61 +2026,13 @@ export default function CeloRoomPage() {
           </div>
         )}
 
-        {/* Dice display zone */}
-        {showDiceZone && (
-          <div className="space-y-2">
-            <DiceThrow
-              rolling={isRolling}
-              dice={currentDice}
-              diceType={myDiceType}
-              onAnimationComplete={handleAnimationComplete}
-            />
-            {!isRolling && lastRollResult?.rollName && (
-              <div className="text-center space-y-1">
-                <p className={`text-lg font-bold ${RESULT_STYLE[lastResult ?? "no_count"]?.text ?? "text-white"}`}>
-                  {lastRollResult.rollName}
-                </p>
-                {lastRollResult.bankerPoint && (
-                  <p className="text-sm text-violet-300/70">
-                    Banker&apos;s point: <span className="text-violet-300 font-bold">{lastRollResult.bankerPoint}</span>
-                  </p>
-                )}
-                {lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0 && (
-                  <p className="text-sm text-emerald-400 font-semibold">
-                    +${(lastRollResult.payoutCents / 100).toFixed(2)} payout
-                  </p>
-                )}
-                {lastRollResult.banker_can_adjust_bank && showCeloBankModal && (
-                  <p className="text-xs text-[#F5C842] animate-pulse">
-                    C-Lo! Use the bank adjustment modal — offer expires in 60s
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Round status — primary game message (avoid duplicating below in action row) */}
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 flex items-center justify-between gap-3 text-sm shadow-sm">
-          <div className="min-w-0">
-            <span
-              className={
-                isPlayerRolling && amIPlayer && isMyTurn
-                  ? "text-[#F5C842] font-semibold"
-                  : isBankerRolling && amIBanker
-                    ? "text-amber-300 font-medium"
-                    : "text-violet-100/90"
-              }
-            >
-              {statusLine}
-            </span>
-          </div>
-          {currentRound?.bank_covered && (
-            <span className="text-[10px] text-violet-200/80 bg-violet-500/15 px-2.5 py-1 rounded-full border border-violet-500/20 shrink-0">
+        {currentRound?.bank_covered ? (
+          <div className="flex justify-center">
+            <span className="text-[10px] text-violet-200/80 bg-violet-500/15 px-2.5 py-1 rounded-full border border-violet-500/20">
               1v1
             </span>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
