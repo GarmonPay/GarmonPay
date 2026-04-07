@@ -5,8 +5,8 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 
 /**
- * Banker-only: delete room when they are the only participant (no other players/spectators)
- * and no round is in progress. Refunds room bank balance to the banker.
+ * Banker or room creator: delete when they are the only participant, no active round,
+ * and bank is refunded. Clears celo_audit_log for the room before delete (FK); migration CASCADE too.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
   const userId = await getAuthUserIdStrict(_req);
@@ -33,8 +33,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
   const rawRoom = room as Record<string, unknown>;
   const normalized = normalizeCeloRoomRow(rawRoom);
   const bankerId = String(rawRoom.banker_id ?? normalized?.banker_id ?? "");
-  if (!bankerId || bankerId !== String(userId)) {
-    return NextResponse.json({ error: "Only the banker can delete this room" }, { status: 403 });
+  const creatorId = String(rawRoom.creator_id ?? "");
+  const isBanker = !!bankerId && bankerId === String(userId);
+  const isCreator = !!creatorId && creatorId === String(userId);
+  if (!isBanker && !isCreator) {
+    return NextResponse.json({ error: "Only the banker or room creator can delete this room" }, { status: 403 });
   }
 
   const { count, error: countErr } = await supabase
@@ -64,8 +67,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
   }
 
   const row = sole as { user_id: string; role: string };
-  if (row.role !== "banker" || String(row.user_id) !== String(userId)) {
-    return NextResponse.json({ error: "Only the solo banker can delete this room" }, { status: 400 });
+  if (String(row.user_id) !== String(userId)) {
+    return NextResponse.json({ error: "Only the sole occupant can delete this room" }, { status: 400 });
+  }
+  const soleOk = row.role === "banker" || isCreator;
+  if (!soleOk) {
+    return NextResponse.json({ error: "Only the solo banker (or room creator when alone) can delete" }, { status: 400 });
   }
 
   const { data: activeRound } = await supabase
@@ -95,18 +102,27 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     }
   }
 
-  await supabase.from("celo_audit_log").insert({
-    room_id: roomId,
-    user_id: userId,
-    action: "room_deleted",
-    details: { bank_refunded_cents: bankCents },
-  });
+  // Remove FK references so celo_rooms.delete succeeds (migration also uses ON DELETE CASCADE).
+  const { error: auditDelErr } = await supabase.from("celo_audit_log").delete().eq("room_id", roomId);
+  if (auditDelErr) {
+    return NextResponse.json(
+      { error: auditDelErr.message ?? "Could not clear room audit log" },
+      { status: 500 }
+    );
+  }
 
   const { error: delErr } = await supabase.from("celo_rooms").delete().eq("id", roomId);
 
   if (delErr) {
     return NextResponse.json({ error: delErr.message ?? "Failed to delete room" }, { status: 500 });
   }
+
+  await supabase.from("celo_audit_log").insert({
+    room_id: null,
+    user_id: userId,
+    action: "room_deleted",
+    details: { room_id: roomId, bank_refunded_cents: bankCents },
+  });
 
   return NextResponse.json({ ok: true });
 }

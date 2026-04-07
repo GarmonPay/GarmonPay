@@ -65,6 +65,7 @@ async function authFetchDelete(url: string) {
 type Room = {
   id: string;
   name: string;
+  creator_id: string;
   status: string;
   banker_id: string;
   room_type: string;
@@ -1017,6 +1018,7 @@ export default function CeloRoomPage() {
   // ── Derived state ─────────────────────────────────────────────────────────
   const userId = session?.userId ?? "";
   const amIBanker = myPlayer?.role === "banker" || sameCeloUserId(room?.banker_id, userId);
+  const amICreator = room ? sameCeloUserId(room.creator_id, userId) : false;
   const amIPlayer = myPlayer?.role === "player";
   const isInRoom = myPlayer !== null;
 
@@ -1462,11 +1464,11 @@ export default function CeloRoomPage() {
     players.filter((p) => p.role === "player" && getPlayerBetCents(p) > 0).length > 0;
 
   const canDeleteRoom =
-    amIBanker &&
+    (amIBanker || amICreator) &&
     noActiveRound &&
     players.length === 1 &&
-    players[0]?.role === "banker" &&
-    sameCeloUserId(players[0].user_id, userId);
+    sameCeloUserId(players[0].user_id, userId) &&
+    (players[0]?.role === "banker" || amICreator);
 
   const canCoverBank =
     amIPlayer &&

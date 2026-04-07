@@ -13,6 +13,7 @@ export const CELO_ROOMS_COL = {
 export type NormalizedCeloRoom = Record<string, unknown> & {
   id: string;
   name: string;
+  creator_id: string;
   banker_id?: string;
   status?: string;
   room_type?: string;
@@ -38,6 +39,7 @@ export function normalizeCeloRoomRow(row: Record<string, unknown> | null | undef
     ...row,
     id: String(row.id ?? ""),
     name: String(row.name ?? ""),
+    creator_id: String(row.creator_id ?? ""),
     min_bet_cents: min,
     current_bank_cents: bank,
     max_bet_cents: maxBet,
