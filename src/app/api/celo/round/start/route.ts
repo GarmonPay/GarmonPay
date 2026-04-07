@@ -128,6 +128,12 @@ export async function POST(req: Request) {
     .update({ status: "rolling", last_activity: new Date().toISOString(), last_round_was_celo: false })
     .eq("id", room_id);
 
+  console.log("[celo/round/start] round_started", {
+    room_id,
+    round_id: (newRound as { id: string }).id,
+    status: "banker_rolling",
+  });
+
   await supabase.from("celo_audit_log").insert({
     room_id,
     round_id: (newRound as { id: string }).id,

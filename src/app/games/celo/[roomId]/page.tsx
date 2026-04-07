@@ -8,7 +8,10 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { SimpleDice } from "@/components/celo/SimpleDice";
+import { CeloDiceStage, type DiceUiPhase } from "@/components/celo/CeloDiceStage";
+import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
+import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
+import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 
 async function authFetch(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
@@ -98,10 +101,14 @@ type Round = {
   covered_by: string | null;
   completed_at: string | null;
   current_player_seat?: number | null;
+  /** Server UTC start for synchronized banker roll animation */
+  roll_animation_start_at?: string | null;
+  roll_animation_duration_ms?: number | null;
 };
 
 type PlayerRoll = {
   id: string;
+  round_id: string;
   room_id?: string;
   user_id: string;
   dice: number[];
@@ -112,6 +119,8 @@ type PlayerRoll = {
   platform_fee_sc: number;
   player_celo_at: string | null;
   created_at: string;
+  roll_animation_start_at?: string | null;
+  roll_animation_duration_ms?: number | null;
 };
 
 type SideBet = {
@@ -410,8 +419,10 @@ export default function CeloRoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Rolling animation state
+  // Rolling animation state (server-synced)
   const [isRolling, setIsRolling] = useState(false);
+  const [diceUiPhase, setDiceUiPhase] = useState<DiceUiPhase>("idle");
+  const [dicePhaseStatusText, setDicePhaseStatusText] = useState("");
   const [lastRollResult, setLastRollResult] = useState<RollResponse | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -431,8 +442,11 @@ export default function CeloRoomPage() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const balanceRef = useRef(0);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
-  /** Dedupe dice animations when realtime delivers duplicates */
-  const lastAnimKeyRef = useRef<string>("");
+  /** Processed roll_started sync keys (broadcast + postgres fallback) */
+  const processedSyncKeysRef = useRef<Set<string>>(new Set());
+  const cancelRollAnimRef = useRef<(() => void) | null>(null);
+  const lastRollPayloadRef = useRef<CeloRollStartedPayload | null>(null);
+  const reconnectAnimAttemptedRef = useRef<string>("");
   const playersRef = useRef<Player[]>([]);
   const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -669,6 +683,81 @@ export default function CeloRoomPage() {
   loadChatRef.current = loadChat;
   loadAllRef.current = loadAll;
 
+  const processRollStartedPayload = useCallback((payload: CeloRollStartedPayload, source: string) => {
+    if (processedSyncKeysRef.current.has(payload.syncKey)) {
+      console.log("[celo/client] skip duplicate sync", payload.syncKey, source);
+      return;
+    }
+    processedSyncKeysRef.current.add(payload.syncKey);
+    while (processedSyncKeysRef.current.size > 80) {
+      const iter = processedSyncKeysRef.current.values();
+      const first = iter.next().value as string | undefined;
+      if (first) processedSyncKeysRef.current.delete(first);
+    }
+
+    cancelRollAnimRef.current?.();
+    lastRollPayloadRef.current = payload;
+    console.log("[celo/client] roll_started", source, {
+      syncKey: payload.syncKey,
+      roundId: payload.roundId,
+      kind: payload.kind,
+      serverStartTime: payload.serverStartTime,
+      revealAt: payload.revealAt,
+    });
+
+    const rollerLabel =
+      payload.kind === "banker"
+        ? "Banker"
+        : getDisplayName(
+            playersRef.current.find((p) => sameCeloUserId(p.user_id, payload.rollerUserId)) ?? {
+              user_id: payload.rollerUserId ?? "",
+            }
+          ) || "Player";
+
+    setCurrentRollerName(rollerLabel);
+    setRollInteractionBusy(true);
+    setLastRollResult(null);
+    setDiceUiPhase("rolling");
+    setDicePhaseStatusText("Rolling…");
+    setIsRolling(true);
+
+    cancelRollAnimRef.current = scheduleCeloRollSequence(payload, {
+      onRollingStart: () => {
+        console.log("[celo/client] animation begin", payload.syncKey);
+        setDiceUiPhase("rolling");
+        setDicePhaseStatusText("Rolling…");
+        setIsRolling(true);
+      },
+      onRevealStart: (dice) => {
+        console.log("[celo/client] reveal begin", payload.syncKey);
+        setDiceUiPhase("revealing");
+        setDicePhaseStatusText("Revealing result…");
+        setIsRolling(false);
+        setLastRollResult({
+          dice,
+          rollName: undefined,
+          result: undefined,
+          bankerPoint: undefined,
+        });
+        void loadRoundRef.current();
+      },
+      onRollFinished: () => {
+        console.log("[celo/client] roll_finished (sequence)", payload.syncKey);
+        setDiceUiPhase("completed");
+        setDicePhaseStatusText("Round complete");
+        setIsRolling(false);
+        setCurrentRollerName("");
+        setRollInteractionBusy(false);
+        lastRollPayloadRef.current = null;
+        void loadRoundRef.current();
+        window.setTimeout(() => {
+          setDiceUiPhase("idle");
+          setDicePhaseStatusText("");
+        }, 700);
+      },
+    });
+  }, []);
+
   // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
   useEffect(() => {
     if (!roomId) return;
@@ -720,11 +809,92 @@ export default function CeloRoomPage() {
   }, [rollInteractionBusy]);
 
   useEffect(() => {
-    const d = lastRollResult?.dice;
-    console.log("Rolling state:", isRolling);
-    console.log("Current dice:", d);
-    console.log("Roll name:", lastRollResult?.rollName);
-  }, [isRolling, lastRollResult?.dice, lastRollResult?.rollName]);
+    console.log("[celo/client] dice UI", {
+      phase: diceUiPhase,
+      isRolling,
+      hasDice: Boolean(lastRollResult?.dice),
+      rollName: lastRollResult?.rollName,
+    });
+  }, [diceUiPhase, isRolling, lastRollResult?.dice, lastRollResult?.rollName]);
+
+  useEffect(() => {
+    if (!initialSyncDone || !currentRound) return;
+    const roomIdStr = String(currentRound.room_id ?? roomId);
+
+    let payload: CeloRollStartedPayload | null = null;
+    if (
+      currentRound.roll_animation_start_at &&
+      currentRound.banker_dice &&
+      currentRound.banker_dice.length === 3
+    ) {
+      const p = buildCeloRollStartedPayload({
+        roomId: roomIdStr,
+        roundId: currentRound.id,
+        dice: currentRound.banker_dice as [number, number, number],
+        kind: "banker",
+        rollerUserId: currentRound.banker_id,
+        serverStartTime: currentRound.roll_animation_start_at,
+      });
+      if (Date.now() < Date.parse(p.sequenceEndAt)) payload = p;
+    } else {
+      for (let i = playerRolls.length - 1; i >= 0; i--) {
+        const r = playerRolls[i];
+        if (!r.roll_animation_start_at || !r.dice || r.dice.length < 3) continue;
+        const p = buildCeloRollStartedPayload({
+          roomId: roomIdStr,
+          roundId: currentRound.id,
+          dice: r.dice as [number, number, number],
+          kind: "player",
+          playerRollId: r.id,
+          rollerUserId: r.user_id,
+          serverStartTime: r.roll_animation_start_at,
+        });
+        if (Date.now() < Date.parse(p.sequenceEndAt)) {
+          payload = p;
+          break;
+        }
+      }
+    }
+    if (!payload) return;
+    if (reconnectAnimAttemptedRef.current === payload.syncKey) return;
+    reconnectAnimAttemptedRef.current = payload.syncKey;
+    console.log("[celo/client] reconnect restore roll animation", payload.syncKey);
+    processRollStartedPayload(payload, "reconnect-db");
+  }, [initialSyncDone, currentRound, playerRolls, roomId, processRollStartedPayload]);
+
+  useEffect(() => {
+    const p = lastRollPayloadRef.current;
+    if (!p || !lastRollResult?.dice || lastRollResult.rollName) return;
+
+    if (p.kind === "banker" && currentRound?.id === p.roundId && currentRound.banker_dice_name) {
+      setLastRollResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              rollName: currentRound.banker_dice_name ?? undefined,
+              result: currentRound.banker_dice_result ?? undefined,
+              bankerPoint: currentRound.banker_point ?? prev.bankerPoint,
+            }
+          : prev
+      );
+    }
+    if (p.kind === "player" && p.playerRollId) {
+      const pr = playerRolls.find((r) => r.id === p.playerRollId);
+      if (pr?.roll_name) {
+        setLastRollResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                rollName: pr.roll_name ?? undefined,
+                result: pr.roll_result ?? undefined,
+                outcome: pr.outcome ?? undefined,
+                payoutCents: pr.payout_sc,
+              }
+            : prev
+        );
+      }
+    }
+  }, [currentRound, playerRolls, lastRollResult?.dice, lastRollResult?.rollName]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -745,7 +915,7 @@ export default function CeloRoomPage() {
     let isMounted = true;
     const uid = session.userId;
     const displayName = session.email?.split("@")[0] ?? "Player";
-    lastAnimKeyRef.current = "";
+    processedSyncKeysRef.current.clear();
 
     const fetchInitialRoomData = async () => {
       await loadAllRef.current();
@@ -754,9 +924,23 @@ export default function CeloRoomPage() {
 
     let presenceSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
     const roomChannel = sb
-      .channel(`celo-room-${roomId}`)
+      .channel(`celo-room-${roomId}`, {
+        config: { broadcast: { self: true } },
+      })
+      .on(
+        "broadcast",
+        { event: "roll_started" },
+        ({ payload }) => {
+          if (!isMounted) return;
+          const p = payload as CeloRollStartedPayload;
+          if (!p?.syncKey || String(p.roomId) !== roomId || !Array.isArray(p.finalDice) || p.finalDice.length !== 3) {
+            return;
+          }
+          console.log("[celo/client] ws broadcast roll_started", p.syncKey);
+          processRollStartedPayload(p, "realtime-broadcast");
+        }
+      )
       .on(
         "postgres_changes",
         {
@@ -844,45 +1028,17 @@ export default function CeloRoomPage() {
               oldRound.banker_dice.length !== 3);
 
           if (bankerDiceJustSet) {
-            const animKey = `banker_${newRound.id}_${br.join("")}`;
-            if (lastAnimKeyRef.current === animKey) {
-              setRollInteractionBusy(false);
-              void loadRoundRef.current();
-              return;
-            }
-            lastAnimKeyRef.current = animKey;
-
-            void (async () => {
-              setCurrentRollerName("Banker");
-              setIsRolling(true);
-              setLastRollResult(null);
-              await sleep(100);
-              await sleep(2500);
-              if (!isMounted) return;
-              setIsRolling(false);
-              setLastRollResult({
-                dice: br as [number, number, number],
-                rollName: undefined,
-                result: undefined,
-                bankerPoint: newRound.banker_point ?? undefined,
-              });
-              await sleep(400);
-              if (!isMounted) return;
-              setLastRollResult((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      rollName: newRound.banker_dice_name ?? undefined,
-                      result: newRound.banker_dice_result ?? undefined,
-                    }
-                  : null
-              );
-              await sleep(1500);
-              if (!isMounted) return;
-              setCurrentRollerName("");
-              setRollInteractionBusy(false);
-              void loadRoundRef.current();
-            })();
+            const p = buildCeloRollStartedPayload({
+              roomId,
+              roundId: newRound.id,
+              dice: br as [number, number, number],
+              kind: "banker",
+              rollerUserId: newRound.banker_id,
+              ...(newRound.roll_animation_start_at
+                ? { serverStartTime: newRound.roll_animation_start_at }
+                : {}),
+            });
+            processRollStartedPayload(p, "postgres-celo_rounds");
             return;
           }
 
@@ -909,61 +1065,16 @@ export default function CeloRoomPage() {
           const roll = payload.new as PlayerRoll;
           if (!roll || String(roll.room_id) !== roomId) return;
 
-          const animKey = `player_${roll.id}`;
-          if (lastAnimKeyRef.current === animKey) {
-            setRollInteractionBusy(false);
-            void loadRoundRef.current();
-            return;
-          }
-          lastAnimKeyRef.current = animKey;
-
-          void (async () => {
-            const roller = playersRef.current.find((p) => p.user_id === roll.user_id);
-            setCurrentRollerName(getDisplayName(roller ?? null) || "Player");
-            setIsRolling(true);
-            setLastRollResult(null);
-            await sleep(100);
-            await sleep(2500);
-            if (!isMounted) return;
-            setIsRolling(false);
-            setLastRollResult({
-              dice: roll.dice as [number, number, number],
-              rollName: undefined,
-              result: undefined,
-              outcome: undefined,
-              payoutCents: roll.payout_sc,
-            });
-            await sleep(400);
-            if (!isMounted) return;
-            setLastRollResult((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    rollName: roll.roll_name ?? undefined,
-                    result: roll.roll_result ?? undefined,
-                    outcome: roll.outcome ?? undefined,
-                  }
-                : null
-            );
-            await sleep(1500);
-            if (!isMounted) return;
-            setCurrentRollerName("");
-            setRollInteractionBusy(false);
-
-            const { data: roundData } = await sb
-              .from("celo_rounds")
-              .select("*")
-              .eq("room_id", roomId)
-              .neq("status", "completed")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (roundData && isMounted) {
-              setCurrentRound(roundData as Round);
-            }
-            void loadRoundRef.current();
-          })();
+          const p = buildCeloRollStartedPayload({
+            roomId,
+            roundId: roll.round_id,
+            dice: roll.dice as [number, number, number],
+            kind: "player",
+            playerRollId: roll.id,
+            rollerUserId: roll.user_id,
+            ...(roll.roll_animation_start_at ? { serverStartTime: roll.roll_animation_start_at } : {}),
+          });
+          processRollStartedPayload(p, "postgres-celo_player_rolls");
         }
       )
       .on(
@@ -1025,6 +1136,7 @@ export default function CeloRoomPage() {
         if (!isMounted) return;
         setRealtimeConnected(status === "SUBSCRIBED");
         if (status === "SUBSCRIBED") {
+          console.log("[celo/client] room channel subscribed", { roomId });
           void (async () => {
             await fetchInitialRoomData();
             if (!isMounted) return;
@@ -1080,13 +1192,15 @@ export default function CeloRoomPage() {
     return () => {
       isMounted = false;
       if (presenceSyncTimer) clearTimeout(presenceSyncTimer);
+      cancelRollAnimRef.current?.();
+      cancelRollAnimRef.current = null;
       roomChannelRef.current = null;
       setRealtimeConnected(false);
       sb.removeChannel(roomChannel);
       sb.removeChannel(presenceChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loaders via refs; only reconnect when room or user changes
-  }, [session?.userId, roomId, addSystemMessage]);
+  }, [session?.userId, roomId, addSystemMessage, processRollStartedPayload]);
 
   useEffect(() => {
     if (realtimeConnected) return;
@@ -1233,7 +1347,6 @@ export default function CeloRoomPage() {
     setActionLoading("roll");
     setRollInteractionBusy(true);
     setLastRollResult(null);
-    setIsRolling(true);
     setError(null);
     let res: Response;
     let data: Record<string, unknown>;
@@ -1713,15 +1826,20 @@ export default function CeloRoomPage() {
   const lastResult = lastRollResult?.result;
 
   /**
-   * Values on dice when not tumbling; null = face-down / blank in SimpleDice.
+   * Values on dice when not tumbling; null = tumbling / hidden faces in RealisticDice.
    * While waiting for the realtime animation after our own roll, do not read banker_dice from DB
    * (avoids flashing final faces before the shared animation).
    */
-  const simpleDiceValues: number[] | null = isRolling
+  const hideFinalDiceFaces =
+    isRolling ||
+    diceUiPhase === "rolling" ||
+    (diceUiPhase === "revealing" && !(lastRollResult?.dice?.length === 3));
+
+  const simpleDiceValues: number[] | null = hideFinalDiceFaces
     ? null
     : lastRollResult?.dice?.length === 3
       ? lastRollResult.dice
-      : rollInteractionBusy
+      : rollInteractionBusy && diceUiPhase === "idle"
         ? null
         : currentRound?.banker_dice?.length === 3
           ? [...currentRound.banker_dice]
@@ -2240,16 +2358,20 @@ export default function CeloRoomPage() {
 
         {/* CENTERPIECE — dice always visible (blank / tumbling / final faces) */}
         <div
-          className="rounded-2xl border-2 border-[#F5C842]/35 bg-[#0a0612]/95 py-6 px-3 sm:px-6 shadow-[0_0_40px_rgba(124,58,237,0.2)] min-h-[200px] flex flex-col items-center justify-center"
+          className="rounded-2xl border-2 border-[#F5C842]/35 bg-[#0a0612]/95 py-6 px-3 sm:px-6 shadow-[0_0_40px_rgba(124,58,237,0.2)] min-h-[200px] flex flex-col items-center justify-center relative overflow-hidden"
           style={{ zIndex: 1 }}
         >
           <p className="text-[10px] uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">Dice</p>
-          <SimpleDice dice={simpleDiceValues} rolling={isRolling} />
-          {isRolling && currentRollerName ? (
-            <p className="text-center text-sm font-bold text-[#F5C842] mt-2" role="status" aria-live="polite">
-              🎲 {currentRollerName} is rolling…
-            </p>
-          ) : null}
+          <CeloDiceStage
+            dice={simpleDiceValues}
+            rolling={isRolling}
+            phase={diceUiPhase}
+            showHand={diceUiPhase === "rolling" || diceUiPhase === "revealing"}
+            statusLine={
+              dicePhaseStatusText ||
+              (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")
+            }
+          />
           {!isRolling && lastRollResult?.rollName ? (
             <div className="text-center space-y-1 mt-2 w-full max-w-md">
               <p
