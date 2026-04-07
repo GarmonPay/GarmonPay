@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
@@ -12,9 +13,7 @@ type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
 type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number | null };
 
 function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
-  const fromEntry = Number(row.entry_sc ?? 0);
-  const fromBet = Number(row.bet_cents ?? 0);
-  return fromEntry > 0 ? fromEntry : fromBet;
+  return celoPlayerStakeCents(row);
 }
 
 function roundTotalPotCents(roundRow: Record<string, unknown>): number {

@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 const DiceThrow = dynamic(() => import("@/components/celo/DiceThrow"), { ssr: false });
 
@@ -191,10 +192,9 @@ function sameCeloUserId(a: string | null | undefined, b: string | null | undefin
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
-/** Stake in cents from row (join writes both entry_sc and bet_cents). */
+/** Stake in cents from row (join writes both; 0 default on entry_sc must not hide bet_cents). */
 function getEntryAmount(player: { entry_sc?: number; bet_cents?: number }): number {
-  const n = Number(player.entry_sc ?? player.bet_cents ?? 0);
-  return Number.isFinite(n) ? n : 0;
+  return celoPlayerStakeCents(player);
 }
 
 /** Alias for round / action logic */

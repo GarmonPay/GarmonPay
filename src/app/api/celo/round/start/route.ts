@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -68,10 +69,11 @@ export async function POST(req: Request) {
     .eq("room_id", room_id)
     .eq("role", "player");
 
-  const players = (playerRows ?? []).filter((p) => {
-    const n = Number((p as { entry_sc?: number; bet_cents?: number }).entry_sc ?? (p as { bet_cents?: number }).bet_cents ?? 0);
-    return Number.isFinite(n) && n > 0;
-  }) as { user_id: string; bet_cents?: number; entry_sc?: number }[];
+  const players = (playerRows ?? []).filter((p) => celoPlayerStakeCents(p as { entry_sc?: number; bet_cents?: number }) > 0) as {
+    user_id: string;
+    bet_cents?: number;
+    entry_sc?: number;
+  }[];
 
   if (players.length === 0) {
     return NextResponse.json(
@@ -80,8 +82,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const entryForPot = (p: { bet_cents?: number; entry_sc?: number }) =>
-    Math.round(Number(p.entry_sc ?? p.bet_cents ?? 0));
+  const entryForPot = (p: { bet_cents?: number; entry_sc?: number }) => celoPlayerStakeCents(p);
 
   const totalPotCents = players.reduce((sum, p) => sum + entryForPot(p), 0);
   const platformFeeCents = Math.floor(

@@ -3,11 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
-
-function playerEntryCents(row: { entry_sc?: number | null; bet_cents?: number | null }): number {
-  const n = Number(row.entry_sc ?? row.bet_cents ?? 0);
-  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
-}
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 /**
  * POST /api/celo/room/close — banker (or creator) closes room: refund player entries + bank, cancel room.
@@ -91,7 +87,7 @@ export async function POST(req: Request) {
 
   for (const p of rows) {
     if (p.role !== "player") continue;
-    const cents = playerEntryCents(p);
+    const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = `celo_room_close_refund_${room_id}_${p.user_id}_${ts}_${refundsIssued}`;
     const result = await walletLedgerEntry(p.user_id, "game_win", cents, ref);
