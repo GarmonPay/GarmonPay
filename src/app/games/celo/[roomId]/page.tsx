@@ -466,6 +466,8 @@ export default function CeloRoomPage() {
   const [sbError, setSbError] = useState<string | null>(null);
 
   const [bankAdjustLoading, setBankAdjustLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showCreatedShareBanner, setShowCreatedShareBanner] = useState(false);
 
   // Ticker for countdowns (1s)
   const [, tick] = useState(0);
@@ -473,6 +475,44 @@ export default function CeloRoomPage() {
     const iv = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("created") !== "1") return;
+    setShowCreatedShareBanner(true);
+    router.replace(`/games/celo/${roomId}`, { scroll: false });
+  }, [roomId, router]);
+
+  const handleShare = useCallback(async () => {
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/games/celo/${roomId}`;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join my C-Lo game on GarmonPay!",
+          text: `${room?.name || "C-Lo Game"} — Min entry $${((room?.min_bet_cents || 500) / 100).toFixed(0)}. Join now!`,
+          url,
+        });
+        return;
+      } catch {
+        // fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      const input = document.createElement("input");
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
+  }, [roomId, room?.name, room?.min_bet_cents]);
 
   // ── Data loaders ───────────────────────────────────────────────────────────
   const loadRoom = useCallback(async () => {
@@ -609,6 +649,12 @@ export default function CeloRoomPage() {
   const loadAll = useCallback(async () => {
     await Promise.all([loadRoom(), fetchPlayers(), loadRound(), loadBalance(), loadChat()]);
   }, [loadRoom, fetchPlayers, loadRound, loadBalance, loadChat]);
+
+  useEffect(() => {
+    if (!session?.userId || !roomId) return;
+    if (myPlayer !== null) return;
+    void fetchPlayers();
+  }, [session?.userId, roomId, myPlayer, fetchPlayers]);
 
   const loadRoomRef = useRef(loadRoom);
   const loadPlayersRef = useRef(fetchPlayers);
@@ -1416,6 +1462,10 @@ export default function CeloRoomPage() {
   // ── Render: join panel ────────────────────────────────────────────────────
   if (!isInRoom) {
     const minBet = room.min_bet_cents;
+    const joinBanker = players.find((p) => p.role === "banker");
+    const joinBankerTitle = `${getDisplayName(joinBanker ?? { user_id: room.banker_id })}'s C-Lo Room`;
+    const joinPlayerCount = players.filter((p) => p.role !== "spectator").length;
+    const entryChipMults = [1, 2, 5, 10];
 
     return (
       <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
@@ -1423,16 +1473,48 @@ export default function CeloRoomPage() {
           <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/20 blur-[130px]" />
         </div>
         <div className="relative z-10 mx-auto max-w-md px-4 py-12">
-          <Link href="/games/celo" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors mb-8 block">
-            ← C-Lo Lobby
-          </Link>
+          <div className="flex items-start justify-between gap-3 mb-6">
+            <Link href="/games/celo" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
+              ← C-Lo Lobby
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              style={{
+                padding: "6px 14px",
+                background: copied ? "rgba(16,185,129,0.2)" : "rgba(124,58,237,0.2)",
+                border: `1px solid ${copied ? "#10B981" : "#7C3AED"}`,
+                borderRadius: 8,
+                color: copied ? "#10B981" : "#A855F7",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: "bold",
+                fontFamily: "Courier New, monospace",
+              }}
+            >
+              {copied ? "✓ COPIED!" : "🔗 SHARE"}
+            </button>
+          </div>
           <div className="rounded-2xl border border-[#F5C842]/20 bg-[#12081f]/90 p-6 shadow-2xl shadow-violet-900/40">
             <div className="text-center mb-6">
               <p className="text-4xl mb-2">🎲</p>
-              <h1 className="text-xl font-bold text-[#F5C842]">{room.name}</h1>
-              <div className="flex justify-center gap-3 mt-3 text-xs text-violet-300/60">
-                <span>Bank: <span className="text-[#F5C842] font-mono">${(room.current_bank_cents / 100).toFixed(2)}</span></span>
-                <span>Min: <span className="text-white font-mono">${(room.min_bet_cents / 100).toFixed(2)}</span></span>
+              <h1 className="text-xl font-bold text-[#F5C842]">{joinBankerTitle}</h1>
+              <p className="text-sm text-violet-200/80 mt-1">{room.name}</p>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-xs text-violet-300/70">
+                <span>
+                  Min entry:{" "}
+                  <span className="text-white font-mono">${(room.min_bet_cents / 100).toFixed(2)}</span>
+                </span>
+                <span>
+                  Players:{" "}
+                  <span className="text-white font-mono">
+                    {joinPlayerCount}/{room.max_players}
+                  </span>
+                </span>
+                <span>
+                  Bank:{" "}
+                  <span className="text-[#F5C842] font-mono">${(room.current_bank_cents / 100).toFixed(2)}</span>
+                </span>
                 <span>{room.platform_fee_pct}% fee</span>
               </div>
             </div>
@@ -1454,6 +1536,29 @@ export default function CeloRoomPage() {
                 />
               </div>
             )}
+
+            <div className="mb-3 flex flex-wrap gap-2 justify-center">
+              {entryChipMults.map((m) => {
+                const cents = minBet * m;
+                if (cents > room.max_bet_cents) return null;
+                const capped = Math.min(cents, balanceCents, room.max_bet_cents);
+                if (capped < minBet) return null;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setJoinEntryCents(capped)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-colors ${
+                      joinEntryCents === capped
+                        ? "bg-[#F5C842]/25 text-[#F5C842] border border-[#F5C842]/50"
+                        : "bg-white/5 text-violet-200 border border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    ${(cents / 100).toFixed(0)}
+                  </button>
+                );
+              })}
+            </div>
 
             <div className="mb-5">
               <label className="text-[10px] uppercase tracking-widest text-violet-400/70">
@@ -1478,9 +1583,9 @@ export default function CeloRoomPage() {
               type="button"
               disabled={joinLoading || joinEntryCents < minBet || balanceCents < joinEntryCents}
               onClick={() => handleJoin(false)}
-              className="w-full rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 disabled:opacity-50 transition-all mb-3"
+              className="w-full rounded-xl bg-gradient-to-r from-[#eab308] via-[#F5C842] to-[#eab308] py-3.5 font-bold text-[#0e0118] shadow-lg shadow-amber-900/30 disabled:opacity-50 transition-all mb-3"
             >
-              {joinLoading ? "Joining…" : `Join as Player — $${(joinEntryCents / 100).toFixed(2)}`}
+              {joinLoading ? "Joining…" : `JOIN FOR $${(joinEntryCents / 100).toFixed(2)}`}
             </button>
             <button
               type="button"
@@ -1816,15 +1921,34 @@ export default function CeloRoomPage() {
 
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-4 pb-24 space-y-3">
 
-        {/* Header — balanced grid so lobby / title / status share one baseline */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <Link
-            href="/games/celo"
-            className="justify-self-start text-violet-300/80 text-sm hover:text-[#F5C842] transition-colors shrink-0 pt-0.5"
-          >
-            ← Lobby
-          </Link>
-          <div className="text-center min-w-0 max-w-[55%] sm:max-w-none mx-auto">
+        {/* Header — lobby + share | title | balance */}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 sm:gap-3">
+          <div className="flex flex-col gap-2 shrink-0">
+            <Link
+              href="/games/celo"
+              className="text-violet-300/80 text-sm hover:text-[#F5C842] transition-colors pt-0.5"
+            >
+              ← Lobby
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              style={{
+                padding: "6px 14px",
+                background: copied ? "rgba(16,185,129,0.2)" : "rgba(124,58,237,0.2)",
+                border: `1px solid ${copied ? "#10B981" : "#7C3AED"}`,
+                borderRadius: 8,
+                color: copied ? "#10B981" : "#A855F7",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: "bold",
+                fontFamily: "Courier New, monospace",
+              }}
+            >
+              {copied ? "✓ COPIED!" : "🔗 SHARE ROOM"}
+            </button>
+          </div>
+          <div className="text-center min-w-0 max-w-full mx-auto pt-0.5">
             <h1 className="font-bold text-[#F5C842] truncate text-base sm:text-lg leading-tight">{room.name}</h1>
             <p className="text-[10px] text-violet-400/70 uppercase tracking-widest mt-0.5">{room.speed}</p>
           </div>
@@ -1851,6 +1975,106 @@ export default function CeloRoomPage() {
             </p>
           </div>
         </div>
+
+        {showCreatedShareBanner && isInRoom && room && (
+          <div
+            style={{
+              background: "rgba(124,58,237,0.1)",
+              border: "1px solid rgba(124,58,237,0.3)",
+              borderRadius: 12,
+              padding: 20,
+              marginTop: 8,
+              textAlign: "center",
+            }}
+          >
+            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
+              Share this link to invite players:
+            </p>
+            <div
+              style={{
+                background: "#0D0520",
+                borderRadius: 8,
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <span
+                style={{
+                  color: "#F5C842",
+                  fontSize: 12,
+                  flex: 1,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                style={{
+                  padding: "6px 12px",
+                  background: "#7C3AED",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {copied ? "✓ Copied" : "Copy Link"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
+                  const text = `Join my C-Lo game on GarmonPay! Min $${((room.min_bet_cents || 500) / 100).toFixed(0)} entry. ${u}`;
+                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
+                }}
+                style={{
+                  padding: "8px 16px",
+                  background: "#1DA1F2",
+                  border: "none",
+                  borderRadius: 8,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                }}
+              >
+                Share on Twitter
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
+                  const text = `Join my C-Lo game on GarmonPay! ${u}`;
+                  window.open("https://www.tiktok.com/", "_blank");
+                  void navigator.clipboard.writeText(text).catch(() => {});
+                }}
+                style={{
+                  padding: "8px 16px",
+                  background: "#000",
+                  border: "1px solid #fff",
+                  borderRadius: 8,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                }}
+              >
+                Share on TikTok
+              </button>
+            </div>
+          </div>
+        )}
 
         {amIBanker && noActiveRound && (
           <div className="flex justify-end mt-3">

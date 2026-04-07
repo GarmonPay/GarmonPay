@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { celoPayoutTestCredit, celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
@@ -20,6 +20,11 @@ function roundTotalPotCents(roundRow: Record<string, unknown>): number {
   return Number(
     roundRow.prize_pool_sc ?? roundRow.total_pot_sc ?? roundRow.total_pot_cents ?? 0
   );
+}
+
+/** Platform fee on 2× gross payouts (10%). */
+function platformFeeFromGrossTenPct(grossCents: number): number {
+  return Math.floor(grossCents * 0.1);
 }
 
 /** Players who roll vs the banker this round (seat order). */
@@ -188,9 +193,9 @@ async function settleOpenSideBets(
   }[]) {
     if (bet.status === "open") {
       // No acceptor — refund creator
-      await walletLedgerEntry(
+      await celoWalletCredit(
+        supabase,
         bet.creator_id,
-        "game_win",
         bet.amount_cents,
         `celo_sidebet_refund_${bet.id}`
       );
@@ -201,15 +206,15 @@ async function settleOpenSideBets(
     } else if (bet.acceptor_id) {
       // Matched but unresolved — refund both sides
       await Promise.all([
-        walletLedgerEntry(
+        celoWalletCredit(
+          supabase,
           bet.creator_id,
-          "game_win",
           bet.amount_cents,
           `celo_sidebet_refund_${bet.id}_creator`
         ),
-        walletLedgerEntry(
+        celoWalletCredit(
+          supabase,
           bet.acceptor_id,
-          "game_win",
           bet.amount_cents,
           `celo_sidebet_refund_${bet.id}_acceptor`
         ),
@@ -419,12 +424,11 @@ export async function POST(req: Request) {
       const platformFee = platformFeeForRound ?? Math.floor((totalPot * feePct) / 100);
       const bankerWins = totalPot - platformFee;
 
-      await walletLedgerEntry(
-        rm.banker_id,
-        "game_win",
-        bankerWins,
-        `celo_banker_win_${round_id}`
-      );
+      await celoPayoutTestCredit(supabase, rm.banker_id);
+
+      const winRef = `celo_banker_win_${round_id}_${Date.now()}`;
+      await celoWalletCredit(supabase, rm.banker_id, bankerWins, winRef);
+      await insertCeloPlatformFee(supabase, round_id, platformFee, roll.rollName);
 
       const newBankCents = rm.current_bank_cents + bankerWins;
 
@@ -479,20 +483,26 @@ export async function POST(req: Request) {
 
       const payouts: { user_id: string; payout: number; fee: number }[] = [];
       let totalPaidOut = 0;
+      let totalPlatformFeeCents = 0;
 
       for (const player of players) {
         const gross = player.bet * 2;
-        const fee = Math.floor(gross * 0.1);
+        const fee = platformFeeFromGrossTenPct(gross);
         const payout = gross - fee;
         payouts.push({ user_id: player.user_id, payout, fee });
         totalPaidOut += payout;
+        totalPlatformFeeCents += fee;
       }
 
-      await Promise.all(
-        payouts.map(({ user_id, payout }) =>
-          walletLedgerEntry(user_id, "game_win", payout, `celo_player_win_${round_id}_${user_id}`)
-        )
-      );
+      for (const { user_id, payout } of payouts) {
+        await celoWalletCredit(
+          supabase,
+          user_id,
+          payout,
+          `celo_player_win_${round_id}_${user_id}_${Date.now()}`
+        );
+      }
+      await insertCeloPlatformFee(supabase, round_id, totalPlatformFeeCents, roll.rollName);
 
       let newBankCents = Math.max(0, rm.current_bank_cents - totalPaidOut);
 
@@ -652,15 +662,16 @@ export async function POST(req: Request) {
     // ── INSTANT WIN (player) ──
     if (roll.result === "instant_win") {
       const gross = playerBet * 2;
-      const fee = Math.floor((gross * feePct) / 100);
+      const fee = platformFeeFromGrossTenPct(gross);
       const payout = gross - fee;
 
-      await walletLedgerEntry(
+      await celoWalletCredit(
+        supabase,
         userId,
-        "game_win",
         payout,
-        `celo_player_win_${round_id}_${userId}`
+        `celo_player_win_${round_id}_${userId}_${Date.now()}`
       );
+      await insertCeloPlatformFee(supabase, round_id, fee, roll.rollName);
 
       const playerCeloAt = roll.isCelo ? now : null;
 
@@ -726,12 +737,13 @@ export async function POST(req: Request) {
 
       const bankerFee = Math.floor((playerBet * feePct) / 100);
       const bankerNet = playerBet - bankerFee;
-      await walletLedgerEntry(
+      await celoWalletCredit(
+        supabase,
         rm.banker_id,
-        "game_win",
         bankerNet,
-        `celo_banker_win_player_loss_${round_id}_${userId}`
+        `celo_banker_win_player_loss_${round_id}_${userId}_${Date.now()}`
       );
+      await insertCeloPlatformFee(supabase, round_id, bankerFee, roll.rollName);
       await supabase
         .from("celo_rooms")
         .update(
@@ -770,15 +782,16 @@ export async function POST(req: Request) {
 
       if (playerWins) {
         const gross = playerBet * 2;
-        feeCents = Math.floor((gross * feePct) / 100);
+        feeCents = platformFeeFromGrossTenPct(gross);
         payoutCents = gross - feeCents;
 
-        await walletLedgerEntry(
+        await celoWalletCredit(
+          supabase,
           userId,
-          "game_win",
           payoutCents,
-          `celo_player_win_${round_id}_${userId}`
+          `celo_player_point_win_${round_id}_${userId}_${Date.now()}`
         );
+        await insertCeloPlatformFee(supabase, round_id, feeCents, roll.rollName);
         const bankAfterPlayerWin = Math.max(0, rm.current_bank_cents - playerBet);
         await supabase
           .from("celo_rooms")
@@ -791,12 +804,13 @@ export async function POST(req: Request) {
       } else {
         const bankerFee = Math.floor((playerBet * feePct) / 100);
         const bankerNet = playerBet - bankerFee;
-        await walletLedgerEntry(
+        await celoWalletCredit(
+          supabase,
           rm.banker_id,
-          "game_win",
           bankerNet,
-          `celo_banker_win_point_${round_id}_${userId}`
+          `celo_banker_point_win_${round_id}_${userId}_${Date.now()}`
         );
+        await insertCeloPlatformFee(supabase, round_id, bankerFee, roll.rollName);
         await supabase
           .from("celo_rooms")
           .update(

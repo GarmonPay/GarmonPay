@@ -255,7 +255,7 @@ export default function CeloLobbyPage() {
         return;
       }
       if (data.room?.id) {
-        router.push(`/games/celo/${data.room.id}`);
+        router.push(`/games/celo/${data.room.id}?created=1`);
       }
     } catch {
       setCreateError("Network error — try again");
