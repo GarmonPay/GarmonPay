@@ -105,11 +105,16 @@ export default function CeloLobbyPage() {
   }, [mapRowToLobbyRoom]);
 
   useEffect(() => {
+    // Load rooms immediately — doesn't require auth
+    void loadRooms();
+
     getSessionAsync().then((s) => {
-      if (!s) { router.replace("/login?redirect=/games/celo"); return; }
+      if (!s) {
+        setLoading(false);
+        return;
+      }
       setSession(s);
       setLoading(false);
-      void loadRooms();
       if (s.accessToken) {
         fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
@@ -117,11 +122,11 @@ export default function CeloLobbyPage() {
           .catch(() => {});
       }
     });
-  }, [router, loadRooms]);
+  }, [loadRooms]);
 
   useEffect(() => {
     const sb = createBrowserClient();
-    if (!sb || !session) return;
+    if (!sb) return;
     let cancelled = false;
 
     const lobby = sb
@@ -221,7 +226,7 @@ export default function CeloLobbyPage() {
       cancelled = true;
       sb.removeChannel(lobby);
     };
-  }, [session, mapRowToLobbyRoom]);
+  }, [mapRowToLobbyRoom]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -300,7 +305,7 @@ export default function CeloLobbyPage() {
     form.name.trim().length > 0 &&
     (form.room_type === "public" || form.join_code.trim().length >= 1);
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0e0118] flex items-center justify-center">
         <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
@@ -341,13 +346,22 @@ export default function CeloLobbyPage() {
 
         {/* Actions row */}
         <div className="flex flex-wrap gap-3 justify-center mb-8">
-          <button
-            type="button"
-            onClick={() => { setShowCreate(true); setCreateError(null); setForm(DEFAULT_FORM); }}
-            className="rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 px-6 py-3 font-semibold text-white shadow-lg shadow-violet-900/40 hover:from-violet-500 hover:to-violet-400 transition-all text-sm"
-          >
-            + Create Room
-          </button>
+          {session ? (
+            <button
+              type="button"
+              onClick={() => { setShowCreate(true); setCreateError(null); setForm(DEFAULT_FORM); }}
+              className="rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 px-6 py-3 font-semibold text-white shadow-lg shadow-violet-900/40 hover:from-violet-500 hover:to-violet-400 transition-all text-sm"
+            >
+              + Create Room
+            </button>
+          ) : (
+            <Link
+              href="/login?redirect=/games/celo"
+              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] px-6 py-3 font-semibold text-black shadow-lg shadow-amber-900/30 transition-all text-sm"
+            >
+              Login to Play
+            </Link>
+          )}
           <form onSubmit={handleJoinByCode} className="flex gap-2">
             <input
               type="text"

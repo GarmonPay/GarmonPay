@@ -41,7 +41,11 @@ export function SimpleDice({
   dice: number[] | null;
   rolling: boolean;
 }) {
-  const showBlank = !rolling && (dice == null || dice.length < 3);
+  // Always show face values — fall back to [1,1,1] so dice are never blank/purple
+  const displayDice: [number, number, number] =
+    dice && dice.length >= 3
+      ? [dice[0] || 1, dice[1] || 1, dice[2] || 1]
+      : [1, 1, 1];
 
   return (
     <div
@@ -53,9 +57,9 @@ export function SimpleDice({
         padding: 24,
       }}
     >
-      {[0, 1, 2].map((i) => {
-        const value = showBlank ? 0 : dice![i] || 1;
-        const dots = value >= 1 && value <= 6 ? DOT_POSITIONS[value] : DOT_POSITIONS[1];
+      {([0, 1, 2] as const).map((i) => {
+        const value = displayDice[i];
+        const dots = DOT_POSITIONS[value] ?? DOT_POSITIONS[1];
 
         return (
           <div
@@ -63,18 +67,18 @@ export function SimpleDice({
             style={{
               width: 80,
               height: 80,
-              background: rolling ? "#DC2626" : showBlank ? "#2a1f35" : "#F5F0E8",
+              background: "#DC2626",
               borderRadius: 14,
-              border: rolling ? "2px solid #991B1B" : showBlank ? "2px solid #4c3d5c" : "2px solid #D4C5A0",
+              border: "2px solid #991B1B",
               boxShadow: rolling
                 ? "0 0 20px rgba(220,38,38,0.5)"
                 : "3px 3px 8px rgba(0,0,0,0.5)",
               position: "relative",
               animation: rolling ? `celoSpin${i} ${1.5 + i * 0.3}s ease-in-out infinite` : "none",
-              transition: "all 0.3s ease",
+              transition: "background 0.3s ease",
             }}
           >
-            {!rolling && !showBlank && dots.map(([cx, cy], di) => (
+            {!rolling && dots.map(([cx, cy], di) => (
               <div
                 key={di}
                 style={{
@@ -82,25 +86,14 @@ export function SimpleDice({
                   width: 14,
                   height: 14,
                   borderRadius: "50%",
-                  background: "#1A1008",
+                  background: "#ffffff",
                   left: `${cx}%`,
                   top: `${cy}%`,
                   transform: "translate(-50%, -50%)",
-                  boxShadow: "inset 0 1px 3px rgba(0,0,0,0.4)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
                 }}
               />
             ))}
-
-            {!rolling && showBlank && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: 12,
-                  background: "linear-gradient(145deg, rgba(0,0,0,0.35) 0%, rgba(255,255,255,0.04) 100%)",
-                }}
-              />
-            )}
 
             {rolling && (
               <div

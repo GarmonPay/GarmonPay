@@ -728,12 +728,15 @@ export default function CeloRoomPage() {
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Load room data immediately (anon client — works without auth if RLS allows)
+    void loadRoomRef.current();
+
     getSessionAsync().then((s) => {
-      if (!s) { router.replace(`/login?redirect=/games/celo/${roomId}`); return; }
+      // Don't redirect unauthenticated users — show room preview instead
       setSession(s);
       setLoading(false);
     });
-  }, [router, roomId]);
+  }, [roomId]);
 
   // ── Realtime + presence (initial fetch runs after SUBSCRIBED) ─────────────────
   useEffect(() => {
@@ -1431,11 +1434,89 @@ export default function CeloRoomPage() {
   }
 
   // ── Render: loading ───────────────────────────────────────────────────────
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0e0118] flex items-center justify-center">
         <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
       </div>
+    );
+  }
+
+  // ── Render: unauthenticated preview (BUG 1) ───────────────────────────────
+  if (!session) {
+    const previewBankerName = room ? `${room.name}` : "C-Lo Room";
+    const previewBank = room ? `$${(room.current_bank_cents / 100).toFixed(2)}` : "—";
+    const previewMin = room ? `$${(room.min_bet_cents / 100).toFixed(2)}` : "—";
+    const previewPlayers = players.filter((p) => p.role !== "spectator").length;
+    const previewMax = room?.max_players ?? "?";
+    const redirectParam = encodeURIComponent(`/games/celo/${roomId}`);
+
+    return (
+      <main className="min-h-screen bg-[#050208] text-white flex flex-col items-center justify-center px-4 py-12"
+        style={{ background: "radial-gradient(ellipse at top, rgba(124,58,237,0.18) 0%, transparent 60%), #050208" }}
+      >
+        <div className="mb-8 text-center">
+          <p className="text-4xl mb-3">🎲</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">GarmonPay</p>
+          <p className="text-2xl font-bold text-white">C-Lo Street Dice</p>
+        </div>
+
+        <div className="w-full max-w-sm rounded-2xl border border-[#F5C842]/25 bg-[#0d0520]/90 p-6 space-y-5"
+          style={{ boxShadow: "0 0 40px rgba(124,58,237,0.2)", backdropFilter: "blur(12px)" }}
+        >
+          <div className="text-center">
+            <p className="text-lg font-bold text-[#F5C842]">{previewBankerName}</p>
+            {room && (
+              <p className="text-xs text-violet-400/60 mt-1">
+                {room.room_type === "private" ? "🔒 Private Room" : "🌐 Public Room"}
+              </p>
+            )}
+          </div>
+
+          {room && (
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Bank</p>
+                <p className="text-base font-bold text-[#F5C842] font-mono mt-1">{previewBank}</p>
+              </div>
+              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Min Entry</p>
+                <p className="text-base font-bold text-white font-mono mt-1">{previewMin}</p>
+              </div>
+              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Players</p>
+                <p className="text-base font-bold text-white font-mono mt-1">{previewPlayers}/{previewMax}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <Link
+              href={`/login?redirect=${redirectParam}`}
+              className="block w-full rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-3.5 text-center font-bold text-black text-sm shadow-lg shadow-amber-900/30"
+            >
+              Login to Join
+            </Link>
+            <Link
+              href={`/register?redirect=${redirectParam}`}
+              className="block w-full rounded-xl border border-[#7C3AED]/50 bg-[#7C3AED]/15 py-3.5 text-center font-semibold text-violet-300 text-sm hover:bg-[#7C3AED]/25 transition-all"
+            >
+              Sign Up &amp; Join
+            </Link>
+          </div>
+
+          <p className="text-center text-xs text-violet-400/50">
+            Already have an account?{" "}
+            <Link href={`/login?redirect=${redirectParam}`} className="text-[#F5C842] hover:underline">
+              Login to join instantly
+            </Link>
+          </p>
+        </div>
+
+        <Link href="/games/celo" className="mt-6 text-xs text-violet-400/50 hover:text-violet-300 transition-colors">
+          ← View all C-Lo rooms
+        </Link>
+      </main>
     );
   }
 
