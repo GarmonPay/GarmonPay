@@ -119,7 +119,7 @@ export default function DashboardPage() {
     }).catch(() => setStripeStatusMessage(null));
   }, [depositModalOpen]);
 
-  // Available balance: `profiles.balance` / `balance_cents` via /api/dashboard + client Supabase refresh.
+  // Main balance: GET /api/dashboard `balanceCents` (canonical wallet_balances). Client profile fetch is fallback only.
   const refetchParam = searchParams.get("refetch");
   useEffect(() => {
     if (refetchParam !== "1") return;
@@ -254,10 +254,10 @@ export default function DashboardPage() {
 
   const apiBalanceErr = (data as { balanceError?: string | null } | null)?.balanceError ?? null;
   const balanceCents =
-    profileBalanceCents !== null
-      ? profileBalanceCents
-      : data?.balanceCents != null
-        ? data.balanceCents
+    data?.balanceCents != null
+      ? data.balanceCents
+      : profileBalanceCents !== null
+        ? profileBalanceCents
         : null;
   const balanceDisplayError =
     balanceCents === null

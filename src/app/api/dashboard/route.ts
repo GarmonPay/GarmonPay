@@ -11,6 +11,7 @@ import {
 import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
 import { resolveProfileBalanceCents } from "@/lib/profile-balance";
+import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { computeTaxInfoRequired } from "@/lib/reportable-earnings";
 import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
     earningsWeekCents: 0,
     earningsMonthCents: 0,
     balanceCents: null as number | null,
+    profileBalanceCentsLegacy: null as number | null,
     balanceError: "Unable to load dashboard" as string | null,
     adCreditBalanceCents: 0,
     withdrawableCents: null as number | null,
@@ -60,34 +62,39 @@ export async function GET(request: Request) {
         if (authError || !authUser) {
           return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
+        /** Main wallet display: `wallet_balances` via ledger (same as GET /api/wallet). */
         let balanceCents: number | null = null;
         let balanceError: string | null = null;
+        /** Transitional: `profiles.balance` mirror only — for drift checks; do not use for spend limits. */
+        let profileBalanceCentsLegacy: number | null = null;
         {
-          const r1 = await supabase
-            .from("profiles")
-            .select("balance, balance_cents")
-            .eq("id", authUser.id)
-            .maybeSingle();
-          const missingCol =
-            r1.error &&
-            (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
-              (r1.error as { code?: string }).code === "42703");
-          const r2 = missingCol
-            ? await supabase.from("profiles").select("balance").eq("id", authUser.id).maybeSingle()
-            : null;
-          const profileRow = missingCol && r2 ? r2.data : r1.data;
-          const profileErr = missingCol && r2 ? r2.error : r1.error;
-
-          if (profileErr) {
-            console.error("Dashboard profiles fetch error:", profileErr);
-            balanceError = profileErr.message;
-          } else {
-            const resolved = resolveProfileBalanceCents(profileRow);
-            if (resolved.ok) {
-              balanceCents = resolved.cents;
-            } else {
-              balanceError = resolved.message;
-            }
+          const [canonicalCents, profileResolved] = await Promise.all([
+            getCanonicalBalanceCents(authUser.id),
+            (async () => {
+              const r1 = await supabase
+                .from("profiles")
+                .select("balance, balance_cents")
+                .eq("id", authUser.id)
+                .maybeSingle();
+              const missingCol =
+                r1.error &&
+                (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
+                  (r1.error as { code?: string }).code === "42703");
+              const r2 = missingCol
+                ? await supabase.from("profiles").select("balance").eq("id", authUser.id).maybeSingle()
+                : null;
+              const profileRow = missingCol && r2 ? r2.data : r1.data;
+              const profileErr = missingCol && r2 ? r2.error : r1.error;
+              if (profileErr) {
+                console.error("Dashboard profiles fetch error (legacy mirror only):", profileErr);
+                return { ok: false as const, message: profileErr.message };
+              }
+              return resolveProfileBalanceCents(profileRow);
+            })(),
+          ]);
+          balanceCents = canonicalCents;
+          if (profileResolved.ok) {
+            profileBalanceCentsLegacy = profileResolved.cents;
           }
         }
 
@@ -193,6 +200,7 @@ export async function GET(request: Request) {
           earningsMonthCents,
           balanceCents,
           balanceError,
+          profileBalanceCentsLegacy,
           adCreditBalanceCents,
           withdrawableCents,
           totalEarningsCents,
@@ -231,7 +239,9 @@ export async function GET(request: Request) {
     const admin = createAdminClient();
     let balanceCents: number | null = null;
     let balanceError: string | null = null;
+    let profileBalanceCentsLegacy: number | null = null;
     if (admin) {
+      balanceCents = await getCanonicalBalanceCents(userIdHeader);
       const r1 = await admin.from("profiles").select("balance, balance_cents").eq("id", userIdHeader).maybeSingle();
       const missingCol =
         r1.error &&
@@ -243,11 +253,10 @@ export async function GET(request: Request) {
       const prof = missingCol && r2 ? r2.data : r1.data;
       const pe = missingCol && r2 ? r2.error : r1.error;
       if (pe) {
-        balanceError = pe.message;
+        console.error("Dashboard profiles fetch error (legacy mirror, x-user-id):", pe.message);
       } else {
         const resolved = resolveProfileBalanceCents(prof);
-        if (resolved.ok) balanceCents = resolved.cents;
-        else balanceError = resolved.message;
+        if (resolved.ok) profileBalanceCentsLegacy = resolved.cents;
       }
     } else {
       balanceError = "Balance unavailable (server configuration)";
@@ -258,6 +267,7 @@ export async function GET(request: Request) {
       earningsMonthCents: 0,
       balanceCents,
       balanceError,
+      profileBalanceCentsLegacy,
       adCreditBalanceCents: 0,
       withdrawableCents: balanceCents,
       totalEarningsCents: 0,

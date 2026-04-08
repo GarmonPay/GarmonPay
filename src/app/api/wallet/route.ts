@@ -3,9 +3,8 @@ import { getAuthUserId } from "@/lib/auth-request";
 import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 /**
  * GET /api/wallet
- * Returns canonical balance in cents: `wallet_balances` first (same as Stripe / ledger),
- * then `users.balance`. Matches web dashboard and avoids stale `users.balance` when
- * it drifts from the ledger.
+ * Returns canonical balance in cents from `wallet_balances` (same source as
+ * `wallet_ledger_entry` and GET /api/dashboard `balanceCents`).
  */
 export async function GET(req: Request) {
   const userId = await getAuthUserId(req);
