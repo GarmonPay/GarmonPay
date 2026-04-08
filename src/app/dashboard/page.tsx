@@ -551,34 +551,34 @@ export default function DashboardPage() {
 
       {/* ——— GPay Balance (internal rewards; not USD) ——— */}
       <section
-        className="animate-slide-up card-lux overflow-hidden border border-emerald-500/30 bg-emerald-950/25 p-6 tablet:p-8"
+        className="animate-slide-up card-lux overflow-hidden border border-amber-500/35 bg-gradient-to-br from-amber-950/40 to-yellow-950/20 p-6 tablet:p-8"
         aria-label="GPay Balance"
       >
-        <h2 className="text-lg font-bold text-emerald-100">GPay Balance</h2>
+        <h2 className="text-lg font-bold text-amber-200">GPay Balance</h2>
         <p className="mt-1 text-xs leading-relaxed text-fintech-muted">
           Internal rewards — not US dollars. Separate from Available Balance above.
         </p>
-        <p className="mt-5 text-sm font-medium text-emerald-200/80">Available GPay Balance</p>
-        <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-emerald-50 tablet:text-4xl">
+        <p className="mt-5 text-sm font-medium text-amber-200/90">Available GPay Balance</p>
+        <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-amber-100 tablet:text-4xl">
           {formatGpayMinor(gpayBalance.gpayAvailableBalanceMinor)}{" "}
-          <span className="text-lg font-semibold text-emerald-300/90">GP</span>
+          <span className="text-lg font-semibold text-amber-400/95">GP</span>
         </p>
-        <div className="mt-6 grid grid-cols-1 gap-4 border-t border-emerald-500/20 pt-5 tablet:grid-cols-3 tablet:gap-6">
+        <div className="mt-6 grid grid-cols-1 gap-4 border-t border-amber-500/25 pt-5 tablet:grid-cols-3 tablet:gap-6">
           <div>
             <p className="text-xs font-medium text-fintech-muted">Pending Claims</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+            <p className="mt-1 font-mono text-lg font-semibold text-amber-100/95">
               {formatGpayMinor(gpayBalance.gpayPendingClaimBalanceMinor)} GP
             </p>
           </div>
           <div>
             <p className="text-xs font-medium text-fintech-muted">Total Claimed</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+            <p className="mt-1 font-mono text-lg font-semibold text-amber-100/95">
               {formatGpayMinor(gpayBalance.gpayClaimedBalanceMinor)} GP
             </p>
           </div>
           <div>
             <p className="text-xs font-medium text-fintech-muted">Lifetime Earned</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+            <p className="mt-1 font-mono text-lg font-semibold text-amber-100/95">
               {formatGpayMinor(gpayBalance.gpayLifetimeEarnedMinor)} GP
             </p>
           </div>
@@ -587,7 +587,7 @@ export default function DashboardPage() {
           <button
             type="button"
             disabled
-            className="btn-press min-h-touch w-full cursor-not-allowed rounded-xl border border-emerald-500/40 bg-emerald-900/40 px-5 py-3 text-sm font-semibold text-emerald-200/70 opacity-80 tablet:max-w-xs"
+            className="btn-press min-h-touch w-full cursor-not-allowed rounded-xl border border-amber-500/45 bg-amber-950/50 px-5 py-3 text-sm font-semibold text-amber-200/75 opacity-80 tablet:max-w-xs"
             title="Coming soon"
           >
             Claim GPay

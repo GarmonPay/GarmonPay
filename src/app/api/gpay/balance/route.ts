@@ -22,5 +22,8 @@ export async function GET(request: Request) {
     gpayPendingClaimBalanceMinor: snap.pending_claim_minor,
     gpayClaimedBalanceMinor: snap.claimed_lifetime_minor,
     gpayLifetimeEarnedMinor: snap.lifetime_earned_minor,
+    /** Aliases (minor units = same scale as *_Minor fields). */
+    gpayBalanceCents: snap.available_minor,
+    gpayLifetimeEarnedCents: snap.lifetime_earned_minor,
   });
 }
