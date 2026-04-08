@@ -4,20 +4,102 @@ import { isAdmin } from "@/lib/admin-auth";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import Stripe from "stripe";
 
+const STRIPE_RECOVERY_PRODUCT_TYPE = "stripe_recovery";
+
+/** When ledger ref already exists (webhook or prior run), attach recovery-labeled reporting rows only. */
+async function backfillRecoveryReporting(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  params: {
+    userId: string;
+    sessionId: string;
+    amountTotal: number;
+    amountDollars: number;
+    customerEmail: string;
+    currency: string;
+  }
+): Promise<void> {
+  const { userId, sessionId, amountTotal, amountDollars, customerEmail, currency } = params;
+
+  const { data: sp } = await supabase.from("stripe_payments").select("id").eq("stripe_session_id", sessionId).maybeSingle();
+  if (!sp) {
+    const { error } = await supabase.from("stripe_payments").insert({
+      stripe_session_id: sessionId,
+      session_id: sessionId,
+      user_id: userId,
+      email: customerEmail || "unknown",
+      amount: amountDollars,
+      currency,
+      product_type: STRIPE_RECOVERY_PRODUCT_TYPE,
+      status: "completed",
+    });
+    if (error && (error as { code?: string }).code !== "23505") {
+      console.error("[recover-stripe-payments] backfill stripe_payments:", error.message);
+    }
+  }
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("reference_id", sessionId)
+    .eq("type", "deposit")
+    .maybeSingle();
+  if (!tx) {
+    const row: Record<string, unknown> = {
+      user_id: userId,
+      type: "deposit",
+      amount: amountTotal,
+      status: "completed",
+      description: `Stripe recovery (ledger already credited) ${sessionId}`,
+      reference_id: sessionId,
+      source: "stripe_recovery",
+    };
+    const { error: e1 } = await supabase.from("transactions").insert(row);
+    if (e1 && (e1 as { code?: string }).code === "42703") {
+      await supabase.from("transactions").insert({
+        user_id: userId,
+        type: "deposit",
+        amount: amountTotal,
+        status: "completed",
+        description: `Stripe recovery (ledger already credited) ${sessionId}`,
+        reference_id: sessionId,
+      });
+    } else if (e1 && (e1 as { code?: string }).code !== "23505") {
+      console.error("[recover-stripe-payments] backfill transactions:", e1.message);
+    }
+  }
+
+  const { data: dep } = await supabase
+    .from("deposits")
+    .select("id")
+    .or(`stripe_session.eq.${sessionId},stripe_session_id.eq.${sessionId}`)
+    .maybeSingle();
+  if (!dep) {
+    await supabase
+      .from("deposits")
+      .insert({
+        user_id: userId,
+        amount: amountDollars,
+        stripe_session: sessionId,
+        stripe_session_id: sessionId,
+        status: "completed",
+      })
+      .then(({ error: e }) => {
+        if (e) console.error("[recover-stripe-payments] backfill deposits:", e.message);
+      });
+  }
+}
+
 /**
  * POST /api/admin/recover-stripe-payments
  *
- * RECOVER ALL STRIPE PAYMENTS AND CREDIT USER BALANCES
+ * Backfills missed Stripe Checkout sessions: credits **`wallet_balances`** via the same canonical
+ * path as the live webhook (`walletLedgerEntry` type **`deposit`**, reference `stripe_session_<id>`).
+ * Reporting distinguishes recovery from live webhook:
+ * - **`stripe_payments.product_type`** = `stripe_recovery`
+ * - **`transactions.source`** = `stripe_recovery` when the column exists
+ * - **`transactions.description`** contains `Stripe recovery`
  *
- * 1. Uses Stripe secret key
- * 2. Fetches all checkout sessions where payment_status = paid
- * 3. For each: customer_email, amount_total
- * 4. Find matching user in Supabase by email
- * 5. Add amount to users.balance and users.total_deposits
- * 6. Save in transactions (type=deposit, source=stripe_recovery)
- * 7. Prevent duplicates: check stripe_session_id / reference_id before inserting
- * 8. Return: recovered count, total amount
- * Admin only.
+ * Ledger type remains `deposit` because these are real Stripe card funds, not discretionary admin credits.
  */
 export async function POST(request: Request) {
   if (!(await isAdmin(request))) {
@@ -123,14 +205,6 @@ export async function POST(request: Request) {
 
     const ledgerRef = `stripe_session_${sessionId}`;
     const ledger = await walletLedgerEntry(userId, "deposit", amountTotal, ledgerRef);
-    if (!ledger.success) {
-      if (ledger.message === "Duplicate transaction") {
-        continue;
-      }
-      console.error("[recover-stripe-payments] walletLedgerEntry:", ledger.message);
-      continue;
-    }
-
     const amountDollars = amountTotal / 100;
     const currency = (session.currency ?? "usd").toLowerCase();
     const metadata = {
@@ -139,13 +213,32 @@ export async function POST(request: Request) {
       stripe_customer_id: stripeCustomerId || undefined,
     };
 
-    // stripe_payments
+    if (!ledger.success) {
+      const dup = typeof ledger.message === "string" && /duplicate/i.test(ledger.message);
+      if (dup) {
+        await backfillRecoveryReporting(supabase, {
+          userId,
+          sessionId,
+          amountTotal,
+          amountDollars,
+          customerEmail,
+          currency,
+        });
+        continue;
+      }
+      console.error("[recover-stripe-payments] walletLedgerEntry:", ledger.message);
+      continue;
+    }
+
+    // stripe_payments — product_type distinguishes admin recovery from live webhook rows
     const stripePaymentRow = {
       stripe_session_id: sessionId,
+      session_id: sessionId,
       user_id: userId,
       email: customerEmail || "unknown",
       amount: amountDollars,
       currency,
+      product_type: STRIPE_RECOVERY_PRODUCT_TYPE,
       status: "completed",
       metadata,
       created_at: new Date().toISOString(),
@@ -154,30 +247,35 @@ export async function POST(request: Request) {
     if (spErr) {
       const code = (spErr as { code?: string }).code;
       if (code === "42703") {
-        await supabase.from("stripe_payments").insert({
-          stripe_session_id: sessionId,
-          user_id: userId,
-          email: customerEmail || "unknown",
-          amount: amountDollars,
-          currency,
-          status: "completed",
-          created_at: new Date().toISOString(),
-        }).then(({ error: e }) => {
-          if (e && (e as { code?: string }).code !== "23505") console.error("[recover-stripe-payments] stripe_payments:", e.message);
-        });
+        await supabase
+          .from("stripe_payments")
+          .insert({
+            stripe_session_id: sessionId,
+            session_id: sessionId,
+            user_id: userId,
+            email: customerEmail || "unknown",
+            amount: amountDollars,
+            currency,
+            product_type: STRIPE_RECOVERY_PRODUCT_TYPE,
+            status: "completed",
+            created_at: new Date().toISOString(),
+          })
+          .then(({ error: e }) => {
+            if (e && (e as { code?: string }).code !== "23505") console.error("[recover-stripe-payments] stripe_payments:", e.message);
+          });
       } else if (code !== "23505") {
         console.error("[recover-stripe-payments] stripe_payments insert error:", spErr);
         continue;
       }
     }
 
-    // 6) transactions: type=deposit, source=stripe_recovery
+    // transactions: type=deposit (real funds); source/description flag recovery vs webhook
     const txRow: Record<string, unknown> = {
       user_id: userId,
       type: "deposit",
       amount: amountTotal,
       status: "completed",
-      description: `Stripe recovery ${sessionId}`,
+      description: `Stripe recovery (admin) ${sessionId}`,
       reference_id: sessionId,
       source: "stripe_recovery",
     };
@@ -190,7 +288,7 @@ export async function POST(request: Request) {
           type: "deposit",
           amount: amountTotal,
           status: "completed",
-          description: `Stripe recovery ${sessionId}`,
+          description: `Stripe recovery (admin) ${sessionId}`,
           reference_id: sessionId,
         });
         if (txErr2 && (txErr2 as { code?: string }).code !== "23505") {

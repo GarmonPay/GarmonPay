@@ -5,6 +5,13 @@
 
 import { createAdminClient } from "@/lib/supabase";
 
+/**
+ * Ledger `type` values for `wallet_ledger_entry` (DB-enforced).
+ * - `deposit`: funds from Stripe Checkout wallet top-up **or** admin recovery of the same session
+ *   (reference `stripe_session_<checkout_session_id>` — idempotent with live webhook).
+ * - `admin_adjustment`: manual platform credits/debits (reconciliation, refunds, voids) — not Stripe UI deposits.
+ * - `game_win` / `game_play` / etc.: product flows (includes e.g. social task rewards as `game_win`).
+ */
 export type WalletLedgerType =
   | "deposit"
   | "withdrawal"
