@@ -1,7 +1,8 @@
-"use client";
+'use client'
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from "three";
 
 const GOLD = "#f5c842";
@@ -264,26 +265,29 @@ export function CoinFlip3D({
     <div
       className={`relative w-full min-h-[280px] md:min-h-[360px] rounded-xl overflow-hidden border border-white/10 bg-[#0e0118] ${className}`}
     >
-      <Canvas
-        shadows
-        camera={{ position: [0, 0.55, 4.6], fov: 40 }}
-        gl={{ antialias: true, alpha: true }}
-        dpr={[1, 2]}
-      >
-        <color attach="background" args={["#0e0118"]} />
-        <ambientLight intensity={0.38} />
-        <directionalLight position={[4, 10, 6]} intensity={1.05} castShadow />
-        <pointLight position={[-2.8, 2.2, 3.8]} intensity={48} color={ACCENT} distance={22} decay={2} />
-        <pointLight position={[2.5, -0.8, 2.2]} intensity={32} color={GOLD} distance={18} decay={2} />
-        <CoinMesh
-          targetFace={targetFace}
-          flipGeneration={flipGeneration}
-          isFlipping={isFlipping}
-          won={won}
-          onFlipStart={onFlipStartCb}
-          onResult={onResultCb}
-        />
-      </Canvas>
+      <div style={{ width: "100%", height: "100%" }}>
+        <Canvas
+          shadows
+          camera={{ position: [0, 0.55, 4.6], fov: 40 }}
+          gl={{ antialias: true, alpha: true }}
+          dpr={[1, 2]}
+          style={{ width: "100%", height: "100%" }}
+        >
+          <color attach="background" args={["#0e0118"]} />
+          <ambientLight intensity={0.38} />
+          <directionalLight position={[4, 10, 6]} intensity={1.05} castShadow />
+          <pointLight position={[-2.8, 2.2, 3.8]} intensity={48} color={ACCENT} distance={22} decay={2} />
+          <pointLight position={[2.5, -0.8, 2.2]} intensity={32} color={GOLD} distance={18} decay={2} />
+          <CoinMesh
+            targetFace={targetFace}
+            flipGeneration={flipGeneration}
+            isFlipping={isFlipping}
+            won={won}
+            onFlipStart={onFlipStartCb}
+            onResult={onResultCb}
+          />
+        </Canvas>
+      </div>
     </div>
   );
 }

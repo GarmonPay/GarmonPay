@@ -4,17 +4,23 @@ const nextConfig = {
   output: "standalone",
   experimental: {
     optimizePackageImports: ["three"],
+    esmExternals: "loose",
   },
   webpack: (config, { isServer }) => {
+    const ext = config.externals;
+    let nextExternals = [
+      ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
+      { canvas: "canvas" },
+    ];
     if (isServer) {
-      const ext = config.externals;
-      config.externals = [
-        ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
+      nextExternals = [
+        ...nextExternals,
         "three",
         "@react-three/fiber",
         "@react-three/drei",
       ];
     }
+    config.externals = nextExternals;
     return config;
   },
   async headers() {

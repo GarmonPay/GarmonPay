@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -522,3 +522,5 @@ export function CoinFlipPanel() {
     </div>
   );
 }
+
+export default CoinFlipPanel;
