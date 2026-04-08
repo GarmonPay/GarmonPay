@@ -59,9 +59,14 @@ export function Sidebar({ onNavigate }: SidebarProps) {
             key={href}
             href={href}
             onClick={onNavigate}
-            className="px-3 py-2 rounded-lg text-sm font-medium text-fintech-muted hover:text-white hover:bg-white/5"
+            className="px-3 py-2 rounded-lg text-sm font-medium text-fintech-muted hover:text-white hover:bg-white/5 inline-flex items-center flex-wrap gap-y-1"
           >
-            {label}
+            <span>{label}</span>
+            {href === "/dashboard/arena" ? (
+              <span className="text-xs bg-fintech-accent/20 text-fintech-accent border border-fintech-accent/30 rounded-full px-2 py-0.5 ml-2">
+                Soon
+              </span>
+            ) : null}
           </Link>
         ))}
         <button
