@@ -6,9 +6,9 @@ import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 /**
  * POST /api/wallet/fund
- * Create Stripe Checkout session to add money to user's wallet.
+ * Alternate checkout entry for wallet top-up (same canonical path as `/api/wallet/deposit`).
+ * Webhook: `checkout.session.completed` → `wallet_ledger_entry` with `product_type: wallet_fund`.
  * Body: { amountCents: number } (min $5)
- * On success (webhook): amount saved to Supabase, user balance updated, transaction ID stored.
  */
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {

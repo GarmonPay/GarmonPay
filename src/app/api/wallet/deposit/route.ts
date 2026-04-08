@@ -6,8 +6,9 @@ import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 
 /**
  * POST /api/wallet/deposit
- * Initiates Stripe Checkout for deposit. Actual wallet credit happens in Stripe webhook
- * via wallet_ledger_entry (with reference = session id to prevent duplicates).
+ * Initiates Stripe Checkout for deposit. Credit is applied once in
+ * `/api/stripe/webhook` on `checkout.session.completed` via `wallet_ledger_entry`
+ * (reference `stripe_session_<id>` → `wallet_balances`). Metadata `product_type: wallet_deposit`.
  * Fraud: require strict auth (Bearer only).
  */
 export async function POST(req: Request) {

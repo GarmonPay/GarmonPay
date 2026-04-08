@@ -12,6 +12,11 @@ import { MEMBERSHIP_PRICE_ENV_BY_TIER, type PaidMembershipTier } from "@/lib/mem
  * Stripe webhook — use this URL in Stripe Dashboard (Developers → Webhooks):
  *   https://garmonpay.com/api/stripe/webhook
  * Do not use the file path (e.g. .../src/app/api/stripe/webhook/route.ts).
+ *
+ * Wallet USD top-up: `checkout.session.completed` credits `wallet_balances` exactly once via
+ * `wallet_ledger_entry` (reference `stripe_session_<session.id>`). Reporting rows
+ * (`transactions`, `deposits`, `stripe_payments`) are best-effort; replays backfill without
+ * double-counting `total_deposits` / platform revenue when the ledger row already exists.
  */
 export const runtime = "nodejs";
 
@@ -63,6 +68,107 @@ async function safeMembershipUpdate(
       updated_at: now,
     })
     .eq("id", userId);
+}
+
+/**
+ * After a successful `wallet_ledger_entry` deposit for Stripe Checkout, mirror rows into
+ * reporting tables. Safe to call on webhook retries when `incrementUserTotalDeposits` /
+ * `recordStripeRevenue` are false (ledger already credited; avoid double-counting).
+ */
+async function finalizeWalletDepositReporting(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  params: {
+    user_id: string;
+    session_id: string;
+    amount_total: number;
+    amount_dollars: number;
+    customer_email: string;
+    product_type_label: string;
+    payment_intent_id: string | null;
+    currency: string;
+    incrementUserTotalDeposits: boolean;
+    recordStripeRevenue: boolean;
+  }
+): Promise<void> {
+  const {
+    user_id,
+    session_id,
+    amount_total,
+    amount_dollars,
+    customer_email,
+    product_type_label,
+    payment_intent_id,
+    currency,
+    incrementUserTotalDeposits,
+    recordStripeRevenue,
+  } = params;
+
+  if (incrementUserTotalDeposits) {
+    const { data: uRow } = await supabase.from("users").select("total_deposits").eq("id", user_id).single();
+    const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
+    await supabase
+      .from("users")
+      .update({ total_deposits: prevTotal + amount_total, updated_at: new Date().toISOString() })
+      .eq("id", user_id);
+  }
+
+  const { data: existingTx } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("reference_id", session_id)
+    .eq("type", "deposit")
+    .maybeSingle();
+  if (!existingTx) {
+    const { error } = await supabase.from("transactions").insert({
+      user_id,
+      type: "deposit",
+      amount: amount_total,
+      status: "completed",
+      description: `Stripe checkout ${session_id}`,
+      reference_id: session_id,
+      stripe_session: session_id,
+    });
+    if (error) console.error("[Stripe webhook] transactions insert:", error.message);
+  }
+
+  if (recordStripeRevenue) {
+    recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
+  }
+
+  const { data: existingDeposit } = await supabase
+    .from("deposits")
+    .select("id")
+    .or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`)
+    .maybeSingle();
+  if (!existingDeposit) {
+    const { error } = await supabase.from("deposits").insert({
+      user_id,
+      amount: amount_dollars,
+      stripe_session: session_id,
+      stripe_session_id: session_id,
+      status: "completed",
+    });
+    if (error) console.error("[Stripe webhook] deposits insert:", error.message);
+  }
+
+  const { data: existingSp } = await supabase.from("stripe_payments").select("id").eq("stripe_session_id", session_id).maybeSingle();
+  if (!existingSp) {
+    const { error } = await supabase.from("stripe_payments").insert({
+      user_id,
+      email: customer_email || "unknown",
+      amount: amount_dollars,
+      currency: currency.toLowerCase(),
+      product_type: product_type_label,
+      stripe_session_id: session_id,
+      session_id: session_id,
+      status: "completed",
+      ...(payment_intent_id && {
+        stripe_payment_intent: payment_intent_id,
+        stripe_payment_intent_id: payment_intent_id,
+      }),
+    });
+    if (error) console.error("[Stripe webhook] stripe_payments insert:", error.message);
+  }
 }
 
 export async function GET() {
@@ -338,6 +444,9 @@ export async function POST(req: Request) {
         return new Response("OK", { status: 200 });
       }
     }
+    // Do not fall through: ad checkout must never credit the USD wallet ledger.
+    console.warn("[Stripe webhook] ad_deposit not applied — no wallet credit", { session_id, user_id });
+    return new Response("OK", { status: 200 });
   }
 
   if (product_type === "arena_store") {
@@ -423,63 +532,72 @@ export async function POST(req: Request) {
     return new Response("OK", { status: 200 });
   }
 
-  const ledgerResult = await walletLedgerEntry(user_id, "deposit", amount_total, `stripe_session_${session_id}`);
-  if (!ledgerResult.success) {
-    console.error("[Stripe webhook] walletLedgerEntry failed — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId, ledgerResult.message);
-    return new Response("Ledger credit failed", { status: 500 });
-  }
-  const { data: uRow } = await supabase.from("users").select("total_deposits").eq("id", user_id).single();
-  const prevTotal = Number((uRow as { total_deposits?: number })?.total_deposits ?? 0);
-  await supabase.from("users").update({ total_deposits: prevTotal + amount_total, updated_at: new Date().toISOString() }).eq("id", user_id);
-  console.log("[Stripe webhook] Balance credited via ledger — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
-
-  await supabase.from("transactions").insert({
-    user_id,
-    type: "deposit",
-    amount: amount_total,
-    status: "completed",
-    description: `Stripe checkout ${session_id}`,
-    reference_id: session_id,
-    stripe_session: session_id,
-  }).then(({ error }) => {
-    if (error) console.error("[Stripe webhook] transactions insert:", error.message);
-  });
-
-  recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue:", e));
-  const { data: existingDeposit } = await supabase.from("deposits").select("id").or(`stripe_session.eq.${session_id},stripe_session_id.eq.${session_id}`).maybeSingle();
-
-  if (!existingDeposit) {
-    await supabase.from("deposits").insert({
-      user_id,
-      amount: amount_dollars,
-      stripe_session: session_id,
-      stripe_session_id: session_id,
-      status: "completed",
-    }).then(({ error }) => {
-      if (error) console.error("[Stripe webhook] deposits insert:", error.message);
-    });
-  }
-
+  const walletLedgerRef = `stripe_session_${session_id}`;
   const payment_intent_id =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : (session.payment_intent as Stripe.PaymentIntent)?.id ?? null;
+  const product_type_label = (session.metadata?.product_type as string) || "payment";
+  const sessionCurrency = (session.currency ?? "usd").toString();
 
-  await supabase.from("stripe_payments").insert({
+  const { data: existingLedgerRow } = await supabase
+    .from("wallet_ledger")
+    .select("id")
+    .eq("reference", walletLedgerRef)
+    .maybeSingle();
+
+  if (existingLedgerRow) {
+    console.log("[Stripe webhook] wallet deposit replay — ledger already credited", { session_id, user_id, eventId });
+    await finalizeWalletDepositReporting(supabase, {
+      user_id,
+      session_id,
+      amount_total,
+      amount_dollars,
+      customer_email,
+      product_type_label,
+      payment_intent_id,
+      currency: sessionCurrency,
+      incrementUserTotalDeposits: false,
+      recordStripeRevenue: false,
+    });
+    return new Response("OK", { status: 200 });
+  }
+
+  const ledgerResult = await walletLedgerEntry(user_id, "deposit", amount_total, walletLedgerRef);
+  if (!ledgerResult.success) {
+    const dup = typeof ledgerResult.message === "string" && /duplicate/i.test(ledgerResult.message);
+    if (dup) {
+      console.log("[Stripe webhook] wallet deposit duplicate ledger ref (retry/race)", { session_id, user_id, eventId });
+      await finalizeWalletDepositReporting(supabase, {
+        user_id,
+        session_id,
+        amount_total,
+        amount_dollars,
+        customer_email,
+        product_type_label,
+        payment_intent_id,
+        currency: sessionCurrency,
+        incrementUserTotalDeposits: false,
+        recordStripeRevenue: false,
+      });
+      return new Response("OK", { status: 200 });
+    }
+    console.error("[Stripe webhook] walletLedgerEntry failed — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId, ledgerResult.message);
+    return new Response("Ledger credit failed", { status: 500 });
+  }
+
+  console.log("[Stripe webhook] Balance credited via ledger — user_id:", user_id, "amount_cents:", amount_total, "eventId:", eventId);
+  await finalizeWalletDepositReporting(supabase, {
     user_id,
-    email: customer_email || "unknown",
-    amount: amount_dollars,
-    currency: (session.currency ?? "usd").toLowerCase(),
-    product_type: (session.metadata?.product_type as string) || "payment",
-    stripe_session_id: session_id,
-    session_id: session_id,
-    status: "completed",
-    ...(payment_intent_id && {
-      stripe_payment_intent: payment_intent_id,
-      stripe_payment_intent_id: payment_intent_id,
-    }),
-  }).then(({ error }) => {
-    if (error) console.error("[Stripe webhook] stripe_payments insert:", error.message);
+    session_id,
+    amount_total,
+    amount_dollars,
+    customer_email,
+    product_type_label,
+    payment_intent_id,
+    currency: sessionCurrency,
+    incrementUserTotalDeposits: true,
+    recordStripeRevenue: true,
   });
 
   return new Response("OK", { status: 200 });
