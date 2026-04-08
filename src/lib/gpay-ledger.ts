@@ -15,7 +15,9 @@ export type GpayLedgerEventType =
   | "admin_adjustment"
   | "claim_reserve"
   | "claim_release"
-  | "claim_settle";
+  | "claim_settle"
+  | "game_play"
+  | "game_win";
 
 function supabase() {
   const c = createAdminClient();
@@ -45,6 +47,7 @@ export type GpayLedgerResult = GpayLedgerSuccess | GpayLedgerError;
  * - manual_debit: negative amount_minor.
  * - admin_adjustment: non-zero signed; positive credits lifetime_earned; negative does not.
  * - claim_*: positive magnitude; claim_reserve moves available → pending; claim_release reverses; claim_settle pending → claimed.
+ * - game_play: negative amount_minor (bet debit). game_win: positive amount_minor (payout).
  */
 export async function gpayLedgerEntry(
   userId: string,

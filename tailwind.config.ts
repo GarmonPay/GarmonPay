@@ -51,6 +51,7 @@ const config: Config = {
         "fade-in": "fadeIn 0.3s ease-out",
         "slide-up": "slideUp 0.35s ease-out",
         "scale-in": "scaleIn 0.2s ease-out",
+        "coin-flip-spin": "coinFlipSpin 2.2s ease-in-out forwards",
       },
       keyframes: {
         fadeIn: {
@@ -64,6 +65,10 @@ const config: Config = {
         scaleIn: {
           "0%": { opacity: "0.95", transform: "scale(0.98)" },
           "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        coinFlipSpin: {
+          "0%": { transform: "rotateY(0deg)" },
+          "100%": { transform: "rotateY(720deg)" },
         },
       },
       transitionDuration: {

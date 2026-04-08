@@ -16,6 +16,7 @@ const nav: { href: string; label: string; soon?: boolean }[] = [
   { href: "/dashboard/games/scratch", label: "Scratch Card", soon: true },
   { href: "/dashboard/games/mystery-box", label: "Mystery Box", soon: true },
   { href: "/dashboard/games/pinball", label: "Pinball", soon: true },
+  { href: "/dashboard/coin-flip", label: "Coin Flip" },
   { href: "/dashboard/rewards", label: "Rewards" },
   { href: "/dashboard/earn", label: "Earn" },
   { href: "/dashboard/earn/social", label: "📱 Social Tasks" },

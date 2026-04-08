@@ -28,10 +28,17 @@ type PlatformMetrics = {
   totalUsers: number;
 };
 
+type CoinFlipAdminStats = {
+  totalFlipsToday: number;
+  totalHouseCutTodayMinor: number;
+  totalWageredTodayMinor: number;
+};
+
 export default function Dashboard() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getAdminSessionAsync>>>(null);
   const [stats, setStats] = useState(defaultStats);
   const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null);
+  const [coinFlipStats, setCoinFlipStats] = useState<CoinFlipAdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -79,6 +86,17 @@ export default function Dashboard() {
         if (data) setPlatformMetrics(data);
       })
       .catch(() => setPlatformMetrics(null));
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetch("/api/admin/coin-flip/stats", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: CoinFlipAdminStats | null) => {
+        if (data && typeof data.totalFlipsToday === "number") setCoinFlipStats(data);
+        else setCoinFlipStats(null);
+      })
+      .catch(() => setCoinFlipStats(null));
   }, [session]);
 
   function load() {
@@ -225,6 +243,38 @@ export default function Dashboard() {
             </>
           ) : (
             <p className="text-fintech-muted text-sm">Loading platform metrics…</p>
+          )}
+        </section>
+
+        <section className="mb-10 rounded-xl border border-emerald-500/25 bg-fintech-bg-card/90 p-5 shadow-lg">
+          <h2 className="text-sm font-semibold text-emerald-300 uppercase tracking-wider mb-4">
+            Coin Flip (GPay)
+          </h2>
+          <p className="text-xs text-fintech-muted mb-4">
+            Completed flips with <code className="text-fintech-muted">resolved_at</code> today (UTC). House cut is
+            10% of the 2× pot.
+          </p>
+          {coinFlipStats ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                <p className="text-xs text-fintech-muted uppercase">Total flips today</p>
+                <p className="text-2xl font-bold text-white mt-1">{coinFlipStats.totalFlipsToday}</p>
+              </div>
+              <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                <p className="text-xs text-fintech-muted uppercase">House cut today (GP)</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-1">
+                  {coinFlipStats.totalHouseCutTodayMinor.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                <p className="text-xs text-fintech-muted uppercase">GPay wagered today</p>
+                <p className="text-2xl font-bold text-amber-200 mt-1">
+                  {coinFlipStats.totalWageredTodayMinor.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-fintech-muted text-sm">Loading Coin Flip stats…</p>
           )}
         </section>
 
