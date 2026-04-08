@@ -76,18 +76,6 @@ export default function DashboardGamesPage() {
           Rewards are drawn from the platform budget. Play fair — all calculations are server-side.
           <Link href="/games" className="ml-2 text-fintech-accent hover:underline">Neon Game Station →</Link>
         </p>
-        <div className="mt-4 rounded-xl border border-[#eab308]/35 bg-fintech-bg-card/90 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-[#fde047]">Stake & Escape</h2>
-            <p className="text-xs text-fintech-muted mt-1">3D vault escape · server-timed · wallet stakes or free play</p>
-          </div>
-          <Link
-            href="/games/escape"
-            className="inline-flex justify-center rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white no-underline shrink-0"
-          >
-            Play →
-          </Link>
-        </div>
       </div>
 
       {noRewards && (
