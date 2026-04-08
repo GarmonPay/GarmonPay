@@ -82,7 +82,7 @@ export default function AdminRevenuePage() {
 
   if (!session) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[40vh] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[40vh] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
@@ -90,7 +90,7 @@ export default function AdminRevenuePage() {
 
   if (!data) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[40vh] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[40vh] text-fintech-muted">
         Loading…
       </div>
     );
@@ -100,37 +100,37 @@ export default function AdminRevenuePage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Fight Revenue</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Fight Revenue</h1>
+      <p className="text-fintech-muted mb-6">
         Platform revenue from fight arena fees (10% of each completed fight pot).
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] mb-1">Total Fight Revenue</p>
-          <p className="text-2xl font-bold text-[#10b981]">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
+          <p className="text-sm text-fintech-muted mb-1">Total Fight Revenue</p>
+          <p className="text-2xl font-bold text-emerald-400">
             {formatCents(data.totalFightRevenueCents)}
           </p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] mb-1">Daily Revenue</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
+          <p className="text-sm text-fintech-muted mb-1">Daily Revenue</p>
           <p className="text-2xl font-bold text-white">
             {formatCents(data.dailyRevenueCents)}
           </p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] mb-1">Monthly Revenue</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
+          <p className="text-sm text-fintech-muted mb-1">Monthly Revenue</p>
           <p className="text-2xl font-bold text-white">
             {formatCents(data.monthlyRevenueCents)}
           </p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-5">
-          <p className="text-sm text-[#9ca3af] mb-1">Fight Count</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
+          <p className="text-sm text-fintech-muted mb-1">Fight Count</p>
           <p className="text-2xl font-bold text-white">{data.fightCount}</p>
         </div>
       </div>
 
-      <div className="rounded-xl bg-[#111827] border border-white/10 p-6">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Profit Chart (last 30 days)</h2>
         <div className="flex items-end gap-1 h-48">
           {data.chartData.map((point, i) => (
@@ -140,12 +140,12 @@ export default function AdminRevenuePage() {
               title={`${formatShortDate(point.date)}: ${formatCents(point.amountCents)}`}
             >
               <div
-                className="w-full rounded-t bg-[#2563eb] min-h-[4px] transition-all"
+                className="w-full rounded-t bg-fintech-accent min-h-[4px] transition-all"
                 style={{
                   height: `${(point.amountCents / maxChartCents) * 100}%`,
                 }}
               />
-              <span className="text-[10px] text-[#6b7280] truncate w-full text-center">
+              <span className="text-[10px] text-fintech-muted truncate w-full text-center">
                 {i % 5 === 0 ? formatShortDate(point.date) : ""}
               </span>
             </div>

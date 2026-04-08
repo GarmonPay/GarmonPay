@@ -131,7 +131,7 @@ export default function AdminAdPackagesPage() {
   return (
     <div className="py-6 space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold text-white">Ad packages</h1>
+        <h1 className="text-xl font-bold text-white mb-2">Ad packages</h1>
         <p className="text-sm text-slate-400 mt-1">
           Prices and allotments sync to <code className="text-violet-300">public.ad_packages</code>. Each save rebuilds
           marketing copy from economics. Live campaigns bill advertisers{" "}
@@ -232,7 +232,7 @@ export default function AdminAdPackagesPage() {
         <button
           type="submit"
           disabled={creating}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:bg-fintech-accent/90 disabled:opacity-50"
         >
           {creating ? "Creating…" : "Create package"}
         </button>
@@ -348,7 +348,7 @@ function PackageEditor({
         type="button"
         onClick={() => onSave(pkg, draft)}
         disabled={!ok}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+        className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:bg-fintech-accent/90 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Save & sync copy
       </button>

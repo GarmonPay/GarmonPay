@@ -3,7 +3,7 @@
 /** Scroll hint + horizontal scroll wrapper; 0.8rem table text on viewports under 640px. */
 export function AdminScrollHint() {
   return (
-    <p className="mb-2 text-xs text-amber-200/90 block min-[640px]:hidden" role="note">
+    <p className="mb-2 text-xs text-fintech-muted block min-[640px]:hidden" role="note">
       Scroll to see more →
     </p>
   );

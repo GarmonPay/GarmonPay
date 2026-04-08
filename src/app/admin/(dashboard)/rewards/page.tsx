@@ -45,32 +45,32 @@ export default function AdminRewardsPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Rewards</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Rewards</h1>
+      <p className="text-fintech-muted mb-6">
         Earning-type transactions (earning, referral, referral_commission). Amounts are USD cents.
       </p>
       {!session ? (
-        <div className="text-[#9ca3af]">Redirecting to admin login…</div>
+        <div className="text-fintech-muted">Redirecting to admin login…</div>
       ) : (
         <>
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
       {loading ? (
-        <div className="text-[#9ca3af]">Loading…</div>
+        <div className="text-fintech-muted">Loading…</div>
       ) : transactions.length === 0 ? (
-        <div className="text-[#9ca3af]">No reward transactions.</div>
+        <div className="text-fintech-muted">No reward transactions.</div>
       ) : (
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">User ID</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Amount</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Description</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Date</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">User ID</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Amount</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Description</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Status</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,9 +78,9 @@ export default function AdminRewardsPage() {
                   <tr key={t.id} className="border-b border-white/5">
                     <td className="p-3 text-white font-mono text-sm">{t.user_id}</td>
                     <td className="p-3 text-white">${(Number(t.amount) / 100).toFixed(2)}</td>
-                    <td className="p-3 text-[#9ca3af]">{t.description ?? "—"}</td>
-                    <td className="p-3 text-[#9ca3af]">{t.status}</td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{new Date(t.created_at).toLocaleString()}</td>
+                    <td className="p-3 text-fintech-muted">{t.description ?? "—"}</td>
+                    <td className="p-3 text-fintech-muted">{t.status}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{new Date(t.created_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

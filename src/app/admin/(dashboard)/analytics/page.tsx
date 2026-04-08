@@ -39,25 +39,25 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Analytics</h1>
-      <p className="text-[#9ca3af] mb-6">Tracked events: login, ad_view, reward_earned, withdrawal_requested.</p>
+      <h1 className="text-xl font-bold text-white mb-2">Analytics</h1>
+      <p className="text-fintech-muted mb-6">Tracked events: login, ad_view, reward_earned, withdrawal_requested.</p>
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
       {loading ? (
-        <div className="text-[#9ca3af]">Loading…</div>
+        <div className="text-fintech-muted">Loading…</div>
       ) : events.length === 0 ? (
-        <div className="text-[#9ca3af]">No events yet.</div>
+        <div className="text-fintech-muted">No events yet.</div>
       ) : (
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">User ID</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Event</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Payload</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Date</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">User ID</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Event</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Payload</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -65,10 +65,10 @@ export default function AdminAnalyticsPage() {
                   <tr key={e.id} className="border-b border-white/5">
                     <td className="p-3 text-white font-mono text-sm">{e.user_id ?? "—"}</td>
                     <td className="p-3 text-white">{e.event_type}</td>
-                    <td className="p-3 text-[#9ca3af] text-sm max-w-xs truncate" title={JSON.stringify(e.payload)}>
+                    <td className="p-3 text-fintech-muted text-sm max-w-xs truncate" title={JSON.stringify(e.payload)}>
                       {Object.keys(e.payload || {}).length ? JSON.stringify(e.payload) : "—"}
                     </td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{new Date(e.created_at).toLocaleString()}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{new Date(e.created_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

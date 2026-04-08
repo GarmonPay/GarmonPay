@@ -42,7 +42,7 @@ export default function AdminWalletMonitorPage() {
 
   if (!session) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
@@ -51,7 +51,7 @@ export default function AdminWalletMonitorPage() {
   if (loading && !stats) {
     return (
       <div className="p-6">
-        <p className="text-[#9ca3af]">Loading…</p>
+        <p className="text-fintech-muted">Loading…</p>
       </div>
     );
   }
@@ -68,38 +68,38 @@ export default function AdminWalletMonitorPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Wallet Monitor</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Wallet Monitor</h1>
+      <p className="text-fintech-muted mb-6">
         Ledger-based wallet: total deposits, withdrawals, user balances, and platform profit.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Total deposits</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Total deposits</p>
           <p className="text-2xl font-bold text-white">{formatCents(s.totalDepositsCents)}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Total withdrawals</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Total withdrawals</p>
           <p className="text-2xl font-bold text-white">{formatCents(s.totalWithdrawalsCents)}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">User balances (total)</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">User balances (total)</p>
           <p className="text-2xl font-bold text-white">{formatCents(s.totalBalanceCents)}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Platform profit</p>
-          <p className="text-2xl font-bold text-[#10b981]">{formatCents(s.platformProfitCents)}</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Platform profit</p>
+          <p className="text-2xl font-bold text-emerald-400">{formatCents(s.platformProfitCents)}</p>
         </div>
       </div>
 
       <h2 className="text-lg font-bold text-white mb-3">User balances (top 100)</h2>
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">User / Email</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Balance</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Updated</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">User / Email</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Balance</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -107,13 +107,13 @@ export default function AdminWalletMonitorPage() {
               <tr key={row.user_id} className="border-b border-white/5">
                 <td className="p-3 text-white font-mono text-sm">{row.email ?? row.user_id.slice(0, 8)}</td>
                 <td className="p-3 text-white font-medium">{formatCents(row.balance_cents)}</td>
-                <td className="p-3 text-[#9ca3af] text-sm">{row.updated_at ? new Date(row.updated_at).toLocaleString() : "—"}</td>
+                <td className="p-3 text-fintech-muted text-sm">{row.updated_at ? new Date(row.updated_at).toLocaleString() : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {(!s.userBalances || s.userBalances.length === 0) && (
-          <p className="p-4 text-[#9ca3af] text-sm">No wallet balances yet.</p>
+          <p className="p-4 text-fintech-muted text-sm">No wallet balances yet.</p>
         )}
       </div>
     </div>

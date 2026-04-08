@@ -127,33 +127,33 @@ export default function AdminTournamentsPage() {
 
   const style = {
     page: { padding: "1.5rem", maxWidth: 960, color: "#e2e8f0" },
-    title: { fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem", color: "#fff" },
-    card: { background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "1.25rem", marginBottom: "1rem" },
-    input: { width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "#1e293b", color: "#fff" },
-    label: { display: "block", marginBottom: "0.25rem", fontSize: "0.875rem", color: "#94a3b8" },
-    button: { padding: "0.5rem 1rem", borderRadius: 8, fontWeight: 600, cursor: "pointer" as const },
+    title: { fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem", color: "#fff" },
+    card: { background: "#150d24", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "1.25rem", marginBottom: "1rem" },
+    input: { width: "100%", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)", color: "#fff" },
+    label: { display: "block", marginBottom: "0.25rem", fontSize: "0.875rem", color: "#a78bfa" },
+    button: { padding: "0.5rem 1rem", borderRadius: 12, fontWeight: 600, cursor: "pointer" as const },
     table: { width: "100%", borderCollapse: "collapse" as const },
-    th: { textAlign: "left" as const, padding: "0.5rem 0.75rem", borderBottom: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: "0.75rem" },
-    td: { padding: "0.5rem 0.75rem", borderBottom: "1px solid rgba(255,255,255,0.06)" },
+    th: { textAlign: "left" as const, padding: "0.75rem", borderBottom: "1px solid rgba(255,255,255,0.1)", color: "#a78bfa", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" as const },
+    td: { padding: "0.75rem", borderBottom: "1px solid rgba(255,255,255,0.06)" },
   };
 
   return (
     <div style={style.page}>
       <h1 style={style.title}>Tournaments</h1>
-      <p style={{ marginBottom: "1rem", color: "#94a3b8", fontSize: "0.875rem" }}>
+      <p style={{ marginBottom: "1rem", color: "#a78bfa", fontSize: "0.875rem" }}>
         Entry fee split: 60% prize pool, 30% platform profit, 10% reserve. Payouts only from prize pool; profit and reserve are locked.
       </p>
       {tournaments.length > 0 && (
         <div style={{ ...style.card, display: "flex", gap: "1.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
           <div>
-            <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>Total platform profit</span>
-            <div style={{ color: "#86efac", fontWeight: 700, fontSize: "1.25rem" }}>
+            <span style={{ color: "#a78bfa", fontSize: "0.75rem", textTransform: "uppercase" }}>Total platform profit</span>
+            <div style={{ color: "#34d399", fontWeight: 700, fontSize: "1.25rem" }}>
               ${tournaments.reduce((s, t) => s + Number(t.platform_profit ?? 0), 0).toFixed(2)}
             </div>
           </div>
           <div>
-            <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>Total reserve balance</span>
-            <div style={{ color: "#93c5fd", fontWeight: 700, fontSize: "1.25rem" }}>
+            <span style={{ color: "#a78bfa", fontSize: "0.75rem", textTransform: "uppercase" }}>Total reserve balance</span>
+            <div style={{ color: "#f5c842", fontWeight: 700, fontSize: "1.25rem" }}>
               ${tournaments.reduce((s, t) => s + Number(t.reserve_balance ?? 0), 0).toFixed(2)}
             </div>
           </div>
@@ -230,7 +230,7 @@ export default function AdminTournamentsPage() {
             />
           </div>
           <div>
-            <button type="submit" style={{ ...style.button, background: "#2563eb", color: "#fff", border: "none" }}>
+            <button type="submit" style={{ ...style.button, background: "#7c3aed", color: "#fff", border: "none" }}>
               Create
             </button>
           </div>
@@ -240,9 +240,9 @@ export default function AdminTournamentsPage() {
       <div style={style.card}>
         <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem", color: "#fff" }}>All tournaments</h2>
         {loading ? (
-          <p style={{ color: "#94a3b8" }}>Loading…</p>
+          <p style={{ color: "#a78bfa" }}>Loading…</p>
         ) : tournaments.length === 0 ? (
-          <p style={{ color: "#94a3b8" }}>No tournaments yet.</p>
+          <p style={{ color: "#a78bfa" }}>No tournaments yet.</p>
         ) : (
           <table style={style.table}>
             <thead>

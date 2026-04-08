@@ -95,22 +95,22 @@ export default function AdminReferralsPage() {
   if (!session) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-[#9ca3af]">Redirecting to admin login…</p>
+        <p className="text-fintech-muted">Redirecting to admin login…</p>
       </div>
     );
   }
   if (loading && config.length === 0) {
     return (
       <div className="p-6">
-        <p className="text-[#9ca3af]">Loading…</p>
+        <p className="text-fintech-muted">Loading…</p>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Referrals & Recurring Commissions</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Referrals & Recurring Commissions</h1>
+      <p className="text-fintech-muted mb-6">
         One-time referral bonuses are in viral growth. Here: recurring commission config and stats for referred members with active paid subscriptions.
       </p>
 
@@ -123,34 +123,34 @@ export default function AdminReferralsPage() {
 
       {/* Admin tracking */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Total referrals</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Total referrals</p>
           <p className="text-2xl font-bold text-white">{totalReferrals}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Total commissions paid</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Total commissions paid</p>
           <p className="text-2xl font-bold text-white">{formatCents(totalCommissionsPaidCents)}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Active referrals</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Active referrals</p>
           <p className="text-2xl font-bold text-white">{activeReferrals}</p>
         </div>
-        <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-          <p className="text-[#9ca3af] text-sm">Recurring commissions paid</p>
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+          <p className="text-fintech-muted text-sm">Recurring commissions paid</p>
           <p className="text-2xl font-bold text-white">{formatCents(totalPaidCents)}</p>
         </div>
       </div>
 
       {/* Top referrers leaderboard */}
       <h2 className="text-lg font-bold text-white mb-3">Top referrers leaderboard</h2>
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden mb-8">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden mb-8">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Rank</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Total referrals</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Total earnings</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Rank</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">User</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Total referrals</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Total earnings</th>
             </tr>
           </thead>
           <tbody>
@@ -159,28 +159,28 @@ export default function AdminReferralsPage() {
                 <td className="p-3 text-white font-medium">{row.rank}</td>
                 <td className="p-3 text-white font-mono text-sm">{row.email}</td>
                 <td className="p-3 text-white">{row.totalReferrals}</td>
-                <td className="p-3 text-[#10b981]">{formatCents(row.totalEarningsCents)}</td>
+                <td className="p-3 text-emerald-400">{formatCents(row.totalEarningsCents)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {leaderboard.length === 0 && (
-          <p className="p-4 text-[#9ca3af] text-sm">No referrers yet.</p>
+          <p className="p-4 text-fintech-muted text-sm">No referrers yet.</p>
         )}
       </div>
 
       {/* Commission % per tier */}
       <h2 className="text-lg font-bold text-white mb-3">Commission percentage per membership tier</h2>
-      <p className="text-[#9ca3af] text-sm mb-4">
+      <p className="text-fintech-muted text-sm mb-4">
         When a referred user&apos;s subscription payment succeeds, the referrer gets this percentage of the monthly price. Stopped when subscription is canceled.
       </p>
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Tier</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Commission %</th>
-              <th className="p-3 text-sm font-medium text-[#9ca3af]">Action</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Tier</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Commission %</th>
+              <th className="p-3 text-sm font-medium text-fintech-muted">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -201,7 +201,7 @@ export default function AdminReferralsPage() {
                       onChange={(e) => setEditPct((prev) => ({ ...prev, [tier]: e.target.value }))}
                       className="w-24 px-2 py-1 rounded bg-black/30 border border-white/20 text-white text-sm"
                     />
-                    <span className="ml-2 text-[#9ca3af] text-sm">%</span>
+                    <span className="ml-2 text-fintech-muted text-sm">%</span>
                   </td>
                   <td className="p-3">
                     <button
@@ -215,7 +215,7 @@ export default function AdminReferralsPage() {
                           setError("Enter a number between 0 and 100");
                         }
                       }}
-                      className="px-3 py-1 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+                      className="px-3 py-1 rounded-xl bg-fintech-accent text-white text-sm hover:bg-fintech-accent/90 disabled:opacity-50"
                     >
                       Save
                     </button>
@@ -226,7 +226,7 @@ export default function AdminReferralsPage() {
           </tbody>
         </table>
       </div>
-      <p className="mt-4 text-[#9ca3af] text-xs">
+      <p className="mt-4 text-fintech-muted text-xs">
         Run the monthly process via <code className="bg-white/10 px-1 rounded">POST /api/cron/process-referral-commissions</code> with header <code className="bg-white/10 px-1 rounded">X-Cron-Secret</code> or <code className="bg-white/10 px-1 rounded">Authorization: Bearer &lt;CRON_SECRET&gt;</code>. Set <code className="bg-white/10 px-1 rounded">CRON_SECRET</code> in env.
       </p>
     </div>

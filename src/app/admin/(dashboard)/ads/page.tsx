@@ -192,14 +192,14 @@ export default function AdminAdsPage() {
     <div className="py-6 space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-        <h1 className="text-2xl font-bold text-white mb-2">Advertisement management</h1>
-        <p className="text-[#9ca3af]">
+        <h1 className="text-xl font-bold text-white mb-2">Advertisement management</h1>
+        <p className="text-fintech-muted">
           Upload banner images or videos, set destination URL and placement. Track impressions and clicks.
         </p>
         </div>
       </div>
 
-      <div className="rounded-xl bg-[#111827] border border-white/10 p-6 max-w-2xl">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 max-w-2xl">
         <h2 className="text-lg font-semibold text-white mb-4">Add advertisement</h2>
         {submitError && (
           <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{submitError}</div>
@@ -209,33 +209,33 @@ export default function AdminAdsPage() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">Title</label>
+            <label className="block text-sm font-medium text-fintech-muted mb-1">Title</label>
             <input
               type="text"
               required
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] focus:border-[#3b82f6] outline-none"
+              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted focus:border-fintech-accent outline-none"
               placeholder="Ad title"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">Description (optional)</label>
+            <label className="block text-sm font-medium text-fintech-muted mb-1">Description (optional)</label>
             <textarea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={2}
-              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] focus:border-[#3b82f6] outline-none"
+              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted focus:border-fintech-accent outline-none"
               placeholder="Short description"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[#9ca3af] mb-1">Ad type</label>
+              <label className="block text-sm font-medium text-fintech-muted mb-1">Ad type</label>
               <select
                 value={form.ad_type}
                 onChange={(e) => setForm((f) => ({ ...f, ad_type: e.target.value as AdType }))}
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white focus:border-[#3b82f6] outline-none"
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white focus:border-fintech-accent outline-none"
               >
                 {AD_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -243,11 +243,11 @@ export default function AdminAdsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#9ca3af] mb-1">Placement</label>
+              <label className="block text-sm font-medium text-fintech-muted mb-1">Placement</label>
               <select
                 value={form.placement}
                 onChange={(e) => setForm((f) => ({ ...f, placement: e.target.value as Placement }))}
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white focus:border-[#3b82f6] outline-none"
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white focus:border-fintech-accent outline-none"
               >
                 {PLACEMENTS.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
@@ -256,13 +256,13 @@ export default function AdminAdsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">File (banner: jpg/png, video: mp4)</label>
+            <label className="block text-sm font-medium text-fintech-muted mb-1">File (banner: jpg/png, video: mp4)</label>
             <div className="flex gap-2">
               <input
                 type="url"
                 value={form.file_url}
                 onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))}
-                className="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] focus:border-[#3b82f6] outline-none"
+                className="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted focus:border-fintech-accent outline-none"
                 placeholder="Upload or paste URL"
               />
               <button
@@ -276,17 +276,17 @@ export default function AdminAdsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-[#9ca3af] mb-1">Destination URL</label>
+            <label className="block text-sm font-medium text-fintech-muted mb-1">Destination URL</label>
             <input
               type="url"
               value={form.target_url}
               onChange={(e) => setForm((f) => ({ ...f, target_url: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280] focus:border-[#3b82f6] outline-none"
+              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted focus:border-fintech-accent outline-none"
               placeholder="https://..."
             />
           </div>
           <div>
-            <label className="flex items-center gap-2 text-sm text-[#9ca3af]">
+            <label className="flex items-center gap-2 text-sm text-fintech-muted">
               <input
                 type="checkbox"
                 checked={form.active}
@@ -298,20 +298,20 @@ export default function AdminAdsPage() {
           </div>
           <button
             type="submit"
-            className="px-4 py-2 rounded-lg bg-[#3b82f6] text-white font-medium hover:opacity-90"
+            className="px-4 py-2 rounded-lg bg-fintech-accent text-white font-medium hover:opacity-90"
           >
             Add advertisement
           </button>
         </form>
       </div>
 
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">All advertisements</h2>
         {error && <div className="p-4 text-red-400 text-sm">{error}</div>}
         {loading ? (
-          <div className="p-6 text-[#9ca3af]">Loading…</div>
+          <div className="p-6 text-fintech-muted">Loading…</div>
         ) : ads.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No advertisements yet. Create one above.</div>
+          <div className="p-6 text-fintech-muted">No advertisements yet. Create one above.</div>
         ) : (
           <>
             <AdminScrollHint />
@@ -319,27 +319,27 @@ export default function AdminAdsPage() {
               <table className="w-full text-left min-w-[640px]">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">ID</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Title</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Type</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Placement</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Impressions</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Clicks</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
-                    <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">ID</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted">Title</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted">Type</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted">Placement</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Impressions</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Clicks</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted">Status</th>
+                    <th className="p-3 text-sm font-medium text-fintech-muted">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ads.map((ad) => (
                     <tr key={ad.id} className="border-b border-white/5">
-                      <td className="p-3 font-mono text-xs text-[#6b7280] hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
+                      <td className="p-3 font-mono text-xs text-fintech-muted hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
                       <td className="p-3 text-white">{ad.title}</td>
-                      <td className="p-3 text-[#9ca3af] capitalize">{ad.ad_type}</td>
-                      <td className="p-3 text-[#9ca3af]">{ad.placement.replace("_", " ")}</td>
-                      <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{ad.impressions}</td>
-                      <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{ad.clicks}</td>
+                      <td className="p-3 text-fintech-muted capitalize">{ad.ad_type}</td>
+                      <td className="p-3 text-fintech-muted">{ad.placement.replace("_", " ")}</td>
+                      <td className="p-3 text-fintech-muted hidden sm:table-cell">{ad.impressions}</td>
+                      <td className="p-3 text-fintech-muted hidden sm:table-cell">{ad.clicks}</td>
                       <td className="p-3">
-                        <span className={ad.active ? "text-green-400" : "text-[#6b7280]"}>
+                        <span className={ad.active ? "text-green-400" : "text-fintech-muted"}>
                           {ad.active ? "Active" : "Inactive"}
                         </span>
                       </td>

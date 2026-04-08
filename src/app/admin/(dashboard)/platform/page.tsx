@@ -151,24 +151,24 @@ export default function AdminPlatformPage() {
   if (!session) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-[#9ca3af]">Redirecting to admin login…</p>
+        <p className="text-fintech-muted">Redirecting to admin login…</p>
       </div>
     );
   }
   if (loading && !balance) {
     return (
       <div className="p-6">
-        <p className="text-[#9ca3af]">Loading…</p>
+        <p className="text-fintech-muted">Loading…</p>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Platform & Profit Protection</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Platform & Profit Protection</h1>
+      <p className="text-fintech-muted mb-6">
         Configure ad reward share, per-game house edge, and view platform balance. Referral commission tiers are in{" "}
-        <Link href="/admin/referrals" className="text-blue-400 hover:underline">
+        <Link href="/admin/referrals" className="text-fintech-accent hover:underline">
           Referrals
         </Link>
         .
@@ -184,20 +184,20 @@ export default function AdminPlatformPage() {
       {/* Platform balance (read-only) */}
       <section className="mb-8">
         <h2 className="text-lg font-bold text-white mb-3">Platform Balance</h2>
-        <p className="text-[#9ca3af] text-sm mb-3">
+        <p className="text-fintech-muted text-sm mb-3">
           Total rewards paid cannot exceed total revenue. Payouts are blocked when balance or revenue is insufficient.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-            <p className="text-[#9ca3af] text-sm">Available balance</p>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+            <p className="text-fintech-muted text-sm">Available balance</p>
             <p className="text-2xl font-bold text-white">{balance ? formatCents(balance.balance_cents) : "—"}</p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-            <p className="text-[#9ca3af] text-sm">Total revenue generated</p>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+            <p className="text-fintech-muted text-sm">Total revenue generated</p>
             <p className="text-2xl font-bold text-white">{balance ? formatCents(balance.total_revenue_cents) : "—"}</p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-4">
-            <p className="text-[#9ca3af] text-sm">Total rewards paid</p>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
+            <p className="text-fintech-muted text-sm">Total rewards paid</p>
             <p className="text-2xl font-bold text-white">{balance ? formatCents(balance.total_rewards_paid_cents) : "—"}</p>
           </div>
         </div>
@@ -206,7 +206,7 @@ export default function AdminPlatformPage() {
       {/* Ad reward % */}
       <section className="mb-8">
         <h2 className="text-lg font-bold text-white mb-3">Ad revenue split</h2>
-        <p className="text-[#9ca3af] text-sm mb-3">
+        <p className="text-fintech-muted text-sm mb-3">
           Users receive this percentage of ad revenue; the platform keeps the rest. Default 40%.
         </p>
         <div className="flex flex-wrap items-center gap-3">
@@ -219,12 +219,12 @@ export default function AdminPlatformPage() {
             onChange={(e) => setAdRewardInput(e.target.value)}
             className="w-24 px-2 py-1 rounded bg-black/30 border border-white/20 text-white text-sm"
           />
-          <span className="text-[#9ca3af] text-sm">% to users</span>
+          <span className="text-fintech-muted text-sm">% to users</span>
           <button
             type="button"
             disabled={saving}
             onClick={saveAdReward}
-            className="px-3 py-1 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+            className="px-3 py-1 rounded-xl bg-fintech-accent text-white text-sm hover:bg-fintech-accent/90 disabled:opacity-50"
           >
             Save
           </button>
@@ -234,16 +234,16 @@ export default function AdminPlatformPage() {
       {/* Game house edge */}
       <section className="mb-8">
         <h2 className="text-lg font-bold text-white mb-3">Game house edge</h2>
-        <p className="text-[#9ca3af] text-sm mb-4">
+        <p className="text-fintech-muted text-sm mb-4">
           House edge (percent) per game. Platform keeps this edge; the rest can be paid as rewards.
         </p>
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="p-3 text-sm font-medium text-[#9ca3af]">Game</th>
-                <th className="p-3 text-sm font-medium text-[#9ca3af]">House edge %</th>
-                <th className="p-3 text-sm font-medium text-[#9ca3af]">Action</th>
+                <th className="p-3 text-sm font-medium text-fintech-muted">Game</th>
+                <th className="p-3 text-sm font-medium text-fintech-muted">House edge %</th>
+                <th className="p-3 text-sm font-medium text-fintech-muted">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -260,14 +260,14 @@ export default function AdminPlatformPage() {
                       onChange={(e) => setGameInputs((prev) => ({ ...prev, [gameName]: e.target.value }))}
                       className="w-24 px-2 py-1 rounded bg-black/30 border border-white/20 text-white text-sm"
                     />
-                    <span className="ml-2 text-[#9ca3af] text-sm">%</span>
+                    <span className="ml-2 text-fintech-muted text-sm">%</span>
                   </td>
                   <td className="p-3">
                     <button
                       type="button"
                       disabled={saving}
                       onClick={() => saveGameEdge(gameName)}
-                      className="px-3 py-1 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+                      className="px-3 py-1 rounded-xl bg-fintech-accent text-white text-sm hover:bg-fintech-accent/90 disabled:opacity-50"
                     >
                       Save
                     </button>
@@ -279,9 +279,9 @@ export default function AdminPlatformPage() {
         </div>
       </section>
 
-      <p className="text-[#9ca3af] text-xs">
+      <p className="text-fintech-muted text-xs">
         Referral commission tiers:{" "}
-        <Link href="/admin/referrals" className="text-blue-400 hover:underline">
+        <Link href="/admin/referrals" className="text-fintech-accent hover:underline">
           /admin/referrals
         </Link>
       </p>

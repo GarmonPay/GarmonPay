@@ -116,7 +116,7 @@ export default function AdminSecurityPage() {
 
   if (!session) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
@@ -124,7 +124,7 @@ export default function AdminSecurityPage() {
 
   return (
     <div className="py-6 max-w-6xl">
-      <h1 className="text-2xl font-bold text-white mb-6">Security dashboard</h1>
+      <h1 className="text-xl font-bold text-white mb-6">Security dashboard</h1>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
       <section className="mb-8">
@@ -200,7 +200,7 @@ export default function AdminSecurityPage() {
                           type="button"
                           onClick={() => unlockUser(u.id)}
                           disabled={unlockSubmitting === u.id}
-                          className={`${ACTION_BTN} bg-blue-600/80 text-white hover:bg-blue-600 disabled:opacity-50`}
+                          className={`${ACTION_BTN} bg-fintech-accent/90 text-white hover:bg-fintech-accent disabled:opacity-50`}
                         >
                           Unlock
                         </button>

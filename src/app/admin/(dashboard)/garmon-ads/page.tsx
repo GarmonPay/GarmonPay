@@ -283,13 +283,13 @@ export default function AdminGarmonAdsPage() {
     <div className="space-y-8 py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-2">Admin Panel — Garmon Ads</h1>
-          <p className="text-[#9ca3af]">Moderate ads, revenue overview, advertisers, and security.</p>
+          <h1 className="text-xl font-bold text-white mb-2">Admin Panel — Garmon Ads</h1>
+          <p className="text-fintech-muted">Moderate ads, revenue overview, advertisers, and security.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end">
           <button
             type="button"
-            className={`${ACTION_BTN} bg-white/10 text-[#9ca3af] hover:bg-white/15 border border-white/10`}
+            className={`${ACTION_BTN} bg-white/10 text-fintech-muted hover:bg-white/15 border border-white/10`}
             onClick={() => {
               const rows = [
                 ["Metric", "Value"],
@@ -310,7 +310,7 @@ export default function AdminGarmonAdsPage() {
           </button>
           <a
             href="/admin/ads"
-            className={`${ACTION_BTN} text-center bg-[#eab308]/20 text-[#fde047] border border-[#eab308]/40 hover:bg-[#eab308]/30 no-underline`}
+            className={`${ACTION_BTN} text-center bg-fintech-highlight/20 text-fintech-highlight border border-fintech-highlight/40 hover:bg-fintech-highlight/30 no-underline`}
           >
             New ad (site ads)
           </a>
@@ -319,11 +319,11 @@ export default function AdminGarmonAdsPage() {
 
       <div className="relative md:mb-2">
         <div
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[#0a0e17] via-[#0a0e17]/60 to-transparent"
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-fintech-bg via-fintech-bg/60 to-transparent"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[#0a0e17] via-[#0a0e17]/60 to-transparent"
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-fintech-bg via-fintech-bg/60 to-transparent"
           aria-hidden
         />
         <div
@@ -346,8 +346,8 @@ export default function AdminGarmonAdsPage() {
                   onClick={() => setActiveTab(tab)}
                   className={`flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap min-w-[120px] max-[480px]:min-w-[120px] max-[480px]:flex-col max-[480px]:gap-1 max-[480px]:py-3 ${
                     active
-                      ? "border-[#eab308] bg-[#eab308]/15 text-[#fde047]"
-                      : "border-white/10 bg-white/5 text-[#9ca3af] hover:bg-white/10"
+                      ? "border-fintech-highlight bg-fintech-highlight/15 text-fintech-highlight"
+                      : "border-white/10 bg-white/5 text-fintech-muted hover:bg-white/10"
                   }`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
@@ -364,50 +364,50 @@ export default function AdminGarmonAdsPage() {
       )}
 
       {/* Revenue overview */}
-      <div className="rounded-xl bg-[#111827] border border-white/10 p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <div>
-          <p className="text-xs text-[#9ca3af] uppercase">Total ad spend</p>
+          <p className="text-xs text-fintech-muted uppercase">Total ad spend</p>
           <p className="text-xl font-bold text-white">${totalSpend.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-xs text-[#9ca3af] uppercase">GarmonPay cut (50%)</p>
+          <p className="text-xs text-fintech-muted uppercase">GarmonPay cut (50%)</p>
           <p className="text-xl font-bold text-green-400">${totalAdminCut.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-xs text-[#9ca3af] uppercase">Paid to users</p>
+          <p className="text-xs text-fintech-muted uppercase">Paid to users</p>
           <p className="text-xl font-bold text-white">${totalPaidToUsers.toFixed(2)}</p>
         </div>
       </div>
 
       {/* Moderation queue */}
       {activeTab === "queue" && (
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <div className="p-4 border-b border-white/10 space-y-2">
           <h2 className="text-lg font-semibold text-white">Moderation queue (pending)</h2>
-          <p className="text-xs text-[#9ca3af] max-w-2xl">
-            Stripe may have already credited <span className="text-[#d1d5db]">remaining_budget</span> while status is
+          <p className="text-xs text-fintech-muted max-w-2xl">
+            Stripe may have already credited <span className="text-fintech-muted">remaining_budget</span> while status is
             still pending. Approve only after content checks; funding is separate from going live.
           </p>
         </div>
         {loading ? (
-          <div className="p-6 text-[#9ca3af]">Loading…</div>
+          <div className="p-6 text-fintech-muted">Loading…</div>
         ) : pending.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No pending ads.</div>
+          <div className="p-6 text-fintech-muted">No pending ads.</div>
         ) : (
           <div className="divide-y divide-white/5">
             {pending.map((ad) => (
               <div key={ad.id} className="p-4 flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="font-medium text-white">{ad.title}</p>
-                  <p className="text-sm text-[#9ca3af]">
+                  <p className="text-sm text-fintech-muted">
                     {(ad.advertisers as { business_name?: string })?.business_name ?? "—"} · {ad.ad_type}
                   </p>
                   {ad.description && (
-                    <p className="text-sm text-[#9ca3af] mt-1 line-clamp-2">{ad.description}</p>
+                    <p className="text-sm text-fintech-muted mt-1 line-clamp-2">{ad.description}</p>
                   )}
-                  <p className="text-xs text-[#9ca3af] mt-2">
+                  <p className="text-xs text-fintech-muted mt-2">
                     Budget:{" "}
-                    <span className="text-[#d1d5db]">
+                    <span className="text-fintech-muted">
                       ${Number(ad.remaining_budget).toFixed(2)} remaining
                     </span>{" "}
                     · ${Number(ad.total_budget).toFixed(2)} total
@@ -415,7 +415,7 @@ export default function AdminGarmonAdsPage() {
                       <span className="text-amber-400/90"> · balance depleted</span>
                     )}
                   </p>
-                  <p className="text-xs text-[#9ca3af] mt-1">
+                  <p className="text-xs text-fintech-muted mt-1">
                     Package:{" "}
                     {ad.ad_package_id ? (
                       <Link
@@ -426,7 +426,7 @@ export default function AdminGarmonAdsPage() {
                         {packageNamesById[ad.ad_package_id] ?? `${ad.ad_package_id.slice(0, 8)}…`}
                       </Link>
                     ) : (
-                      <span className="text-[#6b7280]">—</span>
+                      <span className="text-fintech-muted">—</span>
                     )}
                   </p>
                 </div>
@@ -462,13 +462,13 @@ export default function AdminGarmonAdsPage() {
 
       {/* All ads table */}
       {activeTab === "ads" && (
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">All ads</h2>
         {error && <div className="p-4 text-red-400 text-sm">{error}</div>}
         {loading ? (
-          <div className="p-6 text-[#9ca3af]">Loading…</div>
+          <div className="p-6 text-fintech-muted">Loading…</div>
         ) : allAds.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No ads yet.</div>
+          <div className="p-6 text-fintech-muted">No ads yet.</div>
         ) : (
           <>
             <AdminScrollHint />
@@ -476,25 +476,25 @@ export default function AdminGarmonAdsPage() {
               <table className="w-full text-left text-sm min-w-[640px]">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">ID</th>
-                    <th className="p-3 text-[#9ca3af]">Title</th>
-                    <th className="p-3 text-[#9ca3af]">Advertiser</th>
-                    <th className="p-3 text-[#9ca3af]">Type</th>
-                    <th className="p-3 text-[#9ca3af] hidden lg:table-cell">Package</th>
-                    <th className="p-3 text-[#9ca3af]">Status</th>
-                    <th className="p-3 text-[#9ca3af]">Budget</th>
-                    <th className="p-3 text-[#9ca3af]">Views</th>
-                    <th className="p-3 text-[#9ca3af]">Spent</th>
+                    <th className="p-3 text-fintech-muted hidden sm:table-cell">ID</th>
+                    <th className="p-3 text-fintech-muted">Title</th>
+                    <th className="p-3 text-fintech-muted">Advertiser</th>
+                    <th className="p-3 text-fintech-muted">Type</th>
+                    <th className="p-3 text-fintech-muted hidden lg:table-cell">Package</th>
+                    <th className="p-3 text-fintech-muted">Status</th>
+                    <th className="p-3 text-fintech-muted">Budget</th>
+                    <th className="p-3 text-fintech-muted">Views</th>
+                    <th className="p-3 text-fintech-muted">Spent</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allAds.map((ad) => (
                     <tr key={ad.id} className="border-b border-white/5">
-                      <td className="p-3 font-mono text-xs text-[#6b7280] hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
+                      <td className="p-3 font-mono text-xs text-fintech-muted hidden sm:table-cell">{ad.id.slice(0, 8)}…</td>
                       <td className="p-3 text-white">{ad.title}</td>
-                      <td className="p-3 text-[#9ca3af]">{(ad.advertisers as { business_name?: string })?.business_name ?? "—"}</td>
-                      <td className="p-3 text-[#9ca3af]">{ad.ad_type}</td>
-                      <td className="p-3 text-[#9ca3af] font-mono text-xs hidden lg:table-cell">
+                      <td className="p-3 text-fintech-muted">{(ad.advertisers as { business_name?: string })?.business_name ?? "—"}</td>
+                      <td className="p-3 text-fintech-muted">{ad.ad_type}</td>
+                      <td className="p-3 text-fintech-muted font-mono text-xs hidden lg:table-cell">
                         {ad.ad_package_id ? (
                           <Link
                             href="/admin/ad-packages"
@@ -508,11 +508,11 @@ export default function AdminGarmonAdsPage() {
                         )}
                       </td>
                       <td className="p-3">
-                        <span className={ad.status === "active" ? "text-green-400" : "text-[#9ca3af]"}>{ad.status}</span>
+                        <span className={ad.status === "active" ? "text-green-400" : "text-fintech-muted"}>{ad.status}</span>
                       </td>
-                      <td className="p-3 text-[#9ca3af]">${Number(ad.total_budget).toFixed(2)}</td>
-                      <td className="p-3 text-[#9ca3af]">{ad.views}</td>
-                      <td className="p-3 text-[#9ca3af]">${(Number(ad.total_budget) - Number(ad.remaining_budget)).toFixed(2)}</td>
+                      <td className="p-3 text-fintech-muted">${Number(ad.total_budget).toFixed(2)}</td>
+                      <td className="p-3 text-fintech-muted">{ad.views}</td>
+                      <td className="p-3 text-fintech-muted">${(Number(ad.total_budget) - Number(ad.remaining_budget)).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -525,10 +525,10 @@ export default function AdminGarmonAdsPage() {
 
       {/* Advertisers */}
       {activeTab === "advertisers" && (
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Advertisers</h2>
         {advertisers.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No advertisers.</div>
+          <div className="p-6 text-fintech-muted">No advertisers.</div>
         ) : (
           <>
             <AdminScrollHint />
@@ -536,25 +536,25 @@ export default function AdminGarmonAdsPage() {
               <table className="w-full text-left text-sm min-w-[560px]">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af]">Business</th>
-                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">User ID</th>
-                    <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Joined</th>
-                    <th className="p-3 text-[#9ca3af]">Total spent</th>
-                    <th className="p-3 text-[#9ca3af]">Verified</th>
-                    <th className="p-3 text-[#9ca3af]">Active</th>
-                    <th className="p-3 text-[#9ca3af]">Actions</th>
+                    <th className="p-3 text-fintech-muted">Business</th>
+                    <th className="p-3 text-fintech-muted hidden sm:table-cell">User ID</th>
+                    <th className="p-3 text-fintech-muted hidden sm:table-cell">Joined</th>
+                    <th className="p-3 text-fintech-muted">Total spent</th>
+                    <th className="p-3 text-fintech-muted">Verified</th>
+                    <th className="p-3 text-fintech-muted">Active</th>
+                    <th className="p-3 text-fintech-muted">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {advertisers.map((a) => (
                     <tr key={a.id} className="border-b border-white/5">
                       <td className="p-3 text-white">{a.business_name}</td>
-                      <td className="p-3 text-[#9ca3af] font-mono text-xs hidden sm:table-cell">{a.user_id?.slice(0, 8)}…</td>
-                      <td className="p-3 text-[#9ca3af] text-xs hidden sm:table-cell">
+                      <td className="p-3 text-fintech-muted font-mono text-xs hidden sm:table-cell">{a.user_id?.slice(0, 8)}…</td>
+                      <td className="p-3 text-fintech-muted text-xs hidden sm:table-cell">
                         {a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}
                       </td>
-                      <td className="p-3 text-[#9ca3af]">${Number(a.total_spent).toFixed(2)}</td>
-                      <td className="p-3">{a.is_verified ? <span className="text-green-400">Yes</span> : <span className="text-[#9ca3af]">No</span>}</td>
+                      <td className="p-3 text-fintech-muted">${Number(a.total_spent).toFixed(2)}</td>
+                      <td className="p-3">{a.is_verified ? <span className="text-green-400">Yes</span> : <span className="text-fintech-muted">No</span>}</td>
                       <td className="p-3">{a.is_active ? <span className="text-green-400">Yes</span> : <span className="text-red-400">Suspended</span>}</td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
@@ -586,10 +586,10 @@ export default function AdminGarmonAdsPage() {
 
       {/* Top earners */}
       {activeTab === "earners" && (
-      <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
         <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Top earners (this week)</h2>
         {topEarners.length === 0 ? (
-          <div className="p-6 text-[#9ca3af]">No earnings this week.</div>
+          <div className="p-6 text-fintech-muted">No earnings this week.</div>
         ) : (
           <>
             <AdminScrollHint />
@@ -597,15 +597,15 @@ export default function AdminGarmonAdsPage() {
               <table className="w-full text-left text-sm min-w-[400px]">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="p-3 text-[#9ca3af]">#</th>
-                    <th className="p-3 text-[#9ca3af]">User ID</th>
-                    <th className="p-3 text-[#9ca3af]">Earned</th>
+                    <th className="p-3 text-fintech-muted">#</th>
+                    <th className="p-3 text-fintech-muted">User ID</th>
+                    <th className="p-3 text-fintech-muted">Earned</th>
                   </tr>
                 </thead>
                 <tbody>
                   {topEarners.map((e, i) => (
                     <tr key={e.user_id} className="border-b border-white/5">
-                      <td className="p-3 text-[#9ca3af]">{i + 1}</td>
+                      <td className="p-3 text-fintech-muted">{i + 1}</td>
                       <td className="p-3 font-mono text-xs text-white">{e.user_id}</td>
                       <td className="p-3 text-green-400">${e.total.toFixed(2)}</td>
                     </tr>
@@ -621,10 +621,10 @@ export default function AdminGarmonAdsPage() {
       {/* Fraud flags + Blocked IPs + Banned users */}
       {activeTab === "fraud" && (
       <div className="space-y-6">
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Fraud flags</h2>
           {fraudFlags.length === 0 ? (
-            <div className="p-6 text-[#9ca3af]">No fraud flags.</div>
+            <div className="p-6 text-fintech-muted">No fraud flags.</div>
           ) : (
             <>
               <div className="md:hidden space-y-4 p-4">
@@ -636,8 +636,8 @@ export default function AdminGarmonAdsPage() {
                         Flagged
                       </span>
                     </div>
-                    <p className="mt-3 text-sm text-[#9ca3af]">{f.reason}</p>
-                    <p className="mt-2 text-xs text-[#6b7280]">{new Date(f.created_at).toLocaleString()}</p>
+                    <p className="mt-3 text-sm text-fintech-muted">{f.reason}</p>
+                    <p className="mt-2 text-xs text-fintech-muted">{new Date(f.created_at).toLocaleString()}</p>
                     <div className="mt-4 flex flex-col gap-2">
                       <button
                         type="button"
@@ -670,20 +670,20 @@ export default function AdminGarmonAdsPage() {
                   <table className="w-full text-left text-sm min-w-[720px]">
                     <thead>
                       <tr className="border-b border-white/10">
-                        <th className="p-3 text-[#9ca3af]">ID</th>
-                        <th className="p-3 text-[#9ca3af]">User ID</th>
-                        <th className="p-3 text-[#9ca3af]">Reason</th>
-                        <th className="p-3 text-[#9ca3af]">Date</th>
-                        <th className="p-3 text-[#9ca3af]">Actions</th>
+                        <th className="p-3 text-fintech-muted">ID</th>
+                        <th className="p-3 text-fintech-muted">User ID</th>
+                        <th className="p-3 text-fintech-muted">Reason</th>
+                        <th className="p-3 text-fintech-muted">Date</th>
+                        <th className="p-3 text-fintech-muted">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {fraudFlags.map((f) => (
                         <tr key={f.id} className="border-b border-white/5">
-                          <td className="p-3 font-mono text-xs text-[#6b7280]">{f.id.slice(0, 8)}…</td>
+                          <td className="p-3 font-mono text-xs text-fintech-muted">{f.id.slice(0, 8)}…</td>
                           <td className="p-3 font-mono text-xs text-white">{f.user_id}</td>
-                          <td className="p-3 text-[#9ca3af]">{f.reason}</td>
-                          <td className="p-3 text-[#9ca3af]">{new Date(f.created_at).toLocaleString()}</td>
+                          <td className="p-3 text-fintech-muted">{f.reason}</td>
+                          <td className="p-3 text-fintech-muted">{new Date(f.created_at).toLocaleString()}</td>
                           <td className="p-3">
                             <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
                               <button
@@ -720,13 +720,13 @@ export default function AdminGarmonAdsPage() {
         </div>
 
         {engagementsForUser !== null && (
-          <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
             <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">User engagements (last 50)</h2>
             <div className="p-2 flex justify-end">
-              <button type="button" onClick={() => setEngagementsForUser(null)} className="text-xs text-[#9ca3af] hover:text-white">Close</button>
+              <button type="button" onClick={() => setEngagementsForUser(null)} className="text-xs text-fintech-muted hover:text-white">Close</button>
             </div>
             {engagementsForUser.length === 0 ? (
-              <div className="p-6 text-[#9ca3af]">No engagements.</div>
+              <div className="p-6 text-fintech-muted">No engagements.</div>
             ) : (
               <>
                 <AdminScrollHint />
@@ -734,21 +734,21 @@ export default function AdminGarmonAdsPage() {
                   <table className="w-full text-left text-sm min-w-[720px]">
                     <thead>
                       <tr className="border-b border-white/10">
-                        <th className="p-3 text-[#9ca3af]">Type</th>
-                        <th className="p-3 text-[#9ca3af]">Duration</th>
-                        <th className="p-3 text-[#9ca3af]">Earned</th>
-                        <th className="p-3 text-[#9ca3af] hidden sm:table-cell">IP Address</th>
-                        <th className="p-3 text-[#9ca3af]">Date</th>
+                        <th className="p-3 text-fintech-muted">Type</th>
+                        <th className="p-3 text-fintech-muted">Duration</th>
+                        <th className="p-3 text-fintech-muted">Earned</th>
+                        <th className="p-3 text-fintech-muted hidden sm:table-cell">IP Address</th>
+                        <th className="p-3 text-fintech-muted">Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {engagementsForUser.map((e) => (
                         <tr key={e.id} className="border-b border-white/5">
                           <td className="p-3 text-white">{e.engagement_type}</td>
-                          <td className="p-3 text-[#9ca3af]">{e.duration_seconds}s</td>
+                          <td className="p-3 text-fintech-muted">{e.duration_seconds}s</td>
                           <td className="p-3 text-green-400">${Number(e.user_earned).toFixed(4)}</td>
-                          <td className="p-3 font-mono text-xs text-[#9ca3af] hidden sm:table-cell">{e.ip_address ?? "—"}</td>
-                          <td className="p-3 text-[#9ca3af]">{new Date(e.created_at).toLocaleString()}</td>
+                          <td className="p-3 font-mono text-xs text-fintech-muted hidden sm:table-cell">{e.ip_address ?? "—"}</td>
+                          <td className="p-3 text-fintech-muted">{new Date(e.created_at).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -759,7 +759,7 @@ export default function AdminGarmonAdsPage() {
           </div>
         )}
 
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Blocked IPs</h2>
           <div className="p-4 flex gap-2 flex-wrap">
             <input
@@ -772,7 +772,7 @@ export default function AdminGarmonAdsPage() {
             <button type="button" onClick={addBlockedIp} className="px-3 py-2 rounded bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30">Add block</button>
           </div>
           {blockedIps.length === 0 ? (
-            <div className="p-6 text-[#9ca3af]">No blocked IPs.</div>
+            <div className="p-6 text-fintech-muted">No blocked IPs.</div>
           ) : (
             <>
               <AdminScrollHint />
@@ -780,18 +780,18 @@ export default function AdminGarmonAdsPage() {
                 <table className="w-full text-left text-sm min-w-[560px]">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="p-3 text-[#9ca3af]">IP / Prefix</th>
-                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Reason</th>
-                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Added</th>
-                      <th className="p-3 text-[#9ca3af]">Actions</th>
+                      <th className="p-3 text-fintech-muted">IP / Prefix</th>
+                      <th className="p-3 text-fintech-muted hidden sm:table-cell">Reason</th>
+                      <th className="p-3 text-fintech-muted hidden sm:table-cell">Added</th>
+                      <th className="p-3 text-fintech-muted">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {blockedIps.map((b) => (
                       <tr key={b.id} className="border-b border-white/5">
                         <td className="p-3 font-mono text-white">{b.ip_prefix}</td>
-                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{b.reason ?? "—"}</td>
-                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="p-3 text-fintech-muted hidden sm:table-cell">{b.reason ?? "—"}</td>
+                        <td className="p-3 text-fintech-muted hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
                         <td className="p-3">
                           <button
                             type="button"
@@ -810,7 +810,7 @@ export default function AdminGarmonAdsPage() {
           )}
         </div>
 
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <h2 className="text-lg font-semibold text-white p-4 border-b border-white/10">Banned users (ad earnings)</h2>
           <div className="p-4 border-b border-white/5">
             <input
@@ -822,7 +822,7 @@ export default function AdminGarmonAdsPage() {
             />
           </div>
           {bannedUsers.length === 0 ? (
-            <div className="p-6 text-[#9ca3af]">No banned users.</div>
+            <div className="p-6 text-fintech-muted">No banned users.</div>
           ) : (
             <>
               <AdminScrollHint />
@@ -830,18 +830,18 @@ export default function AdminGarmonAdsPage() {
                 <table className="w-full text-left text-sm min-w-[560px]">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="p-3 text-[#9ca3af]">User ID</th>
-                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Reason</th>
-                      <th className="p-3 text-[#9ca3af] hidden sm:table-cell">Banned</th>
-                      <th className="p-3 text-[#9ca3af]">Actions</th>
+                      <th className="p-3 text-fintech-muted">User ID</th>
+                      <th className="p-3 text-fintech-muted hidden sm:table-cell">Reason</th>
+                      <th className="p-3 text-fintech-muted hidden sm:table-cell">Banned</th>
+                      <th className="p-3 text-fintech-muted">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bannedUsers.map((b) => (
                       <tr key={b.user_id} className="border-b border-white/5">
                         <td className="p-3 font-mono text-xs text-white">{b.user_id.slice(0, 12)}…</td>
-                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{b.reason ?? "—"}</td>
-                        <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="p-3 text-fintech-muted hidden sm:table-cell">{b.reason ?? "—"}</td>
+                        <td className="p-3 text-fintech-muted hidden sm:table-cell">{new Date(b.created_at).toLocaleString()}</td>
                         <td className="p-3">
                           <button
                             type="button"
@@ -863,7 +863,7 @@ export default function AdminGarmonAdsPage() {
       )}
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur-md md:hidden safe-area-pb"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-fintech-bg-card/95 backdrop-blur-md md:hidden safe-area-pb"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         aria-label="Garmon Ads sections"
       >
@@ -877,10 +877,10 @@ export default function AdminGarmonAdsPage() {
                 type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium leading-tight ${
-                  active ? "text-[#fde047]" : "text-[#9ca3af]"
+                  active ? "text-fintech-highlight" : "text-fintech-muted"
                 }`}
               >
-                <Icon className={`h-6 w-6 ${active ? "text-[#eab308]" : "text-[#64748b]"}`} />
+                <Icon className={`h-6 w-6 ${active ? "text-fintech-highlight" : "text-fintech-muted"}`} />
                 <span className="max-w-[4.5rem] text-center text-[9px] leading-tight">{label}</span>
               </button>
             );

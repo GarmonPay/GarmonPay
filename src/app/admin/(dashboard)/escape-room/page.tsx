@@ -208,20 +208,20 @@ export default function AdminEscapeRoomPage() {
     <div className="space-y-8 py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-2">Stake & Escape — Admin</h1>
-          <p className="text-[#9ca3af]">Live sessions, puzzles, financials, anti-cheat review, settings.</p>
+          <h1 className="text-xl font-bold text-white mb-2">Stake & Escape — Admin</h1>
+          <p className="text-fintech-muted">Live sessions, puzzles, financials, anti-cheat review, settings.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className={`${ACTION_BTN} bg-white/10 text-[#9ca3af] hover:bg-white/15 border border-white/10`}
+            className={`${ACTION_BTN} bg-white/10 text-fintech-muted hover:bg-white/15 border border-white/10`}
             onClick={() => loadAll()}
           >
             Refresh
           </button>
           <a
             href={`${API_BASE}/admin/escape-room/sessions?format=csv&limit=500`}
-            className={`${ACTION_BTN} text-center bg-[#2563eb]/30 text-white border border-[#2563eb]/50 no-underline`}
+            className={`${ACTION_BTN} text-center bg-fintech-accent/30 text-white border border-fintech-accent/50 no-underline`}
           >
             Export sessions CSV
           </a>
@@ -241,8 +241,8 @@ export default function AdminEscapeRoomPage() {
                   onClick={() => setActiveTab(tab)}
                   className={`flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap min-w-[120px] ${
                     active
-                      ? "border-[#eab308] bg-[#eab308]/15 text-[#fde047]"
-                      : "border-white/10 bg-white/5 text-[#9ca3af] hover:bg-white/10"
+                      ? "border-fintech-highlight bg-fintech-highlight/15 text-fintech-highlight"
+                      : "border-white/10 bg-white/5 text-fintech-muted hover:bg-white/10"
                   }`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
@@ -257,20 +257,20 @@ export default function AdminEscapeRoomPage() {
 
       {error && <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>}
       {actionError && <div className="p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{actionError}</div>}
-      {loading && <p className="text-[#9ca3af]">Loading…</p>}
+      {loading && <p className="text-fintech-muted">Loading…</p>}
 
       {activeTab === "overview" && stats && !loading && (
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {statCards.map((c) => (
-              <div key={c.label} className="rounded-xl border border-white/10 bg-[#0f172a] p-4 shadow-lg">
-                <div className="text-xs text-[#94a3b8]">{c.label}</div>
+              <div key={c.label} className="rounded-xl border border-white/10 bg-fintech-bg-card p-4 shadow-lg">
+                <div className="text-xs text-fintech-muted">{c.label}</div>
                 <div className="text-xl font-semibold text-white mt-1">{c.value}</div>
               </div>
             ))}
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
-            <h2 className="text-sm font-semibold text-[#fde047] mb-3">Revenue (7-day fee)</h2>
+          <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
+            <h2 className="text-sm font-semibold text-fintech-highlight mb-3">Revenue (7-day fee)</h2>
             <div className="flex items-end gap-2 h-32">
               {(() => {
                 const chart = (stats.revenue_chart as { label: string; cents: number }[]) ?? [];
@@ -282,17 +282,17 @@ export default function AdminEscapeRoomPage() {
                       style={{ height: `${(b.cents / maxC) * 100}%` }}
                       title={`${b.label}: ${(b.cents / 100).toFixed(2)}`}
                     />
-                    <span className="text-[10px] text-[#64748b]">{b.label.slice(5)}</span>
+                    <span className="text-[10px] text-fintech-muted">{b.label.slice(5)}</span>
                   </div>
                 ));
               })()}
             </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
+          <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
             <h2 className="text-sm font-semibold text-white mb-2">Active sessions</h2>
             <AdminTableWrap>
-              <table className="w-full text-sm text-left text-[#cbd5e1]">
-                <thead className="text-xs text-[#94a3b8] border-b border-white/10">
+              <table className="w-full text-sm text-left text-white">
+                <thead className="text-xs text-fintech-muted border-b border-white/10">
                   <tr>
                     <th className="py-2 pr-2">Player</th>
                     <th className="py-2 pr-2">Mode</th>
@@ -318,8 +318,8 @@ export default function AdminEscapeRoomPage() {
 
       {activeTab === "players" && (
         <AdminTableWrap>
-          <table className="w-full text-sm text-left text-[#cbd5e1]">
-            <thead className="text-xs text-[#94a3b8] border-b border-white/10">
+          <table className="w-full text-sm text-left text-white">
+            <thead className="text-xs text-fintech-muted border-b border-white/10">
               <tr>
                 <th className="py-2 pr-2">Email</th>
                 <th className="py-2 pr-2">Games</th>
@@ -364,8 +364,8 @@ export default function AdminEscapeRoomPage() {
 
       {activeTab === "sessions" && (
         <AdminTableWrap>
-          <table className="w-full text-sm text-left text-[#cbd5e1]">
-            <thead className="text-xs text-[#94a3b8] border-b border-white/10">
+          <table className="w-full text-sm text-left text-white">
+            <thead className="text-xs text-fintech-muted border-b border-white/10">
               <tr>
                 <th className="py-2 pr-2">ID</th>
                 <th className="py-2 pr-2">Mode</th>
@@ -405,23 +405,23 @@ export default function AdminEscapeRoomPage() {
       )}
 
       {activeTab === "financials" && financials && (
-        <div className="space-y-4 text-[#cbd5e1] text-sm">
+        <div className="space-y-4 text-white text-sm">
           <div className="grid sm:grid-cols-2 gap-3">
-            <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
-              <div className="text-xs text-[#94a3b8]">Stake gross (range)</div>
+            <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
+              <div className="text-xs text-fintech-muted">Stake gross (range)</div>
               <div className="text-lg text-white font-semibold">
                 ${(Number(financials.stake_gross_cents_in_range) / 100).toFixed(2)}
               </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
-              <div className="text-xs text-[#94a3b8]">Platform fee (range)</div>
-              <div className="text-lg text-[#eab308] font-semibold">
+            <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
+              <div className="text-xs text-fintech-muted">Platform fee (range)</div>
+              <div className="text-lg text-fintech-highlight font-semibold">
                 ${(Number(financials.platform_fee_cents_in_range) / 100).toFixed(2)}
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
-            <h3 className="text-[#fde047] font-medium mb-2">Pending payouts</h3>
+          <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
+            <h3 className="text-fintech-highlight font-medium mb-2">Pending payouts</h3>
             <ul className="space-y-2">
               {((financials.pending_payouts as Record<string, unknown>[]) ?? []).map((p) => (
                 <li key={String(p.id)} className="flex flex-wrap justify-between gap-2 border-b border-white/5 pb-2">
@@ -438,7 +438,7 @@ export default function AdminEscapeRoomPage() {
               ))}
             </ul>
           </div>
-          <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4">
+          <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4">
             <h3 className="text-amber-400 font-medium mb-2">Failed wallet / alerts</h3>
             <ul className="space-y-1 text-xs">
               {((financials.failed_wallet_sessions as Record<string, unknown>[]) ?? []).map((r) => (
@@ -455,9 +455,9 @@ export default function AdminEscapeRoomPage() {
         <div className="space-y-6">
           <form
             onSubmit={createPuzzle}
-            className="rounded-xl border border-white/10 bg-[#0f172a] p-4 grid gap-3 md:grid-cols-2 text-sm"
+            className="rounded-xl border border-white/10 bg-fintech-bg-card p-4 grid gap-3 md:grid-cols-2 text-sm"
           >
-            <label className="md:col-span-2 text-[#94a3b8] text-xs uppercase">New puzzle</label>
+            <label className="md:col-span-2 text-fintech-muted text-xs uppercase">New puzzle</label>
             <input
               className="rounded-lg bg-black/30 border border-white/10 px-3 py-2 text-white"
               placeholder="Name"
@@ -510,8 +510,8 @@ export default function AdminEscapeRoomPage() {
             </button>
           </form>
           <AdminTableWrap>
-            <table className="w-full text-sm text-left text-[#cbd5e1]">
-              <thead className="text-xs text-[#94a3b8] border-b border-white/10">
+            <table className="w-full text-sm text-left text-white">
+              <thead className="text-xs text-fintech-muted border-b border-white/10">
                 <tr>
                   <th className="py-2 pr-2">Name</th>
                   <th className="py-2 pr-2">Date</th>
@@ -536,8 +536,8 @@ export default function AdminEscapeRoomPage() {
 
       {activeTab === "anticheat" && (
         <AdminTableWrap>
-          <table className="w-full text-sm text-left text-[#cbd5e1]">
-            <thead className="text-xs text-[#94a3b8] border-b border-white/10">
+          <table className="w-full text-sm text-left text-white">
+            <thead className="text-xs text-fintech-muted border-b border-white/10">
               <tr>
                 <th className="py-2 pr-2">Session</th>
                 <th className="py-2 pr-2">Reason</th>
@@ -575,7 +575,7 @@ export default function AdminEscapeRoomPage() {
       )}
 
       {activeTab === "settings" && settings && (
-        <div className="rounded-xl border border-white/10 bg-[#0f172a] p-4 space-y-3 text-sm max-w-xl">
+        <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-4 space-y-3 text-sm max-w-xl">
           {(
             [
               ["free_play_enabled", "Free play"],
@@ -583,7 +583,7 @@ export default function AdminEscapeRoomPage() {
               ["daily_puzzle_rotation_enabled", "Daily puzzle rotation"],
             ] as const
           ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-[#cbd5e1]">
+            <label key={key} className="flex items-center gap-2 text-white">
               <input
                 type="checkbox"
                 checked={!!settings[key]}
@@ -604,7 +604,7 @@ export default function AdminEscapeRoomPage() {
               ["suspicious_min_escape_seconds", "Suspicious max time (s)"],
             ] as const
           ).map(([key, label]) => (
-            <label key={key} className="block text-[#94a3b8] text-xs">
+            <label key={key} className="block text-fintech-muted text-xs">
               {label}
               <input
                 type="number"
@@ -616,7 +616,7 @@ export default function AdminEscapeRoomPage() {
               />
             </label>
           ))}
-          <label className="block text-[#94a3b8] text-xs">
+          <label className="block text-fintech-muted text-xs">
             Maintenance banner (empty = off)
             <textarea
               className="mt-1 w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 text-white"
@@ -628,7 +628,7 @@ export default function AdminEscapeRoomPage() {
           <button
             type="button"
             onClick={saveSettings}
-            className="w-full rounded-lg bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium py-2"
+            className="w-full rounded-lg bg-fintech-accent hover:bg-fintech-accent/90 text-white font-medium py-2"
           >
             Save settings
           </button>

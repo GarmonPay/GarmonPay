@@ -92,8 +92,8 @@ export default function AdminWithdrawalsPage() {
     <div className="py-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-2">Withdrawals</h1>
-          <p className="text-[#9ca3af]">
+          <h1 className="text-xl font-bold text-white mb-2">Withdrawals</h1>
+          <p className="text-fintech-muted">
             Review and approve, reject, or mark as paid. Rejecting refunds the user&apos;s balance.
           </p>
         </div>
@@ -105,25 +105,25 @@ export default function AdminWithdrawalsPage() {
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
       {loading ? (
-        <div className="text-[#9ca3af]">Loading…</div>
+        <div className="text-fintech-muted">Loading…</div>
       ) : withdrawals.length === 0 ? (
-        <div className="text-[#9ca3af]">No withdrawal requests.</div>
+        <div className="text-fintech-muted">No withdrawal requests.</div>
       ) : (
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <AdminScrollHint />
           <AdminTableWrap>
             <table className="w-full text-left min-w-[720px]">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">User</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Amount</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Fee</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Net</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden sm:table-cell">Method</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af] hidden lg:table-cell">Wallet / details</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Date</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">User</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Amount</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Fee</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Net</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Method</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted hidden lg:table-cell">Wallet / details</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Status</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Date</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,10 +131,10 @@ export default function AdminWithdrawalsPage() {
                   <tr key={w.id} className="border-b border-white/5">
                     <td className="p-3 text-white">{w.user_email ?? w.user_id}</td>
                     <td className="p-3 text-white font-medium">{formatCents(w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af] hidden sm:table-cell">{formatCents(w.platform_fee ?? 0)}</td>
+                    <td className="p-3 text-fintech-muted hidden sm:table-cell">{formatCents(w.platform_fee ?? 0)}</td>
                     <td className="p-3 text-white hidden sm:table-cell">{formatCents(w.net_amount ?? w.amount)}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize hidden sm:table-cell">{w.method}</td>
-                    <td className="p-3 text-[#9ca3af] font-mono text-sm max-w-xs truncate hidden lg:table-cell" title={w.wallet_address}>
+                    <td className="p-3 text-fintech-muted capitalize hidden sm:table-cell">{w.method}</td>
+                    <td className="p-3 text-fintech-muted font-mono text-sm max-w-xs truncate hidden lg:table-cell" title={w.wallet_address}>
                       {w.wallet_address}
                     </td>
                     <td className="p-3">
@@ -150,7 +150,7 @@ export default function AdminWithdrawalsPage() {
                         {w.status}
                       </span>
                     </td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{formatDate(w.created_at)}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{formatDate(w.created_at)}</td>
                     <td className="p-3">
                       {w.status === "pending" && (
                         <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
@@ -174,7 +174,7 @@ export default function AdminWithdrawalsPage() {
                             type="button"
                             onClick={() => updateStatus(w.id, "paid")}
                             disabled={updatingId === w.id}
-                            className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50`}
+                            className={`${ACTION_BTN} bg-fintech-accent text-white hover:bg-fintech-accent/90 disabled:opacity-50`}
                           >
                             Mark paid
                           </button>
@@ -185,7 +185,7 @@ export default function AdminWithdrawalsPage() {
                           type="button"
                           onClick={() => updateStatus(w.id, "paid")}
                           disabled={updatingId === w.id}
-                          className={`${ACTION_BTN} bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50`}
+                          className={`${ACTION_BTN} bg-fintech-accent text-white hover:bg-fintech-accent/90 disabled:opacity-50`}
                         >
                           Mark paid
                         </button>

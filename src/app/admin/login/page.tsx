@@ -50,19 +50,19 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0e17] px-4 py-12 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-[#eab308]/35 bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]">
+    <div className="flex min-h-screen items-center justify-center bg-fintech-bg px-4 py-12 text-white">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-fintech-bg-card p-8 shadow-card">
         <h1
-          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent md:text-3xl`}
+          className={`${cinzel.className} text-center text-2xl font-bold tracking-tight bg-gradient-to-r from-fintech-highlight via-amber-400 to-amber-700 bg-clip-text text-transparent md:text-3xl`}
         >
           GarmonPay
         </h1>
-        <p className="mt-2 text-center text-sm font-medium text-violet-200/90">Admin login</p>
-        <p className="mt-1 text-center text-xs text-violet-400/70">Staff dashboard access</p>
+        <p className="mt-2 text-center text-sm font-medium text-fintech-muted">Admin login</p>
+        <p className="mt-1 text-center text-xs text-fintech-muted">Staff dashboard access</p>
 
         <form onSubmit={login} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="admin-email" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+            <label htmlFor="admin-email" className="block text-xs font-medium uppercase tracking-wider text-fintech-muted">
               Email
             </label>
             <input
@@ -70,7 +70,7 @@ export default function AdminLogin() {
               type="email"
               autoComplete="email"
               required
-              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-fintech-muted/60 outline-none transition focus:border-fintech-accent focus:ring-1 focus:ring-fintech-accent/30"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -79,7 +79,7 @@ export default function AdminLogin() {
           </div>
 
           <div>
-            <label htmlFor="admin-password" className="block text-xs font-medium uppercase tracking-wider text-violet-300/90">
+            <label htmlFor="admin-password" className="block text-xs font-medium uppercase tracking-wider text-fintech-muted">
               Password
             </label>
             <input
@@ -87,7 +87,7 @@ export default function AdminLogin() {
               type="password"
               autoComplete="current-password"
               required
-              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/50 outline-none transition focus:border-[#eab308]/60 focus:ring-1 focus:ring-[#eab308]/30"
+              className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-fintech-muted/60 outline-none transition focus:border-fintech-accent focus:ring-1 focus:ring-fintech-accent/30"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,7 +96,7 @@ export default function AdminLogin() {
           </div>
 
           {error ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300" role="alert">
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-400" role="alert">
               {error}
             </p>
           ) : null}
@@ -104,14 +104,14 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-press w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3.5 font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70"
+            className="btn-press w-full rounded-xl bg-fintech-accent py-3.5 font-semibold text-white shadow-lg shadow-fintech-accent/20 transition hover:bg-fintech-accent/90 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-8 text-center text-sm text-violet-300/90">
-          <Link href="/" className="font-medium text-[#fde047] underline underline-offset-2 hover:text-[#eab308]">
+        <p className="mt-8 text-center text-sm text-fintech-muted">
+          <Link href="/" className="font-medium text-fintech-highlight underline underline-offset-2 hover:text-fintech-highlight/90">
             Back to site
           </Link>
         </p>

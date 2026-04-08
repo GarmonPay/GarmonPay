@@ -115,15 +115,15 @@ export default function AdminBannersPage() {
   if (!session) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-[#9ca3af]">Redirecting to admin login…</p>
+        <p className="text-fintech-muted">Redirecting to admin login…</p>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Banner Control Panel</h1>
-      <p className="text-[#9ca3af] mb-6">
+      <h1 className="text-xl font-bold text-white mb-2">Banner Control Panel</h1>
+      <p className="text-fintech-muted mb-6">
         View, approve, pause, or delete banners. Only active banners appear in the rotator.
       </p>
       {actionError && (
@@ -133,25 +133,25 @@ export default function AdminBannersPage() {
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
       {loading ? (
-        <p className="text-[#9ca3af]">Loading…</p>
+        <p className="text-fintech-muted">Loading…</p>
       ) : banners.length === 0 ? (
-        <p className="text-[#9ca3af]">No banners.</p>
+        <p className="text-fintech-muted">No banners.</p>
       ) : (
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Preview</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Title</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Owner</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Type</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Status</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Impressions</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Clicks</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">CTR</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Created</th>
-                  <th className="p-3 text-sm font-medium text-[#9ca3af]">Actions</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Preview</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Title</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Owner</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Type</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Status</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Impressions</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Clicks</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">CTR</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Created</th>
+                  <th className="p-3 text-sm font-medium text-fintech-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -161,8 +161,8 @@ export default function AdminBannersPage() {
                       <Image src={b.image_url} alt="" width={120} height={48} className="h-12 w-auto max-w-[120px] object-contain rounded bg-black/20" unoptimized />
                     </td>
                     <td className="p-3 text-white">{b.title || "—"}</td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{b.owner_email ?? "—"}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{b.type}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{b.owner_email ?? "—"}</td>
+                    <td className="p-3 text-fintech-muted capitalize">{b.type}</td>
                     <td className="p-3">
                       <span
                         className={
@@ -170,7 +170,7 @@ export default function AdminBannersPage() {
                             ? "text-emerald-400"
                             : b.status === "paused"
                               ? "text-amber-400"
-                              : "text-[#9ca3af]"
+                              : "text-fintech-muted"
                         }
                       >
                         {b.status}
@@ -178,8 +178,8 @@ export default function AdminBannersPage() {
                     </td>
                     <td className="p-3 text-white">{b.impressions}</td>
                     <td className="p-3 text-white">{b.clicks}</td>
-                    <td className="p-3 text-[#10b981]">{ctr(b.impressions, b.clicks)}</td>
-                    <td className="p-3 text-[#9ca3af] text-sm">{formatDate(b.created_at)}</td>
+                    <td className="p-3 text-emerald-400">{ctr(b.impressions, b.clicks)}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{formatDate(b.created_at)}</td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
                         {b.status === "pending" && (
@@ -207,7 +207,7 @@ export default function AdminBannersPage() {
                             type="button"
                             onClick={() => updateStatus(b.id, "active")}
                             disabled={updatingId === b.id}
-                            className="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-50"
+                            className="px-2 py-1 rounded-xl bg-fintech-accent text-white text-xs hover:bg-fintech-accent/90 disabled:opacity-50"
                           >
                             Activate
                           </button>

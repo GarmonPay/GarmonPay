@@ -108,7 +108,7 @@ export default function Dashboard() {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-[#9ca3af]">
+      <div className="flex items-center justify-center min-h-[50vh] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
@@ -116,7 +116,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-[#9ca3af]">
+      <div className="flex items-center justify-center min-h-[50vh] text-fintech-muted">
         Loading…
       </div>
     );
@@ -124,11 +124,11 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <header className="shrink-0 border-b border-white/10 bg-[#0f172a]/80 py-4">
+      <header className="shrink-0 border-b border-white/10 bg-fintech-bg-card/80 py-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-white">Admin Dashboard</h1>
-            <p className="text-sm text-[#9ca3af] mt-0.5">Overview of platform stats and recent activity</p>
+            <p className="text-sm text-fintech-muted mt-0.5">Overview of platform stats and recent activity</p>
           </div>
         </div>
       </header>
@@ -145,59 +145,59 @@ export default function Dashboard() {
           </div>
         )}
 
-        <section className="mb-10 rounded-xl border border-[#eab308]/25 bg-[#0f172a]/90 p-5 shadow-lg">
-          <h2 className="text-sm font-semibold text-[#eab308] uppercase tracking-wider mb-4">
+        <section className="mb-10 rounded-xl border border-fintech-highlight/25 bg-fintech-bg-card/90 p-5 shadow-lg">
+          <h2 className="text-sm font-semibold text-fintech-highlight uppercase tracking-wider mb-4">
             Platform Earnings Tracker
           </h2>
-          <p className="text-xs text-[#9ca3af] mb-4">
-            Derived from Supabase <code className="text-[#a78bfa]">transactions</code> (deposits =
+          <p className="text-xs text-fintech-muted mb-4">
+            Derived from Supabase <code className="text-fintech-muted">transactions</code> (deposits =
             revenue, completed withdrawals = paid out to members) and{" "}
-            <code className="text-[#a78bfa]">users.membership</code> for plan counts.
+            <code className="text-fintech-muted">users.membership</code> for plan counts.
           </p>
           {platformMetrics ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Platform revenue today</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Platform revenue today</p>
                   <p className="text-xl font-bold text-emerald-400 mt-1">
                     ${(platformMetrics.platformRevenueTodayCents / 100).toFixed(2)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Platform revenue this month</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Platform revenue this month</p>
                   <p className="text-xl font-bold text-emerald-400 mt-1">
                     ${(platformMetrics.platformRevenueMonthCents / 100).toFixed(2)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Paid out to members today</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Paid out to members today</p>
                   <p className="text-xl font-bold text-amber-300 mt-1">
                     ${(platformMetrics.paidOutWithdrawalsTodayCents / 100).toFixed(2)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Paid out to members this month</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Paid out to members this month</p>
                   <p className="text-xl font-bold text-amber-300 mt-1">
                     ${(platformMetrics.paidOutWithdrawalsMonthCents / 100).toFixed(2)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Platform profit today</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Platform profit today</p>
                   <p className="text-xl font-bold text-white mt-1">
                     ${(platformMetrics.profitTodayCents / 100).toFixed(2)}
                   </p>
-                  <p className="text-[10px] text-[#6b7280] mt-1">Revenue today − withdrawals completed today</p>
+                  <p className="text-[10px] text-fintech-muted mt-1">Revenue today − withdrawals completed today</p>
                 </div>
-                <div className="rounded-lg bg-[#111827] border border-white/10 p-4">
-                  <p className="text-xs text-[#9ca3af] uppercase">Earnings credited (month)</p>
+                <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
+                  <p className="text-xs text-fintech-muted uppercase">Earnings credited (month)</p>
                   <p className="text-xl font-bold text-violet-300 mt-1">
                     ${(platformMetrics.earningsCreditedMonthCents / 100).toFixed(2)}
                   </p>
-                  <p className="text-[10px] text-[#6b7280] mt-1">Member earning types completed</p>
+                  <p className="text-[10px] text-fintech-muted mt-1">Member earning types completed</p>
                 </div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-[#111827] p-4">
-                <p className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider mb-3">
+              <div className="rounded-lg border border-white/10 bg-fintech-bg-card p-4">
+                <p className="text-xs font-medium text-fintech-muted uppercase tracking-wider mb-3">
                   Active members by plan (DB membership)
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 text-sm">
@@ -209,73 +209,73 @@ export default function Dashboard() {
                     { key: "active", label: "Active" },
                   ].map(({ key, label }) => (
                     <div key={key} className="rounded-md bg-black/30 px-3 py-2 border border-white/5">
-                      <p className="text-[#9ca3af] text-xs">{label}</p>
+                      <p className="text-fintech-muted text-xs">{label}</p>
                       <p className="text-lg font-bold text-white">
                         {platformMetrics.membershipCounts[key] ?? 0}
                       </p>
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-[#6b7280] mt-3">
+                <p className="text-[10px] text-fintech-muted mt-3">
                   Marketing names (Free, Starter, Growth, Pro, Elite) map to database{" "}
-                  <code className="text-[#a78bfa]">users.membership</code> values; adjust tiers in
+                  <code className="text-fintech-muted">users.membership</code> values; adjust tiers in
                   Stripe/webhooks to match five SKUs over time.
                 </p>
               </div>
             </>
           ) : (
-            <p className="text-[#6b7280] text-sm">Loading platform metrics…</p>
+            <p className="text-fintech-muted text-sm">Loading platform metrics…</p>
           )}
         </section>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Users</h2>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total Users</h2>
             <p className="text-2xl font-bold text-white mt-2">{stats.totalUsers}</p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Deposits</h2>
-            <p className="text-2xl font-bold text-[#10b981] mt-2">
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total Deposits</h2>
+            <p className="text-2xl font-bold text-emerald-400 mt-2">
               ${(stats.totalDeposits / 100).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Withdrawals</h2>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total Withdrawals</h2>
             <p className="text-2xl font-bold text-amber-400 mt-2">
               ${(stats.totalWithdrawals / 100).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">User Balances (total)</h2>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">User Balances (total)</h2>
             <p className="text-2xl font-bold text-white mt-2">
               ${(stats.totalBalance / 100).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Profit</h2>
-            <p className="text-2xl font-bold text-[#10b981] mt-2">
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total Profit</h2>
+            <p className="text-2xl font-bold text-emerald-400 mt-2">
               ${(Number(stats.totalProfit) / 100).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider">Total Revenue</h2>
+          <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total Revenue</h2>
             <p className="text-2xl font-bold text-white mt-2">
               ${(Number(stats.totalRevenue) / 100).toFixed(2)}
             </p>
           </div>
         </div>
 
-        <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg">
-          <h2 className="text-sm font-medium text-[#9ca3af] uppercase tracking-wider mb-4">Recent Transactions</h2>
+        <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
+          <h2 className="text-sm font-medium text-fintech-muted uppercase tracking-wider mb-4">Recent Transactions</h2>
           {stats.recentTransactions.length === 0 ? (
-            <p className="text-[#6b7280] text-sm">No transactions yet.</p>
+            <p className="text-fintech-muted text-sm">No transactions yet.</p>
           ) : (
             <>
             <AdminScrollHint />
             <AdminTableWrap>
               <table className="w-full text-left text-sm min-w-[520px]">
                 <thead>
-                  <tr className="border-b border-white/10 text-[#9ca3af]">
+                  <tr className="border-b border-white/10 text-fintech-muted">
                     <th className="pb-3 pr-4 font-medium">Date</th>
                     <th className="pb-3 pr-4 font-medium">User</th>
                     <th className="pb-3 pr-4 font-medium">Type</th>
@@ -286,12 +286,12 @@ export default function Dashboard() {
                 <tbody>
                   {stats.recentTransactions.slice(0, 20).map((tx) => (
                     <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-3 pr-4 text-[#9ca3af]">
+                      <td className="py-3 pr-4 text-fintech-muted">
                         {tx.created_at ? new Date(tx.created_at).toLocaleString() : "—"}
                       </td>
                       <td className="py-3 pr-4 text-white truncate max-w-[180px]">{tx.user_email ?? tx.id ?? "—"}</td>
-                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{tx.type}</td>
-                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{tx.status}</td>
+                      <td className="py-3 pr-4 text-fintech-muted capitalize">{tx.type}</td>
+                      <td className="py-3 pr-4 text-fintech-muted capitalize">{tx.status}</td>
                       <td className="py-3 pr-4 text-right font-medium text-white">
                         ${(Number(tx.amount) / 100).toFixed(2)}
                       </td>
@@ -303,17 +303,17 @@ export default function Dashboard() {
             </>
           )}
         </section>
-        <section className="rounded-xl bg-[#111827] border border-white/10 p-5 shadow-lg mt-6">
-          <h2 className="text-sm font-medium text-[#9ca3af] uppercase tracking-wider mb-4">Stripe payment logs</h2>
+        <section className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg mt-6">
+          <h2 className="text-sm font-medium text-fintech-muted uppercase tracking-wider mb-4">Stripe payment logs</h2>
           {stats.recentPayments.length === 0 ? (
-            <p className="text-[#6b7280] text-sm">No Stripe payments yet.</p>
+            <p className="text-fintech-muted text-sm">No Stripe payments yet.</p>
           ) : (
             <>
             <AdminScrollHint />
             <AdminTableWrap>
               <table className="w-full text-left text-sm min-w-[480px]">
                 <thead>
-                  <tr className="border-b border-white/10 text-[#9ca3af]">
+                  <tr className="border-b border-white/10 text-fintech-muted">
                     <th className="pb-3 pr-4 font-medium">Date</th>
                     <th className="pb-3 pr-4 font-medium">Email</th>
                     <th className="pb-3 pr-4 font-medium">Status</th>
@@ -323,11 +323,11 @@ export default function Dashboard() {
                 <tbody>
                   {stats.recentPayments.slice(0, 20).map((p) => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-3 pr-4 text-[#9ca3af]">
+                      <td className="py-3 pr-4 text-fintech-muted">
                         {p.created_at ? new Date(p.created_at).toLocaleString() : "—"}
                       </td>
                       <td className="py-3 pr-4 text-white truncate max-w-[200px]">{p.email ?? "—"}</td>
-                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{p.status}</td>
+                      <td className="py-3 pr-4 text-fintech-muted capitalize">{p.status}</td>
                       <td className="py-3 pr-4 text-right font-medium text-white">
                         ${Number(p.amount).toFixed(2)} {p.currency?.toUpperCase() ?? ""}
                       </td>

@@ -85,7 +85,7 @@ export default function AdminSocialTasksPage() {
 
   return (
     <div className="py-8 text-white max-w-4xl">
-      <h1 className="text-2xl font-bold text-white mb-2">Social tasks</h1>
+      <h1 className="text-xl font-bold text-white mb-2">Social tasks</h1>
       <p className="text-slate-400 text-sm mb-6">Review pending submissions and approve rewards.</p>
 
       {error && (
@@ -103,7 +103,7 @@ export default function AdminSocialTasksPage() {
           {items.map((row) => (
             <li
               key={row.id}
-              className="rounded-xl border border-white/10 bg-[#0f172a] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+              className="rounded-xl border border-white/10 bg-fintech-bg-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
             >
               <div className="space-y-1 text-sm">
                 <p className="font-semibold text-white">{row.task?.title ?? "Task"}</p>
@@ -116,7 +116,7 @@ export default function AdminSocialTasksPage() {
                     href={row.proof_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline text-xs break-all"
+                    className="text-fintech-accent hover:underline text-xs break-all"
                   >
                     {row.proof_url}
                   </a>
@@ -135,7 +135,7 @@ export default function AdminSocialTasksPage() {
                   type="button"
                   disabled={busy === row.id}
                   onClick={() => void act(row.id, "approve")}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:bg-fintech-accent/90 disabled:opacity-50"
                 >
                   {busy === row.id ? "…" : "Approve"}
                 </button>

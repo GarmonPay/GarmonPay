@@ -135,34 +135,34 @@ export default function AdminUsersPage() {
 
   if (!session) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
   }
 
   return (
-    <div className="py-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Users</h1>
-      <p className="text-[#9ca3af] mb-6">User management. List and manage registered users.</p>
+    <div className="space-y-6 py-6">
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
+        <h1 className="text-xl font-bold text-white mb-2">Users</h1>
+        <p className="text-sm text-fintech-muted mb-6">User management. List and manage registered users.</p>
 
-      <div className="rounded-xl bg-[#111827] border border-white/10 p-6">
         <div className="mb-4">
           <input
             type="search"
             placeholder="Search by email or user ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-md px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-[#6b7280]"
+            className="w-full max-w-md px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-fintech-muted"
           />
         </div>
 
-      {loading ? (
-        <p className="text-[#9ca3af]">Loading users…</p>
+        {loading ? (
+        <p className="text-fintech-muted">Loading users…</p>
       ) : error ? (
         <p className="text-red-400">{error}</p>
       ) : filtered.length === 0 ? (
-          <p className="text-[#9ca3af]">
+          <p className="text-fintech-muted">
             {users.length === 0
               ? "No users yet."
               : `No users match "${search.trim()}".`}
@@ -173,24 +173,24 @@ export default function AdminUsersPage() {
             <AdminTableWrap>
               <table className="w-full text-left text-sm min-w-[720px]">
                 <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Email</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium hidden sm:table-cell">ID</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Role</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">USD (wallet)</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">GPay</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Status</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium hidden sm:table-cell">Joined</th>
-                    <th className="pb-2 pr-4 text-[#9ca3af] font-medium">Actions</th>
+                  <tr className="border-b border-white/10 bg-black/30">
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">Email</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase hidden sm:table-cell">ID</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">Role</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">USD (wallet)</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">GPay</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">Status</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase hidden sm:table-cell">Joined</th>
+                    <th className="p-3 pr-4 text-xs font-semibold text-fintech-muted uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((u) => (
-                    <tr key={u.id} className="border-b border-white/5">
-                      <td className="py-3 pr-4 text-white font-medium truncate max-w-[200px]">{u.email ?? "—"}</td>
-                      <td className="py-3 pr-4 font-mono text-xs text-[#6b7280] hidden sm:table-cell">{u.id.slice(0, 8)}…</td>
-                      <td className="py-3 pr-4 text-[#9ca3af] capitalize">{u.role ?? "user"}</td>
-                      <td className="py-3 pr-4 text-[#10b981]">
+                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="p-3 pr-4 text-sm text-white font-medium truncate max-w-[200px]">{u.email ?? "—"}</td>
+                      <td className="p-3 pr-4 font-mono text-xs text-fintech-muted hidden sm:table-cell">{u.id.slice(0, 8)}…</td>
+                      <td className="p-3 pr-4 text-sm text-fintech-muted capitalize">{u.role ?? "user"}</td>
+                      <td className="p-3 pr-4 text-sm text-emerald-400">
                         $
                         {typeof u.usd_balance_cents === "number"
                           ? (u.usd_balance_cents / 100).toFixed(2)
@@ -198,19 +198,19 @@ export default function AdminUsersPage() {
                             ? (u.balance / 100).toFixed(2)
                             : "0.00"}
                       </td>
-                      <td className="py-3 pr-4 text-amber-200/95 text-sm">
+                      <td className="p-3 pr-4 text-sm text-fintech-highlight">
                         {(u.gpay_available_minor ?? 0) / 100} GP
-                        <span className="block text-[10px] text-[#6b7280]">
+                        <span className="block text-[10px] text-fintech-muted">
                           life {(u.gpay_lifetime_earned_minor ?? 0) / 100}
                         </span>
                       </td>
-                      <td className="py-3 pr-4">
-                        {u.banned ? <span className="text-red-400 font-medium">Banned</span> : <span className="text-[#10b981]">Active</span>}
+                      <td className="p-3 pr-4">
+                        {u.banned ? <span className="text-red-400 font-medium">Banned</span> : <span className="text-emerald-400">Active</span>}
                       </td>
-                      <td className="py-3 pr-4 text-[#6b7280] hidden sm:table-cell">
+                      <td className="p-3 pr-4 text-sm text-fintech-muted hidden sm:table-cell">
                         {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="p-3 pr-4">
                         <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
                           <button
                             type="button"
@@ -219,7 +219,7 @@ export default function AdminUsersPage() {
                               setCreditAmount("");
                               setCreditReason("");
                             }}
-                            className={`${ACTION_BTN} bg-sky-600 hover:bg-sky-500 text-white`}
+                            className={`${ACTION_BTN} rounded-xl bg-fintech-accent hover:bg-fintech-accent/90 text-white`}
                           >
                             +USD
                           </button>
@@ -230,7 +230,7 @@ export default function AdminUsersPage() {
                               setCreditAmount("");
                               setCreditReason("");
                             }}
-                            className={`${ACTION_BTN} bg-amber-700 hover:bg-amber-600 text-white`}
+                            className={`${ACTION_BTN} rounded-xl border border-fintech-highlight/40 bg-black/30 text-fintech-highlight hover:bg-white/5`}
                           >
                             +GP
                           </button>
@@ -239,7 +239,7 @@ export default function AdminUsersPage() {
                               type="button"
                               onClick={() => submitBan(u, false)}
                               disabled={banSubmitting === u.id}
-                              className={`${ACTION_BTN} bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50`}
+                              className={`${ACTION_BTN} rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white disabled:opacity-50`}
                             >
                               {banSubmitting === u.id ? "…" : "Unban"}
                             </button>
@@ -248,7 +248,7 @@ export default function AdminUsersPage() {
                               type="button"
                               onClick={() => submitBan(u, true)}
                               disabled={banSubmitting === u.id}
-                              className={`${ACTION_BTN} bg-red-600 hover:bg-red-500 text-white disabled:opacity-50`}
+                              className={`${ACTION_BTN} rounded-xl bg-red-600/90 hover:bg-red-600 text-white disabled:opacity-50`}
                             >
                               {banSubmitting === u.id ? "…" : "Ban"}
                             </button>
@@ -263,7 +263,7 @@ export default function AdminUsersPage() {
           </>
         )}
         {!loading && users.length > 0 && (
-          <p className="mt-4 text-xs text-[#6b7280]">
+          <p className="mt-4 text-xs text-fintech-muted">
             Showing {filtered.length} of {users.length} user{users.length !== 1 ? "s" : ""}.
           </p>
         )}
@@ -275,11 +275,11 @@ export default function AdminUsersPage() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-w-md w-full rounded-xl border border-white/10 bg-[#111827] p-6 shadow-xl">
+          <div className="max-w-md w-full rounded-xl border border-white/10 bg-fintech-bg-card p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-white">
               Credit {credit.kind === "usd" ? "USD" : "GPay"} — {credit.email}
             </h2>
-            <p className="mt-1 text-sm text-[#9ca3af]">
+            <p className="mt-1 text-sm text-fintech-muted">
               Amount in dollars (e.g. 5.00 = {credit.kind === "usd" ? "500 cents USD" : "500 minor GP"}).
             </p>
             <form onSubmit={submitCredit} className="mt-4 space-y-3">
@@ -311,7 +311,7 @@ export default function AdminUsersPage() {
                 <button
                   type="submit"
                   disabled={creditBusy}
-                  className="px-4 py-2 rounded-lg bg-[#2563eb] text-white font-medium disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-fintech-accent text-white font-medium hover:bg-fintech-accent/90 disabled:opacity-50"
                 >
                   {creditBusy ? "…" : "Apply"}
                 </button>

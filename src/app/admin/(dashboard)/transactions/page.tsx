@@ -51,7 +51,7 @@ export default function AdminTransactionsPage() {
 
   if (!session) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-[#9ca3af]">
+      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
@@ -59,41 +59,41 @@ export default function AdminTransactionsPage() {
 
   return (
     <div className="py-6">
-      <h1 className="text-2xl font-bold text-white mb-2">Transactions</h1>
-      <p className="text-[#9ca3af] mb-6">All user transactions (amounts in USD cents).</p>
+      <h1 className="text-xl font-bold text-white mb-2">Transactions</h1>
+      <p className="text-fintech-muted mb-6">All user transactions (amounts in USD cents).</p>
       {error && <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>}
       {loading ? (
-        <div className="text-[#9ca3af]">Loading…</div>
+        <div className="text-fintech-muted">Loading…</div>
       ) : transactions.length === 0 ? (
-        <div className="text-[#9ca3af]">No transactions.</div>
+        <div className="text-fintech-muted">No transactions.</div>
       ) : (
-        <div className="rounded-xl bg-[#111827] border border-white/10 overflow-hidden">
+        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
           <AdminScrollHint />
           <AdminTableWrap>
             <table className="w-full text-left text-sm min-w-[800px]">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-[#9ca3af] font-medium">Date</th>
-                  <th className="p-3 text-[#9ca3af] font-medium">User</th>
-                  <th className="p-3 text-[#9ca3af] font-medium">Type</th>
-                  <th className="p-3 text-[#9ca3af] font-medium">Status</th>
-                  <th className="p-3 text-[#9ca3af] font-medium text-right">Amount</th>
-                  <th className="p-3 text-[#9ca3af] font-medium hidden lg:table-cell">Description</th>
+                  <th className="p-3 text-fintech-muted font-medium">Date</th>
+                  <th className="p-3 text-fintech-muted font-medium">User</th>
+                  <th className="p-3 text-fintech-muted font-medium">Type</th>
+                  <th className="p-3 text-fintech-muted font-medium">Status</th>
+                  <th className="p-3 text-fintech-muted font-medium text-right">Amount</th>
+                  <th className="p-3 text-fintech-muted font-medium hidden lg:table-cell">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-white/5">
-                    <td className="p-3 text-[#9ca3af] whitespace-nowrap">
+                    <td className="p-3 text-fintech-muted whitespace-nowrap">
                       {t.created_at ? new Date(t.created_at).toLocaleString() : "—"}
                     </td>
                     <td className="p-3 text-white max-w-[200px] truncate" title={t.user_email ?? t.user_id}>
                       {t.user_email ?? t.user_id}
                     </td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{t.type}</td>
-                    <td className="p-3 text-[#9ca3af] capitalize">{t.status}</td>
+                    <td className="p-3 text-fintech-muted capitalize">{t.type}</td>
+                    <td className="p-3 text-fintech-muted capitalize">{t.status}</td>
                     <td className="p-3 text-right font-medium text-white">{formatUsdCents(t.amount)}</td>
-                    <td className="p-3 text-[#9ca3af] hidden lg:table-cell max-w-xs truncate">{t.description ?? "—"}</td>
+                    <td className="p-3 text-fintech-muted hidden lg:table-cell max-w-xs truncate">{t.description ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

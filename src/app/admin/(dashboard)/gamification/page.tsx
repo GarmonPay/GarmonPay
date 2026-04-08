@@ -122,29 +122,29 @@ export default function GamificationPage() {
 
   if (!session) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[200px] text-[#9ca3af]">
+      <div className="p-8 flex items-center justify-center min-h-[200px] text-fintech-muted">
         Redirecting to admin login…
       </div>
     );
   }
 
   if (config === undefined) {
-    return <div className="p-8 text-[#9ca3af]">Loading gamification config...</div>;
+    return <div className="p-8 text-fintech-muted">Loading gamification config...</div>;
   }
 
   const c = config ?? DEFAULT_CONFIG;
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-4">Gamification Config</h1>
+      <h1 className="text-xl font-bold text-white mb-4">Gamification Config</h1>
       {loadError && (
         <p className="text-amber-400 mb-4">Could not load from server: {loadError}. Showing defaults; save to create/update.</p>
       )}
-      <p className="text-[#10b981] text-sm mb-4">Config loaded. Costs are in credits; house_edge is a decimal (e.g. 0.10 = 10%).</p>
+      <p className="text-emerald-400 text-sm mb-4">Config loaded. Costs are in credits; house_edge is a decimal (e.g. 0.10 = 10%).</p>
 
-      <form onSubmit={handleSave} className="mb-6 p-5 rounded-xl bg-[#111827] border border-white/10 max-w-md space-y-4">
+      <form onSubmit={handleSave} className="mb-6 p-5 rounded-xl bg-fintech-bg-card border border-white/10 max-w-md space-y-4">
         <div>
-          <label htmlFor="spin_cost" className="block text-sm text-[#9ca3af] mb-1">Spin cost</label>
+          <label htmlFor="spin_cost" className="block text-sm text-fintech-muted mb-1">Spin cost</label>
           <input
             id="spin_cost"
             name="spin_cost"
@@ -156,7 +156,7 @@ export default function GamificationPage() {
           />
         </div>
         <div>
-          <label htmlFor="scratch_cost" className="block text-sm text-[#9ca3af] mb-1">Scratch cost</label>
+          <label htmlFor="scratch_cost" className="block text-sm text-fintech-muted mb-1">Scratch cost</label>
           <input
             id="scratch_cost"
             name="scratch_cost"
@@ -168,7 +168,7 @@ export default function GamificationPage() {
           />
         </div>
         <div>
-          <label htmlFor="mystery_box_cost" className="block text-sm text-[#9ca3af] mb-1">Mystery box cost</label>
+          <label htmlFor="mystery_box_cost" className="block text-sm text-fintech-muted mb-1">Mystery box cost</label>
           <input
             id="mystery_box_cost"
             name="mystery_box_cost"
@@ -180,7 +180,7 @@ export default function GamificationPage() {
           />
         </div>
         <div>
-          <label htmlFor="boxing_cost" className="block text-sm text-[#9ca3af] mb-1">Boxing cost</label>
+          <label htmlFor="boxing_cost" className="block text-sm text-fintech-muted mb-1">Boxing cost</label>
           <input
             id="boxing_cost"
             name="boxing_cost"
@@ -192,7 +192,7 @@ export default function GamificationPage() {
           />
         </div>
         <div>
-          <label htmlFor="pinball_cost" className="block text-sm text-[#9ca3af] mb-1">Pinball cost</label>
+          <label htmlFor="pinball_cost" className="block text-sm text-fintech-muted mb-1">Pinball cost</label>
           <input
             id="pinball_cost"
             name="pinball_cost"
@@ -204,7 +204,7 @@ export default function GamificationPage() {
           />
         </div>
         <div>
-          <label htmlFor="house_edge" className="block text-sm text-[#9ca3af] mb-1">House edge (e.g. 0.10 = 10%)</label>
+          <label htmlFor="house_edge" className="block text-sm text-fintech-muted mb-1">House edge (e.g. 0.10 = 10%)</label>
           <input
             id="house_edge"
             name="house_edge"
@@ -219,19 +219,19 @@ export default function GamificationPage() {
         <button
           type="submit"
           disabled={saving}
-          className="px-4 py-2 rounded-lg bg-[#10b981] text-white font-medium disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-fintech-accent text-white font-medium disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
         </button>
       </form>
 
       {message && (
-        <p className={`mb-4 text-sm ${message.type === "success" ? "text-[#10b981]" : "text-red-400"}`}>
+        <p className={`mb-4 text-sm ${message.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
           {message.text}
         </p>
       )}
 
-      <pre className="p-4 rounded-xl bg-[#111827] border border-white/10 text-[#e5e7eb] text-sm overflow-auto max-w-3xl">
+      <pre className="p-4 rounded-xl bg-fintech-bg-card border border-white/10 text-white text-sm overflow-auto max-w-3xl">
         {JSON.stringify(c, null, 2)}
       </pre>
     </div>

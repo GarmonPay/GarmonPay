@@ -129,7 +129,7 @@ export default function AdminBalanceMonitorPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Balance Monitor</h1>
+        <h1 className="text-xl font-bold text-white mb-2">Balance Monitor</h1>
         <p className="mt-1 text-sm text-fintech-muted">
           Compares <code className="text-fintech-accent/90">wallet_balances</code> to the latest{" "}
           <code className="text-fintech-accent/90">wallet_ledger.balance_after</code> per user. Auto-refreshes every 60s.
