@@ -8,19 +8,16 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     const ext = config.externals;
-    let nextExternals = [
-      ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
-      { canvas: "canvas" },
-    ];
+    // Never externalize `canvas` on the client — it breaks Three.js in the browser (undefined internals / ".S").
     if (isServer) {
-      nextExternals = [
-        ...nextExternals,
+      config.externals = [
+        ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
+        { canvas: "canvas" },
         "three",
         "@react-three/fiber",
         "@react-three/drei",
       ];
     }
-    config.externals = nextExternals;
     return config;
   },
   async headers() {

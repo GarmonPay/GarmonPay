@@ -73,6 +73,8 @@ export function CoinFlipPanel() {
 
   const [openGames, setOpenGames] = useState<OpenGame[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  /** Avoid mounting R3F/Three until after client hydration (extra guard beyond dynamic/ssr:false). */
+  const [canvasMountReady, setCanvasMountReady] = useState(false);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -116,6 +118,10 @@ export function CoinFlipPanel() {
       setToken(s?.accessToken ?? null);
       setLoadingSession(false);
     });
+  }, []);
+
+  useEffect(() => {
+    setCanvasMountReady(true);
   }, []);
 
   useEffect(() => {
@@ -283,14 +289,18 @@ export function CoinFlipPanel() {
         </div>
       )}
 
-      <CoinFlip3D
-        flipGeneration={flipGeneration}
-        targetFace={targetFace}
-        isFlipping={isFlipping}
-        won={won}
-        onFlipStart={handleCoinFlipStart}
-        onResult={handleCoinResult}
-      />
+      {canvasMountReady ? (
+        <CoinFlip3D
+          flipGeneration={flipGeneration}
+          targetFace={targetFace}
+          isFlipping={isFlipping}
+          won={won}
+          onFlipStart={handleCoinFlipStart}
+          onResult={handleCoinResult}
+        />
+      ) : (
+        <div className="min-h-[280px] md:min-h-[360px] rounded-xl border border-white/10 bg-[#0e0118] animate-pulse" />
+      )}
 
       {lastResult && !isFlipping && (
         <div
