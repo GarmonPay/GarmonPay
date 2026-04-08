@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type BannerRow = {
   id: string;
@@ -134,7 +135,7 @@ export default function AdminBannersPage() {
       )}
       {loading ? (
         <p className="text-fintech-muted">Loading…</p>
-      ) : banners.length === 0 ? (
+      ) : error ? null : banners.length === 0 ? (
         <p className="text-fintech-muted">No banners.</p>
       ) : (
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">

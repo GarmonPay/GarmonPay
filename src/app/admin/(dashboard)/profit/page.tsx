@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 export default function AdminProfitPage() {
   const [session, setSession] = useState<AdminSession | null>(null);

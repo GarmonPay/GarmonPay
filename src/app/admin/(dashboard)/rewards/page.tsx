@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type TxRow = {
   id: string;
@@ -28,6 +29,7 @@ export default function AdminRewardsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
+    setError(null);
     fetch(`${API_BASE}/admin/transactions`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
@@ -58,7 +60,7 @@ export default function AdminRewardsPage() {
       )}
       {loading ? (
         <div className="text-fintech-muted">Loading…</div>
-      ) : transactions.length === 0 ? (
+      ) : error ? null : transactions.length === 0 ? (
         <div className="text-fintech-muted">No reward transactions.</div>
       ) : (
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">

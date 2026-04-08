@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
 const ACTION_BTN =
   "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-2 rounded-lg text-sm transition max-[480px]:w-full max-[480px]:min-w-0";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type AdType = "banner" | "video";
 type Placement = "homepage" | "dashboard" | "arena";

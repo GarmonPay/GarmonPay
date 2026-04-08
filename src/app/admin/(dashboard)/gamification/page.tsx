@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type Config = {
   id: string | null;
@@ -138,9 +139,15 @@ export default function GamificationPage() {
     <div className="p-8">
       <h1 className="text-xl font-bold text-white mb-4">Gamification Config</h1>
       {loadError && (
-        <p className="text-amber-400 mb-4">Could not load from server: {loadError}. Showing defaults; save to create/update.</p>
+        <p className="text-red-400 mb-4">
+          Could not load from server: {loadError}. Showing defaults; save to create/update.
+        </p>
       )}
-      <p className="text-emerald-400 text-sm mb-4">Config loaded. Costs are in credits; house_edge is a decimal (e.g. 0.10 = 10%).</p>
+      {!loadError && (
+        <p className="text-emerald-400 text-sm mb-4">
+          Config loaded. Costs are in credits; house_edge is a decimal (e.g. 0.10 = 10%).
+        </p>
+      )}
 
       <form onSubmit={handleSave} className="mb-6 p-5 rounded-xl bg-fintech-bg-card border border-white/10 max-w-md space-y-4">
         <div>

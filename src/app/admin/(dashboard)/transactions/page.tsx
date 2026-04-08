@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type TxRow = {
   id: string;
@@ -64,7 +65,7 @@ export default function AdminTransactionsPage() {
       {error && <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>}
       {loading ? (
         <div className="text-fintech-muted">Loading…</div>
-      ) : transactions.length === 0 ? (
+      ) : error ? null : transactions.length === 0 ? (
         <div className="text-fintech-muted">No transactions.</div>
       ) : (
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">

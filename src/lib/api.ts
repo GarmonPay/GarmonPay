@@ -4,7 +4,11 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
-/** Base URL for API requests. Ensures /api prefix when NEXT_PUBLIC_API_URL is origin only (e.g. https://garmonpay.com). */
+/**
+ * Base URL for API requests. Ensures /api prefix when NEXT_PUBLIC_API_URL is origin only
+ * (e.g. https://garmonpay.com → https://garmonpay.com/api). Admin UI must use this so fetches
+ * hit Next.js route handlers instead of returning HTML 404 pages.
+ */
 export function getApiRoot(): string {
   const url = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) || "";
   if (!url.trim()) return "/api";

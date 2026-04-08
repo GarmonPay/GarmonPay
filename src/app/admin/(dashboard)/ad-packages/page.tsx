@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import {
   memberPayoutCeilingUsd,
@@ -10,7 +11,7 @@ import {
   type AdPackageRow,
 } from "@/lib/ad-packages";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type AdminPkg = AdPackageRow & { included_clicks?: number; sort_order?: number };
 

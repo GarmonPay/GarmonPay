@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type Row = {
   id: string;
@@ -96,7 +97,7 @@ export default function AdminSocialTasksPage() {
 
       {loading ? (
         <p className="text-slate-500">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : error ? null : items.length === 0 ? (
         <p className="text-slate-500">No pending completions.</p>
       ) : (
         <ul className="space-y-3">

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
 const ACTION_BTN =
   "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-1.5 rounded-lg text-sm font-medium transition max-[480px]:w-full max-[480px]:min-w-0";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_BASE = getApiRoot();
 
 type WithdrawalRow = {
   id: string;
@@ -46,6 +47,7 @@ export default function AdminWithdrawalsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
+    setError(null);
     fetch(`${API_BASE}/admin/withdrawals`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
@@ -106,7 +108,7 @@ export default function AdminWithdrawalsPage() {
       )}
       {loading ? (
         <div className="text-fintech-muted">Loading…</div>
-      ) : withdrawals.length === 0 ? (
+      ) : error ? null : withdrawals.length === 0 ? (
         <div className="text-fintech-muted">No withdrawal requests.</div>
       ) : (
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
