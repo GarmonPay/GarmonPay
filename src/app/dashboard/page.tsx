@@ -888,13 +888,13 @@ export default function DashboardPage() {
             Play Games
           </Link>
           <Link
-            href="/dashboard/rewards"
+            href="/dashboard/games/spin"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             Spin Wheel
           </Link>
           <Link
-            href="/dashboard/rewards"
+            href="/dashboard/games"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-3 font-medium text-white transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             Daily Bonus

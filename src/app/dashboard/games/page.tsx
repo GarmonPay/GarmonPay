@@ -4,17 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
-import {
-  getGamesBudget,
-  gamesSpin,
-  gamesScratch,
-  gamesDailyBonus,
-  gamesMysteryBox,
-} from "@/lib/api";
-
-function formatCents(c: number) {
-  return `$${(c / 100).toFixed(2)}`;
-}
+import { getGamesBudget, gamesDailyBonus } from "@/lib/api";
 
 export default function DashboardGamesPage() {
   const router = useRouter();
@@ -24,10 +14,7 @@ export default function DashboardGamesPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ game: string; amountCents: number } | null>(null);
 
-  const [spinning, setSpinning] = useState(false);
-  const [scratching, setScratching] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
-  const [openingMystery, setOpeningMystery] = useState(false);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -52,34 +39,6 @@ export default function DashboardGamesPage() {
       .catch(() => {});
   };
 
-  const handleSpin = () => {
-    if (!session || spinning) return;
-    setError(null);
-    setResult(null);
-    setSpinning(true);
-    gamesSpin(session.tokenOrId, session.isToken)
-      .then((r) => {
-        setResult({ game: "Spin Wheel", amountCents: r.amountCents });
-        refreshBudget();
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Spin failed"))
-      .finally(() => setSpinning(false));
-  };
-
-  const handleScratch = () => {
-    if (!session || scratching) return;
-    setError(null);
-    setResult(null);
-    setScratching(true);
-    gamesScratch(session.tokenOrId, session.isToken)
-      .then((r) => {
-        setResult({ game: "Scratch Card", amountCents: r.amountCents });
-        refreshBudget();
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Scratch failed"))
-      .finally(() => setScratching(false));
-  };
-
   const handleDailyBonus = () => {
     if (!session || claimingDaily) return;
     setError(null);
@@ -94,19 +53,9 @@ export default function DashboardGamesPage() {
       .finally(() => setClaimingDaily(false));
   };
 
-  const handleMysteryBox = () => {
-    if (!session || openingMystery) return;
-    setError(null);
-    setResult(null);
-    setOpeningMystery(true);
-    gamesMysteryBox(session.tokenOrId, session.isToken)
-      .then((r) => {
-        setResult({ game: "Mystery Box", amountCents: r.amountCents });
-        refreshBudget();
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Open failed"))
-      .finally(() => setOpeningMystery(false));
-  };
+  function formatCents(c: number) {
+    return `$${(c / 100).toFixed(2)}`;
+  }
 
   if (loading || !session) {
     return (
@@ -163,62 +112,33 @@ export default function DashboardGamesPage() {
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Spin Wheel */}
-        <div className={cardBase}>
+        <Link href="/dashboard/games/spin" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(212,175,55,0.3))" }}>🎡</span>
             <h2 className="text-lg font-semibold text-white">Spin Wheel</h2>
           </div>
-          <p className="text-sm text-fintech-muted mb-4">Spin for a chance to win $0.00 to $0.10. Budget protected.</p>
-          <button
-            type="button"
-            onClick={handleSpin}
-            disabled={noRewards || spinning}
-            className="w-full py-3 rounded-lg bg-fintech-accent text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {spinning ? (
-              <span className="inline-block animate-spin">🎡</span>
-            ) : (
-              "Spin"
-            )}
-          </button>
-        </div>
+          <p className="text-sm text-fintech-muted mb-4">Spin for a chance to win rewards — opening soon.</p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
+        </Link>
 
-        {/* Scratch Card */}
-        <div className={cardBase}>
+        <Link href="/dashboard/games/scratch" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl">🎫</span>
             <h2 className="text-lg font-semibold text-white">Scratch Card</h2>
           </div>
-          <p className="text-sm text-fintech-muted mb-4">Reveal a random reward. Same odds as the wheel.</p>
-          <button
-            type="button"
-            onClick={handleScratch}
-            disabled={noRewards || scratching}
-            className="w-full py-3 rounded-lg border-2 border-fintech-highlight text-fintech-highlight font-semibold hover:bg-fintech-highlight/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {scratching ? "Revealing…" : "Scratch"}
-          </button>
-        </div>
+          <p className="text-sm text-fintech-muted mb-4">Reveal instant rewards — opening soon.</p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
+        </Link>
 
-        {/* Mystery Box */}
-        <div className={cardBase}>
+        <Link href="/dashboard/games/mystery-box" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl">📦</span>
             <h2 className="text-lg font-semibold text-white">Mystery Box</h2>
           </div>
-          <p className="text-sm text-fintech-muted mb-4">Open for a random reward — or nothing. 50/50.</p>
-          <button
-            type="button"
-            onClick={handleMysteryBox}
-            disabled={noRewards || openingMystery}
-            className="w-full py-3 rounded-lg bg-fintech-money/80 text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {openingMystery ? "Opening…" : "Open Box"}
-          </button>
-        </div>
+          <p className="text-sm text-fintech-muted mb-4">Random rewards — opening soon.</p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
+        </Link>
 
-        {/* Daily Bonus */}
         <div className={cardBase}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl">🎁</span>
@@ -235,7 +155,6 @@ export default function DashboardGamesPage() {
           </button>
         </div>
 
-        {/* Leaderboard — link only */}
         <Link href="/dashboard/leaderboard" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl">🏆</span>
@@ -245,14 +164,13 @@ export default function DashboardGamesPage() {
           <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View Leaderboard →</span>
         </Link>
 
-        {/* GarmonPay Pinball */}
-        <Link href="/games/pinball" className={`${cardBase} block no-underline text-inherit`}>
+        <Link href="/dashboard/games/pinball" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(0,240,255,0.5))" }}>🎮</span>
             <h2 className="text-lg font-semibold text-white">GarmonPay Pinball</h2>
           </div>
-          <p className="text-sm text-fintech-muted mb-4">Neon pinball. Pay 10¢ per game, compete on the leaderboard.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">Play Pinball →</span>
+          <p className="text-sm text-fintech-muted mb-4">Neon pinball and leaderboards — opening soon.</p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">View →</span>
         </Link>
       </div>
 
