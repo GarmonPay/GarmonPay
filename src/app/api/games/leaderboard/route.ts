@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-/** Legacy `/api/games/leaderboard` — previously delegated to Stake & Escape; kept as empty payload for compatibility. */
+/** GET `/api/games/leaderboard` — empty payload kept for API compatibility. */
 export async function GET() {
   return NextResponse.json({ window: "", entries: [] });
 }
