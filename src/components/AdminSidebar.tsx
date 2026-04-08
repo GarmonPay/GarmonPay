@@ -22,6 +22,7 @@ const links = [
   { href: "/admin/referrals", label: "Referrals" },
   { href: "/admin/platform", label: "Platform" },
   { href: "/admin/wallet-monitor", label: "Wallet" },
+  { href: "/admin/balance-monitor", label: "Balance Monitor" },
   { href: "/admin/arena", label: "Arena" },
   { href: "/admin/escape-room", label: "Stake & Escape" },
   { href: "/admin/security", label: "Security" },
