@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
   try {
-    const activities = await getRecentActivities(30);
+    const activities = await getRecentActivities(userId, 30);
     return NextResponse.json({ activities: activities ?? [] });
   } catch (e) {
     console.error("Activities error:", e);

@@ -112,24 +112,29 @@ export async function grantReferralBonusForUser(_referredUserId: string): Promis
   return { success: false, message: "referral_signup_bonus_disabled" };
 }
 
-/** Recent platform activities for feed. */
-export async function getRecentActivities(limit = 30): Promise<
+/**
+ * Recent platform activities for the authenticated user's feed only.
+ * Other users' rows and emails are never returned.
+ */
+export async function getRecentActivities(userId: string, limit = 30): Promise<
   { id: string; userId: string | null; email: string; activityType: string; description: string; amountCents: number | null; createdAt: string }[]
 > {
   const { data, error } = await supabase()
     .from("platform_activities")
     .select("id, user_id, activity_type, description, amount_cents, created_at")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   const rows = (data ?? []) as { id: string; user_id: string | null; activity_type: string; description: string; amount_cents: number | null; created_at: string }[];
-  const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean))) as string[];
-  const { data: users } = await supabase().from("users").select("id, email").in("id", userIds);
-  const emailMap = new Map((users ?? []).map((u: { id: string; email: string }) => [u.id, u.email]));
+
+  const { data: self } = await supabase().from("users").select("email").eq("id", userId).maybeSingle();
+  const selfEmail = (self as { email?: string } | null)?.email ?? "—";
+
   return rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
-    email: r.user_id ? (emailMap.get(r.user_id) ?? "User") : "—",
+    email: selfEmail,
     activityType: r.activity_type,
     description: r.description,
     amountCents: r.amount_cents != null ? Number(r.amount_cents) : null,
