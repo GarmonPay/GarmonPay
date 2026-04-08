@@ -62,13 +62,14 @@ export function CoinFlip3D({
   return (
     <div
       className={`relative w-full min-h-[280px] md:min-h-[360px] rounded-xl overflow-hidden border border-white/10 bg-[#0e0118] flex items-center justify-center p-8 ${className}`}
-      style={
-        showWinGlow
+      style={{
+        backgroundColor: "#0e0118",
+        ...(showWinGlow
           ? {
               boxShadow: "0 0 40px rgba(245, 200, 66, 0.6)",
             }
-          : undefined
-      }
+          : {}),
+      }}
     >
       <style>{`
         @keyframes coinflip-float {
@@ -82,7 +83,7 @@ export function CoinFlip3D({
 
       <div
         className={`flex items-center justify-center ${!isFlipping ? "coinflip-float-idle" : ""}`}
-        style={{ perspective: "1000px" }}
+        style={{ perspective: "1000px", backgroundColor: "#0e0118" }}
       >
         <div
           className="relative [transform-style:preserve-3d]"
@@ -99,7 +100,7 @@ export function CoinFlip3D({
           {/* Front — heads */}
           <div
             className="absolute inset-0 rounded-full overflow-hidden [backface-visibility:hidden] [transform:rotateY(0deg)] border border-[#f5c842]/30"
-            style={{ width: 200, height: 200 }}
+            style={{ width: 200, height: 200, backgroundColor: "transparent" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- promotional asset, user-provided PNG */}
             <img
@@ -108,6 +109,7 @@ export function CoinFlip3D({
               width={200}
               height={200}
               className="h-[200px] w-[200px] rounded-full object-cover"
+              style={{ mixBlendMode: "multiply" }}
               draggable={false}
             />
           </div>
@@ -115,7 +117,7 @@ export function CoinFlip3D({
           {/* Back — tails */}
           <div
             className="absolute inset-0 rounded-full overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)] border border-[#f5c842]/25"
-            style={{ width: 200, height: 200 }}
+            style={{ width: 200, height: 200, backgroundColor: "transparent" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- promotional asset, user-provided PNG */}
             <img
@@ -124,7 +126,11 @@ export function CoinFlip3D({
               width={200}
               height={200}
               className="block h-[200px] w-[200px] rounded-full object-cover"
-              style={{ objectFit: "cover", borderRadius: "50%" }}
+              style={{
+                objectFit: "cover",
+                borderRadius: "50%",
+                mixBlendMode: "multiply",
+              }}
               draggable={false}
             />
           </div>
