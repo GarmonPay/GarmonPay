@@ -116,11 +116,13 @@ export default function CeloLobbyPage() {
       setSession(s);
       setLoading(false);
       if (s.accessToken) {
-        fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
+        fetch("/api/dashboard", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
-          .then((d: { balance_cents?: number }) => {
-            const cents = Math.max(0, Math.floor(Number(d.balance_cents ?? 0)));
-            setBalanceCents(Number.isFinite(cents) ? cents : 0);
+          .then((d: { balanceCents?: number | null }) => {
+            const raw = d.balanceCents;
+            const n = raw == null ? NaN : Number(raw);
+            const cents = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+            setBalanceCents(cents);
           })
           .catch(() => {});
       }
