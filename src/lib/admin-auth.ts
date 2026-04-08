@@ -15,13 +15,13 @@ function hasAdminRole(row: { role?: string; is_super_admin?: boolean } | null | 
   return r === "admin" || r === "game_admin" || r === "super_admin";
 }
 
-/** Returns true if request has valid admin. Server-side only. */
-export async function isAdmin(request: Request): Promise<boolean> {
+/** Resolves Supabase auth user id when the user has an admin role; else null. */
+export async function getAdminAuthUserId(request: Request): Promise<string | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !anonKey) return false;
+  if (!url || !anonKey) return null;
 
   let token: string | null = null;
   try {
@@ -34,13 +34,13 @@ export async function isAdmin(request: Request): Promise<boolean> {
     const authHeader = request.headers.get("authorization");
     token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   }
-  if (!token) return false;
+  if (!token) return null;
 
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: { user }, error: authError } = await authClient.auth.getUser();
-  if (authError || !user) return false;
+  if (authError || !user) return null;
 
   const roleClient = serviceKey
     ? createClient(url, serviceKey)
@@ -53,7 +53,13 @@ export async function isAdmin(request: Request): Promise<boolean> {
 
   if (error || !data) {
     if (error) console.error("Admin auth users query error:", error);
-    return false;
+    return null;
   }
-  return hasAdminRole(data as { role?: string; is_super_admin?: boolean });
+  if (!hasAdminRole(data as { role?: string; is_super_admin?: boolean })) return null;
+  return user.id;
+}
+
+/** Returns true if request has valid admin. Server-side only. */
+export async function isAdmin(request: Request): Promise<boolean> {
+  return (await getAdminAuthUserId(request)) !== null;
 }
