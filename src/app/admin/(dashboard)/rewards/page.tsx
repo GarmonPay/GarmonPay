@@ -28,14 +28,16 @@ export default function AdminRewardsPage() {
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/transactions`, { headers: adminApiHeaders(session) })
+    fetch(`${API_BASE}/admin/transactions`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
       })
-      .then((data: TxRow[]) => {
-        const list = Array.isArray(data) ? data : [];
-        setTransactions(list.filter((t) => t.type === "reward"));
+      .then((data: TxRow[] | { transactions?: TxRow[] }) => {
+        const list = Array.isArray(data) ? data : data.transactions ?? [];
+        setTransactions(
+          list.filter((t) => ["earning", "referral", "referral_commission"].includes(t.type))
+        );
       })
       .catch(() => setError("Failed to load reward activity"))
       .finally(() => setLoading(false));
@@ -44,7 +46,9 @@ export default function AdminRewardsPage() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-white mb-2">Rewards</h1>
-      <p className="text-[#9ca3af] mb-6">Reward credits (ad views, etc.) recorded as transactions.</p>
+      <p className="text-[#9ca3af] mb-6">
+        Earning-type transactions (earning, referral, referral_commission). Amounts are USD cents.
+      </p>
       {!session ? (
         <div className="text-[#9ca3af]">Redirecting to admin login…</div>
       ) : (
@@ -73,7 +77,7 @@ export default function AdminRewardsPage() {
                 {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-white/5">
                     <td className="p-3 text-white font-mono text-sm">{t.user_id}</td>
-                    <td className="p-3 text-white">${Number(t.amount).toFixed(2)}</td>
+                    <td className="p-3 text-white">${(Number(t.amount) / 100).toFixed(2)}</td>
                     <td className="p-3 text-[#9ca3af]">{t.description ?? "—"}</td>
                     <td className="p-3 text-[#9ca3af]">{t.status}</td>
                     <td className="p-3 text-[#9ca3af] text-sm">{new Date(t.created_at).toLocaleString()}</td>

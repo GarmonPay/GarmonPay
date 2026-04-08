@@ -40,6 +40,7 @@ export default function AdminRevenuePage() {
     if (!session) return;
     setError(null);
     fetch(`${API_BASE}/admin/revenue`, {
+      credentials: "include",
       headers: adminApiHeaders(session),
     })
       .then((res) => {

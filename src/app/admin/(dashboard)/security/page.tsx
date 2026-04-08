@@ -50,7 +50,7 @@ export default function AdminSecurityPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/security", { headers: adminApiHeaders(session) });
+      const res = await fetch("/api/admin/security", { credentials: "include", headers: adminApiHeaders(session) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.message || "Failed to load");
@@ -78,6 +78,7 @@ export default function AdminSecurityPage() {
     try {
       const res = await fetch("/api/admin/ban", {
         method: "POST",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ userId, banned, reason: banned ? "Fraud / security" : null }),
       });
@@ -98,6 +99,7 @@ export default function AdminSecurityPage() {
     try {
       const res = await fetch("/api/admin/unlock", {
         method: "POST",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
       });

@@ -79,15 +79,15 @@ export default function AdminEscapeRoomPage() {
     setLoading(true);
     setError(null);
     try {
-      const h = adminApiHeaders(session);
+      const h = { credentials: "include" as const, headers: adminApiHeaders(session) };
       const [st, pl, se, fi, pz, fl, sett] = await Promise.all([
-        fetch(`${API_BASE}/admin/escape-room/stats`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/players`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/sessions?limit=80`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/financials`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/puzzles`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/flags`, { headers: h }).then((r) => r.json()),
-        fetch(`${API_BASE}/admin/escape-room/settings`, { headers: h }).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/stats`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/players`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/sessions?limit=80`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/financials`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/puzzles`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/flags`, h).then((r) => r.json()),
+        fetch(`${API_BASE}/admin/escape-room/settings`, h).then((r) => r.json()),
       ]);
       if (st.error) throw new Error(String(st.error));
       setStats(st);
@@ -117,6 +117,7 @@ export default function AdminEscapeRoomPage() {
     setActionError(null);
     const res = await fetch(`${API_BASE}/admin/escape-room/settings`, {
       method: "PATCH",
+      credentials: "include",
       headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
       body: JSON.stringify(settings),
     });
@@ -134,6 +135,7 @@ export default function AdminEscapeRoomPage() {
     setActionError(null);
     const res = await fetch(`${API_BASE}/admin/escape-room/puzzles`, {
       method: "POST",
+      credentials: "include",
       headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
       body: JSON.stringify(puzzleForm),
     });
@@ -151,6 +153,7 @@ export default function AdminEscapeRoomPage() {
     setActionError(null);
     const res = await fetch(`${API_BASE}/admin/escape-room/flags`, {
       method: "PATCH",
+      credentials: "include",
       headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
       body: JSON.stringify({ id, status }),
     });
@@ -164,6 +167,7 @@ export default function AdminEscapeRoomPage() {
     setActionError(null);
     const res = await fetch(`${API_BASE}/admin/escape-room/ban`, {
       method: "POST",
+      credentials: "include",
       headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
       body: JSON.stringify({ player_id: playerId, status, reason: "Admin action" }),
     });
@@ -177,6 +181,7 @@ export default function AdminEscapeRoomPage() {
     setActionError(null);
     const res = await fetch(`${API_BASE}/admin/escape-room/payouts`, {
       method: "POST",
+      credentials: "include",
       headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
     });

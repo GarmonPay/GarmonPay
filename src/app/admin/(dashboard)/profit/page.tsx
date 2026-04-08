@@ -19,7 +19,7 @@ export default function AdminProfitPage() {
     if (!session) return;
     setLoading(true);
     setMessage(null);
-    fetch(`${API_BASE}/admin/stats`, { headers: adminApiHeaders(session) })
+    fetch(`${API_BASE}/admin/stats`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => res.json())
       .then((data: { totalProfit?: number; message?: string }) => {
         const total = typeof data?.totalProfit === "number" ? data.totalProfit : 0;

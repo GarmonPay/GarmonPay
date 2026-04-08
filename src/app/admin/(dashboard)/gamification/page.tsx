@@ -90,6 +90,7 @@ export default function GamificationPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/gamification-config`, {
         method: "PATCH",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...adminApiHeaders(session),

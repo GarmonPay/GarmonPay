@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
+import { listAllTransactions } from "@/lib/transactions-db";
 
-/** GET /api/admin/transactions — list all transactions (admin only). */
+/** GET /api/admin/transactions — list all transactions with user email (admin only). */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json([], { status: 200 });
+  if (!createAdminClient()) {
+    return NextResponse.json({ transactions: [] });
   }
 
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  try {
+    const rows = await listAllTransactions();
+    return NextResponse.json({ transactions: rows });
+  } catch (e) {
+    console.error("[admin transactions]", e);
+    return NextResponse.json(
+      { message: e instanceof Error ? e.message : "Failed to list transactions" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json(data ?? []);
 }

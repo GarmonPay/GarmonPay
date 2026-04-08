@@ -90,14 +90,14 @@ export default function AdminGarmonAdsPage() {
     if (!session) return;
     setLoading(true);
     Promise.all([
-      fetch(`${API_BASE}/admin/garmon-ads?status=pending`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads/advertisers`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads/top-earners`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/garmon-ads/banned-users`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/ad-packages`, { headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads?status=pending`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/advertisers`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/top-earners`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/garmon-ads/banned-users`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
+      fetch(`${API_BASE}/admin/ad-packages`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
     ])
       .then(([pendingRes, allRes, advRes, earnRes, fraudRes, blockedRes, bannedRes, pkgRes]) => {
         setPending(pendingRes.ads ?? []);
@@ -133,6 +133,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ adId, action: "approve" }),
       });
@@ -150,6 +151,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ adId, action: "reject", rejectionReason: rejectionReason || undefined }),
       });
@@ -168,6 +170,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ flagId }),
       });
@@ -185,6 +188,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags/ban`, {
         method: "POST",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ userId, reason: banReason || "Banned from ad earnings" }),
       });
@@ -200,7 +204,7 @@ export default function AdminGarmonAdsPage() {
   async function viewEngagements(userId: string) {
     if (!session) return;
     try {
-      const res = await fetch(`${API_BASE}/admin/garmon-ads/user-engagements?userId=${encodeURIComponent(userId)}`, { headers: adminApiHeaders(session) });
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/user-engagements?userId=${encodeURIComponent(userId)}`, { credentials: "include", headers: adminApiHeaders(session) });
       const data = await res.json().catch(() => ({}));
       setEngagementsForUser(res.ok ? (data.engagements ?? []) : []);
     } catch {
@@ -214,6 +218,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, {
         method: "POST",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ ipPrefix: blockedIpInput.trim() }),
       });
@@ -230,7 +235,7 @@ export default function AdminGarmonAdsPage() {
     if (!session) return;
     setActionError(null);
     try {
-      const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: adminApiHeaders(session) });
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include", headers: adminApiHeaders(session) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data.message as string) || "Failed");
       load();
@@ -243,7 +248,7 @@ export default function AdminGarmonAdsPage() {
     if (!session) return;
     setActionError(null);
     try {
-      const res = await fetch(`${API_BASE}/admin/garmon-ads/banned-users?userId=${encodeURIComponent(userId)}`, { method: "DELETE", headers: adminApiHeaders(session) });
+      const res = await fetch(`${API_BASE}/admin/garmon-ads/banned-users?userId=${encodeURIComponent(userId)}`, { method: "DELETE", credentials: "include", headers: adminApiHeaders(session) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data.message as string) || "Failed");
       load();
@@ -258,6 +263,7 @@ export default function AdminGarmonAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/advertisers`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ advertiserId, action }),
       });

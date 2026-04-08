@@ -45,7 +45,7 @@ export default function AdminBannersPage() {
     if (!session) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/admin/banners`, { headers: adminApiHeaders(session) })
+    fetch(`${API_BASE}/admin/banners`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((r) => {
         if (!r.ok) throw new Error(r.status === 403 ? "Access denied" : "Failed to load");
         return r.json();
@@ -70,6 +70,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/banners`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ id, status }),
       });
@@ -94,6 +95,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/banners`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ id, action: "delete" }),
       });

@@ -27,5 +27,47 @@ export async function GET(request: Request) {
     return NextResponse.json({ message, users: [] }, { status: 500 });
   }
 
-  return NextResponse.json({ users: users ?? [] });
+  const userList = users ?? [];
+  const ids = userList.map((u) => (u as { id: string }).id).filter(Boolean);
+
+  const wbMap = new Map<string, number>();
+  const gpayMap = new Map<string, { available_minor: number; lifetime_earned_minor: number }>();
+
+  if (ids.length > 0) {
+    const { data: wbRows } = await supabase.from("wallet_balances").select("user_id, balance").in("user_id", ids);
+    for (const row of wbRows ?? []) {
+      const uid = (row as { user_id: string }).user_id;
+      wbMap.set(uid, Math.round(Number((row as { balance?: number }).balance ?? 0)));
+    }
+    const { data: gRows } = await supabase
+      .from("gpay_balances")
+      .select("user_id, available_minor, lifetime_earned_minor")
+      .in("user_id", ids);
+    for (const row of gRows ?? []) {
+      const uid = (row as { user_id: string }).user_id;
+      gpayMap.set(uid, {
+        available_minor: Math.round(Number((row as { available_minor?: number }).available_minor ?? 0)),
+        lifetime_earned_minor: Math.round(Number((row as { lifetime_earned_minor?: number }).lifetime_earned_minor ?? 0)),
+      });
+    }
+  }
+
+  const enriched = userList.map((u) => {
+    const row = u as {
+      id: string;
+      balance?: number | null;
+    };
+    const id = row.id;
+    const fallbackUsd = Math.round(Number(row.balance ?? 0));
+    const usd = wbMap.has(id) ? wbMap.get(id)! : fallbackUsd;
+    const g = gpayMap.get(id);
+    return {
+      ...u,
+      usd_balance_cents: usd,
+      gpay_available_minor: g?.available_minor ?? 0,
+      gpay_lifetime_earned_minor: g?.lifetime_earned_minor ?? 0,
+    };
+  });
+
+  return NextResponse.json({ users: enriched });
 }

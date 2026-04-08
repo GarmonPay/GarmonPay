@@ -76,6 +76,7 @@ export default function AdminTournamentsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/tournaments`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...adminApiHeaders(session),
@@ -106,6 +107,7 @@ export default function AdminTournamentsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/tournaments/end`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...adminApiHeaders(session),

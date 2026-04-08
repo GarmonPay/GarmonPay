@@ -46,7 +46,7 @@ export default function AdminWithdrawalsPage() {
   function load() {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/withdrawals`, { headers: adminApiHeaders(session) })
+    fetch(`${API_BASE}/admin/withdrawals`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -68,6 +68,7 @@ export default function AdminWithdrawalsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/withdrawals`, {
         method: "PATCH",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...adminApiHeaders(session),

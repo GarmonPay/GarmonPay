@@ -58,7 +58,7 @@ export default function AdminAdsPage() {
   const loadAds = useCallback(() => {
     if (!session) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/advertisements`, { headers: adminApiHeaders(session) })
+    fetch(`${API_BASE}/admin/advertisements`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -91,6 +91,7 @@ export default function AdminAdsPage() {
         fd.set("file", file);
         const res = await fetch(`${API_BASE}/admin/advertisements/upload`, {
           method: "POST",
+          credentials: "include",
           headers: adminApiHeaders(session),
           body: fd,
         });
@@ -123,6 +124,7 @@ export default function AdminAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/advertisements`, {
         method: "POST",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -152,6 +154,7 @@ export default function AdminAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/advertisements`, {
         method: "PATCH",
+        credentials: "include",
         headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
         body: JSON.stringify({ id: ad.id, active: !ad.active }),
       });
@@ -171,6 +174,7 @@ export default function AdminAdsPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/advertisements?id=${encodeURIComponent(ad.id)}`, {
         method: "DELETE",
+        credentials: "include",
         headers: adminApiHeaders(session),
       });
       if (!res.ok) {
