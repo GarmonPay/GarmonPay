@@ -157,6 +157,7 @@ export function CoinFlipPanel() {
     if (!token || flipDisabled) return;
     setError(null);
     setLastResult(null);
+    setWon(null);
     setBusy(true);
     try {
       const r = await fetch(`${API}/create`, {
@@ -216,6 +217,7 @@ export function CoinFlipPanel() {
     if (!token || busy || isFlipping) return;
     setError(null);
     setLastResult(null);
+    setWon(null);
     setBusy(true);
     try {
       const r = await fetch(`${API}/join`, {
