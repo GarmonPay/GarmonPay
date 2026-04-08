@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const COIN_HEADS = "/images/coin-heads.png";
-const GOLD = "#f5c842";
+const COIN_TAILS = "/images/coin-tails.png";
 
 export type CoinFlip3DProps = {
   isFlipping: boolean;
@@ -114,29 +114,19 @@ export function CoinFlip3D({
 
           {/* Back — tails */}
           <div
-            className="absolute inset-0 flex items-center justify-center rounded-full overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)] border border-[#f5c842]/25"
+            className="absolute inset-0 rounded-full overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)] border border-[#f5c842]/25"
             style={{ width: 200, height: 200 }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- promotional asset, user-provided PNG */}
             <img
-              src={COIN_HEADS}
+              src={COIN_TAILS}
               alt=""
               width={200}
               height={200}
-              className="absolute inset-0 h-[200px] w-[200px] rounded-full object-cover"
-              style={{ filter: "brightness(0.85)" }}
+              className="block h-[200px] w-[200px] rounded-full object-cover"
+              style={{ objectFit: "cover", borderRadius: "50%" }}
               draggable={false}
             />
-            <div
-              className="relative z-10 px-4 text-center font-semibold leading-tight tracking-wide"
-              style={{
-                color: GOLD,
-                fontSize: "13px",
-                textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-              }}
-            >
-              BUILD YOUR WEALTH
-            </div>
           </div>
         </div>
       </div>
