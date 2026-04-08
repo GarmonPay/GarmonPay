@@ -149,9 +149,8 @@ export async function getWalletBalanceCents(userId: string): Promise<number | nu
 }
 
 /**
- * Ensures public.wallet_balances has a row for this user (ledger + canonical reads).
- * Seeds from profiles.balance when present; if public.profiles is missing, uses latest wallet_ledger balance_after or 0.
- * Does not write profiles table.
+ * Ensures public.wallet_balances has a row for this user.
+ * Seeds from latest wallet_ledger.balance_after only (never profiles.balance).
  */
 export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: true } | { ok: false; message: string; code?: string }> {
   const client = supabase();
@@ -163,17 +162,8 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
   if (selErr) return { ok: false, message: selErr.message, code: selErr.code };
   if (existing) return { ok: true };
 
-  let seed = 0;
-  const { data: u, error: uErr } = await client.from("profiles").select("balance").eq("id", userId).maybeSingle();
-  if (!uErr && u != null) {
-    const seedRaw = (u as { balance?: number | null }).balance;
-    seed =
-      seedRaw == null || !Number.isFinite(Number(seedRaw)) ? 0 : Math.max(0, Math.round(Number(seedRaw)));
-  } else if (uErr && isMissingProfileRelationError(uErr)) {
-    seed = (await getLatestLedgerBalanceCents(userId)) ?? 0;
-  } else if (uErr) {
-    return { ok: false, message: uErr.message, code: uErr.code };
-  }
+  /** Seed from latest ledger only — never from profiles.balance (can be stale). */
+  const seed = (await getLatestLedgerBalanceCents(userId)) ?? 0;
 
   const { error: insErr } = await client.from("wallet_balances").insert({
     user_id: userId,
@@ -187,22 +177,16 @@ export async function ensureWalletBalancesRow(userId: string): Promise<{ ok: tru
 }
 
 /**
- * Canonical balance in cents from `wallet_balances` only (same source as `wallet_ledger_entry`).
- * Returns 0 if no row or error. Call `ensureWalletBalancesRow` first when a row may be missing.
+ * Canonical USD balance in cents: latest `wallet_ledger.balance_after` only (same movements as RPC).
+ * Not `profiles.balance` / not a cached `wallet_balances` snapshot.
  */
 export async function getCanonicalBalanceCents(userId: string): Promise<number> {
-  const client = createAdminClient();
-  if (!client) return 0;
-  const { data, error } = await client
-    .from("wallet_balances")
-    .select("balance")
-    .eq("user_id", userId)
-    .single();
-  if (error || !data) return 0;
-  const raw = (data as { balance?: number | null }).balance;
-  if (raw == null) return 0;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : 0;
+  const { getUsdWalletBalanceCents } = await import("@/lib/usd-wallet-balance");
+  try {
+    return await getUsdWalletBalanceCents(userId);
+  } catch {
+    return 0;
+  }
 }
 
 export interface WalletLedgerRow {

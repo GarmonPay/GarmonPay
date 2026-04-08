@@ -21,8 +21,6 @@ import { MARKETING_PLANS, normalizeUserMembershipTier, type MarketingPlanId } fr
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-prices";
-import { createBrowserClient } from "@/lib/supabase";
-import { resolveProfileBalanceCents } from "@/lib/profile-balance";
 import { TaxInfoBanner } from "@/components/dashboard/TaxInfoBanner";
 import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 
@@ -80,9 +78,6 @@ export default function DashboardPage() {
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewBusy, setRenewBusy] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
-  /** Client read of `profiles` — source of truth; overrides API when set. */
-  const [profileBalanceCents, setProfileBalanceCents] = useState<number | null>(null);
-  const [profileBalanceError, setProfileBalanceError] = useState<string | null>(null);
   const [gpayBalance, setGpayBalance] = useState<GpayBalanceState>({ ...GPAY_ZERO });
 
   const fetchGpayBalance = useCallback(async (accessToken?: string | null) => {
@@ -106,55 +101,6 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const fetchProfileBalanceFromSupabase = useCallback(async () => {
-    const supabase = createBrowserClient();
-    if (!supabase) {
-      console.warn("[dashboard] Supabase browser client not configured");
-      return;
-    }
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
-    console.log("AUTH USER:", user);
-    if (userErr || !user) {
-      console.log("PROFILE:", null, userErr);
-      setProfileBalanceError(userErr?.message ?? "Not authenticated");
-      setProfileBalanceCents(null);
-      return;
-    }
-    let row: { balance?: unknown; balance_cents?: unknown } | null = null;
-    let qErr: { message?: string } | null | undefined;
-    {
-      const r1 = await supabase.from("profiles").select("balance, balance_cents").eq("id", user.id).maybeSingle();
-      const missingCol =
-        r1.error &&
-        (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
-          (r1.error as { code?: string }).code === "42703");
-      if (missingCol) {
-        const r2 = await supabase.from("profiles").select("balance").eq("id", user.id).maybeSingle();
-        row = r2.data;
-        qErr = r2.error;
-      } else {
-        row = r1.data;
-        qErr = r1.error;
-      }
-    }
-    console.log("PROFILE:", row, qErr);
-    if (qErr) {
-      setProfileBalanceError(qErr.message ?? "Profile query failed");
-      setProfileBalanceCents(null);
-      return;
-    }
-    const resolved = resolveProfileBalanceCents(row);
-    if (!resolved.ok) {
-      setProfileBalanceError(resolved.message);
-      setProfileBalanceCents(null);
-      return;
-    }
-    const displayBalance = resolved.cents / 100;
-    console.log("BALANCE USED:", displayBalance);
-    setProfileBalanceError(null);
-    setProfileBalanceCents(resolved.cents);
-  }, []);
-
   useEffect(() => {
     if (!depositModalOpen) return;
     fetch("/api/stripe/status").then((r) => r.json()).then((d) => {
@@ -163,7 +109,7 @@ export default function DashboardPage() {
     }).catch(() => setStripeStatusMessage(null));
   }, [depositModalOpen]);
 
-  // Main balance: GET /api/dashboard `balanceCents` (canonical wallet_balances). Client profile fetch is fallback only.
+  // Main balance: GET /api/dashboard `balanceCents` (ledger-derived USD only).
   const refetchParam = searchParams.get("refetch");
   useEffect(() => {
     if (refetchParam !== "1") return;
@@ -173,13 +119,12 @@ export default function DashboardPage() {
           const tokenOrId = session.accessToken ?? session.userId;
           const isToken = !!session.accessToken;
           getDashboard(tokenOrId, isToken).then(setData);
-          void fetchProfileBalanceFromSupabase();
           void fetchGpayBalance(session.accessToken ?? null);
         }
       });
     }, 2500);
     return () => clearTimeout(t);
-  }, [refetchParam, fetchProfileBalanceFromSupabase, fetchGpayBalance]);
+  }, [refetchParam, fetchGpayBalance]);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([
@@ -192,7 +137,6 @@ export default function DashboardPage() {
       setWithdrawals(w.withdrawals ?? []);
       setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
       setActivities("activities" in a ? a.activities : []);
-      void fetchProfileBalanceFromSupabase();
       if (isToken) void fetchGpayBalance(tokenOrId);
       else void fetchGpayBalance(null);
     });
@@ -251,19 +195,14 @@ export default function DashboardPage() {
   }, [router, fetchGpayBalance]);
 
   useEffect(() => {
-    void fetchProfileBalanceFromSupabase();
-  }, [fetchProfileBalanceFromSupabase]);
-
-  useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        void fetchProfileBalanceFromSupabase();
         void fetchGpayBalance();
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [fetchProfileBalanceFromSupabase, fetchGpayBalance]);
+  }, [fetchGpayBalance]);
 
   const [session, setSessionState] = useState<ClientSession | null | "pending">("pending");
   useEffect(() => {
@@ -305,16 +244,8 @@ export default function DashboardPage() {
   }
 
   const apiBalanceErr = (data as { balanceError?: string | null } | null)?.balanceError ?? null;
-  const balanceCents =
-    data?.balanceCents != null
-      ? data.balanceCents
-      : profileBalanceCents !== null
-        ? profileBalanceCents
-        : null;
-  const balanceDisplayError =
-    balanceCents === null
-      ? (profileBalanceError ?? apiBalanceErr ?? "Balance unavailable")
-      : null;
+  const balanceCents = data?.balanceCents ?? null;
+  const balanceDisplayError = balanceCents === null ? (apiBalanceErr ?? "Balance unavailable") : null;
   const adCreditBalanceCents = (data as { adCreditBalanceCents?: number }).adCreditBalanceCents ?? 0;
   const totalEarningsCents = (data as { totalEarningsCents?: number }).totalEarningsCents ?? 0;
   const totalWithdrawnCents = (data as { totalWithdrawnCents?: number }).totalWithdrawnCents ?? 0;
@@ -353,7 +284,6 @@ export default function DashboardPage() {
       setConvertAmount("");
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
-      await fetchProfileBalanceFromSupabase();
       await fetchGpayBalance(session.accessToken ?? null);
     } catch (err) {
       setConvertError(err instanceof Error ? err.message : "Conversion failed");
@@ -460,7 +390,6 @@ export default function DashboardPage() {
       setRenewOpen(false);
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
-      await fetchProfileBalanceFromSupabase();
       await fetchGpayBalance(session.accessToken ?? null);
     } catch {
       setRenewError("Network error.");
