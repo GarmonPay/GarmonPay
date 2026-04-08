@@ -1,14 +1,11 @@
 'use client'
 
-import dynamic from "next/dynamic";
-
-const CoinFlipPanel = dynamic(() => import("@/components/games/CoinFlipPanel"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center min-h-[500px] text-fintech-muted animate-pulse">Loading...</div>
-  ),
-});
+import { CoinFlipPanel } from "@/components/games/CoinFlipPanel";
 
 export default function CoinFlipPage() {
-  return <CoinFlipPanel />;
+  return (
+    <div className="w-full max-w-3xl mx-auto px-4 sm:px-0">
+      <CoinFlipPanel />
+    </div>
+  );
 }

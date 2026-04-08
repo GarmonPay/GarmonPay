@@ -4,15 +4,12 @@ const nextConfig = {
   output: "standalone",
   experimental: {
     optimizePackageImports: ["three"],
-    esmExternals: "loose",
   },
   webpack: (config, { isServer }) => {
     const ext = config.externals;
-    // Never externalize `canvas` on the client — it breaks Three.js in the browser (undefined internals / ".S").
     if (isServer) {
       config.externals = [
         ...(Array.isArray(ext) ? ext : ext != null ? [ext] : []),
-        { canvas: "canvas" },
         "three",
         "@react-three/fiber",
         "@react-three/drei",

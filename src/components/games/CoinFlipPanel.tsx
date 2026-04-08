@@ -1,13 +1,8 @@
 'use client'
 
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionAsync } from "@/lib/session";
-
-const CoinFlip3D = dynamic(
-  () => import("@/components/games/CoinFlip3D").then((m) => ({ default: m.CoinFlip3D })),
-  { ssr: false, loading: () => <div className="min-h-[280px] md:min-h-[360px] rounded-xl border border-white/10 bg-[#0e0118] animate-pulse" /> }
-);
+import { CoinFlip3D } from "@/components/games/CoinFlip3D";
 
 const MIN_BET = 10;
 const API = "/api/coin-flip";
@@ -73,8 +68,6 @@ export function CoinFlipPanel() {
 
   const [openGames, setOpenGames] = useState<OpenGame[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
-  /** Avoid mounting R3F/Three until after client hydration (extra guard beyond dynamic/ssr:false). */
-  const [canvasMountReady, setCanvasMountReady] = useState(false);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -121,19 +114,11 @@ export function CoinFlipPanel() {
   }, []);
 
   useEffect(() => {
-    setCanvasMountReady(true);
-  }, []);
-
-  useEffect(() => {
     if (!token) return;
     loadBalance();
     loadHistory();
     loadOpen();
   }, [token, loadBalance, loadHistory, loadOpen]);
-
-  const handleCoinFlipStart = useCallback(() => {
-    /* reserved for analytics / sound */
-  }, []);
 
   const handleCoinResult = useCallback(
     (result: "heads" | "tails") => {
@@ -289,18 +274,13 @@ export function CoinFlipPanel() {
         </div>
       )}
 
-      {canvasMountReady ? (
-        <CoinFlip3D
-          flipGeneration={flipGeneration}
-          targetFace={targetFace}
-          isFlipping={isFlipping}
-          won={won}
-          onFlipStart={handleCoinFlipStart}
-          onResult={handleCoinResult}
-        />
-      ) : (
-        <div className="min-h-[280px] md:min-h-[360px] rounded-xl border border-white/10 bg-[#0e0118] animate-pulse" />
-      )}
+      <CoinFlip3D
+        flipGeneration={flipGeneration}
+        result={targetFace}
+        isFlipping={isFlipping}
+        playerWon={won}
+        onResult={handleCoinResult}
+      />
 
       {lastResult && !isFlipping && (
         <div
