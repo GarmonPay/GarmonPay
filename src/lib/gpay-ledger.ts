@@ -123,3 +123,50 @@ export async function getGpayBalanceSnapshot(userId: string): Promise<{
     lifetime_earned_minor: n("lifetime_earned_minor"),
   };
 }
+
+export interface GpayLedgerEntryRow {
+  id: string;
+  event_type: string;
+  amount_minor: number;
+  reference: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Read-only ledger history for one user (newest first). Server-side only; caller must enforce auth.
+ */
+export async function listGpayLedgerEntries(
+  userId: string,
+  options: { limit?: number; offset?: number }
+): Promise<{ rows: GpayLedgerEntryRow[]; hasMore: boolean }> {
+  const rawLimit = options.limit ?? 50;
+  const limit = Math.min(Math.max(Math.floor(Number(rawLimit)) || 50, 1), 100);
+  const offset = Math.max(Math.floor(Number(options.offset ?? 0)) || 0, 0);
+  const fetchLimit = limit + 1;
+  const { data, error } = await supabase()
+    .from("gpay_ledger")
+    .select("id, event_type, amount_minor, reference, metadata, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + fetchLimit - 1);
+  if (error) {
+    console.error("[gpay-ledger] listGpayLedgerEntries:", error.message);
+    return { rows: [], hasMore: false };
+  }
+  const list = (data ?? []) as Record<string, unknown>[];
+  const hasMore = list.length > limit;
+  const sliced = hasMore ? list.slice(0, limit) : list;
+  const rows: GpayLedgerEntryRow[] = sliced.map((r) => ({
+    id: String(r.id ?? ""),
+    event_type: String(r.event_type ?? ""),
+    amount_minor: Math.trunc(Number(r.amount_minor ?? 0)),
+    reference: r.reference == null ? null : String(r.reference),
+    metadata:
+      typeof r.metadata === "object" && r.metadata !== null && !Array.isArray(r.metadata)
+        ? (r.metadata as Record<string, unknown>)
+        : {},
+    created_at: String(r.created_at ?? ""),
+  }));
+  return { rows, hasMore };
+}
