@@ -170,3 +170,40 @@ export async function listGpayLedgerEntries(
   }));
   return { rows, hasMore };
 }
+
+export interface GpayClaimRow {
+  id: string;
+  amount_minor: number;
+  status: string;
+  requested_at: string;
+  reviewed_at: string | null;
+  completed_at: string | null;
+  reject_reason: string | null;
+}
+
+/**
+ * Read-only: signed-in user's GPay claims (caller must enforce auth). Newest first by requested_at.
+ */
+export async function listGpayClaimsForUser(userId: string): Promise<GpayClaimRow[]> {
+  const { data, error } = await supabase()
+    .from("gpay_claims")
+    .select("id, amount_minor, status, requested_at, reviewed_at, completed_at, reject_reason")
+    .eq("user_id", userId)
+    .order("requested_at", { ascending: false });
+  if (error) {
+    console.error("[gpay-ledger] listGpayClaimsForUser:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      amount_minor: Math.trunc(Number(row.amount_minor ?? 0)),
+      status: String(row.status ?? ""),
+      requested_at: String(row.requested_at ?? ""),
+      reviewed_at: row.reviewed_at == null ? null : String(row.reviewed_at),
+      completed_at: row.completed_at == null ? null : String(row.completed_at),
+      reject_reason: row.reject_reason == null ? null : String(row.reject_reason),
+    };
+  });
+}
