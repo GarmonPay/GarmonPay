@@ -8,8 +8,9 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { CeloDiceStage, type DiceUiPhase } from "@/components/celo/CeloDiceStage";
 import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
+
+type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 
@@ -162,6 +163,7 @@ type RollResponse = {
   banker_cost_sc?: number;
   roundComplete?: boolean;
   summary?: RoundSummaryPayload;
+  animationPayload?: CeloRollStartedPayload;
   error?: string;
 };
 
@@ -192,6 +194,187 @@ const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }>
   point: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/30" },
   no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
 };
+
+/** Premium SVG dice — remount via `epoch` each roll so CSS animation restarts. */
+function RealisticDice({
+  dice,
+  rolling,
+  epoch,
+}: {
+  dice: number[] | null;
+  rolling: boolean;
+  epoch: number;
+}) {
+  const displayDice = dice || [1, 1, 1];
+
+  const DOTS: Record<number, { x: number; y: number }[]> = {
+    1: [{ x: 50, y: 50 }],
+    2: [
+      { x: 28, y: 28 },
+      { x: 72, y: 72 },
+    ],
+    3: [
+      { x: 28, y: 28 },
+      { x: 50, y: 50 },
+      { x: 72, y: 72 },
+    ],
+    4: [
+      { x: 28, y: 28 },
+      { x: 72, y: 28 },
+      { x: 28, y: 72 },
+      { x: 72, y: 72 },
+    ],
+    5: [
+      { x: 28, y: 28 },
+      { x: 72, y: 28 },
+      { x: 50, y: 50 },
+      { x: 28, y: 72 },
+      { x: 72, y: 72 },
+    ],
+    6: [
+      { x: 28, y: 22 },
+      { x: 72, y: 22 },
+      { x: 28, y: 50 },
+      { x: 72, y: 50 },
+      { x: 28, y: 78 },
+      { x: 72, y: 78 },
+    ],
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 20,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "32px 16px",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(ellipse at center, #1a4a2e 0%, #0d2b1a 70%, #061508 100%)",
+          borderRadius: 20,
+          border: "2px solid #2d7a4a",
+          boxShadow: "inset 0 0 40px rgba(0,0,0,0.6)",
+        }}
+      />
+
+      {[0, 1, 2].map((i) => {
+        const value = displayDice[i] || 1;
+        const dots = DOTS[value] || DOTS[1];
+        const animDelay = i * 0.15;
+        const animDuration = 2.2 + i * 0.2;
+
+        return (
+          <div
+            key={`${epoch}-${i}`}
+            style={{
+              width: 90,
+              height: 90,
+              position: "relative",
+              zIndex: 1,
+              animation: rolling
+                ? `diceRoll${i} ${animDuration}s ${animDelay}s ease-out forwards`
+                : "none",
+              filter: rolling
+                ? "drop-shadow(0 0 15px rgba(245,200,66,0.6))"
+                : "drop-shadow(0 8px 16px rgba(0,0,0,0.8))",
+              transform: rolling ? "scale(1)" : "scale(1)",
+              transition: rolling ? "none" : "all 0.3s ease",
+            }}
+          >
+            <svg viewBox="0 0 100 100" width="90" height="90">
+              <defs>
+                <linearGradient id={`dieGrad${i}-${epoch}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#fff5f5" />
+                  <stop offset="40%" stopColor="#F5F0E8" />
+                  <stop offset="100%" stopColor="#D4C5A0" />
+                </linearGradient>
+                <linearGradient id={`dieGradRoll${i}-${epoch}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#EF4444" />
+                  <stop offset="50%" stopColor="#DC2626" />
+                  <stop offset="100%" stopColor="#991B1B" />
+                </linearGradient>
+                <filter id={`dieShadow${i}-${epoch}`}>
+                  <feDropShadow dx="2" dy="4" stdDeviation="3" floodOpacity="0.4" />
+                </filter>
+              </defs>
+
+              <rect
+                x="4"
+                y="4"
+                width="92"
+                height="92"
+                rx="18"
+                ry="18"
+                fill={rolling ? `url(#dieGradRoll${i}-${epoch})` : `url(#dieGrad${i}-${epoch})`}
+                filter={`url(#dieShadow${i}-${epoch})`}
+                stroke={rolling ? "#7f1d1d" : "#C4A882"}
+                strokeWidth="1.5"
+              />
+
+              <rect x="8" y="8" width="84" height="35" rx="14" ry="14" fill="rgba(255,255,255,0.35)" />
+
+              <rect x="8" y="65" width="84" height="28" rx="0" ry="0" fill="rgba(0,0,0,0.08)" />
+
+              {!rolling &&
+                dots.map((dot, di) => (
+                  <g key={di}>
+                    <circle cx={dot.x + 0.5} cy={dot.y + 1} r="8" fill="rgba(0,0,0,0.3)" />
+                    <circle cx={dot.x} cy={dot.y} r="8" fill="#1A1008" />
+                    <circle cx={dot.x - 2.5} cy={dot.y - 2.5} r="2.5" fill="rgba(255,255,255,0.2)" />
+                  </g>
+                ))}
+
+              {rolling && (
+                <text x="50" y="58" textAnchor="middle" fontSize="32" fill="white">
+                  🎲
+                </text>
+              )}
+            </svg>
+          </div>
+        );
+      })}
+
+      <style>{`
+        @keyframes diceRoll0 {
+          0%   { transform: translateY(-80px) rotate(0deg) scale(0.5); opacity: 0; }
+          20%  { transform: translateY(10px) rotate(180deg) scale(1.1); opacity: 1; }
+          35%  { transform: translateY(-15px) rotate(270deg) scale(0.95); }
+          50%  { transform: translateY(5px) rotate(360deg) scale(1.05); }
+          65%  { transform: translateY(-8px) rotate(405deg) scale(0.98); }
+          80%  { transform: translateY(3px) rotate(450deg) scale(1.02); }
+          90%  { transform: translateY(-3px) rotate(480deg) scale(1); }
+          100% { transform: translateY(0) rotate(540deg) scale(1); opacity: 1; }
+        }
+        @keyframes diceRoll1 {
+          0%   { transform: translateY(-100px) rotate(0deg) scale(0.4); opacity: 0; }
+          25%  { transform: translateY(15px) rotate(-200deg) scale(1.15); opacity: 1; }
+          40%  { transform: translateY(-20px) rotate(-300deg) scale(0.92); }
+          55%  { transform: translateY(8px) rotate(-400deg) scale(1.08); }
+          70%  { transform: translateY(-10px) rotate(-450deg) scale(0.97); }
+          85%  { transform: translateY(4px) rotate(-490deg) scale(1.02); }
+          100% { transform: translateY(0) rotate(-540deg) scale(1); opacity: 1; }
+        }
+        @keyframes diceRoll2 {
+          0%   { transform: translateY(-60px) rotate(0deg) scale(0.6); opacity: 0; }
+          15%  { transform: translateY(8px) rotate(150deg) scale(1.08); opacity: 1; }
+          30%  { transform: translateY(-12px) rotate(240deg) scale(0.96); }
+          45%  { transform: translateY(6px) rotate(330deg) scale(1.04); }
+          60%  { transform: translateY(-6px) rotate(390deg) scale(0.99); }
+          75%  { transform: translateY(2px) rotate(430deg) scale(1.01); }
+          90%  { transform: translateY(-2px) rotate(460deg) scale(1); }
+          100% { transform: translateY(0) rotate(500deg) scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 /** Compare Supabase auth user ids to FK uuids (avoids strict === misses from formatting). */
 function sameCeloUserId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -424,6 +607,12 @@ export default function CeloRoomPage() {
   const [diceUiPhase, setDiceUiPhase] = useState<DiceUiPhase>("idle");
   const [dicePhaseStatusText, setDicePhaseStatusText] = useState("");
   const [lastRollResult, setLastRollResult] = useState<RollResponse | null>(null);
+  /** Dice faces for RealisticDice (null while tumbling). */
+  const [currentDice, setCurrentDice] = useState<number[] | null>(null);
+  /** Roll name under felt (synced with reveal). */
+  const [feltTableRollName, setFeltTableRollName] = useState<string | null>(null);
+  /** Bumps to remount dice so keyframes restart. */
+  const [rollAnimEpoch, setRollAnimEpoch] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [initialSyncDone, setInitialSyncDone] = useState(false);
@@ -447,6 +636,8 @@ export default function CeloRoomPage() {
   const cancelRollAnimRef = useRef<(() => void) | null>(null);
   const lastRollPayloadRef = useRef<CeloRollStartedPayload | null>(null);
   const reconnectAnimAttemptedRef = useRef<string>("");
+  const isRollingRef = useRef(false);
+  const diceUiPhaseRef = useRef<DiceUiPhase>("idle");
   const playersRef = useRef<Player[]>([]);
   const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -714,6 +905,9 @@ export default function CeloRoomPage() {
             }
           ) || "Player";
 
+    setRollAnimEpoch((e) => e + 1);
+    setCurrentDice(null);
+    setFeltTableRollName(null);
     setCurrentRollerName(rollerLabel);
     setRollInteractionBusy(true);
     setLastRollResult(null);
@@ -733,6 +927,7 @@ export default function CeloRoomPage() {
         setDiceUiPhase("revealing");
         setDicePhaseStatusText("Revealing result…");
         setIsRolling(false);
+        setCurrentDice([...dice]);
         setLastRollResult({
           dice,
           rollName: undefined,
@@ -757,6 +952,49 @@ export default function CeloRoomPage() {
       },
     });
   }, []);
+
+  const triggerDiceAnimation = useCallback(async (dice: number[], rollName: string) => {
+    cancelRollAnimRef.current?.();
+    cancelRollAnimRef.current = null;
+    setRollAnimEpoch((e) => e + 1);
+    setIsRolling(true);
+    setCurrentDice(null);
+    setFeltTableRollName(null);
+    setLastRollResult(null);
+    setDiceUiPhase("rolling");
+    setDicePhaseStatusText("Rolling…");
+    setRollInteractionBusy(true);
+    setCurrentRollerName("Banker");
+    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 2500));
+    setIsRolling(false);
+    setCurrentDice(dice);
+    setDiceUiPhase("revealing");
+    setDicePhaseStatusText("Revealing result…");
+    setLastRollResult({
+      dice: dice as [number, number, number],
+      rollName: rollName || undefined,
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    setFeltTableRollName(rollName || null);
+    setDiceUiPhase("completed");
+    setDicePhaseStatusText("Round complete");
+    setRollInteractionBusy(false);
+    setCurrentRollerName("");
+    window.setTimeout(() => {
+      setDiceUiPhase("idle");
+      setDicePhaseStatusText("");
+    }, 700);
+    void loadRoundRef.current();
+  }, []);
+
+  useEffect(() => {
+    isRollingRef.current = isRolling;
+  }, [isRolling]);
+
+  useEffect(() => {
+    diceUiPhaseRef.current = diceUiPhase;
+  }, [diceUiPhase]);
 
   // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
   useEffect(() => {
@@ -1013,6 +1251,14 @@ export default function CeloRoomPage() {
           if (!newRound || String(newRound.room_id) !== roomId) return;
           const oldRound = (payload.old ?? {}) as Partial<Round>;
 
+          console.log("[REALTIME] celo_rounds update:", {
+            newStatus: (payload.new as Record<string, unknown>)?.status,
+            bankerDice: (payload.new as Record<string, unknown>)?.banker_dice,
+            oldBankerDice: (payload.old as Record<string, unknown>)?.banker_dice,
+            roomId: (payload.new as Record<string, unknown>)?.room_id,
+            currentRoomId: roomId,
+          });
+
           setCurrentRound((prev) => {
             if (prev && prev.id === newRound.id) return { ...prev, ...newRound };
             if (payload.eventType === "INSERT") return newRound;
@@ -1026,8 +1272,23 @@ export default function CeloRoomPage() {
             (!oldRound.banker_dice ||
               !Array.isArray(oldRound.banker_dice) ||
               oldRound.banker_dice.length !== 3);
+          const animKey = `banker_${newRound.id}_${Array.isArray(br) ? br.join("") : ""}`;
+          console.log("[ANIMATION] banker dice just set:", {
+            bankerDiceJustSet,
+            newDice: (payload.new as Record<string, unknown>)?.banker_dice,
+            animKey,
+          });
 
-          if (bankerDiceJustSet) {
+          // Detect any new banker roll (first roll OR re-roll after no_count) by checking
+          // if roll_animation_start_at changed. With REPLICA IDENTITY FULL, oldRound has
+          // the full previous row, so null→ts (first roll) and ts1→ts2 (re-roll) both trigger.
+          const bankerRollJustStarted =
+            Array.isArray(br) &&
+            br.length === 3 &&
+            !!newRound.roll_animation_start_at &&
+            newRound.roll_animation_start_at !== oldRound.roll_animation_start_at;
+
+          if (bankerRollJustStarted) {
             const p = buildCeloRollStartedPayload({
               roomId,
               roundId: newRound.id,
@@ -1039,6 +1300,25 @@ export default function CeloRoomPage() {
                 : {}),
             });
             processRollStartedPayload(p, "postgres-celo_rounds");
+            return;
+          }
+
+          if (bankerDiceJustSet && Array.isArray(br) && br.length === 3 && !bankerRollJustStarted) {
+            const p = buildCeloRollStartedPayload({
+              roomId,
+              roundId: newRound.id,
+              dice: br as [number, number, number],
+              kind: "banker",
+              rollerUserId: newRound.banker_id,
+              ...(newRound.roll_animation_start_at
+                ? { serverStartTime: newRound.roll_animation_start_at }
+                : {}),
+            });
+            console.warn(
+              "[REALTIME] banker dice changed without roll_animation_start_at delta — fallback animation",
+              animKey
+            );
+            processRollStartedPayload(p, "postgres-celo_rounds-fallback");
             return;
           }
 
@@ -1344,6 +1624,7 @@ export default function CeloRoomPage() {
 
   async function handleRoll() {
     if (!currentRound) return;
+    const wasBankerRolling = currentRound.status === "banker_rolling";
     setActionLoading("roll");
     setRollInteractionBusy(true);
     setLastRollResult(null);
@@ -1372,7 +1653,12 @@ export default function CeloRoomPage() {
       return;
     }
     const rollData = data as unknown as RollResponse;
-    // Dice animation is driven only by Supabase realtime (celo_rounds / celo_player_rolls).
+    const startedAnimFromApi = Boolean(rollData.animationPayload);
+    // Start animation immediately from API response — roller gets zero-latency feedback.
+    // Other players/spectators get it via postgres_changes. Broadcast is additive dedup.
+    if (rollData.animationPayload) {
+      processRollStartedPayload(rollData.animationPayload, "api-response");
+    }
     if (rollData.roundComplete && rollData.summary) {
       setRoundSummary(rollData.summary);
     }
@@ -1397,6 +1683,29 @@ export default function CeloRoomPage() {
       celoBankModalCloseTimerRef.current = setTimeout(() => setShowCeloBankModal(false), 60_000);
     }
     await loadAll();
+
+    window.setTimeout(() => {
+      void (async () => {
+        await new Promise((r) => setTimeout(r, 500));
+        if (startedAnimFromApi) return;
+        if (!wasBankerRolling) return;
+        const sb = createBrowserClient();
+        if (!sb) return;
+        const { data: latestRound } = await sb
+          .from("celo_rounds")
+          .select("*")
+          .eq("room_id", roomId)
+          .neq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const lr = latestRound as Round | null;
+        if (!lr?.banker_dice || lr.banker_dice.length !== 3) return;
+        if (isRollingRef.current || diceUiPhaseRef.current !== "idle") return;
+        console.log("[celo/client] manual round fetch fallback — triggering dice animation");
+        await triggerDiceAnimation(lr.banker_dice, lr.banker_dice_name ?? "");
+      })();
+    }, 0);
     // rollInteractionBusy clears when realtime animation sequence finishes (or safety timeout below).
   }
 
@@ -2362,25 +2671,67 @@ export default function CeloRoomPage() {
           style={{ zIndex: 1 }}
         >
           <p className="text-[10px] uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">Dice</p>
-          <CeloDiceStage
-            dice={simpleDiceValues}
-            rolling={isRolling}
-            phase={diceUiPhase}
-            showHand={diceUiPhase === "rolling" || diceUiPhase === "revealing"}
-            statusLine={
-              dicePhaseStatusText ||
-              (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")
-            }
-          />
-          {!isRolling && lastRollResult?.rollName ? (
-            <div className="text-center space-y-1 mt-2 w-full max-w-md">
-              <p
-                className={`text-xl sm:text-2xl font-bold ${
-                  RESULT_STYLE[lastResult ?? "no_count"]?.text ?? "text-white"
-                }`}
+          {(dicePhaseStatusText ||
+            (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")) && (
+            <p className="text-center text-xs font-semibold text-[#F5C842]/95 mb-2 px-2" role="status">
+              {dicePhaseStatusText ||
+                (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")}
+            </p>
+          )}
+          <div
+            style={{
+              background:
+                "radial-gradient(ellipse at center, #1a4a2e 0%, #0d2b1a 70%, #061508 100%)",
+              borderRadius: 20,
+              border: "2px solid #2d7a4a",
+              boxShadow: "0 0 40px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.5)",
+              padding: 8,
+              margin: "16px 0",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "100%",
+                height: "100%",
+                background:
+                  "radial-gradient(ellipse at top, rgba(245,200,66,0.08) 0%, transparent 60%)",
+                pointerEvents: "none",
+              }}
+            />
+            <RealisticDice
+              dice={isRolling ? null : currentDice ?? simpleDiceValues}
+              rolling={isRolling}
+              epoch={rollAnimEpoch}
+            />
+            {!isRolling && (feltTableRollName || lastRollResult?.rollName) ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "8px 0 16px",
+                  fontSize: 36,
+                  fontWeight: "bold",
+                  fontFamily: "Cinzel Decorative, serif",
+                  color: "#F5C842",
+                  textShadow: "0 0 20px rgba(245,200,66,0.8)",
+                  animation: "celo-felt-roll-name-in 0.5s ease-out",
+                }}
               >
-                {lastRollResult.rollName}
-              </p>
+                {feltTableRollName ?? lastRollResult?.rollName}
+              </div>
+            ) : null}
+          </div>
+          {!isRolling &&
+          lastRollResult &&
+          (lastRollResult.bankerPoint != null ||
+            (lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0) ||
+            lastRollResult.banker_can_adjust_bank) ? (
+            <div className="text-center space-y-1 mt-2 w-full max-w-md">
               {lastRollResult.bankerPoint != null && (
                 <p className="text-sm text-violet-300/80">
                   Banker&apos;s point:{" "}

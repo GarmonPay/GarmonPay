@@ -467,6 +467,7 @@ export async function POST(req: Request) {
         rollName: roll.rollName,
         result: "no_count",
         bankerRerolls: r.banker_rerolls + 1,
+        animationPayload: bankerSync,
       });
     }
 
@@ -478,6 +479,7 @@ export async function POST(req: Request) {
         bankerPoint: roll.point,
         status: "player_rolling",
         currentPlayerSeat: firstSeatForPoint,
+        animationPayload: bankerSync,
       });
     }
 
@@ -529,7 +531,7 @@ export async function POST(req: Request) {
         instantWinPayload.banker_can_adjust_bank = false;
       }
 
-      return NextResponse.json(instantWinPayload);
+      return NextResponse.json({ ...instantWinPayload, animationPayload: bankerSync });
     }
 
     // ── INSTANT LOSS (banker) — Shit / Dick: pay table, bank drops by total payouts; banker stays unless broke ──
@@ -644,6 +646,7 @@ export async function POST(req: Request) {
         bankerChanged,
         newBankerId: newBankerId ?? undefined,
         bankerBroke: newBankCents < minimumEntry,
+        animationPayload: bankerSync,
       });
     }
   }
@@ -742,6 +745,7 @@ export async function POST(req: Request) {
         rollName: roll.rollName,
         result: "no_count",
         rerollCount: rerollCount + 1,
+        animationPayload: plSync,
       });
     }
 
@@ -825,6 +829,7 @@ export async function POST(req: Request) {
         summary: adv.summary,
         player_can_become_banker: coverOffer,
         banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
+        animationPayload: plSync,
       });
     }
 
@@ -901,6 +906,7 @@ export async function POST(req: Request) {
         outcome: "loss",
         roundComplete: adv.roundComplete,
         summary: adv.summary,
+        animationPayload: plSync,
       });
     }
 
@@ -1018,6 +1024,7 @@ export async function POST(req: Request) {
         summary: adv.summary,
         player_can_become_banker: coverOffer,
         banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
+        animationPayload: plSync,
       });
     }
   }
