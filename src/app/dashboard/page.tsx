@@ -8,6 +8,7 @@ import { getSessionAsync, type ClientSession } from "@/lib/session";
 import { generateReferralLink } from "@/lib/referrals";
 import {
   getDashboard,
+  getGpayBalance,
   getWithdrawals,
   getGrowth,
   getActivities,
@@ -30,6 +31,27 @@ const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ 
 function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+/** GPay minor units: 100 minor = 1.00 display GP (consistent 2 decimal places; not USD). */
+function formatGpayMinor(minor: number): string {
+  const n = Number(minor);
+  if (!Number.isFinite(n)) return "0.00";
+  return (n / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+type GpayBalanceState = {
+  gpayAvailableBalanceMinor: number;
+  gpayPendingClaimBalanceMinor: number;
+  gpayClaimedBalanceMinor: number;
+  gpayLifetimeEarnedMinor: number;
+};
+
+const GPAY_ZERO: GpayBalanceState = {
+  gpayAvailableBalanceMinor: 0,
+  gpayPendingClaimBalanceMinor: 0,
+  gpayClaimedBalanceMinor: 0,
+  gpayLifetimeEarnedMinor: 0,
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -61,6 +83,28 @@ export default function DashboardPage() {
   /** Client read of `profiles` — source of truth; overrides API when set. */
   const [profileBalanceCents, setProfileBalanceCents] = useState<number | null>(null);
   const [profileBalanceError, setProfileBalanceError] = useState<string | null>(null);
+  const [gpayBalance, setGpayBalance] = useState<GpayBalanceState>({ ...GPAY_ZERO });
+
+  const fetchGpayBalance = useCallback(async (accessToken?: string | null) => {
+    const token =
+      accessToken ??
+      (await getSessionAsync().then((s) => s?.accessToken ?? null));
+    if (!token) {
+      setGpayBalance({ ...GPAY_ZERO });
+      return;
+    }
+    try {
+      const b = await getGpayBalance(token);
+      setGpayBalance({
+        gpayAvailableBalanceMinor: Math.trunc(Number(b.gpayAvailableBalanceMinor)) || 0,
+        gpayPendingClaimBalanceMinor: Math.trunc(Number(b.gpayPendingClaimBalanceMinor)) || 0,
+        gpayClaimedBalanceMinor: Math.trunc(Number(b.gpayClaimedBalanceMinor)) || 0,
+        gpayLifetimeEarnedMinor: Math.trunc(Number(b.gpayLifetimeEarnedMinor)) || 0,
+      });
+    } catch {
+      setGpayBalance({ ...GPAY_ZERO });
+    }
+  }, []);
 
   const fetchProfileBalanceFromSupabase = useCallback(async () => {
     const supabase = createBrowserClient();
@@ -130,11 +174,12 @@ export default function DashboardPage() {
           const isToken = !!session.accessToken;
           getDashboard(tokenOrId, isToken).then(setData);
           void fetchProfileBalanceFromSupabase();
+          void fetchGpayBalance(session.accessToken ?? null);
         }
       });
     }, 2500);
     return () => clearTimeout(t);
-  }, [refetchParam, fetchProfileBalanceFromSupabase]);
+  }, [refetchParam, fetchProfileBalanceFromSupabase, fetchGpayBalance]);
 
   function loadDashboardData(tokenOrId: string, isToken: boolean) {
     Promise.all([
@@ -148,6 +193,8 @@ export default function DashboardPage() {
       setGrowth(g ? { totalReferrals: g.totalReferrals, leaderboardRank: g.leaderboardRank, badges: g.badges, canClaimDaily: g.canClaimDaily } : null);
       setActivities("activities" in a ? a.activities : []);
       void fetchProfileBalanceFromSupabase();
+      if (isToken) void fetchGpayBalance(tokenOrId);
+      else void fetchGpayBalance(null);
     });
   }
 
@@ -187,6 +234,8 @@ export default function DashboardPage() {
           if (aRes.status === "fulfilled" && aRes.value && typeof aRes.value === "object" && "activities" in aRes.value) {
             setActivities((aRes.value as { activities?: typeof activities }).activities ?? []);
           }
+          if (session.accessToken) void fetchGpayBalance(session.accessToken);
+          else void fetchGpayBalance(null);
         });
       })
       .catch((err) => {
@@ -199,7 +248,7 @@ export default function DashboardPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [router]);
+  }, [router, fetchGpayBalance]);
 
   useEffect(() => {
     void fetchProfileBalanceFromSupabase();
@@ -207,11 +256,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible") void fetchProfileBalanceFromSupabase();
+      if (document.visibilityState === "visible") {
+        void fetchProfileBalanceFromSupabase();
+        void fetchGpayBalance();
+      }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [fetchProfileBalanceFromSupabase]);
+  }, [fetchProfileBalanceFromSupabase, fetchGpayBalance]);
 
   const [session, setSessionState] = useState<ClientSession | null | "pending">("pending");
   useEffect(() => {
@@ -302,6 +354,7 @@ export default function DashboardPage() {
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
       await fetchProfileBalanceFromSupabase();
+      await fetchGpayBalance(session.accessToken ?? null);
     } catch (err) {
       setConvertError(err instanceof Error ? err.message : "Conversion failed");
     } finally {
@@ -408,6 +461,7 @@ export default function DashboardPage() {
       const dash = await getDashboard(session.accessToken ?? session.userId, !!session.accessToken);
       setData(dash);
       await fetchProfileBalanceFromSupabase();
+      await fetchGpayBalance(session.accessToken ?? null);
     } catch {
       setRenewError("Network error.");
     } finally {
@@ -562,6 +616,52 @@ export default function DashboardPage() {
             disabled={balanceCents == null || balanceCents < 100}
           >
             Transfer
+          </button>
+        </div>
+      </section>
+
+      {/* ——— GPay Balance (internal rewards; not USD) ——— */}
+      <section
+        className="animate-slide-up card-lux overflow-hidden border border-emerald-500/30 bg-emerald-950/25 p-6 tablet:p-8"
+        aria-label="GPay Balance"
+      >
+        <h2 className="text-lg font-bold text-emerald-100">GPay Balance</h2>
+        <p className="mt-1 text-xs leading-relaxed text-fintech-muted">
+          Internal rewards — not US dollars. Separate from Available Balance above.
+        </p>
+        <p className="mt-5 text-sm font-medium text-emerald-200/80">Available GPay Balance</p>
+        <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-emerald-50 tablet:text-4xl">
+          {formatGpayMinor(gpayBalance.gpayAvailableBalanceMinor)}{" "}
+          <span className="text-lg font-semibold text-emerald-300/90">GP</span>
+        </p>
+        <div className="mt-6 grid grid-cols-1 gap-4 border-t border-emerald-500/20 pt-5 tablet:grid-cols-3 tablet:gap-6">
+          <div>
+            <p className="text-xs font-medium text-fintech-muted">Pending Claims</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+              {formatGpayMinor(gpayBalance.gpayPendingClaimBalanceMinor)} GP
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-fintech-muted">Total Claimed</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+              {formatGpayMinor(gpayBalance.gpayClaimedBalanceMinor)} GP
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-fintech-muted">Lifetime Earned</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-emerald-100/95">
+              {formatGpayMinor(gpayBalance.gpayLifetimeEarnedMinor)} GP
+            </p>
+          </div>
+        </div>
+        <div className="mt-6">
+          <button
+            type="button"
+            disabled
+            className="btn-press min-h-touch w-full cursor-not-allowed rounded-xl border border-emerald-500/40 bg-emerald-900/40 px-5 py-3 text-sm font-semibold text-emerald-200/70 opacity-80 tablet:max-w-xs"
+            title="Coming soon"
+          >
+            Claim GPay
           </button>
         </div>
       </section>

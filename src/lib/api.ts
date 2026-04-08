@@ -317,6 +317,18 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
   }>("/dashboard", { headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
+/** GPay internal rewards balance (Bearer only; same session as dashboard). */
+export async function getGpayBalance(accessToken: string) {
+  return api<{
+    gpayAvailableBalanceMinor: number;
+    gpayPendingClaimBalanceMinor: number;
+    gpayClaimedBalanceMinor: number;
+    gpayLifetimeEarnedMinor: number;
+  }>("/gpay/balance", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 /** Certify that tax information (e.g. W-9) is on file — clears dashboard banner when over $600 reportable. */
 export async function certifyTaxInfoSubmitted(accessTokenOrUserId: string, isToken = false) {
   return api<{ success: boolean }>("/profile/tax-info", {
