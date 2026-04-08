@@ -118,11 +118,28 @@ export default function CeloLobbyPage() {
       if (s.accessToken) {
         fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
-          .then((d: { balance_cents?: number }) => setBalanceCents(d.balance_cents ?? 0))
+          .then((d: { balance_cents?: number }) => {
+            const cents = Math.max(0, Math.floor(Number(d.balance_cents ?? 0)));
+            setBalanceCents(Number.isFinite(cents) ? cents : 0);
+          })
           .catch(() => {});
       }
     });
   }, [loadRooms]);
+
+  /** Keep starting bank ≤ wallet; slider min/max/step are all in cents. */
+  useEffect(() => {
+    if (!showCreate || balanceCents <= 0) return;
+    setForm((f) => {
+      const cap = Math.min(balanceCents, 200_000);
+      const step = f.minimum_entry_cents;
+      let sb = f.starting_bank_cents;
+      if (sb > cap) sb = Math.floor(cap / step) * step;
+      if (sb < step) sb = step;
+      if (sb === f.starting_bank_cents) return f;
+      return { ...f, starting_bank_cents: sb };
+    });
+  }, [showCreate, balanceCents]);
 
   useEffect(() => {
     const sb = createBrowserClient();
@@ -298,7 +315,10 @@ export default function CeloLobbyPage() {
     }));
   }
 
-  const canAfford = balanceCents >= form.starting_bank_cents;
+  /** Both sides in cents (wallet + form fields use *_cents). */
+  const userBalanceCents = balanceCents;
+  const startingBankCents = form.starting_bank_cents;
+  const canAfford = userBalanceCents >= startingBankCents;
   const canSubmit =
     !creating &&
     canAfford &&
@@ -564,16 +584,24 @@ export default function CeloLobbyPage() {
                 <input
                   type="range"
                   min={form.minimum_entry_cents}
-                  max={Math.min(200000, Math.max(balanceCents, form.minimum_entry_cents * 2))}
+                  max={Math.max(
+                    form.minimum_entry_cents,
+                    userBalanceCents > 0 ? Math.min(userBalanceCents, 200_000) : 200_000
+                  )}
                   step={form.minimum_entry_cents}
                   value={form.starting_bank_cents}
-                  onChange={(e) => setForm((f) => ({ ...f, starting_bank_cents: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      starting_bank_cents: Number(e.target.value),
+                    }))
+                  }
                   className="mt-2 w-full accent-[#F5C842]"
                 />
                 <p className={`text-[10px] mt-1.5 font-medium ${canAfford ? "text-violet-400/50" : "text-red-400"}`}>
                   {canAfford
-                    ? `You need $${(form.starting_bank_cents / 100).toFixed(2)} to cover this bank`
-                    : `Insufficient balance — you have $${(balanceCents / 100).toFixed(2)}`}
+                    ? `You need $${(startingBankCents / 100).toFixed(2)} to cover this bank`
+                    : `Insufficient balance — you have $${(userBalanceCents / 100).toFixed(2)} (need $${(startingBankCents / 100).toFixed(2)})`}
                 </p>
               </div>
 
@@ -586,7 +614,7 @@ export default function CeloLobbyPage() {
                 <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
                   <span className="text-violet-300/70">Your balance</span>
                   <span className={`font-bold font-mono ${canAfford ? "text-emerald-400" : "text-red-400"}`}>
-                    ${(balanceCents / 100).toFixed(2)}
+                    ${(userBalanceCents / 100).toFixed(2)}
                   </span>
                 </div>
               </div>
