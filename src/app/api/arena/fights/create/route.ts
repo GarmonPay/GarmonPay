@@ -61,14 +61,28 @@ const FALLBACK_AI_FIGHTERS: AIGeneratedFighter[] = [
 ];
 
 function signJoinToken(payload: { fightId: string; userId: string; fighterAId: string; exp: number }): string {
-  const secret = process.env.ARENA_JOIN_SECRET || "arena-join-secret-change-in-production";
+  const secret = process.env.ARENA_JOIN_SECRET;
+  if (!secret) {
+    throw new Error("ARENA_JOIN_SECRET is not configured");
+  }
   const str = JSON.stringify(payload);
   const sig = createHmac("sha256", secret).update(str).digest("hex");
   return Buffer.from(JSON.stringify({ ...payload, sig })).toString("base64url");
 }
 
 /** POST /api/arena/fights/create — create a fight vs CPU or AI. Body: { cpuFighterId } or { opponentType: 'ai' }. Rate limited. */
-export async function POST(req: Request) {
+export async function POST(_req: Request) {
+  return NextResponse.json(
+    { message: "Arena is coming soon." },
+    { status: 503 }
+  );
+}
+
+/**
+ * Full fight-create logic — kept for when Arena goes live; not called while disabled.
+ * @internal
+ */
+async function arenaFightCreateImpl(req: Request): Promise<Response> {
   const rate = arenaRateLimitFightCreate(req);
   if (rate) return rate;
   const userId = await getAuthUserIdStrict(req);
@@ -236,3 +250,5 @@ export async function POST(req: Request) {
     wsUrl: process.env.NEXT_PUBLIC_BOXING_WS_URL || "http://localhost:3001",
   });
 }
+
+void arenaFightCreateImpl;
