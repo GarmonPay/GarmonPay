@@ -7,6 +7,7 @@ import {
   ensureWalletBalancesRow,
 } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, CELO_ROOMS_COL } from "@/lib/celo-room-schema";
+import { sumPlayerTableStakesCents } from "@/lib/celo-banker-reserve";
 
 const ADJUST_WINDOW_MS = 60_000;
 const ABS_MIN_BET_SC = 500;
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
   const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as {
     banker_id: string;
     current_bank_cents: number;
+    banker_reserve_cents: number;
     min_bet_cents: number;
     last_round_was_celo?: boolean;
     banker_celo_at?: string | null;
@@ -97,6 +99,33 @@ export async function POST(req: Request) {
 
   const currentBank = rm.current_bank_cents;
   const delta = new_bank_sc - currentBank;
+
+  const { data: stakeRows, error: stakeErr } = await supabase
+    .from("celo_room_players")
+    .select("bet_cents, entry_sc")
+    .eq("room_id", room_id)
+    .eq("role", "player");
+
+  if (stakeErr) {
+    return NextResponse.json({ error: "Could not validate player stakes" }, { status: 500 });
+  }
+
+  const sumStakes = sumPlayerTableStakesCents(
+    (stakeRows ?? []) as { bet_cents?: number | null; entry_sc?: number | null }[]
+  );
+  const newReserve = rm.banker_reserve_cents + delta;
+  if (newReserve < 0) {
+    return NextResponse.json({ error: "Invalid bank adjustment" }, { status: 400 });
+  }
+  if (newReserve < sumStakes) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot adjust bank: reserved liability would fall below total committed player stakes (integer US cents).",
+      },
+      { status: 400 }
+    );
+  }
 
   const ensured = await ensureWalletBalancesRow(userId);
   if (!ensured.ok) {
@@ -145,6 +174,7 @@ export async function POST(req: Request) {
     .update({
       ...mergeCeloRoomUpdate(new_bank_sc, {
         [CELO_ROOMS_COL.minimumEntry]: new_minimum_sc,
+        [CELO_ROOMS_COL.bankerReserve]: newReserve,
         last_round_was_celo: false,
         banker_celo_at: null,
         last_activity: now,
@@ -164,9 +194,12 @@ export async function POST(req: Request) {
     details: {
       previous_bank_cents: currentBank,
       new_bank_cents: new_bank_sc,
+      previous_reserve_cents: rm.banker_reserve_cents,
+      new_reserve_cents: newReserve,
       previous_minimum_cents: rm.min_bet_cents,
       new_minimum_cents: new_minimum_sc,
       delta_cents: delta,
+      sum_player_stakes_cents: sumStakes,
     },
   });
 

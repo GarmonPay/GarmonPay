@@ -3,6 +3,9 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { isCeloRoomJoinableStatus } from "@/lib/celo-room-constants";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { assertSumStakesWithinReserve, sumPlayerTableStakesCents } from "@/lib/celo-banker-reserve";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -48,6 +51,7 @@ export async function POST(req: Request) {
     .single();
 
   if (roomErr || !room) {
+    console.error("[celo/room/join] room not found", { room_id, err: roomErr?.message });
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
@@ -56,13 +60,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  if (!roomRecord.status || !["waiting", "active"].includes(roomRecord.status)) {
+  if (!isCeloRoomJoinableStatus(roomRecord.status)) {
+    console.error("[celo/room/join] room not joinable", { room_id, status: roomRecord.status });
     return NextResponse.json({ error: "Room is not open for joining" }, { status: 400 });
   }
 
   // Private room: validate join code
   if (roomRecord.room_type === "private") {
-    if (!join_code || join_code.trim() !== String(roomRecord.join_code ?? "").trim()) {
+    const want = String(join_code ?? "")
+      .trim()
+      .toUpperCase();
+    const have = String(roomRecord.join_code ?? "")
+      .trim()
+      .toUpperCase();
+    if (!want || want !== have) {
+      console.error("[celo/room/join] invalid join code", { room_id });
       return NextResponse.json({ error: "Invalid join code" }, { status: 403 });
     }
   }
@@ -119,22 +131,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Room is full" }, { status: 400 });
     }
 
-    const currentPlayerCount = (playerCount ?? 0) + 1;
-    const maxCoveragePerPlayer = Math.floor(roomRecord.current_bank_cents / currentPlayerCount);
-    if (entry_cents > maxCoveragePerPlayer) {
-      return NextResponse.json(
-        { error: "Your bet cannot exceed the banker's available coverage per player." },
-        { status: 400 }
-      );
+    const { data: stakeRows, error: stakeErr } = await supabase
+      .from("celo_room_players")
+      .select("bet_cents, entry_sc")
+      .eq("room_id", room_id)
+      .eq("role", "player");
+
+    if (stakeErr) {
+      console.error("[celo/room/join] stake sum failed", stakeErr.message);
+      return NextResponse.json({ error: "Could not validate table liability" }, { status: 500 });
     }
 
-    // Check balance
+    const totalCommitted = sumPlayerTableStakesCents(
+      (stakeRows ?? []) as { bet_cents?: number | null; entry_sc?: number | null }[]
+    );
+
+    const reserve = roomRecord.banker_reserve_cents;
+    const cap = assertSumStakesWithinReserve({
+      reserveCents: reserve,
+      sumStakesCents: totalCommitted + entry_cents,
+      messageWhenExceeded:
+        "Your bet cannot exceed the banker's remaining coverage for this table (total player stakes cannot exceed the reserved bank).",
+    });
+    if (!cap.ok) {
+      console.error("[celo/room/join] over banker reserve", {
+        room_id,
+        totalCommitted,
+        entry_cents,
+        reserve,
+      });
+      return NextResponse.json({ error: cap.message }, { status: 400 });
+    }
+
+    // Check balance (canonical USD — wallet_ledger)
     const balanceCents = await getCanonicalBalanceCents(userId);
     if (balanceCents < entry_cents) {
+      console.error("[celo/room/join] insufficient balance", { userId, balanceCents, entry_cents });
       return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
     }
 
-    // Deduct entry
+    // Deduct entry — funds committed to this table (ledger)
     const deductResult = await walletLedgerEntry(
       userId,
       "game_play",

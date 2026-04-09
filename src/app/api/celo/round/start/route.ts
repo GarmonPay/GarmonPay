@@ -3,6 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { assertSumStakesWithinReserve } from "@/lib/celo-banker-reserve";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
     banker_id: string;
     platform_fee_pct: number;
     current_bank_cents: number;
+    banker_reserve_cents: number;
   };
 
   // Only the banker may start a round
@@ -85,6 +87,22 @@ export async function POST(req: Request) {
   const entryForPot = (p: { bet_cents?: number; entry_sc?: number }) => celoPlayerStakeCents(p);
 
   const totalPotCents = players.reduce((sum, p) => sum + entryForPot(p), 0);
+
+  const reserveOk = assertSumStakesWithinReserve({
+    reserveCents: roomRecord.banker_reserve_cents,
+    sumStakesCents: totalPotCents,
+    messageWhenExceeded:
+      "Round pot exceeds the banker reserved liability cap; refuse to start (data invariant).",
+  });
+  if (!reserveOk.ok) {
+    console.error("[celo/round/start] reserve invariant failed", {
+      room_id,
+      totalPotCents,
+      reserve: roomRecord.banker_reserve_cents,
+    });
+    return NextResponse.json({ error: reserveOk.message }, { status: 409 });
+  }
+
   const platformFeeCents = Math.floor(
     (totalPotCents * roomRecord.platform_fee_pct) / 100
   );

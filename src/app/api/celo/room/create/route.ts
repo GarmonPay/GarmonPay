@@ -140,7 +140,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[celo/room/create] step: getCanonicalBalanceCents");
+    console.error("[celo/room/create] step: getCanonicalBalanceCents (wallet_ledger)");
     let balanceCents: number;
     try {
       balanceCents = await getCanonicalBalanceCents(userId);
@@ -152,7 +152,23 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[celo/room/create] step: balanceCents=", balanceCents, "need=", starting_bank_cents);
+    console.error(
+      "[celo/room/create] step: balanceCents=",
+      balanceCents,
+      "required_bankroll_cents=",
+      requiredBankCents,
+      "starting_bank_cents=",
+      starting_bank_cents
+    );
+
+    if (balanceCents < requiredBankCents) {
+      return NextResponse.json(
+        {
+          error: `Insufficient balance: you need at least $${(requiredBankCents / 100).toFixed(2)} available to cover the required bankroll (minimum entry × max players).`,
+        },
+        { status: 400 }
+      );
+    }
 
     if (balanceCents < starting_bank_cents) {
       return NextResponse.json(
@@ -179,7 +195,8 @@ export async function POST(req: Request) {
         max_players: max_players as number,
         [CELO_ROOMS_COL.minimumEntry]: minimum_entry_cents,
         [CELO_ROOMS_COL.currentBank]: starting_bank_cents,
-        join_code: room_type === "private" ? join_code!.trim() : null,
+        [CELO_ROOMS_COL.bankerReserve]: starting_bank_cents,
+        join_code: room_type === "private" ? join_code!.trim().toUpperCase() : null,
         status: "waiting",
         total_rounds: 0,
       };
@@ -278,6 +295,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Single wallet debit for the table bank; banker_reserve_sc mirrors the liability cap (not a second debit).
     console.error("[celo/room/create] step: walletLedgerEntry deduct (after room persisted)");
     let deductResult: Awaited<ReturnType<typeof walletLedgerEntry>>;
     try {

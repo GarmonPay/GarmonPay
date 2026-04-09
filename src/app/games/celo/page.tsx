@@ -87,21 +87,19 @@ export default function CeloLobbyPage() {
   }, []);
 
   const loadRooms = useCallback(async () => {
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const { data } = await sb
-      .from("celo_rooms")
-      .select("*")
-      .eq("room_type", "public")
-      .in("status", ["waiting", "active", "rolling"])
-      .order("last_activity", { ascending: false })
-      .limit(30);
-    const rows = (data ?? []) as Record<string, unknown>[];
-    setRooms(
-      rows
-        .map((row) => mapRowToLobbyRoom(row))
-        .filter((x): x is Room => x !== null)
-    );
+    try {
+      const res = await fetch("/api/celo/lobby");
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => ({}))) as { rooms?: Record<string, unknown>[] };
+      const rows = json.rooms ?? [];
+      setRooms(
+        rows
+          .map((row) => mapRowToLobbyRoom(row))
+          .filter((x): x is Room => x !== null)
+      );
+    } catch {
+      /* ignore */
+    }
   }, [mapRowToLobbyRoom]);
 
   useEffect(() => {
@@ -116,13 +114,11 @@ export default function CeloLobbyPage() {
       setSession(s);
       setLoading(false);
       if (s.accessToken) {
-        fetch("/api/dashboard", { headers: { Authorization: `Bearer ${s.accessToken}` } })
+        fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
-          .then((d: { balanceCents?: number | null }) => {
-            const raw = d.balanceCents;
-            const n = raw == null ? NaN : Number(raw);
-            const cents = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-            setBalanceCents(cents);
+          .then((d: { balance_cents?: number }) => {
+            const n = Number(d.balance_cents ?? 0);
+            setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
           })
           .catch(() => {});
       }
@@ -276,8 +272,8 @@ export default function CeloLobbyPage() {
         error?: string;
         details?: string;
       };
-      console.log("Create room response:", data);
 
+      // Do not navigate until the API returns a persisted room row (no optimistic room state).
       if (!res.ok) {
         console.error("Create room error:", data);
         setCreateError(data.details || data.error || "Failed to create room");
@@ -299,48 +295,19 @@ export default function CeloLobbyPage() {
     if (!code) return;
     setJoinError(null);
     setJoining(true);
-    const sb = createBrowserClient();
-    if (!sb) {
+    try {
+      const res = await fetch(`/api/celo/room/lookup?code=${encodeURIComponent(code)}`);
+      const data = (await res.json().catch(() => ({}))) as { roomId?: string; error?: string };
+      if (!res.ok || !data.roomId) {
+        setJoinError(data.error ?? "No active room with that code");
+        return;
+      }
+      router.push(`/games/celo/${data.roomId}`);
+    } catch {
+      setJoinError("Lookup failed — try again");
+    } finally {
       setJoining(false);
-      return;
     }
-
-    // First try: match private room join_code
-    const { data: privateRoom } = await sb
-      .from("celo_rooms")
-      .select("id")
-      .eq("join_code", code)
-      .in("status", ["waiting", "active"])
-      .maybeSingle();
-
-    if (privateRoom) {
-      setJoining(false);
-      router.push(`/games/celo/${(privateRoom as { id: string }).id}`);
-      return;
-    }
-
-    // Second try: match by room id prefix (public rooms — no join_code; users share first 8 chars of UUID)
-    const { data: idCandidates } = await sb
-      .from("celo_rooms")
-      .select("id")
-      .in("status", ["waiting", "active"])
-      .order("last_activity", { ascending: false })
-      .limit(200);
-
-    const normalized = code.replace(/-/g, "").toUpperCase();
-    const publicRoom = idCandidates?.find((r) => {
-      const idCompact = String((r as { id: string }).id)
-        .replace(/-/g, "")
-        .toUpperCase();
-      return idCompact.startsWith(normalized);
-    });
-
-    setJoining(false);
-    if (!publicRoom) {
-      setJoinError("No active room with that code");
-      return;
-    }
-    router.push(`/games/celo/${(publicRoom as { id: string }).id}`);
   }
 
   // Keep starting_bank_cents snapped to a multiple of minimum_entry_cents

@@ -4,8 +4,8 @@ import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 
 /**
  * GET /api/wallet/get
- * Canonical balance in cents from `wallet_balances` — same source as
- * `/api/wallet`, `/api/celo/room/create`, and ledger-backed flows.
+ * Canonical USD balance in cents: latest `wallet_ledger.balance_after` via
+ * `getCanonicalBalanceCents` (same as `/api/wallet` and C-Lo APIs).
  */
 export async function GET(req: Request) {
   const userId = await getAuthUserId(req);

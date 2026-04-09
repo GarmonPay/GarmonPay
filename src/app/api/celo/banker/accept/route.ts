@@ -90,6 +90,8 @@ export async function POST(req: Request) {
 
   const currentBankCents = rm.current_bank_cents;
 
+  // Player stakes unchanged — banker_reserve_sc (liability cap) unchanged; this only moves bank float between users.
+
   // Check player has enough to cover the current bank
   const balanceCents = await getCanonicalBalanceCents(userId);
   if (balanceCents < currentBankCents) {

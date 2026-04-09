@@ -60,6 +60,7 @@ type Room = {
   min_bet_cents: number;
   max_bet_cents: number;
   current_bank_cents: number;
+  banker_reserve_cents: number;
   platform_fee_pct: number;
   speed: string;
   last_round_was_celo: boolean;
@@ -617,7 +618,6 @@ export default function CeloRoomPage() {
 
   const [initialSyncDone, setInitialSyncDone] = useState(false);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -629,7 +629,6 @@ export default function CeloRoomPage() {
   const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
   const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const balanceRef = useRef(0);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
   /** Processed roll_started sync keys (broadcast + postgres fallback) */
   const processedSyncKeysRef = useRef<Set<string>>(new Set());
@@ -829,11 +828,10 @@ export default function CeloRoomPage() {
 
   const loadBalance = useCallback(async () => {
     try {
-      const res = await authFetchGet("/api/dashboard");
+      const res = await authFetchGet("/api/wallet/get");
       if (res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { balanceCents?: number | null };
-        const raw = d.balanceCents;
-        const n = raw == null ? NaN : Number(raw);
+        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number };
+        const n = Number(d.balance_cents ?? 0);
         setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
       }
     } catch {
@@ -1019,10 +1017,6 @@ export default function CeloRoomPage() {
   const addSystemMessage = useCallback((line: string) => {
     setSystemFeed((prev) => [...prev.slice(-25), line]);
   }, []);
-
-  useEffect(() => {
-    balanceRef.current = balanceCents;
-  }, [balanceCents]);
 
   useEffect(() => {
     playersRef.current = players;
@@ -1394,26 +1388,6 @@ export default function CeloRoomPage() {
           setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "wallet_balances",
-          filter: `user_id=eq.${uid}`,
-        },
-        (payload) => {
-          if (!isMounted) return;
-          const next = Number((payload.new as { balance?: number }).balance ?? 0);
-          const prevBal = balanceRef.current;
-          setBalanceCents(next);
-          if (next > prevBal) setBalanceFlash("up");
-          else if (next < prevBal) setBalanceFlash("down");
-          setTimeout(() => {
-            if (isMounted) setBalanceFlash(null);
-          }, 1500);
-        }
-      )
       .subscribe((status) => {
         if (!isMounted) return;
         setRealtimeConnected(status === "SUBSCRIBED");
@@ -1552,12 +1526,15 @@ export default function CeloRoomPage() {
     setJoinLoading(true);
     setJoinError(null);
     if (!asSpectator && room) {
-      const playerRoleCount = players.filter((p) => p.role === "player").length;
-      const currentPlayerCount = playerRoleCount + 1;
-      const maxCoveragePerPlayer = Math.floor(room.current_bank_cents / currentPlayerCount);
-      if (joinEntryCents > maxCoveragePerPlayer) {
+      const totalCommitted = players
+        .filter((p) => p.role === "player")
+        .reduce((s, p) => s + celoPlayerStakeCents(p), 0);
+      const remainingCover = room.banker_reserve_cents - totalCommitted;
+      if (joinEntryCents > remainingCover) {
         setJoinLoading(false);
-        setJoinError("Your bet cannot exceed the banker's available coverage per player.");
+        setJoinError(
+          "Your bet cannot exceed the banker's remaining coverage for this table (total player stakes cannot exceed the reserved bank)."
+        );
         return;
       }
     }
@@ -1980,10 +1957,11 @@ export default function CeloRoomPage() {
     const joinBanker = players.find((p) => p.role === "banker");
     const joinBankerTitle = `${getDisplayName(joinBanker ?? { user_id: room.banker_id })}'s C-Lo Room`;
     const joinPlayerCount = players.filter((p) => p.role !== "spectator").length;
-    const seatedPlayerCount = players.filter((p) => p.role === "player").length;
-    const activePlayerCount = seatedPlayerCount + 1;
-    const maxBankCoveragePerPlayer = Math.floor(room.current_bank_cents / activePlayerCount);
-    const joinEntryCap = Math.min(room.max_bet_cents, balanceCents, maxBankCoveragePerPlayer);
+    const totalCommittedStakes = players
+      .filter((p) => p.role === "player")
+      .reduce((s, p) => s + celoPlayerStakeCents(p), 0);
+    const remainingCover = Math.max(0, room.banker_reserve_cents - totalCommittedStakes);
+    const joinEntryCap = Math.min(room.max_bet_cents, balanceCents, remainingCover);
     const entryChipMults = [1, 2, 5, 10];
 
     return (
@@ -2064,7 +2042,7 @@ export default function CeloRoomPage() {
               {entryChipMults.map((m) => {
                 const cents = minBet * m;
                 if (cents > room.max_bet_cents) return null;
-                const capped = Math.min(cents, balanceCents, room.max_bet_cents, maxBankCoveragePerPlayer);
+                const capped = Math.min(cents, balanceCents, room.max_bet_cents, remainingCover);
                 if (capped < minBet) return null;
                 return (
                   <button
@@ -2502,15 +2480,7 @@ export default function CeloRoomPage() {
               <span className="text-[10px] text-violet-300/75">{onlineCount} online</span>
             )}
             <p className="text-[10px] text-violet-400/60 mt-1">Balance</p>
-            <p
-              className={`text-sm font-bold font-mono tabular-nums transition-colors ${
-                balanceFlash === "up"
-                  ? "text-emerald-300"
-                  : balanceFlash === "down"
-                    ? "text-red-400"
-                    : "text-emerald-400"
-              }`}
-            >
+            <p className="text-sm font-bold font-mono tabular-nums text-emerald-400">
               ${(balanceCents / 100).toFixed(2)}
             </p>
           </div>

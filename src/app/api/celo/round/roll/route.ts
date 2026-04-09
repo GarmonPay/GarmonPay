@@ -5,6 +5,7 @@ import { celoPayoutTestCredit, celoWalletCredit, insertCeloPlatformFee } from "@
 import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { broadcastCeloRoomEvent, buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 
@@ -600,13 +601,7 @@ export async function POST(req: Request) {
           const player = row as { user_id: string; seat_number: number | null; role: string };
           if (player.user_id === rm.banker_id) continue;
 
-          const { data: wb } = await supabase
-            .from("wallet_balances")
-            .select("balance")
-            .eq("user_id", player.user_id)
-            .maybeSingle();
-
-          const balance = Number((wb as { balance?: number } | null)?.balance ?? 0);
+          const balance = await getCanonicalBalanceCents(player.user_id);
           if (balance >= newBankCents) {
             await supabase
               .from("celo_room_players")

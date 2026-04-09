@@ -3,6 +3,12 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import {
+  assertSumStakesWithinReserve,
+  sumPlayerTableStakesCents,
+  totalCommittedAfterStakeReplacement,
+} from "@/lib/celo-banker-reserve";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -30,7 +36,7 @@ export async function POST(req: Request) {
   // Verify user is a player in this room
   const { data: playerRow } = await supabase
     .from("celo_room_players")
-    .select("role, bet_cents")
+    .select("role, bet_cents, entry_sc")
     .eq("room_id", room_id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -76,6 +82,7 @@ export async function POST(req: Request) {
     current_bank_cents: number;
     min_bet_cents: number;
     banker_id: string;
+    banker_reserve_cents: number;
   };
 
   if (userId === roomRecord.banker_id) {
@@ -83,6 +90,47 @@ export async function POST(req: Request) {
   }
 
   const coverAmount = roomRecord.current_bank_cents;
+
+  const { data: allPlayerStakes, error: stakesErr } = await supabase
+    .from("celo_room_players")
+    .select("bet_cents, entry_sc")
+    .eq("room_id", room_id)
+    .eq("role", "player");
+
+  if (stakesErr) {
+    console.error("[celo/cover-bank] stake load", stakesErr.message);
+    return NextResponse.json({ error: "Could not validate table liability" }, { status: 500 });
+  }
+
+  const totalCommitted = sumPlayerTableStakesCents(
+    (allPlayerStakes ?? []) as { bet_cents?: number | null; entry_sc?: number | null }[]
+  );
+  const previousStake = celoPlayerStakeCents(
+    (playerRow ?? {}) as { bet_cents?: number | null; entry_sc?: number | null }
+  );
+  const nextTotal = totalCommittedAfterStakeReplacement({
+    totalCommittedAllPlayers: totalCommitted,
+    previousStakeThisPlayer: previousStake,
+    newStakeThisPlayer: coverAmount,
+  });
+
+  const cap = assertSumStakesWithinReserve({
+    reserveCents: roomRecord.banker_reserve_cents,
+    sumStakesCents: nextTotal,
+    messageWhenExceeded:
+      "Covering the bank would exceed the banker reserved liability cap for this table.",
+  });
+  if (!cap.ok) {
+    console.error("[celo/cover-bank] reserve exceeded", {
+      room_id,
+      reserve: roomRecord.banker_reserve_cents,
+      totalCommitted,
+      previousStake,
+      coverAmount,
+      nextTotal,
+    });
+    return NextResponse.json({ error: cap.message }, { status: 400 });
+  }
 
   // Check balance
   const balanceCents = await getCanonicalBalanceCents(userId);
@@ -108,10 +156,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Update player's bet_cents to the cover amount
+  // Update player's table stake (keep entry_sc in sync for settlement / sums)
   await supabase
     .from("celo_room_players")
-    .update({ bet_cents: coverAmount })
+    .update({ bet_cents: coverAmount, entry_sc: coverAmount })
     .eq("room_id", room_id)
     .eq("user_id", userId);
 
