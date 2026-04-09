@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
+import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
  * POST /api/celo/room/close — banker (or creator) closes room: refund player entries + bank, cancel room.
@@ -83,27 +85,26 @@ export async function POST(req: Request) {
   }>;
 
   let refundsIssued = 0;
-  const ts = Date.now();
 
   for (const p of rows) {
     if (p.role !== "player") continue;
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
-    const ref = `celo_room_close_refund_${room_id}_${p.user_id}_${ts}_${refundsIssued}`;
-    const result = await walletLedgerEntry(p.user_id, "game_win", cents, ref);
+    const ref = celoPlayerStakeRefundReference(room_id, p.user_id);
+    const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
     if (!result.success) {
       return NextResponse.json(
         { error: result.message ?? "Refund failed", details: `player ${p.user_id}` },
         { status: 500 }
       );
     }
-    refundsIssued += 1;
+    if (!("skipped" in result && result.skipped)) refundsIssued += 1;
   }
 
   const bankCents = normalized.current_bank_cents ?? 0;
   if (bankCents > 0 && bankerId) {
-    const bankRef = `celo_room_close_bank_refund_${room_id}_${ts}`;
-    const bankResult = await walletLedgerEntry(bankerId, "game_win", bankCents, bankRef);
+    const bankRef = celoBankRefundReference(room_id);
+    const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);
     if (!bankResult.success) {
       return NextResponse.json(
         { error: bankResult.message ?? "Could not refund bank to banker" },
@@ -120,7 +121,12 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   const { error: updErr } = await supabase
     .from("celo_rooms")
-    .update({ status: "cancelled", last_activity: now })
+    .update(
+      mergeCeloRoomUpdate(0, {
+        status: "cancelled",
+        last_activity: now,
+      })
+    )
     .eq("id", room_id);
 
   if (updErr) {
@@ -136,6 +142,12 @@ export async function POST(req: Request) {
       refunds_issued: refundsIssued,
       bank_refunded_cents: bankCents,
     },
+  });
+
+  celoQaLog("room_close_refunds_ok", {
+    roomId: room_id,
+    playerRefundsCount: refundsIssued,
+    bankRefundedCents: bankCents,
   });
 
   return NextResponse.json({
