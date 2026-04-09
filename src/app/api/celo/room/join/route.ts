@@ -6,6 +6,7 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { isCeloRoomJoinableStatus } from "@/lib/celo-room-constants";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { assertSumStakesWithinReserve, sumPlayerTableStakesCents } from "@/lib/celo-banker-reserve";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -154,6 +155,13 @@ export async function POST(req: Request) {
         "Your bet cannot exceed the banker's remaining coverage for this table (total player stakes cannot exceed the reserved bank).",
     });
     if (!cap.ok) {
+      celoQaLog("join_reserve_rejected", {
+        roomId: room_id,
+        totalCommittedCents: totalCommitted,
+        entryCents: entry_cents,
+        reserveCents: reserve,
+        httpStatus: 400,
+      });
       console.error("[celo/room/join] over banker reserve", {
         room_id,
         totalCommitted,
@@ -166,6 +174,12 @@ export async function POST(req: Request) {
     // Check balance (canonical USD — wallet_ledger)
     const balanceCents = await getCanonicalBalanceCents(userId);
     if (balanceCents < entry_cents) {
+      celoQaLog("join_wallet_rejected", {
+        roomId: room_id,
+        balanceCents,
+        entryCents: entry_cents,
+        httpStatus: 400,
+      });
       console.error("[celo/room/join] insufficient balance", { userId, balanceCents, entry_cents });
       return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
     }

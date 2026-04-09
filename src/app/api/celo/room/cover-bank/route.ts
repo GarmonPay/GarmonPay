@@ -9,6 +9,7 @@ import {
   sumPlayerTableStakesCents,
   totalCommittedAfterStakeReplacement,
 } from "@/lib/celo-banker-reserve";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -121,6 +122,15 @@ export async function POST(req: Request) {
       "Covering the bank would exceed the banker reserved liability cap for this table.",
   });
   if (!cap.ok) {
+    celoQaLog("cover_bank_reserve_rejected", {
+      roomId: room_id,
+      reserveCents: roomRecord.banker_reserve_cents,
+      totalCommittedCents: totalCommitted,
+      previousStakeCents: previousStake,
+      coverAmountCents: coverAmount,
+      nextTotalCommittedCents: nextTotal,
+      httpStatus: 400,
+    });
     console.error("[celo/cover-bank] reserve exceeded", {
       room_id,
       reserve: roomRecord.banker_reserve_cents,

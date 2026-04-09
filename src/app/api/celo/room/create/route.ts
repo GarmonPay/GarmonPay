@@ -7,6 +7,7 @@ import {
   ensureWalletBalancesRow,
 } from "@/lib/wallet-ledger";
 import { CELO_ROOMS_COL } from "@/lib/celo-room-schema";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
  * `celo_rooms` production columns: minimum_entry_sc, current_bank_sc (see user DB audit).
@@ -28,6 +29,12 @@ function serializeErr(err: unknown): Record<string, unknown> {
 }
 
 function jsonDbFailure(label: string, err: PgLike | null | undefined): NextResponse {
+  celoQaLog("room_create_failure", {
+    step: label,
+    kind: "db",
+    code: err?.code ?? null,
+    message: err?.message ?? null,
+  });
   console.error(`[celo/room/create] ${label}`, err);
   return NextResponse.json(
     {
@@ -44,6 +51,7 @@ export async function POST(req: Request) {
     console.error("[celo/room/create] step: start");
     const userId = await getAuthUserIdStrict(req);
     if (!userId) {
+      celoQaLog("room_create_failure", { kind: "auth", httpStatus: 401 });
       console.error("[celo/room/create] step: auth failed");
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -162,6 +170,12 @@ export async function POST(req: Request) {
     );
 
     if (balanceCents < requiredBankCents) {
+      celoQaLog("room_create_failure", {
+        kind: "insufficient_required_bankroll",
+        httpStatus: 400,
+        balanceCents,
+        requiredBankCents,
+      });
       return NextResponse.json(
         {
           error: `Insufficient balance: you need at least $${(requiredBankCents / 100).toFixed(2)} available to cover the required bankroll (minimum entry × max players).`,
@@ -171,6 +185,12 @@ export async function POST(req: Request) {
     }
 
     if (balanceCents < starting_bank_cents) {
+      celoQaLog("room_create_failure", {
+        kind: "insufficient_starting_bank",
+        httpStatus: 400,
+        balanceCents,
+        startingBankCents: starting_bank_cents,
+      });
       return NextResponse.json(
         { error: "Insufficient balance to cover the starting bank" },
         { status: 400 }
@@ -321,6 +341,12 @@ export async function POST(req: Request) {
     }
 
     if (!deductResult.success) {
+      celoQaLog("room_create_failure", {
+        kind: "ledger_deduct",
+        httpStatus: 400,
+        roomId: room.id,
+        message: deductResult.message ?? null,
+      });
       console.error("[celo/room/create] walletLedgerEntry (deduct) failed:", deductResult.message);
       try {
         await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
@@ -340,8 +366,15 @@ export async function POST(req: Request) {
     }
 
     console.error("[celo/room/create] step: success room_id=", room.id);
+    celoQaLog("room_create_ok", {
+      roomId: room.id,
+      startingBankCents: starting_bank_cents,
+      bankerReserveCents: starting_bank_cents,
+      roomType: room.room_type,
+    });
     return NextResponse.json({ room });
   } catch (err: unknown) {
+    celoQaLog("room_create_failure", { kind: "unhandled", message: err instanceof Error ? err.message : String(err) });
     console.error("[celo/room/create] unhandled top-level:", err);
     return NextResponse.json(
       {

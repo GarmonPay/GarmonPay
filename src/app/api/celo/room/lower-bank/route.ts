@@ -8,6 +8,7 @@ import {
 } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, CELO_ROOMS_COL } from "@/lib/celo-room-schema";
 import { sumPlayerTableStakesCents } from "@/lib/celo-banker-reserve";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 const ADJUST_WINDOW_MS = 60_000;
 const ABS_MIN_BET_SC = 500;
@@ -118,6 +119,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid bank adjustment" }, { status: 400 });
   }
   if (newReserve < sumStakes) {
+    celoQaLog("lower_bank_reserve_rejected", {
+      roomId: room_id,
+      previousReserveCents: rm.banker_reserve_cents,
+      newReserveCents: newReserve,
+      sumPlayerStakesCents: sumStakes,
+      deltaCents: delta,
+      httpStatus: 400,
+    });
     return NextResponse.json(
       {
         error:

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { isCeloRoomJoinableStatus } from "@/lib/celo-room-constants";
 import { normalizeCeloRoomLookupCode } from "@/lib/celo-lookup-code";
+import { matchPublicCeloRoomByUuidPrefix } from "@/lib/celo-public-room-match";
+import { celoQaLog } from "@/lib/celo-qa-log";
 
 export const dynamic = "force-dynamic";
 
@@ -14,20 +16,21 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const raw = url.searchParams.get("code")?.trim() ?? "";
   if (!raw) {
+    celoQaLog("room_lookup_error", { reason: "missing_code", httpStatus: 400 });
     return NextResponse.json({ error: "code is required" }, { status: 400 });
   }
 
   const normalized = normalizeCeloRoomLookupCode(raw);
   if (normalized.length < 4) {
+    celoQaLog("room_lookup_error", { reason: "code_too_short", httpStatus: 400, codeLen: normalized.length });
     return NextResponse.json({ error: "Code is too short" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
   if (!supabase) {
+    celoQaLog("room_lookup_error", { reason: "no_supabase", httpStatus: 503 });
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
-
-  console.error("[celo/room/lookup] code=", normalized);
 
   // Private rooms: join_code match (stored trimmed; compare normalized)
   const { data: privateRoom, error: privErr } = await supabase
@@ -38,16 +41,21 @@ export async function GET(req: Request) {
     .maybeSingle();
 
   if (privErr) {
-    console.error("[celo/room/lookup] private query", privErr.message);
+    celoQaLog("room_lookup_private_query_error", { message: privErr.message });
   }
 
   if (privateRoom) {
     const st = String((privateRoom as { status?: string }).status ?? "");
     if (!isCeloRoomJoinableStatus(st)) {
-      console.error("[celo/room/lookup] private room not joinable", { id: (privateRoom as { id: string }).id, st });
+      celoQaLog("room_lookup_not_joinable", {
+        kind: "private",
+        roomId: (privateRoom as { id: string }).id,
+        status: st,
+        httpStatus: 404,
+      });
       return NextResponse.json({ error: "No active room with that code" }, { status: 404 });
     }
-    console.error("[celo/room/lookup] matched private", (privateRoom as { id: string }).id);
+    celoQaLog("room_lookup_ok", { kind: "private", roomId: (privateRoom as { id: string }).id, status: st });
     return NextResponse.json({
       roomId: (privateRoom as { id: string }).id,
       status: st,
@@ -64,28 +72,24 @@ export async function GET(req: Request) {
     .limit(400);
 
   if (listErr) {
-    console.error("[celo/room/lookup] public list", listErr.message);
+    celoQaLog("room_lookup_public_list_error", { message: listErr.message, httpStatus: 500 });
     return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
   }
 
-  const match = (candidates ?? []).find((r) => {
-    const row = r as { id: string; status?: string };
-    if (!isCeloRoomJoinableStatus(row.status)) return false;
-    const idCompact = String(row.id)
-      .replace(/-/g, "")
-      .toUpperCase();
-    return idCompact.startsWith(normalized);
-  }) as { id: string; status?: string; room_type?: string } | undefined;
+  const match = matchPublicCeloRoomByUuidPrefix(
+    (candidates ?? []) as { id: string; status?: string; room_type?: string }[],
+    normalized
+  );
 
   if (!match) {
-    console.error("[celo/room/lookup] no public match");
+    celoQaLog("room_lookup_miss", { kind: "public", candidateCount: (candidates ?? []).length, httpStatus: 404 });
     return NextResponse.json({ error: "No active room with that code" }, { status: 404 });
   }
 
-  console.error("[celo/room/lookup] matched public", match.id);
+  celoQaLog("room_lookup_ok", { kind: "public", roomId: match.id, status: match.status });
   return NextResponse.json({
     roomId: match.id,
-    status: String(match.status ?? ""),
-    room_type: match.room_type ?? "public",
+    status: match.status,
+    room_type: match.room_type,
   });
 }
