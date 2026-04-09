@@ -174,36 +174,8 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[celo/room/create] step: walletLedgerEntry deduct");
-    let deductResult: Awaited<ReturnType<typeof walletLedgerEntry>>;
-    try {
-      deductResult = await walletLedgerEntry(
-        userId,
-        "game_play",
-        -starting_bank_cents,
-        `celo_bank_deposit_${Date.now()}`
-      );
-    } catch (err: unknown) {
-      console.error("[celo/room/create] walletLedgerEntry (deduct) threw:", err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
-        { status: 500 }
-      );
-    }
-
-    if (!deductResult.success) {
-      console.error("[celo/room/create] walletLedgerEntry (deduct) failed:", deductResult.message);
-      return NextResponse.json(
-        {
-          error: deductResult.message ?? "Failed to reserve bank funds",
-          details: deductResult.message,
-          code: null,
-        },
-        { status: 400 }
-      );
-    }
-
     // Insert only columns present on production: *_sc bank fields, no speed/max_bet unless migrated
+    // Balance is validated above; deduction happens ONLY after room (+ player + audit) rows exist.
     console.error("[celo/room/create] step: insert celo_rooms");
     let room: {
       id: string;
@@ -232,39 +204,11 @@ export async function POST(req: Request) {
 
       if (roomError) {
         console.error("[celo/room/create] Exact error (celo_rooms):", roomError);
-        try {
-          const refund = await walletLedgerEntry(
-            userId,
-            "game_win",
-            starting_bank_cents,
-            `celo_bank_refund_creation_failed_${Date.now()}`
-          );
-          if (!refund.success) {
-            console.error("[celo/room/create] refund after failed insert:", refund.message);
-          }
-        } catch (refundErr: unknown) {
-          console.error("[celo/room/create] refund threw:", refundErr);
-          return NextResponse.json(
-            {
-              error: roomError.message,
-              details: serializeErr(roomError),
-              code: roomError.code,
-              refundError: serializeErr(refundErr),
-            },
-            { status: 500 }
-          );
-        }
         return jsonDbFailure("celo_rooms insert", roomError as PgLike);
       }
 
       if (!roomData) {
         console.error("[celo/room/create] celo_rooms insert returned no row");
-        await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_creation_failed_${Date.now()}`
-        );
         return NextResponse.json(
           {
             error: "Failed to create room",
@@ -277,16 +221,6 @@ export async function POST(req: Request) {
       room = roomData as typeof room;
     } catch (err: unknown) {
       console.error("[celo/room/create] celo_rooms insert threw:", err);
-      try {
-        await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_creation_failed_${Date.now()}`
-        );
-      } catch (e2: unknown) {
-        console.error("[celo/room/create] refund after throw failed:", e2);
-      }
       return NextResponse.json(
         { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
         { status: 500 }
@@ -307,29 +241,14 @@ export async function POST(req: Request) {
       if (playerError) {
         console.error("[celo/room/create] Exact error (celo_room_players):", playerError);
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        const refund = await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_player_insert_failed_${Date.now()}`
-        );
-        if (!refund.success) {
-          console.error("[celo/room/create] refund after player insert failed:", refund.message);
-        }
         return jsonDbFailure("celo_room_players insert", playerError as PgLike);
       }
     } catch (err: unknown) {
       console.error("[celo/room/create] celo_room_players insert threw:", err);
       try {
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_player_insert_failed_${Date.now()}`
-        );
       } catch (e2: unknown) {
-        console.error("[celo/room/create] rollback after player throw failed:", e2);
+        console.error("[celo/room/create] rollback room after player throw failed:", e2);
       }
       return NextResponse.json(
         { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
@@ -356,15 +275,6 @@ export async function POST(req: Request) {
         console.error("[celo/room/create] Exact error (celo_audit_log):", auditError);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        const refund = await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_audit_failed_${Date.now()}`
-        );
-        if (!refund.success) {
-          console.error("[celo/room/create] refund after audit failed:", refund.message);
-        }
         return jsonDbFailure("celo_audit_log insert", auditError as PgLike);
       }
     } catch (err: unknown) {
@@ -372,18 +282,55 @@ export async function POST(req: Request) {
       try {
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        await walletLedgerEntry(
-          userId,
-          "game_win",
-          starting_bank_cents,
-          `celo_bank_refund_audit_failed_${Date.now()}`
-        );
       } catch (e2: unknown) {
         console.error("[celo/room/create] rollback after audit throw failed:", e2);
       }
       return NextResponse.json(
         { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
         { status: 500 }
+      );
+    }
+
+    console.error("[celo/room/create] step: walletLedgerEntry deduct (after room persisted)");
+    let deductResult: Awaited<ReturnType<typeof walletLedgerEntry>>;
+    try {
+      deductResult = await walletLedgerEntry(
+        userId,
+        "game_play",
+        -starting_bank_cents,
+        `celo_bank_deposit_${room.id}`
+      );
+    } catch (err: unknown) {
+      console.error("[celo/room/create] walletLedgerEntry (deduct) threw:", err);
+      try {
+        await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
+        await supabase.from("celo_room_players").delete().eq("room_id", room.id);
+        await supabase.from("celo_rooms").delete().eq("id", room.id);
+      } catch (rollbackErr: unknown) {
+        console.error("[celo/room/create] rollback after deduct throw failed:", rollbackErr);
+      }
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
+        { status: 500 }
+      );
+    }
+
+    if (!deductResult.success) {
+      console.error("[celo/room/create] walletLedgerEntry (deduct) failed:", deductResult.message);
+      try {
+        await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
+        await supabase.from("celo_room_players").delete().eq("room_id", room.id);
+        await supabase.from("celo_rooms").delete().eq("id", room.id);
+      } catch (rollbackErr: unknown) {
+        console.error("[celo/room/create] rollback after deduct failure failed:", rollbackErr);
+      }
+      return NextResponse.json(
+        {
+          error: deductResult.message ?? "Failed to reserve bank funds",
+          details: deductResult.message,
+          code: null,
+        },
+        { status: 400 }
       );
     }
 
