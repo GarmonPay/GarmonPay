@@ -474,6 +474,7 @@ function getRoundStatusLine(opts: {
 function getCeloRoomStatusLine(opts: {
   noActiveRound: boolean;
   round: Round | null;
+  roomStatus?: string;
   isBanker: boolean;
   amIPlayer: boolean;
   currentTurnPlayer: Player | null;
@@ -484,6 +485,7 @@ function getCeloRoomStatusLine(opts: {
   const {
     noActiveRound,
     round,
+    roomStatus,
     isBanker,
     amIPlayer,
     currentTurnPlayer,
@@ -491,6 +493,9 @@ function getCeloRoomStatusLine(opts: {
     activePlayers,
     playersWithBets,
   } = opts;
+  if (roomStatus === "rolling" && !round) {
+    return isBanker ? "Round started — loading table…" : "Round in progress…";
+  }
   if (noActiveRound || !round) {
     return getLobbyStatusLine({ isBanker, activePlayers, playersWithBets });
   }
@@ -744,6 +749,7 @@ export default function CeloRoomPage() {
         const data = (await res.json().catch(() => ({}))) as {
           players?: Player[];
           room?: Record<string, unknown>;
+          round?: Round | null;
         };
         if (data.players) {
           const plist = data.players;
@@ -763,6 +769,9 @@ export default function CeloRoomPage() {
               banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
             } as Room);
           }
+        }
+        if ("round" in data) {
+          setCurrentRound(data.round ?? null);
         }
         return;
       }
@@ -792,10 +801,50 @@ export default function CeloRoomPage() {
     }
   }, [roomId, session?.userId]);
 
-  const loadRound = useCallback(async () => {
+  const loadRound = useCallback(async (): Promise<Round | null> => {
+    const applyRollsForRound = async (round: Round | null) => {
+      const sb = createBrowserClient();
+      if (!sb) {
+        setPlayerRolls([]);
+        setOpenSideBets([]);
+        return;
+      }
+      if (round) {
+        const { data: rolls } = await sb
+          .from("celo_player_rolls")
+          .select("*")
+          .eq("round_id", round.id)
+          .order("created_at", { ascending: true });
+        setPlayerRolls((rolls as PlayerRoll[]) ?? []);
+
+        const { data: bets } = await sb
+          .from("celo_side_bets")
+          .select("*")
+          .eq("round_id", round.id)
+          .eq("status", "open");
+        setOpenSideBets((bets as SideBet[]) ?? []);
+      } else {
+        setPlayerRolls([]);
+        setOpenSideBets([]);
+      }
+    };
+
+    try {
+      const res = await authFetchGet(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`);
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { round?: Round | null };
+        const round = data.round ?? null;
+        setCurrentRound(round);
+        await applyRollsForRound(round);
+        return round;
+      }
+    } catch {
+      /* fall through to Supabase */
+    }
+
     const sb = createBrowserClient();
-    if (!sb) return;
-    const { data } = await sb
+    if (!sb) return null;
+    const { data, error } = await sb
       .from("celo_rounds")
       .select("*")
       .eq("room_id", roomId)
@@ -803,27 +852,13 @@ export default function CeloRoomPage() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) {
+      console.debug("[celo/ui] loadRound Supabase fallback error", error.message);
+    }
     const round = (data as Round) ?? null;
     setCurrentRound(round);
-
-    if (round) {
-      const { data: rolls } = await sb
-        .from("celo_player_rolls")
-        .select("*")
-        .eq("round_id", round.id)
-        .order("created_at", { ascending: true });
-      setPlayerRolls((rolls as PlayerRoll[]) ?? []);
-
-      const { data: bets } = await sb
-        .from("celo_side_bets")
-        .select("*")
-        .eq("round_id", round.id)
-        .eq("status", "open");
-      setOpenSideBets((bets as SideBet[]) ?? []);
-    } else {
-      setPlayerRolls([]);
-      setOpenSideBets([]);
-    }
+    await applyRollsForRound(round);
+    return round;
   }, [roomId]);
 
   const loadBalance = useCallback(async () => {
@@ -1581,7 +1616,15 @@ export default function CeloRoomPage() {
       setError(det ? `${msg}: ${det}` : msg);
       return;
     }
-    await loadRound();
+    await loadAll();
+    let r = await loadRound();
+    if (!r) {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      r = await loadRound();
+    }
+    if (!r) {
+      setError("Round started but state did not sync. Tap Retry or refresh the page.");
+    }
   }
 
   async function handleCloseRoom() {
@@ -2122,9 +2165,10 @@ export default function CeloRoomPage() {
   const seatedPlayers = players.filter((p) => p.role === "player");
   const playersWithBets = seatedPlayers.filter((p) => getEntryAmount(p) > 0);
 
+  /** Matches POST /api/celo/round/start: room must be `active` (first player join promotes waiting → active). */
   const canStartRound =
     amIBanker &&
-    (room.status === "active" || room.status === "waiting") &&
+    room.status === "active" &&
     noActiveRound &&
     playersWithBets.length > 0;
 
@@ -2165,6 +2209,7 @@ export default function CeloRoomPage() {
   const statusLine = getCeloRoomStatusLine({
     noActiveRound,
     round: currentRound,
+    roomStatus: room.status,
     isBanker: amIBanker,
     amIPlayer,
     currentTurnPlayer,
@@ -2172,6 +2217,19 @@ export default function CeloRoomPage() {
     activePlayers: seatedPlayers,
     playersWithBets,
   });
+
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    console.debug("[celo/ui] bankerControls", {
+      roomStatus: room.status,
+      roundStatus: currentRound?.status ?? null,
+      noActiveRound,
+      canStartRound,
+      canRollBanker,
+      amIBanker,
+      playersWithBets: playersWithBets.length,
+    });
+  }
+
   return (
     <main
       className="text-white relative overflow-x-hidden"
@@ -2822,6 +2880,18 @@ export default function CeloRoomPage() {
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
+          {amIBanker && room.status === "rolling" && !currentRound && (
+            <div className="flex-1 min-w-[200px] rounded-xl border border-amber-500/25 bg-amber-950/20 py-3.5 px-3 flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-amber-100/90">
+              <span>Syncing round…</span>
+              <button
+                type="button"
+                onClick={() => void loadRound()}
+                className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
+              >
+                Retry sync
+              </button>
+            </div>
+          )}
           {/* Start round */}
           {canStartRound && (
             <button
@@ -2909,13 +2979,16 @@ export default function CeloRoomPage() {
             !showPlayerRollButton &&
             !canCoverBank &&
             noActiveRound &&
-            amIBanker && (
+            amIBanker &&
+            room.status !== "rolling" && (
             <div className="flex-1 min-w-[140px] rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
               {seatedPlayers.length === 0
                 ? "Waiting for players to join…"
                 : playersWithBets.length === 0
                   ? "Players joined but no bets placed yet"
-                  : "Ready — press Start Round"}
+                  : room.status !== "active"
+                    ? "Waiting for room to be active…"
+                    : "Ready — press Start Round"}
             </div>
           )}
         </div>

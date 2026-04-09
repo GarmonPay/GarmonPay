@@ -62,8 +62,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
     return NextResponse.json({ error: playersErr.message ?? "Failed to load players" }, { status: 500 });
   }
 
+  const { data: openRound } = await supabase
+    .from("celo_rounds")
+    .select("*")
+    .eq("room_id", roomId)
+    .neq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return NextResponse.json({
     room: rawRoom,
     players: players ?? [],
+    round: openRound ?? null,
   });
 }
