@@ -829,10 +829,12 @@ export default function CeloRoomPage() {
 
   const loadBalance = useCallback(async () => {
     try {
-      const res = await authFetchGet("/api/wallet/get");
+      const res = await authFetchGet("/api/dashboard");
       if (res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number };
-        setBalanceCents(d.balance_cents ?? 0);
+        const d = (await res.json().catch(() => ({}))) as { balanceCents?: number | null };
+        const raw = d.balanceCents;
+        const n = raw == null ? NaN : Number(raw);
+        setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
       }
     } catch {
       /* ignore */
@@ -1549,6 +1551,16 @@ export default function CeloRoomPage() {
   async function handleJoin(asSpectator = false) {
     setJoinLoading(true);
     setJoinError(null);
+    if (!asSpectator && room) {
+      const playerRoleCount = players.filter((p) => p.role === "player").length;
+      const currentPlayerCount = playerRoleCount + 1;
+      const maxCoveragePerPlayer = Math.floor(room.current_bank_cents / currentPlayerCount);
+      if (joinEntryCents > maxCoveragePerPlayer) {
+        setJoinLoading(false);
+        setJoinError("Your bet cannot exceed the banker's available coverage per player.");
+        return;
+      }
+    }
     let res: Response;
     let data: Record<string, unknown>;
     try {
@@ -1968,6 +1980,10 @@ export default function CeloRoomPage() {
     const joinBanker = players.find((p) => p.role === "banker");
     const joinBankerTitle = `${getDisplayName(joinBanker ?? { user_id: room.banker_id })}'s C-Lo Room`;
     const joinPlayerCount = players.filter((p) => p.role !== "spectator").length;
+    const seatedPlayerCount = players.filter((p) => p.role === "player").length;
+    const activePlayerCount = seatedPlayerCount + 1;
+    const maxBankCoveragePerPlayer = Math.floor(room.current_bank_cents / activePlayerCount);
+    const joinEntryCap = Math.min(room.max_bet_cents, balanceCents, maxBankCoveragePerPlayer);
     const entryChipMults = [1, 2, 5, 10];
 
     return (
@@ -2048,7 +2064,7 @@ export default function CeloRoomPage() {
               {entryChipMults.map((m) => {
                 const cents = minBet * m;
                 if (cents > room.max_bet_cents) return null;
-                const capped = Math.min(cents, balanceCents, room.max_bet_cents);
+                const capped = Math.min(cents, balanceCents, room.max_bet_cents, maxBankCoveragePerPlayer);
                 if (capped < minBet) return null;
                 return (
                   <button
@@ -2074,9 +2090,13 @@ export default function CeloRoomPage() {
               <input
                 type="range"
                 min={minBet}
-                max={Math.min(room.max_bet_cents, balanceCents)}
+                max={joinEntryCap < minBet ? minBet : Math.max(minBet, joinEntryCap)}
                 step={minBet}
-                value={Math.max(minBet, Math.min(joinEntryCents, room.max_bet_cents))}
+                value={
+                  joinEntryCap < minBet
+                    ? minBet
+                    : Math.max(minBet, Math.min(joinEntryCents, joinEntryCap))
+                }
                 onChange={(e) => setJoinEntryCents(Number(e.target.value))}
                 className="mt-2 w-full accent-[#F5C842]"
               />
@@ -2088,7 +2108,12 @@ export default function CeloRoomPage() {
 
             <button
               type="button"
-              disabled={joinLoading || joinEntryCents < minBet || balanceCents < joinEntryCents}
+              disabled={
+                joinLoading ||
+                joinEntryCents < minBet ||
+                balanceCents < joinEntryCents ||
+                joinEntryCents > joinEntryCap
+              }
               onClick={() => handleJoin(false)}
               className="w-full rounded-xl bg-gradient-to-r from-[#eab308] via-[#F5C842] to-[#eab308] py-3.5 font-bold text-[#0e0118] shadow-lg shadow-amber-900/30 disabled:opacity-50 transition-all mb-3"
             >

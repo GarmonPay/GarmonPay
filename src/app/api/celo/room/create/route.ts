@@ -6,7 +6,6 @@ import {
   getCanonicalBalanceCents,
   ensureWalletBalancesRow,
 } from "@/lib/wallet-ledger";
-import { resolveProfileBalanceCents } from "@/lib/profile-balance";
 import { CELO_ROOMS_COL } from "@/lib/celo-room-schema";
 
 /**
@@ -90,6 +89,8 @@ export async function POST(req: Request) {
       );
     }
 
+    const maxPlayersNum = max_players as number;
+
     if (!minimum_entry_cents || minimum_entry_cents < MIN_BET_CENTS) {
       return NextResponse.json(
         { error: `Minimum entry must be at least ${MIN_BET_CENTS} cents ($5)` },
@@ -104,9 +105,12 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!starting_bank_cents || starting_bank_cents < minimum_entry_cents) {
+    const requiredBankCents = minimum_entry_cents * maxPlayersNum;
+    if (!starting_bank_cents || starting_bank_cents < requiredBankCents) {
       return NextResponse.json(
-        { error: "Starting bank must be at least the minimum entry" },
+        {
+          error: `Banker must hold at least $${(requiredBankCents / 100).toFixed(2)} to cover all ${maxPlayersNum} players at the minimum entry of $${(minimum_entry_cents / 100).toFixed(2)}`,
+        },
         { status: 400 }
       );
     }
@@ -136,7 +140,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[celo/room/create] step: getCanonicalBalanceCents + profile reconcile");
+    console.error("[celo/room/create] step: getCanonicalBalanceCents");
     let balanceCents: number;
     try {
       balanceCents = await getCanonicalBalanceCents(userId);
@@ -146,23 +150,6 @@ export async function POST(req: Request) {
         { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
         { status: 500 }
       );
-    }
-
-    const { data: profileRow } = await supabase
-      .from("profiles")
-      .select("balance, balance_cents")
-      .eq("id", userId)
-      .maybeSingle();
-    const profileResolved = resolveProfileBalanceCents(profileRow);
-    if (profileResolved.ok && profileResolved.cents > balanceCents) {
-      const delta = profileResolved.cents - balanceCents;
-      const syncRef = `profile_reconcile_celo_${Date.now()}`;
-      const syncRes = await walletLedgerEntry(userId, "admin_adjustment", delta, syncRef);
-      if (syncRes.success) {
-        balanceCents = syncRes.balance_cents;
-      } else {
-        console.error("[celo/room/create] profile→wallet reconcile failed:", syncRes.message);
-      }
     }
 
     console.error("[celo/room/create] step: balanceCents=", balanceCents, "need=", starting_bank_cents);

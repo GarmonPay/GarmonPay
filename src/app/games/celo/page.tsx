@@ -159,6 +159,7 @@ export default function CeloLobbyPage() {
           const pubStatuses = new Set(["waiting", "active", "rolling"]);
 
           if (ev === "INSERT") {
+            console.log("[celo-lobby] postgres_changes INSERT celo_rooms", payload);
             const row = payload.new as Record<string, unknown>;
             if (row.room_type === "public" && pubStatuses.has(String(row.status ?? ""))) {
               const mapped = mapRowToLobbyRoom(row);
@@ -239,13 +240,17 @@ export default function CeloLobbyPage() {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void loadRooms();
+        }
+      });
 
     return () => {
       cancelled = true;
       sb.removeChannel(lobby);
     };
-  }, [mapRowToLobbyRoom]);
+  }, [mapRowToLobbyRoom, loadRooms]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

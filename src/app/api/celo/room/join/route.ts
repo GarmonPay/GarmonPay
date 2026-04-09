@@ -119,6 +119,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Room is full" }, { status: 400 });
     }
 
+    const currentPlayerCount = (playerCount ?? 0) + 1;
+    const maxCoveragePerPlayer = Math.floor(roomRecord.current_bank_cents / currentPlayerCount);
+    if (entry_cents > maxCoveragePerPlayer) {
+      return NextResponse.json(
+        { error: "Your bet cannot exceed the banker's available coverage per player." },
+        { status: 400 }
+      );
+    }
+
     // Check balance
     const balanceCents = await getCanonicalBalanceCents(userId);
     if (balanceCents < entry_cents) {
