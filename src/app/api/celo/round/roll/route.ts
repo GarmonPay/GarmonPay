@@ -8,12 +8,38 @@ import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { broadcastCeloRoomEvent, buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
+import { celoQaLog } from "@/lib/celo-qa-log";
+import { resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
 type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
 
 type EligiblePlayer = { user_id: string; bet_cents: number; seat_number: number | null };
+
+function playerRollSaveErrorResponse(
+  err: { message?: string; code?: string; details?: string } | null,
+  phase: string,
+  ctx: Record<string, unknown>
+) {
+  const code = err?.code ?? "";
+  const msg = err?.message ?? "";
+  celoQaLog("player_roll_failed", {
+    phase,
+    pgCode: code,
+    pgMessage: msg,
+    ...ctx,
+  });
+  const duplicate = code === "23505" || msg.toLowerCase().includes("duplicate");
+  return NextResponse.json(
+    {
+      error: duplicate ? "This roll was already recorded — try again" : "Failed to save roll",
+      details: msg || null,
+      code: code || null,
+    },
+    { status: duplicate ? 409 : 500 }
+  );
+}
 
 function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
   return celoPlayerStakeCents(row);
@@ -299,7 +325,7 @@ export async function POST(req: Request) {
   // Verify user is in this room
   const { data: playerEntry } = await supabase
     .from("celo_room_players")
-    .select("role, bet_cents, seat_number")
+    .select("id, role, bet_cents, entry_sc, seat_number")
     .eq("room_id", room_id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -307,6 +333,14 @@ export async function POST(req: Request) {
   if (!playerEntry) {
     return NextResponse.json({ error: "Not in this room" }, { status: 403 });
   }
+
+  const playerRow = playerEntry as {
+    id: string;
+    role: string;
+    bet_cents?: number;
+    entry_sc?: number;
+    seat_number: number | null;
+  };
 
   // Fetch round
   const { data: round } = await supabase
@@ -360,6 +394,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not your turn to roll" }, { status: 403 });
     }
 
+    const eligibleForBank = await getEligiblePlayers(supabase, room_id, r.covered_by);
+    if (eligibleForBank.length === 0) {
+      celoQaLog("banker_roll_rejected", {
+        room_id,
+        round_id,
+        roomStatus: rm.status,
+        roundStatus: r.status,
+        reason: "no_eligible_players_with_stake",
+      });
+      return NextResponse.json(
+        { error: "Cannot roll: no players with stakes are seated at this table" },
+        { status: 400 }
+      );
+    }
+
     const dice = rollThreeDice();
     const roll = evaluateRoll(dice);
     const feePct = rm.platform_fee_pct;
@@ -367,8 +416,7 @@ export async function POST(req: Request) {
     // First eligible seat when transitioning to player_rolling (must match game rules)
     let firstSeatForPoint: number | null = null;
     if (roll.result === "point") {
-      const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
-      firstSeatForPoint = eligible[0]?.seat_number ?? 1;
+      firstSeatForPoint = eligibleForBank[0]?.seat_number ?? 1;
     }
 
     let platformFeeForRound: number | undefined;
@@ -649,30 +697,70 @@ export async function POST(req: Request) {
   // ── PLAYER ROLL ────────────────────────────────────────────────────────────
 
   if (r.status === "player_rolling") {
+    if (playerRow.role !== "player") {
+      celoQaLog("player_roll_failed", {
+        reason: "not_player_role",
+        room_id,
+        round_id,
+        userId,
+        playerRowId: playerRow.id,
+        role: playerRow.role,
+        roomStatus: rm.status,
+        roundStatus: r.status,
+      });
+      return NextResponse.json(
+        { error: "Only seated players (not spectators) can roll in this phase" },
+        { status: 403 }
+      );
+    }
+
     if (r.banker_point === null) {
       return NextResponse.json({ error: "No banker point set" }, { status: 400 });
     }
 
     const eligible = await getEligiblePlayers(supabase, room_id, r.covered_by);
     if (eligible.length === 0) {
+      celoQaLog("player_roll_failed", {
+        reason: "no_eligible_players",
+        room_id,
+        round_id,
+        userId,
+        roomStatus: rm.status,
+        roundStatus: r.status,
+      });
       return NextResponse.json({ error: "No players remaining to roll" }, { status: 400 });
     }
 
     let currentSeat = r.current_player_seat;
     if (currentSeat == null) {
-      const firstSeat = eligible[0]?.seat_number ?? 1;
-      await supabase
-        .from("celo_rounds")
-        .update({ current_player_seat: firstSeat })
-        .eq("id", round_id);
+      const firstSeat = eligible[0]?.seat_number != null ? Number(eligible[0].seat_number) : 1;
+      await supabase.from("celo_rounds").update({ current_player_seat: firstSeat }).eq("id", round_id);
       currentSeat = firstSeat;
     }
 
-    const currentPlayer =
-      eligible.find((p) => p.seat_number === currentSeat) ?? eligible[0];
+    const currentPlayer = resolveCurrentPlayerForSeat(eligible, currentSeat);
 
-    if (currentPlayer.user_id !== userId) {
-      return NextResponse.json({ error: "Not your turn to roll" }, { status: 403 });
+    if (!currentPlayer || currentPlayer.user_id !== userId) {
+      celoQaLog("player_roll_failed", {
+        reason: "not_your_turn",
+        room_id,
+        round_id,
+        userId,
+        playerRowId: playerRow.id,
+        current_player_seat: r.current_player_seat,
+        resolvedSeat: currentSeat,
+        expectedRoller: currentPlayer?.user_id ?? null,
+        bet_cents: playerBetCents(playerRow),
+        roomStatus: rm.status,
+        roundStatus: r.status,
+      });
+      return NextResponse.json(
+        {
+          error: "Not your turn to roll",
+          details: currentPlayer ? "Another player's turn" : "Could not resolve turn order",
+        },
+        { status: 403 }
+      );
     }
 
     const playerBet = currentPlayer.bet_cents;
@@ -712,6 +800,7 @@ export async function POST(req: Request) {
           entry_sc: playerBet,
           outcome: "reroll",
           payout_sc: 0,
+          platform_fee_sc: 0,
           reroll_count: rerollCount + 1,
           roll_animation_start_at: serverStartTime,
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
@@ -720,8 +809,16 @@ export async function POST(req: Request) {
         .single();
 
       if (prInsErr || !prRow) {
-        console.error("[celo/roll] player no_count insert:", prInsErr);
-        return NextResponse.json({ error: "Failed to save roll" }, { status: 500 });
+        return playerRollSaveErrorResponse(prInsErr, "player_no_count_insert", {
+          room_id,
+          round_id,
+          userId,
+          playerRowId: playerRow.id,
+          roomStatus: rm.status,
+          roundStatus: r.status,
+          bet_cents: playerBet,
+          roll_result: roll.result,
+        });
       }
 
       const plSync = buildCeloRollStartedPayload({
@@ -784,8 +881,16 @@ export async function POST(req: Request) {
         .single();
 
       if (prWinErr || !prWin) {
-        console.error("[celo/roll] player instant_win insert:", prWinErr);
-        return NextResponse.json({ error: "Failed to save roll" }, { status: 500 });
+        return playerRollSaveErrorResponse(prWinErr, "player_instant_win_insert", {
+          room_id,
+          round_id,
+          userId,
+          playerRowId: playerRow.id,
+          roomStatus: rm.status,
+          roundStatus: r.status,
+          bet_cents: playerBet,
+          roll_result: roll.result,
+        });
       }
 
       const plSync = buildCeloRollStartedPayload({
@@ -844,6 +949,7 @@ export async function POST(req: Request) {
           entry_sc: playerBet,
           outcome: "loss",
           payout_sc: 0,
+          platform_fee_sc: 0,
           reroll_count: rerollCount,
           roll_animation_start_at: serverStartTime,
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
@@ -852,8 +958,16 @@ export async function POST(req: Request) {
         .single();
 
       if (prLossErr || !prLoss) {
-        console.error("[celo/roll] player instant_loss insert:", prLossErr);
-        return NextResponse.json({ error: "Failed to save roll" }, { status: 500 });
+        return playerRollSaveErrorResponse(prLossErr, "player_instant_loss_insert", {
+          room_id,
+          round_id,
+          userId,
+          playerRowId: playerRow.id,
+          roomStatus: rm.status,
+          roundStatus: r.status,
+          bet_cents: playerBet,
+          roll_result: roll.result,
+        });
       }
 
       const plSync = buildCeloRollStartedPayload({
@@ -978,8 +1092,16 @@ export async function POST(req: Request) {
         .single();
 
       if (prPointErr || !prPoint) {
-        console.error("[celo/roll] player point insert:", prPointErr);
-        return NextResponse.json({ error: "Failed to save roll" }, { status: 500 });
+        return playerRollSaveErrorResponse(prPointErr, "player_point_insert", {
+          room_id,
+          round_id,
+          userId,
+          playerRowId: playerRow.id,
+          roomStatus: rm.status,
+          roundStatus: r.status,
+          bet_cents: playerBet,
+          roll_result: roll.result,
+        });
       }
 
       const plSync = buildCeloRollStartedPayload({

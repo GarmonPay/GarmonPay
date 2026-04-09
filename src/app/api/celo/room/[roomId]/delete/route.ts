@@ -5,10 +5,11 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoQaLog } from "@/lib/celo-qa-log";
+import { isRoomEmptyForDelete } from "@/lib/celo-room-rules";
 
 /**
- * Banker or room creator: delete when they are the only participant, no active round,
- * and bank is refunded. Clears celo_audit_log for the room before delete (FK); migration CASCADE too.
+ * Banker: delete when no players hold table stakes, no active round, and bank is refunded (idempotent).
+ * Clears celo_audit_log for the room before delete (FK); migration CASCADE too.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
   const userId = await getAuthUserIdStrict(_req);
@@ -39,42 +40,33 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
   const isBanker = !!bankerId && bankerId === String(userId);
   const isCreator = !!creatorId && creatorId === String(userId);
   if (!isBanker && !isCreator) {
+    celoQaLog("delete_room_rejected", { roomId, userId, reason: "not_banker_or_creator" });
     return NextResponse.json({ error: "Only the banker or room creator can delete this room" }, { status: 403 });
   }
 
-  const { count, error: countErr } = await supabase
-    .from("celo_room_players")
-    .select("id", { count: "exact", head: true })
-    .eq("room_id", roomId);
-
-  if (countErr) {
-    return NextResponse.json({ error: "Could not verify players" }, { status: 500 });
-  }
-
-  if ((count ?? 0) !== 1) {
+  if (isCreator && !isBanker && bankerId && String(bankerId) !== String(userId)) {
+    celoQaLog("delete_room_rejected", { roomId, userId, reason: "creator_cannot_delete_bankers_room" });
     return NextResponse.json(
-      { error: "Room can only be deleted when no one else is in the room" },
-      { status: 400 }
+      { error: "Only the banker can delete this room while a banker is seated" },
+      { status: 403 }
     );
   }
 
-  const { data: sole, error: soleErr } = await supabase
-    .from("celo_room_players")
-    .select("user_id, role")
-    .eq("room_id", roomId)
-    .single();
-
-  if (soleErr || !sole) {
-    return NextResponse.json({ error: "Could not load room membership" }, { status: 500 });
-  }
-
-  const row = sole as { user_id: string; role: string };
-  if (String(row.user_id) !== String(userId)) {
-    return NextResponse.json({ error: "Only the sole occupant can delete this room" }, { status: 400 });
-  }
-  const soleOk = row.role === "banker" || isCreator;
-  if (!soleOk) {
-    return NextResponse.json({ error: "Only the solo banker (or room creator when alone) can delete" }, { status: 400 });
+  const empty = await isRoomEmptyForDelete(supabase, roomId);
+  if (!empty.ok) {
+    celoQaLog("delete_room_rejected", {
+      roomId,
+      userId,
+      reason: empty.reason,
+      playersWithStake: empty.playersWithStake,
+    });
+    return NextResponse.json(
+      {
+        error: "Cannot delete while players still have money on the table",
+        details: `${empty.playersWithStake} seated player(s) still have stakes`,
+      },
+      { status: 400 }
+    );
   }
 
   const { data: activeRound } = await supabase
@@ -85,11 +77,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     .maybeSingle();
 
   if (activeRound) {
+    celoQaLog("delete_room_rejected", {
+      roomId,
+      userId,
+      reason: "active_round",
+      roundId: (activeRound as { id?: string }).id,
+    });
     return NextResponse.json({ error: "Cannot delete while a round is in progress" }, { status: 400 });
   }
 
   const status = String(normalized?.status ?? "");
   if (status === "cancelled" || status === "completed") {
+    celoQaLog("delete_room_rejected", { roomId, userId, reason: "room_already_closed", status });
     return NextResponse.json({ error: "Room is already closed" }, { status: 400 });
   }
 

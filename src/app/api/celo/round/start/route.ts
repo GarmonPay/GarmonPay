@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { assertSumStakesWithinReserve } from "@/lib/celo-banker-reserve";
+import { celoQaLog } from "@/lib/celo-qa-log";
+import { countPlayersWithPositiveStake } from "@/lib/celo-room-rules";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -45,10 +47,23 @@ export async function POST(req: Request) {
 
   // Only the banker may start a round
   if (roomRecord.banker_id !== userId) {
+    celoQaLog("banker_start_rejected", {
+      room_id,
+      reason: "not_banker",
+      userId,
+      banker_id: roomRecord.banker_id,
+      roomStatus: roomRecord.status,
+    });
     return NextResponse.json({ error: "Only the banker can start a round" }, { status: 403 });
   }
 
   if (roomRecord.status !== "active") {
+    celoQaLog("banker_start_rejected", {
+      room_id,
+      reason: "room_not_active",
+      userId,
+      roomStatus: roomRecord.status,
+    });
     return NextResponse.json({ error: "Room is not active" }, { status: 400 });
   }
 
@@ -61,7 +76,29 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (inProgressRound) {
+    celoQaLog("banker_start_rejected", {
+      room_id,
+      reason: "round_in_progress",
+      userId,
+      inRoundId: (inProgressRound as { id?: string }).id,
+      roomStatus: roomRecord.status,
+    });
     return NextResponse.json({ error: "A round is already in progress" }, { status: 400 });
+  }
+
+  const withStake = await countPlayersWithPositiveStake(supabase, room_id);
+  if (withStake < 1) {
+    celoQaLog("banker_start_rejected", {
+      room_id,
+      reason: "no_players_with_stake",
+      userId,
+      playersWithStake: withStake,
+      roomStatus: roomRecord.status,
+    });
+    return NextResponse.json(
+      { error: "At least one non-banker player with a bet is required to start a round" },
+      { status: 400 }
+    );
   }
 
   // Get seated players; stake may be in entry_sc and/or bet_cents
@@ -78,6 +115,12 @@ export async function POST(req: Request) {
   }[];
 
   if (players.length === 0) {
+    celoQaLog("banker_start_rejected", {
+      room_id,
+      reason: "player_rows_empty_after_filter",
+      userId,
+      roomStatus: roomRecord.status,
+    });
     return NextResponse.json(
       { error: "At least one player with an entry is required to start a round" },
       { status: 400 }

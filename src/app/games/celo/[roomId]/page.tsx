@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { celoSeatsEqual } from "@/lib/celo-room-rules";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 
@@ -1533,7 +1534,7 @@ export default function CeloRoomPage() {
       ? (() => {
           const seat = currentRound.current_player_seat;
           if (seat != null) {
-            const bySeat = roundEligiblePlayers.find((p) => p.seat_number === seat);
+            const bySeat = roundEligiblePlayers.find((p) => celoSeatsEqual(p.seat_number, seat));
             if (bySeat) return bySeat;
           }
           return roundEligiblePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
@@ -2179,7 +2180,7 @@ export default function CeloRoomPage() {
     !currentRound.bank_covered &&
     !sameCeloUserId(room.banker_id, userId);
 
-  const canRollBanker = amIBanker && isBankerRolling;
+  const canRollBanker = amIBanker && isBankerRolling && playersWithBets.length > 0;
   const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
   const showPlayerRollButton = amIPlayer && isPlayerRolling;
 
