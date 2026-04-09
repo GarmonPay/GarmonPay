@@ -295,16 +295,47 @@ export default function CeloLobbyPage() {
     setJoinError(null);
     setJoining(true);
     const sb = createBrowserClient();
-    if (!sb) { setJoining(false); return; }
-    const { data } = await sb
+    if (!sb) {
+      setJoining(false);
+      return;
+    }
+
+    // First try: match private room join_code
+    const { data: privateRoom } = await sb
       .from("celo_rooms")
       .select("id")
       .eq("join_code", code)
       .in("status", ["waiting", "active"])
       .maybeSingle();
+
+    if (privateRoom) {
+      setJoining(false);
+      router.push(`/games/celo/${(privateRoom as { id: string }).id}`);
+      return;
+    }
+
+    // Second try: match by room id prefix (public rooms — no join_code; users share first 8 chars of UUID)
+    const { data: idCandidates } = await sb
+      .from("celo_rooms")
+      .select("id")
+      .in("status", ["waiting", "active"])
+      .order("last_activity", { ascending: false })
+      .limit(200);
+
+    const normalized = code.replace(/-/g, "").toUpperCase();
+    const publicRoom = idCandidates?.find((r) => {
+      const idCompact = String((r as { id: string }).id)
+        .replace(/-/g, "")
+        .toUpperCase();
+      return idCompact.startsWith(normalized);
+    });
+
     setJoining(false);
-    if (!data) { setJoinError("No active room with that code"); return; }
-    router.push(`/games/celo/${(data as { id: string }).id}`);
+    if (!publicRoom) {
+      setJoinError("No active room with that code");
+      return;
+    }
+    router.push(`/games/celo/${(publicRoom as { id: string }).id}`);
   }
 
   // Keep starting_bank_cents snapped to a multiple of minimum_entry_cents

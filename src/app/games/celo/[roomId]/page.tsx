@@ -2020,6 +2020,10 @@ export default function CeloRoomPage() {
                 </span>
                 <span>{room.platform_fee_pct}% fee</span>
               </div>
+              <p className="text-center text-[11px] text-violet-300/80 font-mono mt-3">
+                Lobby room code:{" "}
+                <span className="text-[#F5C842] font-semibold">{room.id.slice(0, 8).toUpperCase()}</span>
+              </p>
             </div>
 
             {joinError && (
@@ -2028,7 +2032,7 @@ export default function CeloRoomPage() {
 
             {room.room_type === "private" && (
               <div className="mb-4">
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Join Code</label>
+                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Private join password</label>
                 <input
                   type="text"
                   value={joinCode}
@@ -2459,6 +2463,9 @@ export default function CeloRoomPage() {
           <div className="text-center min-w-0 max-w-full mx-auto pt-0.5">
             <h1 className="font-bold text-[#F5C842] truncate text-base sm:text-lg leading-tight">{room.name}</h1>
             <p className="text-[10px] text-violet-400/70 uppercase tracking-widest mt-0.5">{room.speed}</p>
+            <p className="text-[10px] text-[#F5C842]/90 font-mono mt-1 tracking-wide" title="Use in C-Lo lobby">
+              {room.id.slice(0, 8).toUpperCase()}
+            </p>
           </div>
           <div className="justify-self-end text-right shrink-0 flex flex-col items-end gap-0 leading-tight">
             <span
@@ -2495,8 +2502,14 @@ export default function CeloRoomPage() {
               textAlign: "center",
             }}
           >
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
+            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 8 }}>
               Share this link to invite players:
+            </p>
+            <p style={{ color: "#888", fontSize: 12, marginBottom: 12 }}>
+              Lobby room code:{" "}
+              <span style={{ color: "#F5C842", fontFamily: "ui-monospace, monospace", fontWeight: 600 }}>
+                {room.id.slice(0, 8).toUpperCase()}
+              </span>
             </p>
             <div
               style={{
