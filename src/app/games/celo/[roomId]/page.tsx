@@ -10,6 +10,7 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoSeatsEqual } from "@/lib/celo-room-rules";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
+import { AnimatedDice } from "@/components/games/AnimatedDice";
 
 type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
@@ -197,191 +198,12 @@ const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }>
   no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
 };
 
-/** Premium SVG dice — remount via `epoch` each roll so CSS animation restarts. */
-function RealisticDice({
-  dice,
-  rolling,
-  epoch,
-}: {
-  dice: number[] | null;
-  rolling: boolean;
-  epoch: number;
-}) {
-  const displayDice = dice || [1, 1, 1];
-
-  const DOTS: Record<number, { x: number; y: number }[]> = {
-    1: [{ x: 50, y: 50 }],
-    2: [
-      { x: 28, y: 28 },
-      { x: 72, y: 72 },
-    ],
-    3: [
-      { x: 28, y: 28 },
-      { x: 50, y: 50 },
-      { x: 72, y: 72 },
-    ],
-    4: [
-      { x: 28, y: 28 },
-      { x: 72, y: 28 },
-      { x: 28, y: 72 },
-      { x: 72, y: 72 },
-    ],
-    5: [
-      { x: 28, y: 28 },
-      { x: 72, y: 28 },
-      { x: 50, y: 50 },
-      { x: 28, y: 72 },
-      { x: 72, y: 72 },
-    ],
-    6: [
-      { x: 28, y: 22 },
-      { x: 72, y: 22 },
-      { x: 28, y: 50 },
-      { x: 72, y: 50 },
-      { x: 28, y: 78 },
-      { x: 72, y: 78 },
-    ],
-  };
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 20,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "32px 16px",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(ellipse at center, #1a4a2e 0%, #0d2b1a 70%, #061508 100%)",
-          borderRadius: 20,
-          border: "2px solid #2d7a4a",
-          boxShadow: "inset 0 0 40px rgba(0,0,0,0.6)",
-        }}
-      />
-
-      {[0, 1, 2].map((i) => {
-        const value = displayDice[i] || 1;
-        const dots = DOTS[value] || DOTS[1];
-        const animDelay = i * 0.15;
-        const animDuration = 2.2 + i * 0.2;
-
-        return (
-          <div
-            key={`${epoch}-${i}`}
-            style={{
-              width: 90,
-              height: 90,
-              position: "relative",
-              zIndex: 1,
-              animation: rolling
-                ? `diceRoll${i} ${animDuration}s ${animDelay}s ease-out forwards`
-                : "none",
-              filter: rolling
-                ? "drop-shadow(0 0 15px rgba(245,200,66,0.6))"
-                : "drop-shadow(0 8px 16px rgba(0,0,0,0.8))",
-              transform: rolling ? "scale(1)" : "scale(1)",
-              transition: rolling ? "none" : "all 0.3s ease",
-            }}
-          >
-            <svg viewBox="0 0 100 100" width="90" height="90">
-              <defs>
-                <linearGradient id={`dieGrad${i}-${epoch}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#fff5f5" />
-                  <stop offset="40%" stopColor="#F5F0E8" />
-                  <stop offset="100%" stopColor="#D4C5A0" />
-                </linearGradient>
-                <linearGradient id={`dieGradRoll${i}-${epoch}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#EF4444" />
-                  <stop offset="50%" stopColor="#DC2626" />
-                  <stop offset="100%" stopColor="#991B1B" />
-                </linearGradient>
-                <filter id={`dieShadow${i}-${epoch}`}>
-                  <feDropShadow dx="2" dy="4" stdDeviation="3" floodOpacity="0.4" />
-                </filter>
-              </defs>
-
-              <rect
-                x="4"
-                y="4"
-                width="92"
-                height="92"
-                rx="18"
-                ry="18"
-                fill={rolling ? `url(#dieGradRoll${i}-${epoch})` : `url(#dieGrad${i}-${epoch})`}
-                filter={`url(#dieShadow${i}-${epoch})`}
-                stroke={rolling ? "#7f1d1d" : "#C4A882"}
-                strokeWidth="1.5"
-              />
-
-              <rect x="8" y="8" width="84" height="35" rx="14" ry="14" fill="rgba(255,255,255,0.35)" />
-
-              <rect x="8" y="65" width="84" height="28" rx="0" ry="0" fill="rgba(0,0,0,0.08)" />
-
-              {!rolling &&
-                dots.map((dot, di) => (
-                  <g key={di}>
-                    <circle cx={dot.x + 0.5} cy={dot.y + 1} r="8" fill="rgba(0,0,0,0.3)" />
-                    <circle cx={dot.x} cy={dot.y} r="8" fill="#1A1008" />
-                    <circle cx={dot.x - 2.5} cy={dot.y - 2.5} r="2.5" fill="rgba(255,255,255,0.2)" />
-                  </g>
-                ))}
-
-              {rolling && (
-                <text x="50" y="58" textAnchor="middle" fontSize="32" fill="white">
-                  🎲
-                </text>
-              )}
-            </svg>
-          </div>
-        );
-      })}
-
-      <style>{`
-        @keyframes diceRoll0 {
-          0%   { transform: translateY(-80px) rotate(0deg) scale(0.5); opacity: 0; }
-          20%  { transform: translateY(10px) rotate(180deg) scale(1.1); opacity: 1; }
-          35%  { transform: translateY(-15px) rotate(270deg) scale(0.95); }
-          50%  { transform: translateY(5px) rotate(360deg) scale(1.05); }
-          65%  { transform: translateY(-8px) rotate(405deg) scale(0.98); }
-          80%  { transform: translateY(3px) rotate(450deg) scale(1.02); }
-          90%  { transform: translateY(-3px) rotate(480deg) scale(1); }
-          100% { transform: translateY(0) rotate(540deg) scale(1); opacity: 1; }
-        }
-        @keyframes diceRoll1 {
-          0%   { transform: translateY(-100px) rotate(0deg) scale(0.4); opacity: 0; }
-          25%  { transform: translateY(15px) rotate(-200deg) scale(1.15); opacity: 1; }
-          40%  { transform: translateY(-20px) rotate(-300deg) scale(0.92); }
-          55%  { transform: translateY(8px) rotate(-400deg) scale(1.08); }
-          70%  { transform: translateY(-10px) rotate(-450deg) scale(0.97); }
-          85%  { transform: translateY(4px) rotate(-490deg) scale(1.02); }
-          100% { transform: translateY(0) rotate(-540deg) scale(1); opacity: 1; }
-        }
-        @keyframes diceRoll2 {
-          0%   { transform: translateY(-60px) rotate(0deg) scale(0.6); opacity: 0; }
-          15%  { transform: translateY(8px) rotate(150deg) scale(1.08); opacity: 1; }
-          30%  { transform: translateY(-12px) rotate(240deg) scale(0.96); }
-          45%  { transform: translateY(6px) rotate(330deg) scale(1.04); }
-          60%  { transform: translateY(-6px) rotate(390deg) scale(0.99); }
-          75%  { transform: translateY(2px) rotate(430deg) scale(1.01); }
-          90%  { transform: translateY(-2px) rotate(460deg) scale(1); }
-          100% { transform: translateY(0) rotate(500deg) scale(1); opacity: 1; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 /** Compare Supabase auth user ids to FK uuids (avoids strict === misses from formatting). */
 function sameCeloUserId(a: string | null | undefined, b: string | null | undefined): boolean {
   if (a == null || b == null) return false;
-  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  return (
+    String(a).trim().toLowerCase().replace(/-/g, "") === String(b).trim().toLowerCase().replace(/-/g, "")
+  );
 }
 
 /** Stake in cents from row (join writes both; 0 default on entry_sc must not hide bet_cents). */
@@ -2187,7 +2009,7 @@ export default function CeloRoomPage() {
   const lastResult = lastRollResult?.result;
 
   /**
-   * Values on dice when not tumbling; null = tumbling / hidden faces in RealisticDice.
+   * Values on dice when not tumbling; null = tumbling / hidden faces in AnimatedDice.
    * While waiting for the realtime animation after our own roll, do not read banker_dice from DB
    * (avoids flashing final faces before the shared animation).
    */
@@ -2771,11 +2593,30 @@ export default function CeloRoomPage() {
                 pointerEvents: "none",
               }}
             />
-            <RealisticDice
-              dice={isRolling ? null : currentDice ?? simpleDiceValues}
-              rolling={isRolling}
-              epoch={rollAnimEpoch}
-            />
+            <div
+              style={{
+                display: "flex",
+                gap: 14,
+                justifyContent: "center",
+                alignItems: "center",
+                padding: "20px 12px",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              {[0, 1, 2].map((i) => (
+                <AnimatedDice
+                  key={`${rollAnimEpoch}-${i}`}
+                  isRolling={hideFinalDiceFaces}
+                  result={
+                    simpleDiceValues && simpleDiceValues.length === 3
+                      ? simpleDiceValues[i] ?? null
+                      : null
+                  }
+                  size={72}
+                />
+              ))}
+            </div>
             {!isRolling && (feltTableRollName || lastRollResult?.rollName) ? (
               <div
                 style={{

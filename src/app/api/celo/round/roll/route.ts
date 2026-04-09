@@ -9,7 +9,7 @@ import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { broadcastCeloRoomEvent, buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 import { celoQaLog } from "@/lib/celo-qa-log";
-import { resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
+import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
@@ -697,23 +697,6 @@ export async function POST(req: Request) {
   // ── PLAYER ROLL ────────────────────────────────────────────────────────────
 
   if (r.status === "player_rolling") {
-    if (playerRow.role !== "player") {
-      celoQaLog("player_roll_failed", {
-        reason: "not_player_role",
-        room_id,
-        round_id,
-        userId,
-        playerRowId: playerRow.id,
-        role: playerRow.role,
-        roomStatus: rm.status,
-        roundStatus: r.status,
-      });
-      return NextResponse.json(
-        { error: "Only seated players (not spectators) can roll in this phase" },
-        { status: 403 }
-      );
-    }
-
     if (r.banker_point === null) {
       return NextResponse.json({ error: "No banker point set" }, { status: 400 });
     }
@@ -731,6 +714,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No players remaining to roll" }, { status: 400 });
     }
 
+    const isStakedPlayer = eligible.some((e) => celoSameAuthUserId(e.user_id, userId));
+    if (!isStakedPlayer) {
+      celoQaLog("player_roll_failed", {
+        reason: "not_eligible_staked_player",
+        room_id,
+        round_id,
+        userId,
+        playerRowId: playerRow.id,
+        role: playerRow.role,
+        roomStatus: rm.status,
+        roundStatus: r.status,
+      });
+      return NextResponse.json(
+        { error: "Only players with an active stake can roll in this phase" },
+        { status: 403 }
+      );
+    }
+
     let currentSeat = r.current_player_seat;
     if (currentSeat == null) {
       const firstSeat = eligible[0]?.seat_number != null ? Number(eligible[0].seat_number) : 1;
@@ -740,7 +741,7 @@ export async function POST(req: Request) {
 
     const currentPlayer = resolveCurrentPlayerForSeat(eligible, currentSeat);
 
-    if (!currentPlayer || currentPlayer.user_id !== userId) {
+    if (!currentPlayer || !celoSameAuthUserId(currentPlayer.user_id, userId)) {
       celoQaLog("player_roll_failed", {
         reason: "not_your_turn",
         room_id,
