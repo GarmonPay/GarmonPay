@@ -61,16 +61,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Room is already closed" }, { status: 400 });
   }
 
-  const { count: incompleteRoundCount, error: roundsErr } = await supabase
+  const { data: activeRound } = await supabase
     .from("celo_rounds")
-    .select("id", { count: "exact", head: true })
+    .select("id")
     .eq("room_id", room_id)
-    .neq("status", "completed");
+    .neq("status", "completed")
+    .maybeSingle();
 
-  if (roundsErr) {
-    return NextResponse.json({ error: roundsErr.message }, { status: 500 });
-  }
-  if ((incompleteRoundCount ?? 0) > 0) {
+  if (activeRound) {
     return NextResponse.json({ error: "Cannot close while a round is in progress" }, { status: 400 });
   }
 
