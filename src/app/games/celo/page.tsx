@@ -86,22 +86,6 @@ export default function CeloLobbyPage() {
     };
   }, []);
 
-  const loadRooms = useCallback(async () => {
-    try {
-      const res = await fetch("/api/celo/lobby");
-      if (!res.ok) return;
-      const json = (await res.json().catch(() => ({}))) as { rooms?: Record<string, unknown>[] };
-      const rows = json.rooms ?? [];
-      setRooms(
-        rows
-          .map((row) => mapRowToLobbyRoom(row))
-          .filter((x): x is Room => x !== null)
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [mapRowToLobbyRoom]);
-
   useEffect(() => {
     if (!showCreate || !session?.accessToken) return;
     fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${session.accessToken}` } })
@@ -114,16 +98,12 @@ export default function CeloLobbyPage() {
   }, [showCreate, session?.accessToken]);
 
   useEffect(() => {
-    // Load rooms immediately — doesn't require auth
-    void loadRooms();
-
     getSessionAsync().then((s) => {
       if (!s) {
         setLoading(false);
         return;
       }
       setSession(s);
-      setLoading(false);
       if (s.accessToken) {
         fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
@@ -134,7 +114,7 @@ export default function CeloLobbyPage() {
           .catch(() => {});
       }
     });
-  }, [loadRooms]);
+  }, []);
 
   /** Keep starting bank ≤ wallet; slider min/max/step are all in cents. */
   useEffect(() => {
@@ -151,113 +131,92 @@ export default function CeloLobbyPage() {
   }, [showCreate, balanceCents]);
 
   useEffect(() => {
+    let isMounted = true;
     const sb = createBrowserClient();
-    if (!sb) return;
-    let cancelled = false;
+    if (!sb) {
+      setLoading(false);
+      return;
+    }
 
-    const lobby = sb
-      .channel("celo-lobby")
+    const channel = sb
+      .channel("celo-lobby-v2")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "celo_rooms" },
-        async (payload) => {
-          if (cancelled) return;
-          const ev = payload.eventType;
-          const pubStatuses = new Set(["waiting", "active", "rolling"]);
-
-          if (ev === "INSERT") {
-            console.log("[celo-lobby] postgres_changes INSERT celo_rooms", payload);
-            const row = payload.new as Record<string, unknown>;
-            if (row.room_type === "public" && pubStatuses.has(String(row.status ?? ""))) {
-              const mapped = mapRowToLobbyRoom(row);
-              if (mapped) {
-                setRooms((prev) => {
-                  if (prev.some((r) => r.id === mapped.id)) return prev;
-                  return [mapped, ...prev];
-                });
-              }
-            }
-            return;
-          }
-
-          if (ev === "UPDATE") {
-            const row = payload.new as Record<string, unknown>;
-            const id = String(row.id ?? "");
-            const isPublic = row.room_type === "public";
-            const st = String(row.status ?? "");
-            if (!isPublic || !pubStatuses.has(st)) {
-              setTimeout(() => {
-                if (!cancelled) {
-                  setRooms((prev) => prev.filter((r) => r.id !== id));
-                }
-              }, 0);
-              return;
-            }
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "celo_rooms",
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as Record<string, unknown>;
+          if (row.room_type === "public") {
             const mapped = mapRowToLobbyRoom(row);
-            if (!mapped) return;
-            setRooms((prev) => {
-              const idx = prev.findIndex((r) => r.id === id);
-              if (idx === -1) return [mapped, ...prev];
-              const next = [...prev];
-              const prevCount = next[idx].player_count;
-              next[idx] = {
-                ...next[idx],
-                ...mapped,
-                player_count: mapped.player_count ?? prevCount,
-              };
-              return next;
-            });
-            if (st === "cancelled" || st === "completed") {
-              setTimeout(() => {
-                if (!cancelled) {
-                  setRooms((prev) => prev.filter((r) => r.id !== id));
-                }
-              }, 3000);
-            }
-            return;
-          }
-
-          if (ev === "DELETE") {
-            const oldId = (payload.old as { id?: string } | null)?.id;
-            if (oldId) {
-              setRooms((prev) => prev.filter((r) => r.id !== oldId));
+            if (mapped) {
+              setRooms((prev) => {
+                if (prev.some((r) => r.id === mapped.id)) return prev;
+                return [mapped, ...prev];
+              });
             }
           }
         }
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "celo_room_players" },
-        async (payload) => {
-          if (cancelled) return;
-          const affectedRoomId =
-            (payload.new as { room_id?: string } | null)?.room_id ??
-            (payload.old as { room_id?: string } | null)?.room_id;
-          if (!affectedRoomId) return;
-          const { count } = await sb
-            .from("celo_room_players")
-            .select("*", { count: "exact", head: true })
-            .eq("room_id", affectedRoomId)
-            .neq("role", "spectator");
-          if (cancelled) return;
-          setRooms((prev) =>
-            prev.map((r) =>
-              r.id === affectedRoomId ? { ...r, player_count: count ?? 0 } : r
-            )
-          );
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "celo_rooms",
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as Record<string, unknown>;
+          const id = String(row.id ?? "");
+          const st = String(row.status ?? "");
+          if (["cancelled", "completed"].includes(st)) {
+            setRooms((prev) => prev.filter((r) => r.id !== id));
+          } else {
+            const mapped = mapRowToLobbyRoom(row);
+            if (mapped) {
+              setRooms((prev) => {
+                const idx = prev.findIndex((r) => r.id === id);
+                if (idx === -1) return [mapped, ...prev];
+                const next = [...prev];
+                const prevCount = next[idx].player_count;
+                next[idx] = { ...mapped, player_count: mapped.player_count ?? prevCount };
+                return next;
+              });
+            }
+          }
         }
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void loadRooms();
+        if (status === "SUBSCRIBED" && isMounted) {
+          void (async () => {
+            const { data } = await sb
+              .from("celo_rooms")
+              .select("*")
+              .in("status", ["waiting", "active", "rolling"])
+              .order("created_at", { ascending: false });
+            if (data && isMounted) {
+              setRooms(
+                data
+                  .map((row) => mapRowToLobbyRoom(row as Record<string, unknown>))
+                  .filter((x): x is Room => x !== null)
+              );
+            }
+            if (isMounted) setLoading(false);
+          })();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (isMounted) setLoading(false);
         }
       });
 
     return () => {
-      cancelled = true;
-      sb.removeChannel(lobby);
+      isMounted = false;
+      sb.removeChannel(channel);
     };
-  }, [mapRowToLobbyRoom, loadRooms]);
+  }, [mapRowToLobbyRoom]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

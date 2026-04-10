@@ -6,7 +6,6 @@ import {
   getCanonicalBalanceCents,
   ensureWalletBalancesRow,
 } from "@/lib/wallet-ledger";
-import { CELO_ROOMS_COL } from "@/lib/celo-room-schema";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
@@ -236,8 +235,7 @@ export async function POST(req: Request) {
 
     startingBankCentsForRefund = starting_bank_cents;
 
-    // Insert only columns present on production: *_sc bank fields, no speed/max_bet unless migrated
-    // Balance is validated above; deduction happens ONLY after room (+ player + audit) rows exist.
+    // INSERT columns must match production `celo_rooms` (see migration / live DB).
     console.error("[celo/room/create] step: insert celo_rooms");
     let room: {
       id: string;
@@ -246,18 +244,22 @@ export async function POST(req: Request) {
       [key: string]: unknown;
     };
     try {
-      const insertPayload: Record<string, unknown> = {
+      const insertPayload = {
         name: name.trim(),
         creator_id: userId,
         banker_id: userId,
         room_type: room_type === "private" ? "private" : "public",
         max_players: max_players as number,
-        [CELO_ROOMS_COL.minimumEntry]: minimum_entry_cents,
-        [CELO_ROOMS_COL.currentBank]: starting_bank_cents,
-        [CELO_ROOMS_COL.bankerReserve]: starting_bank_cents,
-        join_code: room_type === "private" ? join_code!.trim().toUpperCase() : null,
+        minimum_entry_sc: minimum_entry_cents,
+        current_bank_sc: starting_bank_cents,
+        current_bank_cents: starting_bank_cents,
+        banker_reserve_sc: starting_bank_cents,
+        join_code: room_type === "private" ? join_code!.trim() : null,
         status: "waiting",
         total_rounds: 0,
+        platform_fee_pct: 10,
+        last_round_was_celo: false,
+        last_activity: new Date().toISOString(),
       };
       const { data: roomData, error: roomError } = await supabase
         .from("celo_rooms")
