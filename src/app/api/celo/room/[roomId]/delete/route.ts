@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { celoBankRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoQaLog } from "@/lib/celo-qa-log";
 import { isRoomEmptyForDelete } from "@/lib/celo-room-rules";
 
@@ -62,6 +60,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     });
     return NextResponse.json(
       {
+        message: "Cannot delete room while players have active stakes or bank has balance",
         error: "Cannot delete while players still have money on the table",
         details: `${empty.playersWithStake} seated player(s) still have stakes`,
       },
@@ -71,7 +70,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
 
   const { data: activeRound } = await supabase
     .from("celo_rounds")
-    .select("id")
+    .select("id, status")
     .eq("room_id", roomId)
     .neq("status", "completed")
     .maybeSingle();
@@ -83,7 +82,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
       reason: "active_round",
       roundId: (activeRound as { id?: string }).id,
     });
-    return NextResponse.json({ error: "Cannot delete while a round is in progress" }, { status: 400 });
+    return NextResponse.json(
+      {
+        message: "Cannot delete room while players have active stakes or bank has balance",
+        error: "Cannot delete while a round is in progress",
+      },
+      { status: 400 }
+    );
   }
 
   const status = String(normalized?.status ?? "");
@@ -93,25 +98,24 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
   }
 
   const bankCents = normalized?.current_bank_cents ?? 0;
-  const creditUserId = bankerId || userId;
   if (bankCents > 0) {
-    const bankRef = celoBankRefundReference(roomId);
-    const refund = await walletLedgerGameWinIdempotent(creditUserId, bankCents, bankRef);
-    if (!refund.success) {
-      return NextResponse.json(
-        { error: refund.message ?? "Could not refund bank balance" },
-        { status: 500 }
-      );
-    }
-    celoQaLog("room_delete_bank_refund_ok", {
+    celoQaLog("delete_room_rejected", {
       roomId,
-      bankRefundedCents: bankCents,
-      ledgerSkipped: "skipped" in refund && refund.skipped,
-      reference: bankRef,
+      userId,
+      reason: "bank_not_empty",
+      bankCents,
     });
-  } else {
-    celoQaLog("room_delete_no_bank_refund", { roomId, bankCents: 0 });
+    return NextResponse.json(
+      {
+        message: "Cannot delete room while players have active stakes or bank has balance",
+        error: "Bank balance must be zero. Close the room to refund the bank first.",
+      },
+      { status: 400 }
+    );
   }
+
+  const creditUserId = bankerId || userId;
+  celoQaLog("room_delete_no_bank_refund", { roomId, bankCents: 0, creditUserId });
 
   // Remove FK references so celo_rooms.delete succeeds (migration also uses ON DELETE CASCADE).
   const { error: auditDelErr } = await supabase.from("celo_audit_log").delete().eq("room_id", roomId);

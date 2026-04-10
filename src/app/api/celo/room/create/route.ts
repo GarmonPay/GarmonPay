@@ -63,6 +63,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
+    const { data: existingRoom } = await supabase
+      .from("celo_rooms")
+      .select("id, status")
+      .eq("banker_id", userId)
+      .in("status", ["waiting", "active", "rolling"])
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRoom) {
+      const er = existingRoom as { id: string; status?: string };
+      return NextResponse.json(
+        {
+          message: "You already have an open room. Close it before creating a new one.",
+          existingRoomId: er.id,
+        },
+        { status: 409 }
+      );
+    }
+
     let body: unknown;
     try {
       body = await req.json();

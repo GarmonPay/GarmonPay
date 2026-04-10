@@ -28,6 +28,15 @@ export type CeloRollFinishedPayload = {
   completedAt: string;
 };
 
+/** Cron turn timer: optional broadcast alongside postgres_changes on celo_rounds. */
+export type CeloTurnTimeoutPayload = {
+  roomId: string;
+  roundId: string;
+  kind: "banker_stale" | "player_stale";
+  forfeitUserId?: string;
+  at: string;
+};
+
 export function buildCeloRollStartedPayload(opts: {
   roomId: string;
   roundId: string;
@@ -76,8 +85,8 @@ export function buildCeloRollStartedPayload(opts: {
 export async function broadcastCeloRoomEvent(
   _supabase: SupabaseClient,
   roomId: string,
-  event: "roll_started" | "roll_finished",
-  payload: CeloRollStartedPayload | CeloRollFinishedPayload
+  event: "roll_started" | "roll_finished" | "turn_timeout",
+  payload: CeloRollStartedPayload | CeloRollFinishedPayload | CeloTurnTimeoutPayload
 ): Promise<void> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

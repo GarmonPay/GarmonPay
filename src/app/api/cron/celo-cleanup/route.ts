@@ -5,6 +5,7 @@ import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { celoQaLog } from "@/lib/celo-qa-log";
+import { processCeloTurnTimeouts } from "@/lib/celo-turn-timeout";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ async function runCeloCleanup(request: Request) {
   if (!admin) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
+
+  const turnTimer = await processCeloTurnTimeouts(admin);
 
   const staleBefore = new Date(Date.now() - STALE_MS).toISOString();
 
@@ -177,6 +180,11 @@ async function runCeloCleanup(request: Request) {
 
   return NextResponse.json({
     success: true,
+    turn_timer: {
+      banker_stale: turnTimer.bankerStale,
+      player_stale: turnTimer.playerStale,
+      errors: turnTimer.errors.length ? turnTimer.errors : undefined,
+    },
     cancelled,
     skipped_had_completed_rounds: skipped,
     candidates: (roomRows ?? []).length,
