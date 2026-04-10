@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -45,12 +46,13 @@ export async function POST(req: Request) {
   const playerRole = role === "spectator" ? "spectator" : "player";
 
   // Fetch room
-  const { data: room, error: roomErr } = await supabase
+  const { data: roomRows, error: roomErr } = await supabase
     .from("celo_rooms")
     .select("*")
     .eq("id", room_id)
-    .single();
+    .limit(1);
 
+  const room = celoFirstRow(roomRows);
   if (roomErr || !room) {
     console.error("[celo/room/join] room not found", { room_id, err: roomErr?.message });
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -81,14 +83,14 @@ export async function POST(req: Request) {
   }
 
   // Check if user is already in this room
-  const { data: existingPlayer } = await supabase
+  const { data: existingRows } = await supabase
     .from("celo_room_players")
     .select("id")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
-  if (existingPlayer) {
+  if (celoFirstRow(existingRows)) {
     return NextResponse.json({ error: "Already in this room" }, { status: 400 });
   }
 
@@ -220,7 +222,7 @@ export async function POST(req: Request) {
   }
 
   // Insert player — persist stake in both columns for players (spectators: 0)
-  const { data: playerRow, error: insertErr } = await supabase
+  const { data: insertedRows, error: insertErr } = await supabase
     .from("celo_room_players")
     .insert({
       room_id,
@@ -231,8 +233,9 @@ export async function POST(req: Request) {
       seat_number: seatNumber,
     })
     .select()
-    .single();
+    .limit(1);
 
+  const playerRow = celoFirstRow(insertedRows);
   if (insertErr || !playerRow) {
     if (playerRole === "player" && betCents > 0) {
       await walletLedgerEntry(

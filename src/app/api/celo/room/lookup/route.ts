@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { isCeloRoomJoinableStatus } from "@/lib/celo-room-constants";
 import { normalizeCeloRoomLookupCode } from "@/lib/celo-lookup-code";
@@ -33,17 +34,18 @@ export async function GET(req: Request) {
   }
 
   // Private rooms: join_code match (stored trimmed; compare normalized)
-  const { data: privateRoom, error: privErr } = await supabase
+  const { data: privateRows, error: privErr } = await supabase
     .from("celo_rooms")
     .select("id,status,room_type,name,join_code")
     .eq("room_type", "private")
     .eq("join_code", normalized)
-    .maybeSingle();
+    .limit(1);
 
   if (privErr) {
     celoQaLog("room_lookup_private_query_error", { message: privErr.message });
   }
 
+  const privateRoom = celoFirstRow(privateRows);
   if (privateRoom) {
     const st = String((privateRoom as { status?: string }).status ?? "");
     if (!isCeloRoomJoinableStatus(st)) {

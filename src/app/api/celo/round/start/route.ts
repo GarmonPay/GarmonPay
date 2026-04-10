@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
@@ -30,9 +31,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "room_id required" }, { status: 400 });
   }
 
-  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
-
-  if (!room) {
+  const { data: roomRows, error: roomFetchErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", room_id)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
+  if (roomFetchErr || !room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
@@ -74,19 +79,21 @@ export async function POST(req: Request) {
   }
 
   // Ensure no round is currently in progress
-  const { data: inProgressRound } = await supabase
+  const { count: incompleteRoundCount, error: ipErr } = await supabase
     .from("celo_rounds")
-    .select("id, status")
+    .select("id", { count: "exact", head: true })
     .eq("room_id", room_id)
-    .neq("status", "completed")
-    .maybeSingle();
+    .neq("status", "completed");
 
-  if (inProgressRound) {
+  if (ipErr) {
+    return NextResponse.json({ error: ipErr.message }, { status: 500 });
+  }
+  if ((incompleteRoundCount ?? 0) > 0) {
     celoQaLog("banker_start_rejected", {
       room_id,
       reason: "round_in_progress",
       userId,
-      inRoundId: (inProgressRound as { id?: string }).id,
+      incompleteRounds: incompleteRoundCount ?? 0,
       roomStatus: roomRecord.status,
     });
     return NextResponse.json({ error: "A round is already in progress" }, { status: 400 });
@@ -165,7 +172,7 @@ export async function POST(req: Request) {
   const roundNumber = (roundCount ?? 0) + 1;
 
   // Insert new round
-  const { data: newRound, error: roundErr } = await supabase
+  const { data: newRoundRows, error: roundErr } = await supabase
     .from("celo_rounds")
     .insert({
       room_id,
@@ -176,8 +183,9 @@ export async function POST(req: Request) {
       platform_fee_sc: platformFeeCents,
     })
     .select()
-    .single();
+    .limit(1);
 
+  const newRound = celoFirstRow(newRoundRows);
   if (roundErr || !newRound) {
     return NextResponse.json(
       {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
@@ -15,7 +16,12 @@ export async function systemCloseCeloRoomWithRefunds(
   roomId: string,
   meta: { reason: string; auditUserId?: string | null }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: room, error: roomErr } = await admin.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows, error: roomErr } = await admin
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", roomId)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
   if (roomErr || !room) {
     return { ok: false, error: roomErr?.message ?? "Room not found" };
   }

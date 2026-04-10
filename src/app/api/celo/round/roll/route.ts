@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { celoPayoutTestCredit, celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
@@ -100,16 +101,16 @@ async function getPlayerRerollCount(
   roundId: string,
   userId: string
 ): Promise<number> {
-  const { data } = await supabase
+  const { data: rollRows } = await supabase
     .from("celo_player_rolls")
     .select("reroll_count")
     .eq("round_id", roundId)
     .eq("user_id", userId)
     .eq("voided_by_short_stop", false)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
+  const data = celoFirstRow(rollRows);
   if (!data) return 0;
   return (data as { reroll_count?: number }).reroll_count ?? 0;
 }
@@ -173,13 +174,14 @@ async function handleCeloRollPost(req: Request) {
   }
 
   // Verify user is in this room
-  const { data: playerEntry } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("id, role, bet_cents, entry_sc, seat_number")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const playerEntry = celoFirstRow(playerRows);
   if (!playerEntry) {
     return errJson(403, "Not in this room");
   }
@@ -192,7 +194,12 @@ async function handleCeloRollPost(req: Request) {
     seat_number: number | null;
   };
 
-  const { data: room, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", room_id).maybeSingle();
+  const { data: roomRows, error: roomErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", room_id)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
 
   if (roomErr || !room) {
     return errJson(404, "Room not found");
@@ -202,15 +209,15 @@ async function handleCeloRollPost(req: Request) {
     banker_id: string;
   };
 
-  const { data: authoritativeRound, error: authRoundErr } = await supabase
+  const { data: authRoundRows, error: authRoundErr } = await supabase
     .from("celo_rounds")
     .select("*")
     .eq("room_id", room_id)
     .neq("status", CELO_ROUND_STATUS.completed)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
+  const authoritativeRound = celoFirstRow(authRoundRows);
   if (authRoundErr) {
     return errJson(500, authRoundErr.message);
   }
@@ -669,7 +676,7 @@ async function handleCeloRollPost(req: Request) {
     // ── NO COUNT ──
     if (roll.result === "no_count") {
       const serverStartTime = new Date().toISOString();
-      const { data: prRow, error: prInsErr } = await supabase
+      const { data: prRowArr, error: prInsErr } = await supabase
         .from("celo_player_rolls")
         .insert({
           round_id,
@@ -688,8 +695,9 @@ async function handleCeloRollPost(req: Request) {
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
-        .single();
+        .limit(1);
 
+      const prRow = celoFirstRow(prRowArr);
       if (prInsErr || !prRow) {
         return playerRollSaveErrorResponse(prInsErr, "player_no_count_insert", {
           room_id,
@@ -740,7 +748,7 @@ async function handleCeloRollPost(req: Request) {
       const playerCeloAt = roll.isCelo ? now : null;
 
       const serverStartTime = new Date().toISOString();
-      const { data: prWin, error: prWinErr } = await supabase
+      const { data: prWinArr, error: prWinErr } = await supabase
         .from("celo_player_rolls")
         .insert({
           round_id,
@@ -760,8 +768,9 @@ async function handleCeloRollPost(req: Request) {
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
-        .single();
+        .limit(1);
 
+      const prWin = celoFirstRow(prWinArr);
       if (prWinErr || !prWin) {
         return playerRollSaveErrorResponse(prWinErr, "player_instant_win_insert", {
           room_id,
@@ -818,7 +827,7 @@ async function handleCeloRollPost(req: Request) {
     // ── INSTANT LOSS (player) ──
     if (roll.result === "instant_loss") {
       const serverStartTime = new Date().toISOString();
-      const { data: prLoss, error: prLossErr } = await supabase
+      const { data: prLossArr, error: prLossErr } = await supabase
         .from("celo_player_rolls")
         .insert({
           round_id,
@@ -837,8 +846,9 @@ async function handleCeloRollPost(req: Request) {
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
-        .single();
+        .limit(1);
 
+      const prLoss = celoFirstRow(prLossArr);
       if (prLossErr || !prLoss) {
         return playerRollSaveErrorResponse(prLossErr, "player_instant_loss_insert", {
           room_id,
@@ -951,7 +961,7 @@ async function handleCeloRollPost(req: Request) {
       }
 
       const serverStartTime = new Date().toISOString();
-      const { data: prPoint, error: prPointErr } = await supabase
+      const { data: prPointArr, error: prPointErr } = await supabase
         .from("celo_player_rolls")
         .insert({
           round_id,
@@ -971,8 +981,9 @@ async function handleCeloRollPost(req: Request) {
           roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
-        .single();
+        .limit(1);
 
+      const prPoint = celoFirstRow(prPointArr);
       if (prPointErr || !prPoint) {
         return playerRollSaveErrorResponse(prPointErr, "player_point_insert", {
           room_id,

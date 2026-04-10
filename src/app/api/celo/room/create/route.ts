@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import {
   walletLedgerEntry,
@@ -80,14 +81,14 @@ export async function POST(req: Request) {
       console.error("[celo/room/create] stale room cleanup:", staleErr.message);
     }
 
-    const { data: existingRoom } = await supabase
+    const { data: existingRows } = await supabase
       .from("celo_rooms")
       .select("id, status")
       .eq("banker_id", userId)
       .in("status", ["waiting", "active", "rolling"])
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
 
+    const existingRoom = celoFirstRow(existingRows);
     if (existingRoom) {
       const er = existingRoom as { id: string; status?: string };
       return NextResponse.json(
@@ -261,12 +262,13 @@ export async function POST(req: Request) {
         last_round_was_celo: false,
         last_activity: new Date().toISOString(),
       };
-      const { data: roomData, error: roomError } = await supabase
+      const { data: roomDataRows, error: roomError } = await supabase
         .from("celo_rooms")
         .insert(insertPayload)
         .select()
-        .single();
+        .limit(1);
 
+      const roomData = celoFirstRow(roomDataRows);
       if (roomError) {
         console.error("[celo/room/create] Exact error (celo_rooms):", roomError);
         return jsonDbFailure("celo_rooms insert", roomError as PgLike);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 
@@ -27,12 +28,13 @@ export async function POST(req: Request) {
   }
 
   // Fetch the side bet
-  const { data: bet } = await supabase
+  const { data: betRows } = await supabase
     .from("celo_side_bets")
     .select("*")
     .eq("id", bet_id)
-    .maybeSingle();
+    .limit(1);
 
+  const bet = celoFirstRow(betRows);
   if (!bet) {
     return NextResponse.json({ error: "Side bet not found" }, { status: 404 });
   }
@@ -74,14 +76,14 @@ export async function POST(req: Request) {
   }
 
   // Verify acceptor is in the room
-  const { data: playerEntry } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("role")
     .eq("room_id", b.room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
-  if (!playerEntry) {
+  if (!celoFirstRow(playerRows)) {
     return NextResponse.json({ error: "Not in this room" }, { status: 403 });
   }
 
@@ -107,7 +109,7 @@ export async function POST(req: Request) {
   }
 
   // Mark bet as matched
-  const { data: updatedBet, error: updateErr } = await supabase
+  const { data: updatedBetRows, error: updateErr } = await supabase
     .from("celo_side_bets")
     .update({
       acceptor_id: userId,
@@ -116,8 +118,9 @@ export async function POST(req: Request) {
     .eq("id", bet_id)
     .eq("status", "open") // Optimistic lock — prevent double-accept
     .select()
-    .single();
+    .limit(1);
 
+  const updatedBet = celoFirstRow(updatedBetRows);
   if (updateErr || !updatedBet) {
     // Someone else got there first — refund acceptor
     await walletLedgerEntry(

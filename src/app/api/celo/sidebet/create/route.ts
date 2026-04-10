@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 
@@ -79,25 +80,26 @@ export async function POST(req: Request) {
   }
 
   // Verify user is in this room
-  const { data: playerEntry } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("role")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
-  if (!playerEntry) {
+  if (!celoFirstRow(playerRows)) {
     return NextResponse.json({ error: "Not in this room" }, { status: 403 });
   }
 
   // Verify round exists and is active
-  const { data: round } = await supabase
+  const { data: roundRows } = await supabase
     .from("celo_rounds")
     .select("id, status")
     .eq("id", round_id)
     .eq("room_id", room_id)
-    .maybeSingle();
+    .limit(1);
 
+  const round = celoFirstRow(roundRows);
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
@@ -145,7 +147,7 @@ export async function POST(req: Request) {
 
   const expiresAt = new Date(Date.now() + SIDEBET_EXPIRY_MS).toISOString();
 
-  const { data: newBet, error: insertErr } = await supabase
+  const { data: newBetRows, error: insertErr } = await supabase
     .from("celo_side_bets")
     .insert({
       room_id,
@@ -159,8 +161,9 @@ export async function POST(req: Request) {
       expires_at: expiresAt,
     })
     .select()
-    .single();
+    .limit(1);
 
+  const newBet = celoFirstRow(newBetRows);
   if (insertErr || !newBet) {
     // Refund on failure
     await walletLedgerEntry(

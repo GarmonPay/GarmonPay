@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -31,19 +32,20 @@ export async function POST(req: Request) {
   }
 
   // Verify the player is in this room with role "player"
-  const { data: playerEntry } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("role")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const playerEntry = celoFirstRow(playerRows);
   if (!playerEntry || (playerEntry as { role: string }).role !== "player") {
     return NextResponse.json({ error: "Not a player in this room" }, { status: 403 });
   }
 
   // Verify the player rolled C-Lo in this round
-  const { data: celoRoll } = await supabase
+  const { data: celoRollRows } = await supabase
     .from("celo_player_rolls")
     .select("player_celo_at, created_at")
     .eq("round_id", round_id)
@@ -51,9 +53,9 @@ export async function POST(req: Request) {
     .eq("outcome", "win")
     .not("player_celo_at", "is", null)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
+  const celoRoll = celoFirstRow(celoRollRows);
   if (!celoRoll) {
     return NextResponse.json(
       { error: "You did not roll C-Lo in this round" },
@@ -71,7 +73,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
+  const { data: roomRows } = await supabase.from("celo_rooms").select("*").eq("id", room_id).limit(1);
+  const room = celoFirstRow(roomRows);
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });

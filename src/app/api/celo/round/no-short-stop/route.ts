@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
 
@@ -30,12 +31,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "roundId required" }, { status: 400 });
   }
 
-  const { data: round, error: roundErr } = await supabase
+  const { data: roundRows, error: roundErr } = await supabase
     .from("celo_rounds")
     .select("id, room_id, banker_id, status, no_short_stop")
     .eq("id", roundId)
-    .maybeSingle();
+    .limit(1);
 
+  const round = celoFirstRow(roundRows);
   if (roundErr || !round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }

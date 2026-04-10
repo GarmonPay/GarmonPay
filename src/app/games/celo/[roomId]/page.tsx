@@ -4,6 +4,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -559,7 +560,8 @@ export default function CeloRoomPage() {
   const loadRoom = useCallback(async () => {
     const sb = createBrowserClient();
     if (!sb) return;
-    const { data } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+    const { data: roomRows } = await sb.from("celo_rooms").select("*").eq("id", roomId).limit(1);
+    const data = celoFirstRow(roomRows);
     if (data) {
       const raw = data as Record<string, unknown>;
       const n = normalizeCeloRoomRow(raw);
@@ -676,18 +678,17 @@ export default function CeloRoomPage() {
 
     const sb = createBrowserClient();
     if (!sb) return null;
-    const { data, error } = await sb
+    const { data: roundRows, error } = await sb
       .from("celo_rounds")
       .select("*")
       .eq("room_id", roomId)
       .neq("status", "completed")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
     if (error) {
       console.debug("[celo/ui] loadRound Supabase fallback error", error.message);
     }
-    const round = (data as Round) ?? null;
+    const round = (celoFirstRow(roundRows) as Round | null) ?? null;
     setCurrentRound(round);
     await applyRollsForRound(round);
     return round;
@@ -1085,7 +1086,8 @@ export default function CeloRoomPage() {
 
           await loadPlayersRef.current();
 
-          const { data: freshRoom } = await sb.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+          const { data: freshRows } = await sb.from("celo_rooms").select("*").eq("id", roomId).limit(1);
+          const freshRoom = celoFirstRow(freshRows);
           if (freshRoom && isMounted) {
             const raw = freshRoom as Record<string, unknown>;
             const n = normalizeCeloRoomRow(raw);
@@ -1598,15 +1600,14 @@ export default function CeloRoomPage() {
         if (!wasBankerRolling) return;
         const sb = createBrowserClient();
         if (!sb) return;
-        const { data: latestRound } = await sb
+        const { data: latestRows } = await sb
           .from("celo_rounds")
           .select("*")
           .eq("room_id", roomId)
           .neq("status", "completed")
           .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const lr = latestRound as Round | null;
+          .limit(1);
+        const lr = (celoFirstRow(latestRows) as Round | null) ?? null;
         if (!lr?.banker_dice || lr.banker_dice.length !== 3) return;
         if (isRollingRef.current || diceUiPhaseRef.current !== "idle") return;
         console.log("[celo/client] manual round fetch fallback — triggering dice animation");

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -35,25 +36,27 @@ export async function POST(req: Request) {
   }
 
   // Verify user is a player in this room
-  const { data: playerRow } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("role, bet_cents, entry_sc")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const playerRow = celoFirstRow(playerRows);
   if (!playerRow || (playerRow as { role: string }).role !== "player") {
     return NextResponse.json({ error: "Not a player in this room" }, { status: 403 });
   }
 
   // Fetch round
-  const { data: round } = await supabase
+  const { data: roundRows } = await supabase
     .from("celo_rounds")
     .select("*")
     .eq("id", round_id)
     .eq("room_id", room_id)
-    .maybeSingle();
+    .limit(1);
 
+  const round = celoFirstRow(roundRows);
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
@@ -73,7 +76,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Bank already covered by another player" }, { status: 400 });
   }
 
-  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
+  const { data: roomRows } = await supabase.from("celo_rooms").select("*").eq("id", room_id).limit(1);
+  const room = celoFirstRow(roomRows);
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -174,7 +178,7 @@ export async function POST(req: Request) {
     .eq("user_id", userId);
 
   // Mark round as bank_covered
-  const { data: updatedRound, error: updateErr } = await supabase
+  const { data: updatedRoundRows, error: updateErr } = await supabase
     .from("celo_rounds")
     .update({
       bank_covered: true,
@@ -183,8 +187,9 @@ export async function POST(req: Request) {
     })
     .eq("id", round_id)
     .select()
-    .single();
+    .limit(1);
 
+  const updatedRound = celoFirstRow(updatedRoundRows);
   if (updateErr) {
     await walletLedgerEntry(
       userId,

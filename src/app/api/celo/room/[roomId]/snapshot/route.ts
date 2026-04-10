@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 
 /**
@@ -22,7 +23,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: roomRow, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows, error: roomErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", roomId)
+    .limit(1);
+  const roomRow = celoFirstRow(roomRows);
 
   if (roomErr || !roomRow) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -32,13 +38,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
   const isPublic = rawRoom.room_type === "public";
   const isBanker = String(rawRoom.banker_id ?? "") === userId;
 
-  const { data: membership } = await supabase
+  const { data: membershipRows } = await supabase
     .from("celo_room_players")
     .select("id")
     .eq("room_id", roomId)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const membership = celoFirstRow(membershipRows);
   if (!isPublic && !isBanker && !membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -62,14 +69,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
     return NextResponse.json({ error: playersErr.message ?? "Failed to load players" }, { status: 500 });
   }
 
-  const { data: openRound } = await supabase
+  const { data: openRoundRows } = await supabase
     .from("celo_rounds")
     .select("*")
     .eq("room_id", roomId)
     .neq("status", "completed")
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  const openRound = celoFirstRow(openRoundRows);
 
   return NextResponse.json({
     room: rawRoom,

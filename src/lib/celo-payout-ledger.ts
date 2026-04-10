@@ -3,6 +3,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import {
   walletLedgerEntry,
   type LedgerEntryError,
@@ -21,11 +22,12 @@ export async function celoWalletCredit(
   if (!result.success) {
     console.error("[celo/payout] ledger error:", result.message);
   } else {
-    const { data: updatedWallet } = await supabase
+    const { data: wbRows } = await supabase
       .from("wallet_balances")
       .select("balance")
       .eq("user_id", userId)
-      .maybeSingle();
+      .limit(1);
+    const updatedWallet = celoFirstRow(wbRows);
     console.error("[celo/payout] new balance:", (updatedWallet as { balance?: number } | null)?.balance);
   }
   return result;

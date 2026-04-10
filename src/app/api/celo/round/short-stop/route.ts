@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
@@ -48,12 +49,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "calledBy must be player or banker" }, { status: 400 });
   }
 
-  const { data: round, error: roundErr } = await supabase
+  const { data: roundRows, error: roundErr } = await supabase
     .from("celo_rounds")
     .select("*")
     .eq("id", roundId)
-    .maybeSingle();
+    .limit(1);
 
+  const round = celoFirstRow(roundRows);
   if (roundErr || !round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
@@ -70,7 +72,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Short stop only applies during player rolling" }, { status: 400 });
   }
 
-  const { data: roomRow } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows } = await supabase.from("celo_rooms").select("*").eq("id", roomId).limit(1);
+  const roomRow = celoFirstRow(roomRows);
   if (!roomRow) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
@@ -79,13 +82,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const { data: roll, error: rollErr } = await supabase
+  const { data: rollRows, error: rollErr } = await supabase
     .from("celo_player_rolls")
     .select("*")
     .eq("id", rollId)
     .eq("round_id", roundId)
-    .maybeSingle();
+    .limit(1);
 
+  const roll = celoFirstRow(rollRows);
   if (rollErr || !roll) {
     return NextResponse.json({ error: "Roll not found" }, { status: 404 });
   }
@@ -250,13 +254,14 @@ async function handlePlayerForfeitShortStop(
   const idx = eligibleBefore.findIndex((p) => celoSameAuthUserId(p.user_id, userId));
   const nextSeat = idx >= 0 ? eligibleBefore[idx + 1] : null;
 
-  const { data: playerRow } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("user_id, bet_cents, entry_sc")
     .eq("room_id", roomId)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const playerRow = celoFirstRow(playerRows);
   if (!playerRow) {
     return NextResponse.json({ error: "Player not seated" }, { status: 400 });
   }

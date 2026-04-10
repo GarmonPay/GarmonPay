@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
@@ -98,7 +99,12 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: "roomId required" }, { status: 400 });
   }
 
-  const { data: room, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows, error: roomErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", roomId)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
   if (roomErr || !room) {
     return NextResponse.json({ message: "Room not found" }, { status: 404 });
   }

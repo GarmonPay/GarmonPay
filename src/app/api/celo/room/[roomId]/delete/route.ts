@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoQaLog } from "@/lib/celo-qa-log";
@@ -25,7 +26,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: room, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows, error: roomErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", roomId)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
 
   if (roomErr || !room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -83,19 +89,24 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     );
   }
 
-  const { data: activeRound } = await supabase
+  const { count: incompleteRoundCount, error: roundCountErr } = await supabase
     .from("celo_rounds")
-    .select("id, status")
+    .select("id", { count: "exact", head: true })
     .eq("room_id", roomId)
-    .neq("status", "completed")
-    .maybeSingle();
+    .neq("status", "completed");
 
-  if (activeRound) {
+  if (roundCountErr) {
+    return NextResponse.json(
+      { success: false, error: roundCountErr.message ?? "Could not verify rounds" },
+      { status: 500 }
+    );
+  }
+  if ((incompleteRoundCount ?? 0) > 0) {
     celoQaLog("delete_room_rejected", {
       roomId,
       userId,
       reason: "active_round",
-      roundId: (activeRound as { id?: string }).id,
+      incompleteRounds: incompleteRoundCount ?? 0,
     });
     return NextResponse.json(
       {

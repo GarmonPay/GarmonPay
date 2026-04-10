@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
@@ -25,15 +26,14 @@ async function lastPlayerPhaseActivityMs(
   roundId: string,
   round: Record<string, unknown>
 ): Promise<number> {
-  const { data: pr } = await admin
+  const { data: prRows } = await admin
     .from("celo_player_rolls")
     .select("created_at")
     .eq("round_id", roundId)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
-  const prRow = pr as { created_at?: string } | null;
+  const prRow = celoFirstRow(prRows) as { created_at?: string } | null;
   const prMs = isoToMs(prRow?.created_at);
   const animMs = isoToMs(round.roll_animation_start_at as string | undefined);
   const createdMs = isoToMs(round.created_at as string | undefined);
@@ -87,7 +87,8 @@ async function handleBankerTurnTimeout(
   const cutoffIso = new Date(Date.now() - TURN_MS).toISOString();
   if (createdAt >= cutoffIso) return false;
 
-  const { data: roomRow } = await admin.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRows } = await admin.from("celo_rooms").select("*").eq("id", roomId).limit(1);
+  const roomRow = celoFirstRow(roomRows);
   if (!roomRow) return false;
   const rm = normalizeCeloRoomRow(roomRow as Record<string, unknown>);
   if (!rm) return false;
@@ -176,7 +177,8 @@ async function handlePlayerTurnTimeout(
   const bankerPoint = round.banker_point as number | null;
   if (bankerPoint == null) return false;
 
-  const { data: roomRow } = await admin.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRowsB } = await admin.from("celo_rooms").select("*").eq("id", roomId).limit(1);
+  const roomRow = celoFirstRow(roomRowsB);
   if (!roomRow) return false;
   const rm = normalizeCeloRoomRow(roomRow as Record<string, unknown>);
   if (!rm) return false;

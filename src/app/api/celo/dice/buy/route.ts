@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { DICE_TYPES, type DiceType } from "@/lib/celo-engine";
@@ -57,13 +58,14 @@ export async function POST(req: Request) {
   }
 
   // Verify user is a player in this room
-  const { data: playerEntry } = await supabase
+  const { data: playerRows } = await supabase
     .from("celo_room_players")
     .select("role")
     .eq("room_id", room_id)
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
+  const playerEntry = celoFirstRow(playerRows);
   if (!playerEntry || (playerEntry as { role: string }).role === "spectator") {
     return NextResponse.json({ error: "Must be a player in this room" }, { status: 403 });
   }

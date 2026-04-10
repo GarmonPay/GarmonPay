@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import {
   walletLedgerEntry,
@@ -63,7 +64,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
+  const { data: roomRows } = await supabase.from("celo_rooms").select("*").eq("id", room_id).limit(1);
+  const room = celoFirstRow(roomRows);
 
   if (!room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -212,7 +214,8 @@ export async function POST(req: Request) {
     },
   });
 
-  const { data: updated } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
+  const { data: updatedRows } = await supabase.from("celo_rooms").select("*").eq("id", room_id).limit(1);
+  const updated = celoFirstRow(updatedRows);
 
   return NextResponse.json({
     room: updated,

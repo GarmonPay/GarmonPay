@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { systemCloseCeloRoomWithRefunds } from "@/lib/celo-room-system-close";
@@ -31,7 +32,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "room_id required" }, { status: 400 });
   }
 
-  const { data: room, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", room_id).maybeSingle();
+  const { data: roomRows, error: roomErr } = await supabase
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", room_id)
+    .limit(1);
+  const room = celoFirstRow(roomRows);
   if (roomErr || !room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
