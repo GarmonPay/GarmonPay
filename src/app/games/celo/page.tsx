@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative } from "next/font/google";
@@ -86,6 +86,38 @@ export default function CeloLobbyPage() {
     };
   }, []);
 
+  /** Canonical lobby list — service role + stale cleanup; bypasses RLS (fixes mobile vs desktop). */
+  const loadPublicRooms = useCallback(async () => {
+    try {
+      const res = await fetch("/api/celo/rooms/public", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => ({}))) as { rooms?: Record<string, unknown>[] };
+      const rows = json.rooms ?? [];
+      setRooms(
+        rows
+          .map((row) => mapRowToLobbyRoom(row))
+          .filter((x): x is Room => x !== null)
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [mapRowToLobbyRoom]);
+
+  const lobbyRefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLobbyRefetch = useCallback(() => {
+    if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
+    lobbyRefetchTimer.current = setTimeout(() => {
+      lobbyRefetchTimer.current = null;
+      void loadPublicRooms();
+    }, 200);
+  }, [loadPublicRooms]);
+
   useEffect(() => {
     if (!showCreate || !session?.accessToken) return;
     fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${session.accessToken}` } })
@@ -138,6 +170,11 @@ export default function CeloLobbyPage() {
       return;
     }
 
+    const onRoomsChange = () => {
+      if (!isMounted) return;
+      scheduleLobbyRefetch();
+    };
+
     const channel = sb
       .channel("celo-lobby-v2")
       .on(
@@ -147,19 +184,7 @@ export default function CeloLobbyPage() {
           schema: "public",
           table: "celo_rooms",
         },
-        (payload) => {
-          if (!isMounted) return;
-          const row = payload.new as Record<string, unknown>;
-          if (row.room_type === "public") {
-            const mapped = mapRowToLobbyRoom(row);
-            if (mapped) {
-              setRooms((prev) => {
-                if (prev.some((r) => r.id === mapped.id)) return prev;
-                return [mapped, ...prev];
-              });
-            }
-          }
-        }
+        onRoomsChange
       )
       .on(
         "postgres_changes",
@@ -168,55 +193,41 @@ export default function CeloLobbyPage() {
           schema: "public",
           table: "celo_rooms",
         },
-        (payload) => {
-          if (!isMounted) return;
-          const row = payload.new as Record<string, unknown>;
-          const id = String(row.id ?? "");
-          const st = String(row.status ?? "");
-          if (["cancelled", "completed"].includes(st)) {
-            setRooms((prev) => prev.filter((r) => r.id !== id));
-          } else {
-            const mapped = mapRowToLobbyRoom(row);
-            if (mapped) {
-              setRooms((prev) => {
-                const idx = prev.findIndex((r) => r.id === id);
-                if (idx === -1) return [mapped, ...prev];
-                const next = [...prev];
-                const prevCount = next[idx].player_count;
-                next[idx] = { ...mapped, player_count: mapped.player_count ?? prevCount };
-                return next;
-              });
-            }
-          }
-        }
+        onRoomsChange
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "celo_rooms",
+        },
+        onRoomsChange
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED" && isMounted) {
-          void (async () => {
-            const { data } = await sb
-              .from("celo_rooms")
-              .select("*")
-              .in("status", ["waiting", "active", "rolling"])
-              .order("created_at", { ascending: false });
-            if (data && isMounted) {
-              setRooms(
-                data
-                  .map((row) => mapRowToLobbyRoom(row as Record<string, unknown>))
-                  .filter((x): x is Room => x !== null)
-              );
-            }
+          void loadPublicRooms().finally(() => {
             if (isMounted) setLoading(false);
-          })();
+          });
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          if (isMounted) setLoading(false);
+          if (isMounted) {
+            setLoading(false);
+            void loadPublicRooms();
+          }
         }
       });
 
+    const poll = window.setInterval(() => {
+      if (isMounted) void loadPublicRooms();
+    }, 60_000);
+
     return () => {
       isMounted = false;
+      if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
+      window.clearInterval(poll);
       sb.removeChannel(channel);
     };
-  }, [mapRowToLobbyRoom]);
+  }, [loadPublicRooms, scheduleLobbyRefetch]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -250,6 +261,7 @@ export default function CeloLobbyPage() {
         return;
       }
       if (data.room?.id) {
+        void loadPublicRooms();
         router.push(`/games/celo/${data.room.id}?created=1`);
       }
     } catch {

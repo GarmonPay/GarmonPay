@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
-import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { systemCloseCeloRoomWithRefunds } from "@/lib/celo-room-system-close";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
@@ -68,90 +66,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Cannot close while a round is in progress" }, { status: 400 });
   }
 
-  const { data: playerRows, error: playersErr } = await supabase
-    .from("celo_room_players")
-    .select("user_id, role, entry_sc, bet_cents")
-    .eq("room_id", room_id);
-
-  if (playersErr) {
-    return NextResponse.json({ error: "Could not load players" }, { status: 500 });
-  }
-
-  const rows = (playerRows ?? []) as Array<{
-    user_id: string;
-    role: string;
-    entry_sc?: number | null;
-    bet_cents?: number | null;
-  }>;
-
-  let refundsIssued = 0;
-
-  for (const p of rows) {
-    if (p.role !== "player") continue;
-    const cents = celoPlayerStakeCents(p);
-    if (cents <= 0) continue;
-    const ref = celoPlayerStakeRefundReference(room_id, p.user_id);
-    const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.message ?? "Refund failed", details: `player ${p.user_id}` },
-        { status: 500 }
-      );
-    }
-    if (!("skipped" in result && result.skipped)) refundsIssued += 1;
-  }
-
-  /** Live table bank from DB (`current_bank_sc` in production), not the opening reserve alone. */
-  const bankCents = Math.max(
+  const bankCentsPreview = Math.max(
     0,
     Math.round(Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0))
   );
-  if (bankCents > 0 && bankerId) {
-    const bankRef = celoBankRefundReference(room_id);
-    const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);
-    if (!bankResult.success) {
-      return NextResponse.json(
-        { error: bankResult.message ?? "Could not refund bank to banker" },
-        { status: 500 }
-      );
-    }
-  }
 
-  const { error: delPlayersErr } = await supabase.from("celo_room_players").delete().eq("room_id", room_id);
-  if (delPlayersErr) {
-    return NextResponse.json({ error: delPlayersErr.message ?? "Failed to clear players" }, { status: 500 });
-  }
-
-  const now = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("celo_rooms")
-    .update(
-      mergeCeloRoomUpdate(0, {
-        status: "cancelled",
-        last_activity: now,
-      })
-    )
-    .eq("id", room_id);
-
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message ?? "Failed to update room" }, { status: 500 });
-  }
-
-  await supabase.from("celo_audit_log").insert({
-    room_id,
-    user_id: userId,
-    action: "room_closed",
-    details: {
-      reason: "banker_closed",
-      refunds_issued: refundsIssued,
-      bank_refunded_cents: bankCents,
-    },
+  const closed = await systemCloseCeloRoomWithRefunds(supabase, room_id, {
+    reason: "banker_closed",
+    auditUserId: userId,
   });
+
+  if (!closed.ok) {
+    return NextResponse.json({ error: closed.error ?? "Failed to close room" }, { status: 500 });
+  }
 
   celoQaLog("room_close_refunds_ok", {
     roomId: room_id,
-    playerRefundsCount: refundsIssued,
-    bankRefundedCents: bankCents,
+    bankRefundedCentsPreview: bankCentsPreview,
   });
 
   return NextResponse.json({

@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * GET /api/celo/lobby — alias for canonical public room list (same as /api/celo/rooms/public).
+ * GET /api/celo/rooms/public
+ * Canonical public lobby list (service role + stale cleanup). All clients should use this.
  */
 export async function GET() {
   const admin = createAdminClient();
@@ -15,9 +16,9 @@ export async function GET() {
   }
 
   try {
-    const { rooms } = await getPublicLobbyRoomsWithCleanup(admin);
+    const { rooms, cleanup, queryCount } = await getPublicLobbyRoomsWithCleanup(admin);
     return NextResponse.json(
-      { rooms },
+      { rooms, meta: { cleanup, queryCount } },
       {
         headers: {
           "Cache-Control": "no-store, max-age=0",
@@ -25,8 +26,8 @@ export async function GET() {
       }
     );
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Failed to load lobby";
-    console.error("[celo/lobby]", msg);
+    const msg = e instanceof Error ? e.message : "Failed to load rooms";
+    console.error("[celo/rooms/public]", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
