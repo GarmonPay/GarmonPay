@@ -77,6 +77,7 @@ async function getPlayerRerollCount(
     .select("reroll_count")
     .eq("round_id", roundId)
     .eq("user_id", userId)
+    .eq("voided_by_short_stop", false)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -9,7 +9,7 @@ import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoSeatsEqual } from "@/lib/celo-room-rules";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
+import type { CeloRollStartedPayload, CeloShortStopPayload } from "@/lib/celo-roll-broadcast";
 import { AnimatedDice } from "@/components/games/AnimatedDice";
 
 type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
@@ -108,6 +108,10 @@ type Round = {
   /** Server UTC start for synchronized banker roll animation */
   roll_animation_start_at?: string | null;
   roll_animation_duration_ms?: number | null;
+  /** Banker declared "no short stop" — player short-stop forfeits instead of voiding */
+  no_short_stop?: boolean;
+  banker_short_stops_used?: number;
+  banker_short_stops_max?: number;
 };
 
 type PlayerRoll = {
@@ -125,6 +129,8 @@ type PlayerRoll = {
   created_at: string;
   roll_animation_start_at?: string | null;
   roll_animation_duration_ms?: number | null;
+  voided_by_short_stop?: boolean;
+  short_stop_called_by?: string | null;
 };
 
 type SideBet = {
@@ -1034,6 +1040,31 @@ export default function CeloRoomPage() {
         }
       )
       .on(
+        "broadcast",
+        { event: "short_stop" },
+        ({ payload }) => {
+          if (!isMounted) return;
+          const p = payload as CeloShortStopPayload;
+          if (!p?.roomId || String(p.roomId) !== roomId) return;
+          void loadRoundRef.current();
+          const rollerId = p.rollerUserId ?? p.forfeitUserId;
+          const rollerName = rollerId
+            ? getDisplayName(
+                playersRef.current.find((pl) => sameCeloUserId(pl.user_id, rollerId)) ?? {
+                  user_id: rollerId,
+                }
+              )
+            : "Player";
+          if (p.kind === "no_short_stop_declared") {
+            addSystemMessage("Banker declared NO SHORT STOP for this round.");
+          } else if (p.kind === "player_void" || p.kind === "banker_void") {
+            addSystemMessage(`Roll voided — ${rollerName} must reroll`);
+          } else if (p.kind === "player_forfeit") {
+            addSystemMessage(`Short stop forfeit — ${rollerName} lost their stake.`);
+          }
+        }
+      )
+      .on(
         "postgres_changes",
         {
           event: "*",
@@ -1189,13 +1220,17 @@ export default function CeloRoomPage() {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "celo_player_rolls",
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           if (!isMounted) return;
+          if (payload.eventType === "UPDATE") {
+            void loadRoundRef.current();
+            return;
+          }
           const roll = payload.new as PlayerRoll;
           if (!roll || String(roll.room_id) !== roomId) return;
 
@@ -1694,6 +1729,52 @@ export default function CeloRoomPage() {
     await loadBalance();
   }
 
+  async function handleNoShortStop() {
+    if (!currentRound) return;
+    setActionLoading("no_short_stop");
+    setError(null);
+    try {
+      const res = await authFetch("/api/celo/round/no-short-stop", { roundId: currentRound.id });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Failed to declare");
+        return;
+      }
+      await loadRound();
+    } catch {
+      setError("Not authenticated");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleShortStop(calledBy: "player" | "banker", rollId: string) {
+    if (!currentRound) return;
+    setActionLoading("short_stop");
+    setError(null);
+    try {
+      const res = await authFetch("/api/celo/round/short-stop", {
+        roundId: currentRound.id,
+        rollId,
+        calledBy,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        setError(data.message ?? data.error ?? "Short stop failed");
+        return;
+      }
+      await loadRound();
+      await loadBalance();
+    } catch {
+      setError("Not authenticated");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleSendChat(e: React.FormEvent) {
     e.preventDefault();
     const text = chatInput.trim();
@@ -2005,6 +2086,44 @@ export default function CeloRoomPage() {
   const canRollBanker = amIBanker && isBankerRolling && playersWithBets.length > 0;
   const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
   const showPlayerRollButton = amIPlayer && isPlayerRolling;
+
+  const noShortStopDeclared = Boolean(currentRound?.no_short_stop);
+  const bankerShortUsed = currentRound?.banker_short_stops_used ?? 0;
+  const bankerShortMax = currentRound?.banker_short_stops_max ?? 3;
+  const bankerShortLeft = Math.max(0, bankerShortMax - bankerShortUsed);
+
+  const mySortedRollsThisRound =
+    currentRound && userId
+      ? playerRolls
+          .filter((r) => r.round_id === currentRound.id && sameCeloUserId(r.user_id, userId))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      : [];
+  const myLatestPlayerRoll = mySortedRollsThisRound[0] ?? null;
+
+  const voidableRerolls = currentRound
+    ? playerRolls.filter(
+        (r) =>
+          r.round_id === currentRound.id &&
+          r.outcome === "reroll" &&
+          !r.voided_by_short_stop
+      )
+    : [];
+
+  const canBankerShortStopRoll = (roll: PlayerRoll) =>
+    amIBanker &&
+    isPlayerRolling &&
+    currentRound &&
+    roll.outcome === "reroll" &&
+    !roll.voided_by_short_stop &&
+    bankerShortLeft > 0;
+
+  const showPlayerShortStopOnMyReroll =
+    amIPlayer &&
+    isPlayerRolling &&
+    isMyTurn &&
+    myLatestPlayerRoll &&
+    myLatestPlayerRoll.outcome === "reroll" &&
+    !myLatestPlayerRoll.voided_by_short_stop;
 
   const lastResult = lastRollResult?.result;
 
@@ -2719,6 +2838,105 @@ export default function CeloRoomPage() {
             </span>
           </div>
         ) : null}
+
+        {roundActive && currentRound && (
+          <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] px-1">
+            {noShortStopDeclared && (
+              <span className="rounded-full border-2 border-[#F5C842] bg-[#F5C842]/10 px-3 py-1 font-semibold text-[#F5C842]">
+                NO SHORT STOP
+              </span>
+            )}
+            <span className="text-violet-300/90">
+              Banker Short Stops: {bankerShortUsed}/{bankerShortMax} used
+            </span>
+          </div>
+        )}
+
+        {roundActive && amIBanker && currentRound && (
+          <div className="rounded-xl border-2 border-[#F5C842]/60 bg-[#F5C842]/5 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {noShortStopDeclared ? (
+              <span className="text-xs font-bold uppercase tracking-wide text-[#F5C842]">NO SHORT STOP ACTIVE</span>
+            ) : (
+              <>
+                <p className="text-xs text-violet-200/85 text-center sm:text-left">
+                  Declare &quot;no short stop&quot; — if a player still calls short stop, they forfeit their stake.
+                </p>
+                <button
+                  type="button"
+                  disabled={actionLoading === "no_short_stop"}
+                  onClick={() => void handleNoShortStop()}
+                  className="shrink-0 rounded-lg border-2 border-[#F5C842] bg-transparent px-4 py-2 text-sm font-bold text-[#F5C842] hover:bg-[#F5C842]/10 disabled:opacity-50 transition-colors"
+                >
+                  {actionLoading === "no_short_stop" ? "…" : "No Short Stop"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {isBankerRolling && amIPlayer && currentRound && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/25 px-4 py-3 text-center space-y-2">
+            {noShortStopDeclared ? (
+              <>
+                <p className="text-xs text-amber-100/95 leading-snug">
+                  ⚠ No Short Stop Declared — calling short stop will forfeit your bet
+                </p>
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-violet-400/50 cursor-not-allowed"
+                >
+                  Short Stop
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-violet-300/85">
+                Short stop: if you roll a no-count, you can void and reroll (until the banker declares otherwise).
+              </p>
+            )}
+          </div>
+        )}
+
+        {isPlayerRolling && amIBanker && voidableRerolls.length > 0 && currentRound && (
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-[#F5C842]/70">Short stop (banker)</p>
+            {voidableRerolls.map((r) => {
+              const pl = players.find((p) => sameCeloUserId(p.user_id, r.user_id));
+              return (
+                <div key={r.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-violet-200">
+                    {getDisplayName(pl ?? { user_id: r.user_id })} — {r.roll_name ?? "No count"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!canBankerShortStopRoll(r) || actionLoading === "short_stop"}
+                    onClick={() => void handleShortStop("banker", r.id)}
+                    className="rounded-lg border border-[#F5C842]/50 bg-[#F5C842]/10 px-3 py-1.5 text-[11px] font-semibold text-[#F5C842] disabled:opacity-40"
+                  >
+                    Short Stop ({bankerShortLeft} left)
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {showPlayerShortStopOnMyReroll && myLatestPlayerRoll && (
+          <div className="flex justify-center px-2">
+            <button
+              type="button"
+              disabled={actionLoading === "short_stop"}
+              onClick={() => void handleShortStop("player", myLatestPlayerRoll.id)}
+              className="rounded-lg border-2 border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              {actionLoading === "short_stop"
+                ? "…"
+                : noShortStopDeclared
+                  ? "Short Stop (forfeits bet)"
+                  : "Short Stop"}
+            </button>
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
