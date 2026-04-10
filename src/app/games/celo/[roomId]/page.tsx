@@ -15,6 +15,7 @@ import { AnimatedDice } from "@/components/games/AnimatedDice";
 type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
+import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 
 async function authFetch(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
@@ -1451,6 +1452,7 @@ export default function CeloRoomPage() {
     const ok = res.ok;
     setJoinLoading(false);
     if (!ok) { setJoinError((data.error as string) ?? "Failed to join"); return; }
+    markCeloPublicLobbyStale();
     await loadAll();
     await fetchPlayers();
   }
@@ -1505,6 +1507,7 @@ export default function CeloRoomPage() {
         window.alert(data.error ?? "Failed to close room");
         return;
       }
+      markCeloPublicLobbyStale();
       router.push("/games/celo");
     } catch {
       setError("Not authenticated");

@@ -7,6 +7,7 @@ import { Cinzel_Decorative } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
+import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -88,6 +89,7 @@ export default function CeloLobbyPage() {
 
   /** Canonical lobby list — service role + stale cleanup; bypasses RLS (fixes mobile vs desktop). */
   const loadPublicRooms = useCallback(async () => {
+    console.info("[celo-lobby-debug] loadPublicRooms start");
     try {
       const res = await fetch("/api/celo/rooms/public", {
         cache: "no-store",
@@ -96,16 +98,23 @@ export default function CeloLobbyPage() {
           Pragma: "no-cache",
         },
       });
-      if (!res.ok) return;
+      console.info("[celo-lobby-debug] loadPublicRooms response status", res.status);
+      if (!res.ok) {
+        console.warn("[celo-lobby-debug] loadPublicRooms non-OK, keeping previous rooms");
+        return;
+      }
       const json = (await res.json().catch(() => ({}))) as { rooms?: Record<string, unknown>[] };
       const rows = json.rooms ?? [];
-      setRooms(
-        rows
-          .map((row) => mapRowToLobbyRoom(row))
-          .filter((x): x is Room => x !== null)
-      );
-    } catch {
-      /* ignore */
+      const mapped = rows
+        .map((row) => mapRowToLobbyRoom(row))
+        .filter((x): x is Room => x !== null);
+      console.info("[celo-lobby-debug] loadPublicRooms room count", mapped.length, {
+        ids: mapped.map((r) => r.id),
+        join_codes: rows.map((row) => String(row.join_code ?? "")),
+      });
+      setRooms(mapped);
+    } catch (e) {
+      console.warn("[celo-lobby-debug] loadPublicRooms error", e);
     }
   }, [mapRowToLobbyRoom]);
 
@@ -164,10 +173,20 @@ export default function CeloLobbyPage() {
 
   useEffect(() => {
     let isMounted = true;
+    if (consumeCeloPublicLobbyStale()) {
+      console.info("[celo-lobby-debug] consumed stale flag from room page — refetching");
+    }
+    /** Eager fetch: do not wait for Realtime SUBSCRIBED (fixes slow mobile / delayed first paint). */
+    void loadPublicRooms().finally(() => {
+      if (isMounted) setLoading(false);
+    });
+
     const sb = createBrowserClient();
     if (!sb) {
-      setLoading(false);
-      return;
+      return () => {
+        isMounted = false;
+        if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
+      };
     }
 
     const onRoomsChange = () => {
@@ -206,14 +225,9 @@ export default function CeloLobbyPage() {
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED" && isMounted) {
-          void loadPublicRooms().finally(() => {
-            if (isMounted) setLoading(false);
-          });
+          void loadPublicRooms();
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          if (isMounted) {
-            setLoading(false);
-            void loadPublicRooms();
-          }
+          if (isMounted) void loadPublicRooms();
         }
       });
 
@@ -221,9 +235,32 @@ export default function CeloLobbyPage() {
       if (isMounted) void loadPublicRooms();
     }, 60_000);
 
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted && isMounted) {
+        console.info("[celo-lobby-debug] pageshow from bfcache — refetch");
+        void loadPublicRooms();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+
+    let visTimer: ReturnType<typeof setTimeout> | null = null;
+    const onVis = () => {
+      if (document.visibilityState !== "visible" || !isMounted) return;
+      if (visTimer) clearTimeout(visTimer);
+      visTimer = setTimeout(() => {
+        visTimer = null;
+        console.info("[celo-lobby-debug] visibility visible — refetch");
+        void loadPublicRooms();
+      }, 400);
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
       isMounted = false;
       if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
+      if (visTimer) clearTimeout(visTimer);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(poll);
       sb.removeChannel(channel);
     };

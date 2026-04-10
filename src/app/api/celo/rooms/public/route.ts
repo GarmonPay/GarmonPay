@@ -17,6 +17,17 @@ export async function GET() {
 
   try {
     const { rooms, cleanup, queryCount } = await getPublicLobbyRoomsWithCleanup(admin);
+    console.info("[celo-lobby-debug] GET /api/celo/rooms/public total rooms", queryCount);
+    for (const row of rooms) {
+      const r = row as Record<string, unknown>;
+      console.info("[celo-lobby-debug] room row", {
+        id: r.id,
+        status: r.status,
+        room_type: r.room_type,
+        join_code: r.join_code ?? null,
+        last_activity: r.last_activity,
+      });
+    }
     return NextResponse.json(
       { rooms, meta: { cleanup, queryCount } },
       {
