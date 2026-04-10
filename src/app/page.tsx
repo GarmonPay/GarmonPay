@@ -13,9 +13,7 @@ export default function Page() {
         data-deploy-marker="true"
       >
         DEPLOY TEST — {deployStamp}
-      </div><div style={{ background: 'red', color: 'white', padding: '20px', fontSize: '32px' }}>
-  LIVE TEST APR 10
-</div>
+      </div>
       <HomePageClient />
     </>
   );
