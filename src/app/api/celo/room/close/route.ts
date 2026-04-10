@@ -101,7 +101,11 @@ export async function POST(req: Request) {
     if (!("skipped" in result && result.skipped)) refundsIssued += 1;
   }
 
-  const bankCents = normalized.current_bank_cents ?? 0;
+  /** Live table bank from DB (`current_bank_sc` in production), not the opening reserve alone. */
+  const bankCents = Math.max(
+    0,
+    Math.round(Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0))
+  );
   if (bankCents > 0 && bankerId) {
     const bankRef = celoBankRefundReference(room_id);
     const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);

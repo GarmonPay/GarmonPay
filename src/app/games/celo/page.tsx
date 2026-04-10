@@ -103,6 +103,17 @@ export default function CeloLobbyPage() {
   }, [mapRowToLobbyRoom]);
 
   useEffect(() => {
+    if (!showCreate || !session?.accessToken) return;
+    fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${session.accessToken}` } })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { balance_cents?: number }) => {
+        const n = Number(d.balance_cents ?? 0);
+        setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+      })
+      .catch(() => {});
+  }, [showCreate, session?.accessToken]);
+
+  useEffect(() => {
     // Load rooms immediately — doesn't require auth
     void loadRooms();
 
@@ -320,13 +331,15 @@ export default function CeloLobbyPage() {
     }));
   }
 
-  /** Both sides in cents (wallet + form fields use *_cents). */
+  /** Both sides in cents (`minimum_entry_cents` / `starting_bank_cents` vs wallet). */
   const userBalanceCents = balanceCents;
+  const minimumEntryCents = form.minimum_entry_cents;
   const startingBankCents = form.starting_bank_cents;
-  const canAfford = userBalanceCents >= startingBankCents;
+  const hasEnough = userBalanceCents >= startingBankCents;
+  const shortfallCents = Math.max(0, startingBankCents - userBalanceCents);
   const canSubmit =
     !creating &&
-    canAfford &&
+    hasEnough &&
     form.name.trim().length > 0 &&
     (form.room_type === "public" || form.join_code.trim().length >= 1);
 
@@ -588,13 +601,10 @@ export default function CeloLobbyPage() {
                 </div>
                 <input
                   type="range"
-                  min={form.minimum_entry_cents}
-                  max={Math.max(
-                    form.minimum_entry_cents,
-                    userBalanceCents > 0 ? Math.min(userBalanceCents, 200_000) : 200_000
-                  )}
-                  step={form.minimum_entry_cents}
-                  value={form.starting_bank_cents}
+                  min={minimumEntryCents}
+                  max={Math.max(minimumEntryCents, userBalanceCents > 0 ? userBalanceCents : minimumEntryCents)}
+                  step={minimumEntryCents}
+                  value={startingBankCents}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
@@ -603,10 +613,19 @@ export default function CeloLobbyPage() {
                   }
                   className="mt-2 w-full accent-[#F5C842]"
                 />
-                <p className={`text-[10px] mt-1.5 font-medium ${canAfford ? "text-violet-400/50" : "text-red-400"}`}>
-                  {canAfford
-                    ? `You need $${(startingBankCents / 100).toFixed(2)} to cover this bank`
-                    : `Insufficient balance — you have $${(userBalanceCents / 100).toFixed(2)} (need $${(startingBankCents / 100).toFixed(2)})`}
+                <p
+                  className={`text-[10px] mt-1.5 font-medium ${
+                    hasEnough ? "text-emerald-400/90" : "text-red-400"
+                  }`}
+                >
+                  {hasEnough ? (
+                    <>Your balance: ${(userBalanceCents / 100).toFixed(2)} — enough to reserve this bank.</>
+                  ) : (
+                    <>
+                      Your balance: ${(userBalanceCents / 100).toFixed(2)} — you need $
+                      {(shortfallCents / 100).toFixed(2)} more to reserve ${(startingBankCents / 100).toFixed(2)}.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -618,7 +637,7 @@ export default function CeloLobbyPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
                   <span className="text-violet-300/70">Your balance</span>
-                  <span className={`font-bold font-mono ${canAfford ? "text-emerald-400" : "text-red-400"}`}>
+                  <span className={`font-bold font-mono ${hasEnough ? "text-emerald-400" : "text-red-400"}`}>
                     ${(userBalanceCents / 100).toFixed(2)}
                   </span>
                 </div>
@@ -635,19 +654,19 @@ export default function CeloLobbyPage() {
                 type="submit"
                 disabled={!canSubmit}
                 className={`w-full rounded-xl py-4 font-bold text-sm tracking-wide shadow-lg transition-all ${
-                  canAfford
+                  hasEnough
                     ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30 hover:from-[#fde047] hover:to-[#F5C842] disabled:opacity-60"
                     : "bg-red-900/40 border border-red-500/30 text-red-400 cursor-not-allowed"
                 }`}
               >
                 {creating
                   ? "Creating…"
-                  : !canAfford
+                  : !hasEnough
                   ? "Insufficient Balance"
                   : `CREATE ROOM — $${(form.starting_bank_cents / 100).toFixed(2)}`}
               </button>
 
-              {!canAfford && (
+              {!hasEnough && (
                 <p className="text-center text-[10px] text-violet-400/50">
                   <Link href="/dashboard/finance" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
                     Add funds to your wallet →

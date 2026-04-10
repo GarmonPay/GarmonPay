@@ -57,14 +57,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Only the banker can start a round" }, { status: 403 });
   }
 
-  if (roomRecord.status !== "active") {
+  const roomStatus = String(roomRecord.status ?? "");
+  if (roomStatus !== "active" && roomStatus !== "waiting") {
     celoQaLog("banker_start_rejected", {
       room_id,
-      reason: "room_not_active",
+      reason: "room_not_open",
       userId,
       roomStatus: roomRecord.status,
     });
-    return NextResponse.json({ error: "Room is not active" }, { status: 400 });
+    return NextResponse.json({ error: "Room is not open to start a round" }, { status: 400 });
+  }
+
+  if (roomStatus === "waiting") {
+    const now = new Date().toISOString();
+    await supabase.from("celo_rooms").update({ status: "active", last_activity: now }).eq("id", room_id).eq("status", "waiting");
   }
 
   // Ensure no round is currently in progress

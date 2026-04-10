@@ -159,6 +159,8 @@ type RollResponse = {
   dice?: number[];
   rollName?: string;
   result?: string;
+  status?: string;
+  currentPlayerSeat?: number | null;
   isCelo?: boolean;
   outcome?: string;
   payoutCents?: number;
@@ -1519,8 +1521,8 @@ export default function CeloRoomPage() {
     setRollInteractionBusy(true);
     setLastRollResult(null);
     setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
+    let res: Response | undefined;
+    let data: Record<string, unknown> = {};
     try {
       res = await authFetch("/api/celo/round/roll", {
         room_id: roomId,
@@ -1530,16 +1532,20 @@ export default function CeloRoomPage() {
     } catch {
       setRollInteractionBusy(false);
       setIsRolling(false);
+      setError("Network error — try again");
+    } finally {
       setActionLoading(null);
-      setError("Not authenticated");
-      return;
     }
-    const ok = res.ok;
-    setActionLoading(null);
-    if (!ok) {
-      setRollInteractionBusy(false);
-      setIsRolling(false);
-      setError((data.error as string) ?? "Roll failed");
+    if (!res || !res.ok) {
+      if (res && !res.ok) {
+        const errMsg =
+          (typeof data.error === "string" && data.error) ||
+          (typeof data.message === "string" && data.message) ||
+          "Roll failed";
+        setRollInteractionBusy(false);
+        setIsRolling(false);
+        setError(errMsg);
+      }
       return;
     }
     const rollData = data as unknown as RollResponse;
@@ -1548,6 +1554,14 @@ export default function CeloRoomPage() {
     // Other players/spectators get it via postgres_changes. Broadcast is additive dedup.
     if (rollData.animationPayload) {
       processRollStartedPayload(rollData.animationPayload, "api-response");
+    } else if (
+      wasBankerRolling &&
+      Array.isArray(rollData.dice) &&
+      rollData.dice.length === 3
+    ) {
+      window.setTimeout(() => {
+        void triggerDiceAnimation(rollData.dice as number[], String(rollData.rollName ?? ""));
+      }, 0);
     }
     if (rollData.roundComplete && rollData.summary) {
       setRoundSummary(rollData.summary);
@@ -1577,7 +1591,7 @@ export default function CeloRoomPage() {
     window.setTimeout(() => {
       void (async () => {
         await new Promise((r) => setTimeout(r, 500));
-        if (startedAnimFromApi) return;
+        if (startedAnimFromApi || (wasBankerRolling && rollData.dice?.length === 3)) return;
         if (!wasBankerRolling) return;
         const sb = createBrowserClient();
         if (!sb) return;
@@ -2067,14 +2081,19 @@ export default function CeloRoomPage() {
   const noActiveRound = !currentRound;
 
   const seatedPlayers = players.filter((p) => p.role === "player");
-  const playersWithBets = seatedPlayers.filter((p) => getEntryAmount(p) > 0);
+  /** Players with money on the table (`entry_sc` / `bet_cents`, cents). */
+  const playersWithEntries = seatedPlayers.filter((p) => getEntryAmount(p) > 0);
+  const playersWithBets = playersWithEntries;
 
-  /** Matches POST /api/celo/round/start: room must be `active` (first player join promotes waiting → active). */
+  /** Banker can start when at least one player has a stake and no round is in progress (`POST /api/celo/round/start` also allows `waiting`). */
+  const roomOpenForStart = room.status === "active" || room.status === "waiting";
   const canStartRound =
     amIBanker &&
-    room.status === "active" &&
+    roomOpenForStart &&
     noActiveRound &&
-    playersWithBets.length > 0;
+    playersWithEntries.length > 0 &&
+    !isBankerRolling &&
+    !isPlayerRolling;
 
   const canCoverBank =
     amIPlayer &&
@@ -2982,7 +3001,7 @@ export default function CeloRoomPage() {
           {canRollBanker && (
             <button
               type="button"
-              disabled={!!actionLoading || rollInteractionBusy}
+              disabled={!currentRound || !!actionLoading || rollInteractionBusy}
               onClick={handleRoll}
               className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-4 font-bold text-black shadow-lg shadow-amber-900/30 disabled:opacity-60 transition-all text-sm"
             >
@@ -3000,7 +3019,7 @@ export default function CeloRoomPage() {
           {showPlayerRollButton && (
             <button
               type="button"
-              disabled={!canRollPlayer || !!actionLoading || rollInteractionBusy}
+              disabled={!currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy}
               onClick={handleRoll}
               className={`flex-1 rounded-xl py-4 font-bold shadow-lg transition-all text-sm ${
                 canRollPlayer
@@ -3045,10 +3064,8 @@ export default function CeloRoomPage() {
               {seatedPlayers.length === 0
                 ? "Waiting for players to join…"
                 : playersWithBets.length === 0
-                  ? "Players joined but no bets placed yet"
-                  : room.status !== "active"
-                    ? "Waiting for room to be active…"
-                    : "Ready — press Start Round"}
+                  ? "Waiting for players to place entries…"
+                  : "Ready — press Start Round"}
             </div>
           )}
         </div>

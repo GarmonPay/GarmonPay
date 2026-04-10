@@ -47,6 +47,12 @@ function jsonDbFailure(label: string, err: PgLike | null | undefined): NextRespo
 }
 
 export async function POST(req: Request) {
+  /** Set after a successful bank debit; outer catch refunds at most once if something throws after that. */
+  let bankDebitSucceeded = false;
+  let refundIssued = false;
+  let startingBankCentsForRefund = 0;
+  let authedUserId: string | null = null;
+
   try {
     console.error("[celo/room/create] step: start");
     const userId = await getAuthUserIdStrict(req);
@@ -55,12 +61,24 @@ export async function POST(req: Request) {
       console.error("[celo/room/create] step: auth failed");
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    authedUserId = userId;
     console.error("[celo/room/create] step: authenticated userId=", userId);
 
     const supabase = createAdminClient();
     if (!supabase) {
       console.error("[celo/room/create] step: no Supabase admin client");
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
+
+    const staleBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { error: staleErr } = await supabase
+      .from("celo_rooms")
+      .update({ status: "cancelled", last_activity: new Date().toISOString() })
+      .eq("creator_id", userId)
+      .in("status", ["waiting", "active"])
+      .lt("last_activity", staleBefore);
+    if (staleErr) {
+      console.error("[celo/room/create] stale room cleanup:", staleErr.message);
     }
 
     const { data: existingRoom } = await supabase
@@ -215,6 +233,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    startingBankCentsForRefund = starting_bank_cents;
 
     // Insert only columns present on production: *_sc bank fields, no speed/max_bet unless migrated
     // Balance is validated above; deduction happens ONLY after room (+ player + audit) rows exist.
@@ -384,6 +404,8 @@ export async function POST(req: Request) {
       );
     }
 
+    bankDebitSucceeded = true;
+
     console.error("[celo/room/create] step: success room_id=", room.id);
     celoQaLog("room_create_ok", {
       roomId: room.id,
@@ -393,8 +415,26 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ room });
   } catch (err: unknown) {
+    if (bankDebitSucceeded && !refundIssued && startingBankCentsForRefund > 0 && authedUserId) {
+      refundIssued = true;
+      try {
+        await walletLedgerEntry(
+          authedUserId,
+          "game_win",
+          startingBankCentsForRefund,
+          `celo_bank_refund_creation_failed_${Date.now()}`
+        );
+        celoQaLog("room_create_bank_refund_after_throw", {
+          userId: authedUserId,
+          cents: startingBankCentsForRefund,
+        });
+      } catch (refundErr: unknown) {
+        console.error("[celo/room/create] emergency bank refund after error failed:", refundErr);
+      }
+    }
     celoQaLog("room_create_failure", { kind: "unhandled", message: err instanceof Error ? err.message : String(err) });
     console.error("[celo/room/create] unhandled top-level:", err);
+
     return NextResponse.json(
       {
         error: err instanceof Error ? err.message : String(err),
