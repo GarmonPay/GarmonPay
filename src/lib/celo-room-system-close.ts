@@ -31,14 +31,17 @@ export async function systemCloseCeloRoomWithRefunds(
     return { ok: true };
   }
 
-  const { data: activeRound } = await admin
+  /** Use count — `.maybeSingle()` errors when >1 incomplete round exists and would look like "no row". */
+  const { count: incompleteRoundCount, error: roundsErr } = await admin
     .from("celo_rounds")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("room_id", roomId)
-    .neq("status", "completed")
-    .maybeSingle();
+    .neq("status", "completed");
 
-  if (activeRound) {
+  if (roundsErr) {
+    return { ok: false, error: roundsErr.message };
+  }
+  if ((incompleteRoundCount ?? 0) > 0) {
     return { ok: false, error: "Round in progress" };
   }
 
