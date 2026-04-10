@@ -13,6 +13,7 @@ import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room
 import { getEligibleStakedPlayers } from "@/lib/celo-eligible-players";
 import { advanceAfterResolvingCeloPlayerRoll } from "@/lib/celo-round-advance";
 import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
+import { CELO_ROUND_STATUS } from "@/lib/celo-round-status";
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
@@ -39,16 +40,27 @@ function playerRollSaveErrorResponse(
     ...ctx,
   });
   const duplicate = code === "23505" || msg.toLowerCase().includes("duplicate");
+  const userMsg = duplicate ? "This roll was already recorded — try again" : "Failed to save roll";
   return NextResponse.json(
     {
-      message: duplicate ? "This roll was already recorded — try again" : "Failed to save roll",
-      error: msg || null,
+      success: false,
+      message: userMsg,
+      error: userMsg,
+      pgMessage: msg || null,
       code: code || null,
       details: err?.details ?? null,
       hint: err?.hint ?? null,
     },
     { status: duplicate ? 409 : 500 }
   );
+}
+
+function errJson(status: number, error: string, extra?: Record<string, unknown>) {
+  return NextResponse.json({ success: false, error, ...extra }, { status });
+}
+
+function okJson(data: Record<string, unknown>) {
+  return NextResponse.json({ success: true, ...data });
 }
 
 function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
@@ -67,6 +79,22 @@ function platformFeeFromGrossTenPct(grossCents: number): number {
 }
 
 /** Get the latest reroll_count for a player in this round. */
+async function countSeatedPlayersWithRole(
+  supabase: SupabaseClient,
+  roomId: string,
+  role: "player" | "banker"
+): Promise<{ count: number; error: string | null }> {
+  const { count, error } = await supabase
+    .from("celo_room_players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("role", role);
+  if (error) {
+    return { count: 0, error: error.message };
+  }
+  return { count: count ?? 0, error: null };
+}
+
 async function getPlayerRerollCount(
   supabase: SupabaseClient,
   roundId: string,
@@ -110,46 +138,38 @@ async function emitCeloRollStarted(
 // ── ROUTE HANDLER ──────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  try {
+    return await handleCeloRollPost(req);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    celoQaLog("celo_roll_unhandled", { message: msg });
+    console.error("[celo/roll] unhandled", e);
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
+  }
+}
+
+async function handleCeloRollPost(req: Request) {
   const userId = await getAuthUserIdStrict(req);
   if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return errJson(401, "Not authenticated");
   }
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    return errJson(503, "Service unavailable");
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return errJson(400, "Invalid JSON");
   }
 
   const parsed = body as { room_id?: string; round_id?: string };
   const { room_id } = parsed;
   if (!room_id) {
-    return NextResponse.json({ error: "room_id required" }, { status: 400 });
-  }
-
-  let round_id: string;
-  if (parsed.round_id) {
-    round_id = parsed.round_id;
-  } else {
-    const { data: activeRound } = await supabase
-      .from("celo_rounds")
-      .select("id, status, banker_point, current_player_seat")
-      .eq("room_id", room_id)
-      .neq("status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!activeRound?.id) {
-      return NextResponse.json({ error: "No active round for this room" }, { status: 400 });
-    }
-    round_id = activeRound.id;
+    return errJson(400, "room_id required");
   }
 
   // Verify user is in this room
@@ -161,7 +181,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (!playerEntry) {
-    return NextResponse.json({ error: "Not in this room" }, { status: 403 });
+    return errJson(403, "Not in this room");
   }
 
   const playerRow = playerEntry as {
@@ -172,17 +192,38 @@ export async function POST(req: Request) {
     seat_number: number | null;
   };
 
-  // Fetch round
-  const { data: round } = await supabase
+  const { data: room, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", room_id).maybeSingle();
+
+  if (roomErr || !room) {
+    return errJson(404, "Room not found");
+  }
+
+  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as NormalizedCeloRoom & {
+    banker_id: string;
+  };
+
+  const { data: authoritativeRound, error: authRoundErr } = await supabase
     .from("celo_rounds")
     .select("*")
-    .eq("id", round_id)
     .eq("room_id", room_id)
+    .neq("status", CELO_ROUND_STATUS.completed)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (!round) {
-    return NextResponse.json({ error: "Round not found" }, { status: 404 });
+  if (authRoundErr) {
+    return errJson(500, authRoundErr.message);
   }
+  if (!authoritativeRound) {
+    return errJson(400, "No active round");
+  }
+
+  if (parsed.round_id && String(authoritativeRound.id) !== String(parsed.round_id)) {
+    return errJson(409, "Round is out of date — refresh and try again");
+  }
+
+  const round_id = authoritativeRound.id;
+  const round = authoritativeRound;
 
   const r = round as {
     id: string;
@@ -198,30 +239,34 @@ export async function POST(req: Request) {
     banker_dice_result?: string | null;
   };
 
-  if (r.completed_at || r.status === "completed") {
-    return NextResponse.json({ error: "Round is already completed" }, { status: 400 });
+  if (r.completed_at || r.status === CELO_ROUND_STATUS.completed) {
+    return errJson(400, "Round is already completed");
   }
 
   console.log("[celo/roll] request", { userId, room_id, round_id });
-
-  // Fetch room (supports current_bank_sc / minimum_entry_sc or legacy *_cents columns)
-  const { data: room } = await supabase.from("celo_rooms").select("*").eq("id", room_id).single();
-
-  if (!room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-
-  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as NormalizedCeloRoom & {
-    banker_id: string;
-  };
 
   const now = new Date().toISOString();
 
   // ── BANKER ROLL ────────────────────────────────────────────────────────────
 
-  if (r.status === "banker_rolling") {
-    if (userId !== rm.banker_id) {
-      return NextResponse.json({ error: "Not your turn to roll" }, { status: 403 });
+  if (r.status === CELO_ROUND_STATUS.banker_rolling) {
+    if (playerRow.role !== "banker") {
+      return errJson(403, "Invalid turn");
+    }
+    if (!celoSameAuthUserId(userId, rm.banker_id)) {
+      return errJson(403, "Invalid turn");
+    }
+
+    const { count: seatedPlayerCount, error: seatCountErr } = await countSeatedPlayersWithRole(
+      supabase,
+      room_id,
+      "player"
+    );
+    if (seatCountErr) {
+      return errJson(500, seatCountErr);
+    }
+    if (seatedPlayerCount < 1) {
+      return errJson(400, "No players in room");
     }
 
     const eligibleForBank = await getEligibleStakedPlayers(supabase, room_id, r.covered_by);
@@ -233,10 +278,7 @@ export async function POST(req: Request) {
         roundStatus: r.status,
         reason: "no_eligible_players_with_stake",
       });
-      return NextResponse.json(
-        { error: "Cannot roll: no players with stakes are seated at this table" },
-        { status: 400 }
-      );
+      return errJson(400, "Cannot roll: no players with stakes are seated at this table");
     }
 
     const dice = rollThreeDice();
@@ -260,10 +302,10 @@ export async function POST(req: Request) {
 
     const statusAfterRoll =
       roll.result === "point"
-        ? "player_rolling"
+        ? CELO_ROUND_STATUS.player_rolling
         : roll.result === "no_count"
-          ? "banker_rolling"
-          : "completed";
+          ? CELO_ROUND_STATUS.banker_rolling
+          : CELO_ROUND_STATUS.completed;
 
     const bankerPointValue =
       roll.result === "point" && roll.point !== undefined ? roll.point : null;
@@ -294,7 +336,7 @@ export async function POST(req: Request) {
       .from("celo_rounds")
       .update(roundUpdate)
       .eq("id", round_id)
-      .eq("status", "banker_rolling");
+      .eq("status", CELO_ROUND_STATUS.banker_rolling);
 
     const hasNoBankerDice =
       r.banker_dice == null || !Array.isArray(r.banker_dice) || r.banker_dice.length !== 3;
@@ -311,15 +353,24 @@ export async function POST(req: Request) {
 
     if (bankerRoundUpErr) {
       console.error("celo_rounds banker roll update:", bankerRoundUpErr);
-      return NextResponse.json({ error: "Failed to save banker roll" }, { status: 500 });
+      celoQaLog("banker_roll_failed", {
+        phase: "banker_round_update",
+        pgCode: bankerRoundUpErr.code,
+        pgMessage: bankerRoundUpErr.message,
+        pgDetails: bankerRoundUpErr.details ?? null,
+        room_id,
+        round_id,
+      });
+      return errJson(500, bankerRoundUpErr.message || "Failed to save roll", {
+        code: bankerRoundUpErr.code ?? null,
+        details: bankerRoundUpErr.details ?? null,
+        hint: bankerRoundUpErr.hint ?? null,
+      });
     }
 
     if (!bankerUpRows || bankerUpRows.length === 0) {
       console.warn("[celo/roll] banker conditional update matched 0 rows — duplicate or stale roll");
-      return NextResponse.json(
-        { error: "Roll already recorded or round state changed — try again" },
-        { status: 409 }
-      );
+      return errJson(409, "Roll already recorded or round state changed — try again");
     }
 
     await supabase.from("celo_audit_log").insert({
@@ -341,7 +392,7 @@ export async function POST(req: Request) {
     await emitCeloRollStarted(supabase, room_id, bankerSync);
 
     if (roll.result === "no_count") {
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "no_count",
@@ -351,12 +402,12 @@ export async function POST(req: Request) {
     }
 
     if (roll.result === "point") {
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "point",
         bankerPoint: roll.point,
-        status: "player_rolling",
+        status: CELO_ROUND_STATUS.player_rolling,
         currentPlayerSeat: firstSeatForPoint,
         animationPayload: bankerSync,
       });
@@ -410,7 +461,7 @@ export async function POST(req: Request) {
         instantWinPayload.banker_can_adjust_bank = false;
       }
 
-      return NextResponse.json({ ...instantWinPayload, animationPayload: bankerSync });
+      return okJson({ ...instantWinPayload, animationPayload: bankerSync });
     }
 
     // ── INSTANT LOSS (banker) — Shit / Dick: pay table, bank drops by total payouts; banker stays unless broke ──
@@ -508,7 +559,7 @@ export async function POST(req: Request) {
 
       await settleCeloOpenSideBets(supabase, round_id, room_id);
 
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "instant_loss",
@@ -526,9 +577,16 @@ export async function POST(req: Request) {
 
   // ── PLAYER ROLL ────────────────────────────────────────────────────────────
 
-  if (r.status === "player_rolling") {
+  if (r.status === CELO_ROUND_STATUS.player_rolling) {
+    if (playerRow.role !== "player") {
+      return errJson(403, "Invalid turn");
+    }
+    if (!Array.isArray(r.banker_dice) || r.banker_dice.length !== 3) {
+      return errJson(400, "Banker roll not recorded — wait for sync");
+    }
+
     if (r.banker_point === null) {
-      return NextResponse.json({ error: "No banker point set" }, { status: 400 });
+      return errJson(400, "No banker point set");
     }
 
     const eligible = await getEligibleStakedPlayers(supabase, room_id, r.covered_by);
@@ -541,7 +599,7 @@ export async function POST(req: Request) {
         roomStatus: rm.status,
         roundStatus: r.status,
       });
-      return NextResponse.json({ error: "No players remaining to roll" }, { status: 400 });
+      return errJson(400, "No players remaining to roll");
     }
 
     const isStakedPlayer = eligible.some((e) => celoSameAuthUserId(e.user_id, userId));
@@ -556,10 +614,7 @@ export async function POST(req: Request) {
         roomStatus: rm.status,
         roundStatus: r.status,
       });
-      return NextResponse.json(
-        { error: "Only players with an active stake can roll in this phase" },
-        { status: 403 }
-      );
+      return errJson(403, "Only players with an active stake can roll in this phase");
     }
 
     let currentSeat = r.current_player_seat;
@@ -585,13 +640,9 @@ export async function POST(req: Request) {
         roomStatus: rm.status,
         roundStatus: r.status,
       });
-      return NextResponse.json(
-        {
-          error: "Not your turn to roll",
-          details: currentPlayer ? "Another player's turn" : "Could not resolve turn order",
-        },
-        { status: 403 }
-      );
+      return errJson(403, "Not your turn to roll", {
+        details: currentPlayer ? "Another player's turn" : "Could not resolve turn order",
+      });
     }
 
     const playerBet = currentPlayer.bet_cents;
@@ -663,7 +714,7 @@ export async function POST(req: Request) {
       });
       await emitCeloRollStarted(supabase, room_id, plSync);
 
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "no_count",
@@ -748,7 +799,7 @@ export async function POST(req: Request) {
 
       const coverOffer = Boolean(r.bank_covered && r.covered_by && userId === r.covered_by);
 
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "instant_win",
@@ -839,7 +890,7 @@ export async function POST(req: Request) {
         now
       );
 
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "instant_loss",
@@ -959,7 +1010,7 @@ export async function POST(req: Request) {
         playerWins && r.bank_covered && r.covered_by && userId === r.covered_by
       );
 
-      return NextResponse.json({
+      return okJson({
         dice,
         rollName: roll.rollName,
         result: "point",
@@ -977,5 +1028,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ error: "Round is not in a rollable state" }, { status: 400 });
+  return errJson(400, "Invalid turn — round is not in a rolling phase");
 }

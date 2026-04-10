@@ -3,7 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoQaLog } from "@/lib/celo-qa-log";
-import { isRoomEmptyForDelete } from "@/lib/celo-room-rules";
+import { celoSameAuthUserId, isRoomEmptyForDelete } from "@/lib/celo-room-rules";
 
 /**
  * Banker: delete when no players hold table stakes, no active round, and bank is refunded (idempotent).
@@ -34,19 +34,34 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
   const rawRoom = room as Record<string, unknown>;
   const normalized = normalizeCeloRoomRow(rawRoom);
   const bankerId = String(rawRoom.banker_id ?? normalized?.banker_id ?? "");
-  const creatorId = String(rawRoom.creator_id ?? "");
-  const isBanker = !!bankerId && bankerId === String(userId);
-  const isCreator = !!creatorId && creatorId === String(userId);
-  if (!isBanker && !isCreator) {
-    celoQaLog("delete_room_rejected", { roomId, userId, reason: "not_banker_or_creator" });
-    return NextResponse.json({ error: "Only the banker or room creator can delete this room" }, { status: 403 });
+  if (!bankerId || !celoSameAuthUserId(userId, bankerId)) {
+    celoQaLog("delete_room_rejected", { roomId, userId, reason: "not_banker" });
+    return NextResponse.json(
+      { success: false, error: "Only the banker can delete this room" },
+      { status: 403 }
+    );
   }
 
-  if (isCreator && !isBanker && bankerId && String(bankerId) !== String(userId)) {
-    celoQaLog("delete_room_rejected", { roomId, userId, reason: "creator_cannot_delete_bankers_room" });
+  const { count: seatedPlayerCount, error: seatedErr } = await supabase
+    .from("celo_room_players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("role", "player");
+
+  if (seatedErr) {
     return NextResponse.json(
-      { error: "Only the banker can delete this room while a banker is seated" },
-      { status: 403 }
+      { success: false, error: seatedErr.message ?? "Could not verify room players" },
+      { status: 500 }
+    );
+  }
+  if ((seatedPlayerCount ?? 0) > 0) {
+    celoQaLog("delete_room_rejected", { roomId, userId, reason: "players_seated", seatedPlayerCount });
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Cannot delete while players are seated at the table",
+      },
+      { status: 400 }
     );
   }
 
@@ -139,5 +154,5 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ room
     details: { room_id: roomId, bank_refunded_cents: bankCents },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ success: true, ok: true });
 }
