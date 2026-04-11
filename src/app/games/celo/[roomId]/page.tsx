@@ -445,7 +445,9 @@ export default function CeloRoomPage() {
   const [playerRolls, setPlayerRolls] = useState<PlayerRoll[]>([]);
   const [openSideBets, setOpenSideBets] = useState<SideBet[]>([]);
   const [myPlayer, setMyPlayer] = useState<Player | null>(null);
+  /** USD wallet cents — C-Lo stakes still use wallet ledger USD. */
   const [balanceCents, setBalanceCents] = useState(0);
+  const [sweepsBalanceDisplay, setSweepsBalanceDisplay] = useState(0);
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const balanceRef = useRef(0);
   const [loading, setLoading] = useState(true);
@@ -724,11 +726,13 @@ export default function CeloRoomPage() {
     try {
       const res = await authFetchGet("/api/coins/balance");
       if (res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { sweeps_coins?: number };
-        const n = Number(d.sweeps_coins ?? 0);
-        const v = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number; sweeps_coins?: number };
+        const usd = Number(d.balance_cents ?? 0);
+        const v = Number.isFinite(usd) ? Math.max(0, Math.floor(usd)) : 0;
         setBalanceCents(v);
         balanceRef.current = v;
+        const sc = Number(d.sweeps_coins ?? 0);
+        setSweepsBalanceDisplay(Number.isFinite(sc) ? Math.max(0, Math.floor(sc)) : 0);
       }
     } catch {
       /* ignore */
@@ -1074,21 +1078,21 @@ export default function CeloRoomPage() {
     if (!sb || !session?.userId) return;
     let isMounted = true;
     const uid = session.userId;
-    const ch = sb
-      .channel(`user-sweeps-${uid}`)
+    const chWallet = sb
+      .channel(`wallet-balance-${uid}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "users",
-          filter: `id=eq.${uid}`,
+          table: "wallet_balances",
+          filter: `user_id=eq.${uid}`,
         },
         (payload) => {
           if (!isMounted) return;
-          const row = payload.new as { id?: string; sweeps_coins?: number } | undefined;
-          if (!row || !sameCeloUserId(row.id, uid)) return;
-          const newBalance = Number(row.sweeps_coins ?? 0);
+          const row = payload.new as { user_id?: string; balance?: number } | undefined;
+          if (!row || !sameCeloUserId(row.user_id, uid)) return;
+          const newBalance = Number(row.balance ?? 0);
           if (!Number.isFinite(newBalance)) return;
           const floored = Math.max(0, Math.floor(newBalance));
           const prev = balanceRef.current;
@@ -1108,9 +1112,30 @@ export default function CeloRoomPage() {
         }
       )
       .subscribe();
+
+    const chSweeps = sb
+      .channel(`user-sweeps-${uid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "users",
+          filter: `id=eq.${uid}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as { id?: string; sweeps_coins?: number } | undefined;
+          if (!row || !sameCeloUserId(row.id, uid)) return;
+          const sc = Math.max(0, Math.floor(Number(row.sweeps_coins ?? 0)));
+          setSweepsBalanceDisplay(sc);
+        }
+      )
+      .subscribe();
     return () => {
       isMounted = false;
-      void sb.removeChannel(ch);
+      void sb.removeChannel(chWallet);
+      void sb.removeChannel(chSweeps);
     };
   }, [session?.userId]);
 
@@ -2251,7 +2276,9 @@ export default function CeloRoomPage() {
               />
               <div className="flex justify-between text-[10px] text-violet-400/50 mt-1">
                 <span>Min: ${(minBet / 100).toFixed(2)}</span>
-                <span>Balance: {formatScLine(balanceCents)}</span>
+                <span>
+              USD ${(balanceCents / 100).toFixed(2)} · SC {formatScLine(sweepsBalanceDisplay)}
+            </span>
               </div>
             </div>
 
@@ -2433,7 +2460,7 @@ export default function CeloRoomPage() {
                 ${(becomeBankerCostCents / 100).toFixed(2)}
               </p>
               <p className="text-xs text-violet-300/50">
-                Your balance: {formatScLine(balanceCents)}
+                Your USD wallet: ${(balanceCents / 100).toFixed(2)} · SC {sweepsBalanceDisplay.toLocaleString()}
               </p>
             </div>
             <p className="text-xs text-violet-400/60">
@@ -2693,7 +2720,7 @@ export default function CeloRoomPage() {
                     : "text-emerald-400"
               }`}
             >
-              {formatScLine(balanceCents)}
+              ${(balanceCents / 100).toFixed(2)} USD · {formatScLine(sweepsBalanceDisplay)}
             </p>
           </div>
         </div>

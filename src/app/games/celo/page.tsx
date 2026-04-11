@@ -66,8 +66,10 @@ export default function CeloLobbyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  /** Sweeps Coins — same integer units as room bank / entry fields (`*_cents` columns hold SC amounts). */
+  /** Sweeps Coins (display + games using SC). */
   const [sweepsBalance, setSweepsBalance] = useState(0);
+  /** USD wallet cents — C-Lo room create/join still debits USD via wallet ledger until migrated to SC. */
+  const [usdBalanceCents, setUsdBalanceCents] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateForm>(DEFAULT_FORM);
   const [creating, setCreating] = useState(false);
@@ -138,9 +140,11 @@ export default function CeloLobbyPage() {
     if (!showCreate || !session?.accessToken) return;
     fetch("/api/coins/balance", { headers: { Authorization: `Bearer ${session.accessToken}` } })
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { sweeps_coins?: number }) => {
+      .then((d: { sweeps_coins?: number; balance_cents?: number }) => {
         const n = Number(d.sweeps_coins ?? 0);
         setSweepsBalance(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+        const u = Number(d.balance_cents ?? 0);
+        setUsdBalanceCents(Number.isFinite(u) ? Math.max(0, Math.floor(u)) : 0);
       })
       .catch(() => {});
   }, [showCreate, session?.accessToken]);
@@ -155,20 +159,22 @@ export default function CeloLobbyPage() {
       if (s.accessToken) {
         fetch("/api/coins/balance", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
-          .then((d: { sweeps_coins?: number }) => {
+          .then((d: { sweeps_coins?: number; balance_cents?: number }) => {
             const n = Number(d.sweeps_coins ?? 0);
             setSweepsBalance(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+            const u = Number(d.balance_cents ?? 0);
+            setUsdBalanceCents(Number.isFinite(u) ? Math.max(0, Math.floor(u)) : 0);
           })
           .catch(() => {});
       }
     });
   }, []);
 
-  /** Keep starting bank ≤ wallet; slider min/max/step are all in cents. */
+  /** Keep starting bank ≤ USD wallet (room stakes still settle in USD). */
   useEffect(() => {
-    if (!showCreate || sweepsBalance <= 0) return;
+    if (!showCreate || usdBalanceCents <= 0) return;
     setForm((f) => {
-      const cap = Math.min(sweepsBalance, 200_000);
+      const cap = Math.min(usdBalanceCents, 200_000);
       const step = f.minimum_entry_cents;
       let sb = f.starting_bank_cents;
       if (sb > cap) sb = Math.floor(cap / step) * step;
@@ -176,7 +182,7 @@ export default function CeloLobbyPage() {
       if (sb === f.starting_bank_cents) return f;
       return { ...f, starting_bank_cents: sb };
     });
-  }, [showCreate, sweepsBalance]);
+  }, [showCreate, usdBalanceCents]);
 
   useEffect(() => {
     let isMounted = true;
@@ -347,7 +353,7 @@ export default function CeloLobbyPage() {
   }
 
   /** Both sides in cents (`minimum_entry_cents` / `starting_bank_cents` vs wallet). */
-  const userBalanceCents = sweepsBalance;
+  const userBalanceCents = usdBalanceCents;
   const minimumEntryCents = form.minimum_entry_cents;
   const startingBankCents = form.starting_bank_cents;
   const hasEnough = userBalanceCents >= startingBankCents;
@@ -381,8 +387,11 @@ export default function CeloLobbyPage() {
             ← Games
           </Link>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balance</p>
-            <p className="text-base font-bold text-[#F5C842] font-mono">{formatScLine(sweepsBalance)}</p>
+            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
+            <p className="text-base font-bold text-[#F5C842] font-mono leading-snug">{formatScLine(sweepsBalance)}</p>
+            <p className="text-[11px] text-violet-300/70 mt-1">
+              Room bank (USD wallet): <span className="font-mono text-white">${(usdBalanceCents / 100).toFixed(2)}</span>
+            </p>
           </div>
         </div>
 
