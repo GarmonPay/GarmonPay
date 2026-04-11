@@ -161,6 +161,13 @@ type RollResponse = {
   isCelo?: boolean;
   outcome?: string;
   payoutCents?: number;
+  /** API may return cents as payoutSC */
+  payoutSC?: number;
+  feeSC?: number;
+  /** Player's point when result is `point` */
+  point?: number;
+  playerPoint?: number;
+  nextPlayerSeat?: number | null;
   bankerWinCents?: number;
   newBankSC?: number;
   newBankCents?: number;
@@ -462,6 +469,12 @@ export default function CeloRoomPage() {
   /** True after Roll API succeeds until realtime dice animation sequence finishes */
   const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
   const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
+  const [lastPayoutAmount, setLastPayoutAmount] = useState(0);
+  const [showPayoutFlash, setShowPayoutFlash] = useState(false);
+  /** Point battle display (player vs banker) after a point roll resolves */
+  const [playerPointCompare, setPlayerPointCompare] = useState<number | null>(null);
+  const [bankerPointCompare, setBankerPointCompare] = useState<number | null>(null);
+  const [showRoundSummaryBanner, setShowRoundSummaryBanner] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
   /** Processed roll_started sync keys (broadcast + postgres fallback) */
@@ -473,6 +486,9 @@ export default function CeloRoomPage() {
   const diceUiPhaseRef = useRef<DiceUiPhase>("idle");
   const playersRef = useRef<Player[]>([]);
   const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Postgres INSERT row — merged into UI when realtime player animation reveals */
+  const pendingPlayerRollMetaRef = useRef<PlayerRoll | null>(null);
+  const currentRoundRef = useRef<Round | null>(null);
 
   // Join form state — default to min_bet_cents once room loads
   const [joinEntryCents, setJoinEntryCents] = useState(0);
@@ -758,6 +774,8 @@ export default function CeloRoomPage() {
 
     cancelRollAnimRef.current?.();
     lastRollPayloadRef.current = payload;
+    setPlayerPointCompare(null);
+    setBankerPointCompare(null);
     console.log("[celo/client] roll_started", source, {
       syncKey: payload.syncKey,
       roundId: payload.roundId,
@@ -798,12 +816,32 @@ export default function CeloRoomPage() {
         setDicePhaseStatusText("Revealing result…");
         setIsRolling(false);
         setCurrentDice([...dice]);
-        setLastRollResult({
-          dice,
-          rollName: undefined,
-          result: undefined,
-          bankerPoint: undefined,
-        });
+        const meta = pendingPlayerRollMetaRef.current;
+        pendingPlayerRollMetaRef.current = null;
+        if (payload.kind === "player" && meta) {
+          const bp = currentRoundRef.current?.banker_point ?? null;
+          setLastRollResult({
+            dice,
+            rollName: meta.roll_name ?? undefined,
+            result: meta.roll_result ?? undefined,
+            outcome: meta.outcome ?? undefined,
+            payoutCents: meta.payout_sc,
+            bankerPoint: bp ?? undefined,
+            playerPoint: meta.point ?? undefined,
+          });
+          setFeltTableRollName(meta.roll_name ?? null);
+          if (meta.point != null && meta.roll_result === "point") {
+            setPlayerPointCompare(meta.point);
+            setBankerPointCompare(bp);
+          }
+        } else {
+          setLastRollResult({
+            dice,
+            rollName: undefined,
+            result: undefined,
+            bankerPoint: undefined,
+          });
+        }
         void loadRoundRef.current();
       },
       onRollFinished: () => {
@@ -823,7 +861,7 @@ export default function CeloRoomPage() {
     });
   }, []);
 
-  const triggerDiceAnimation = useCallback(async (dice: number[], rollName: string) => {
+  const triggerDiceAnimation = useCallback(async (dice: number[], rollName: string, rollerLabel = "Banker") => {
     cancelRollAnimRef.current?.();
     cancelRollAnimRef.current = null;
     setRollAnimEpoch((e) => e + 1);
@@ -831,10 +869,12 @@ export default function CeloRoomPage() {
     setCurrentDice(null);
     setFeltTableRollName(null);
     setLastRollResult(null);
+    setPlayerPointCompare(null);
+    setBankerPointCompare(null);
     setDiceUiPhase("rolling");
     setDicePhaseStatusText("Rolling…");
     setRollInteractionBusy(true);
-    setCurrentRollerName("Banker");
+    setCurrentRollerName(rollerLabel);
     await new Promise((r) => setTimeout(r, 100));
     await new Promise((r) => setTimeout(r, 2500));
     setIsRolling(false);
@@ -891,6 +931,10 @@ export default function CeloRoomPage() {
   useEffect(() => {
     playersRef.current = players;
   }, [players]);
+
+  useEffect(() => {
+    currentRoundRef.current = currentRound;
+  }, [currentRound]);
 
   useEffect(() => {
     setInitialSyncDone(false);
@@ -1218,6 +1262,15 @@ export default function CeloRoomPage() {
           const roll = payload.new as PlayerRoll;
           if (!roll || String(roll.room_id) !== roomId) return;
 
+          /* Roller already ran local animation in handleRoll — observers only */
+          if (sameCeloUserId(roll.user_id, uid)) {
+            pendingPlayerRollMetaRef.current = null;
+            void loadRoundRef.current();
+            return;
+          }
+
+          pendingPlayerRollMetaRef.current = roll;
+
           const p = buildCeloRollStartedPayload({
             roomId,
             roundId: roll.round_id,
@@ -1501,6 +1554,7 @@ export default function CeloRoomPage() {
   async function handleRoll() {
     if (!currentRound) return;
     const wasBankerRolling = currentRound.status === "banker_rolling";
+    const bankerPointSnapshot = currentRound.banker_point;
     setActionLoading("roll");
     setRollInteractionBusy(true);
     setLastRollResult(null);
@@ -1533,14 +1587,116 @@ export default function CeloRoomPage() {
       return;
     }
     const rollData = data as unknown as RollResponse;
+    console.log("[ROLL RESPONSE]", rollData);
+
+    /* ── Player phase: full local dice + outcome sequence (roller) ── */
+    if (
+      !wasBankerRolling &&
+      Array.isArray(rollData.dice) &&
+      rollData.dice.length === 3
+    ) {
+      const rollerLabel =
+        getDisplayName(myPlayer ?? { user_id: userId }) || "You";
+      setRollAnimEpoch((e) => e + 1);
+      setIsRolling(true);
+      setCurrentDice(null);
+      setFeltTableRollName(null);
+      setLastRollResult(null);
+      setPlayerPointCompare(null);
+      setBankerPointCompare(null);
+      setDiceUiPhase("rolling");
+      setDicePhaseStatusText("Rolling…");
+      setCurrentRollerName(rollerLabel);
+
+      await new Promise((r) => setTimeout(r, 2500));
+
+      setIsRolling(false);
+      setCurrentDice(rollData.dice);
+      setDiceUiPhase("revealing");
+      setDicePhaseStatusText("Revealing result…");
+      await new Promise((r) => setTimeout(r, 400));
+
+      const payCents = Number(rollData.payoutSC ?? rollData.payoutCents ?? 0);
+      const playerPt =
+        rollData.point ?? rollData.playerPoint ?? undefined;
+      const bankerPt =
+        rollData.bankerPoint != null
+          ? Number(rollData.bankerPoint)
+          : bankerPointSnapshot != null
+            ? Number(bankerPointSnapshot)
+            : undefined;
+
+      setFeltTableRollName(String(rollData.rollName ?? ""));
+      setLastRollResult({
+        dice: rollData.dice as [number, number, number],
+        rollName: rollData.rollName,
+        result: rollData.result,
+        outcome: rollData.outcome,
+        payoutCents: payCents,
+        bankerPoint: bankerPt,
+        playerPoint: playerPt,
+      });
+
+      await new Promise((r) => setTimeout(r, 800));
+
+      const oc = String(rollData.outcome ?? "");
+      if (oc === "win" && payCents > 0) {
+        setLastPayoutAmount(payCents);
+        setShowPayoutFlash(true);
+        window.setTimeout(() => setShowPayoutFlash(false), 3000);
+      } else if (rollData.result === "no_count") {
+        setFeltTableRollName("NO COUNT 🔄 — Roll Again!");
+        setLastRollResult((prev) =>
+          prev
+            ? { ...prev, result: "no_count", rollName: "NO COUNT 🔄 — Roll Again!" }
+            : { result: "no_count", rollName: "NO COUNT 🔄 — Roll Again!" }
+        );
+      }
+
+      if (rollData.result === "point" && playerPt != null) {
+        setPlayerPointCompare(playerPt);
+        setBankerPointCompare(bankerPt ?? null);
+      }
+
+      setDiceUiPhase("completed");
+      setDicePhaseStatusText("Round complete");
+      setRollInteractionBusy(false);
+      setCurrentRollerName("");
+      window.setTimeout(() => {
+        setDiceUiPhase("idle");
+        setDicePhaseStatusText("");
+      }, 700);
+
+      if (rollData.roundComplete) {
+        setShowRoundSummaryBanner(true);
+        window.setTimeout(() => setShowRoundSummaryBanner(false), 8000);
+      }
+
+      if (rollData.roundComplete && rollData.summary) {
+        setRoundSummary(rollData.summary);
+      }
+      if (rollData.player_can_become_banker) {
+        setBecomeBankerCostCents(
+          Number(rollData.banker_cost_sc ?? room?.current_bank_cents ?? 0)
+        );
+        setBecomeBankerDeadline(Date.now() + 30_000);
+        setShowBecomeBankerModal(true);
+      }
+
+      void loadAll();
+      return;
+    }
+
     const startedAnimFromApi = Boolean(rollData.animationPayload);
-    // Start animation immediately from API response — roller gets zero-latency feedback.
-    // Other players/spectators get it via postgres_changes. Broadcast is additive dedup.
     if (rollData.animationPayload) {
       processRollStartedPayload(rollData.animationPayload, "api-response");
     } else if (Array.isArray(rollData.dice) && rollData.dice.length === 3) {
       window.setTimeout(() => {
-        void triggerDiceAnimation(rollData.dice as number[], String(rollData.rollName ?? ""));
+        void triggerDiceAnimation(
+          rollData.dice as number[],
+          String(rollData.rollName ?? ""),
+          "Banker"
+        );
       }, 0);
     }
     if (rollData.roundComplete && rollData.summary) {
@@ -1586,10 +1742,9 @@ export default function CeloRoomPage() {
         if (!lr?.banker_dice || lr.banker_dice.length !== 3) return;
         if (isRollingRef.current || diceUiPhaseRef.current !== "idle") return;
         console.log("[celo/client] manual round fetch fallback — triggering dice animation");
-        await triggerDiceAnimation(lr.banker_dice, lr.banker_dice_name ?? "");
+        await triggerDiceAnimation(lr.banker_dice, lr.banker_dice_name ?? "", "Banker");
       })();
     }, 0);
-    // rollInteractionBusy clears when realtime animation sequence finishes (or safety timeout below).
   }
 
   async function handleCoverBank() {
@@ -2457,6 +2612,45 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
+        {showPayoutFlash && (
+          <div
+            style={{
+              position: "fixed",
+              top: "30%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(16,185,129,0.95)",
+              border: "2px solid #10B981",
+              borderRadius: 16,
+              padding: "20px 40px",
+              textAlign: "center",
+              zIndex: 200,
+              animation: "fadeInUp 0.5s ease-out",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: "bold",
+                color: "#fff",
+              }}
+            >
+              +${(lastPayoutAmount / 100).toFixed(2)}
+            </div>
+            <div style={{ color: "#D1FAE5", fontSize: 14 }}>Added to your balance</div>
+          </div>
+        )}
+
+        {showRoundSummaryBanner && (
+          <div
+            className="fixed left-1/2 top-1/3 z-[199] -translate-x-1/2 rounded-xl border border-[#F5C842]/40 bg-[#0e0118]/95 px-6 py-4 text-center shadow-xl"
+            role="status"
+          >
+            <p className="text-sm font-bold text-[#F5C842]">Round complete</p>
+            <p className="mt-1 text-xs text-violet-300/80">Table updating…</p>
+          </div>
+        )}
+
         {showCreatedShareBanner && isInRoom && room && (
           <div
             style={{
@@ -2784,6 +2978,99 @@ export default function CeloRoomPage() {
               )}
             </div>
           )}
+
+          {isPlayerRolling &&
+            playerPointCompare != null &&
+            bankerPointCompare != null &&
+            lastRollResult?.result === "point" && (
+              <div
+                style={{
+                  textAlign: "center",
+                  marginTop: 16,
+                  padding: 16,
+                  background: "rgba(0,0,0,0.4)",
+                  borderRadius: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: 24,
+                  }}
+                >
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#888", fontSize: 11 }}>YOUR POINT</div>
+                    <div
+                      style={{
+                        fontSize: 48,
+                        fontWeight: "bold",
+                        color:
+                          playerPointCompare > bankerPointCompare
+                            ? "#10B981"
+                            : "#EF4444",
+                      }}
+                    >
+                      {playerPointCompare ?? "?"}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 24,
+                      color: "#F5C842",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    VS
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#888", fontSize: 11 }}>BANKER POINT</div>
+                    <div
+                      style={{
+                        fontSize: 48,
+                        fontWeight: "bold",
+                        color: "#F5C842",
+                      }}
+                    >
+                      {bankerPointCompare ?? "?"}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 20,
+                    fontWeight: "bold",
+                    color:
+                      playerPointCompare > bankerPointCompare
+                        ? "#10B981"
+                        : "#EF4444",
+                  }}
+                >
+                  {playerPointCompare > bankerPointCompare
+                    ? "🏆 YOU WIN!"
+                    : playerPointCompare < bankerPointCompare
+                      ? "❌ BANKER WINS"
+                      : "🤝 TIE — BANKER WINS"}
+                </div>
+              </div>
+            )}
+
+          {!isRolling &&
+            lastRollResult &&
+            (lastRollResult.outcome === "win" || lastRollResult.outcome === "loss") &&
+            lastRollResult.result !== "point" && (
+              <p
+                className={`mt-3 text-center text-lg font-bold ${
+                  lastRollResult.outcome === "win" ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {lastRollResult.outcome === "win"
+                  ? "✓ You win this bet"
+                  : "✗ Banker wins this bet"}
+              </p>
+            )}
         </div>
 
         {systemFeed.length > 0 && (
