@@ -37,19 +37,6 @@ export type CeloTurnTimeoutPayload = {
   at: string;
 };
 
-/** Short stop: no-short-stop declare, void roll, or forfeit. */
-export type CeloShortStopPayload = {
-  roomId: string;
-  roundId: string;
-  kind: "no_short_stop_declared" | "player_void" | "banker_void" | "player_forfeit";
-  rollId?: string;
-  at: string;
-  shortStopsRemaining?: number;
-  forfeitUserId?: string;
-  /** Whose roll was voided (for UI copy). */
-  rollerUserId?: string;
-};
-
 export function buildCeloRollStartedPayload(opts: {
   roomId: string;
   roundId: string;
@@ -98,12 +85,8 @@ export function buildCeloRollStartedPayload(opts: {
 export async function broadcastCeloRoomEvent(
   _supabase: SupabaseClient,
   roomId: string,
-  event: "roll_started" | "roll_finished" | "turn_timeout" | "short_stop",
-  payload:
-    | CeloRollStartedPayload
-    | CeloRollFinishedPayload
-    | CeloTurnTimeoutPayload
-    | CeloShortStopPayload
+  event: "roll_started" | "roll_finished" | "turn_timeout",
+  payload: CeloRollStartedPayload | CeloRollFinishedPayload | CeloTurnTimeoutPayload
 ): Promise<void> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

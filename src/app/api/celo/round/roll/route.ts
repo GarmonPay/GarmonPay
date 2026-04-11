@@ -106,7 +106,6 @@ async function getPlayerRerollCount(
     .select("reroll_count")
     .eq("round_id", roundId)
     .eq("user_id", userId)
-    .eq("voided_by_short_stop", false)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -682,17 +681,14 @@ async function handleCeloRollPost(req: Request) {
           round_id,
           room_id,
           user_id: userId,
-          roll_number: rerollCount + 1,
           dice,
-          roll_name: roll.rollName ?? "",
+          roll_name: roll.rollName,
           roll_result: roll.result,
           entry_sc: playerBet,
           outcome: "reroll",
           payout_sc: 0,
           platform_fee_sc: 0,
           reroll_count: rerollCount + 1,
-          roll_animation_start_at: serverStartTime,
-          roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
         .limit(1);
@@ -745,8 +741,6 @@ async function handleCeloRollPost(req: Request) {
       );
       await insertCeloPlatformFee(supabase, round_id, fee, roll.rollName);
 
-      const playerCeloAt = roll.isCelo ? now : null;
-
       const serverStartTime = new Date().toISOString();
       const { data: prWinArr, error: prWinErr } = await supabase
         .from("celo_player_rolls")
@@ -754,18 +748,15 @@ async function handleCeloRollPost(req: Request) {
           round_id,
           room_id,
           user_id: userId,
-          roll_number: rerollCount + 1,
           dice,
-          roll_name: roll.rollName ?? "",
+          roll_name: roll.rollName,
           roll_result: roll.result,
           entry_sc: playerBet,
           outcome: "win",
           payout_sc: payout,
           platform_fee_sc: fee,
           reroll_count: rerollCount,
-          player_celo_at: playerCeloAt,
-          roll_animation_start_at: serverStartTime,
-          roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
+          player_celo_at: roll.isCelo ? now : null,
         })
         .select("id")
         .limit(1);
@@ -833,17 +824,14 @@ async function handleCeloRollPost(req: Request) {
           round_id,
           room_id,
           user_id: userId,
-          roll_number: rerollCount + 1,
           dice,
-          roll_name: roll.rollName ?? "",
+          roll_name: roll.rollName,
           roll_result: roll.result,
           entry_sc: playerBet,
           outcome: "loss",
           payout_sc: 0,
           platform_fee_sc: 0,
           reroll_count: rerollCount,
-          roll_animation_start_at: serverStartTime,
-          roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
         .limit(1);
@@ -967,9 +955,8 @@ async function handleCeloRollPost(req: Request) {
           round_id,
           room_id,
           user_id: userId,
-          roll_number: rerollCount + 1,
           dice,
-          roll_name: roll.rollName ?? "",
+          roll_name: roll.rollName,
           roll_result: roll.result,
           point: roll.point,
           entry_sc: playerBet,
@@ -977,8 +964,6 @@ async function handleCeloRollPost(req: Request) {
           payout_sc: payoutCents,
           platform_fee_sc: feeCents,
           reroll_count: rerollCount,
-          roll_animation_start_at: serverStartTime,
-          roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         })
         .select("id")
         .limit(1);
