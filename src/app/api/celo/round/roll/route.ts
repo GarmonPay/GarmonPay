@@ -2,441 +2,174 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { celoPayoutTestCredit, celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
-import { rollThreeDice, evaluateRoll, comparePoints } from "@/lib/celo-engine";
-import { normalizeCeloRoomRow, mergeCeloRoomUpdate, type NormalizedCeloRoom } from "@/lib/celo-room-schema";
-import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
-import { broadcastCeloRoomEvent, buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
-import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
-import { celoQaLog } from "@/lib/celo-qa-log";
-import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
-import { getEligibleStakedPlayers } from "@/lib/celo-eligible-players";
-import { advanceAfterResolvingCeloPlayerRoll } from "@/lib/celo-round-advance";
-import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
-import { CELO_ROUND_STATUS } from "@/lib/celo-round-status";
-
-// ── HELPERS ────────────────────────────────────────────────────────────────────
-
-type SupabaseClient = NonNullable<ReturnType<typeof createAdminClient>>;
-
-function playerRollSaveErrorResponse(
-  err: {
-    message?: string;
-    code?: string;
-    details?: string | null;
-    hint?: string | null;
-  } | null,
-  phase: string,
-  ctx: Record<string, unknown>
-) {
-  const code = err?.code ?? "";
-  const msg = err?.message ?? "";
-  celoQaLog("player_roll_failed", {
-    phase,
-    pgCode: code,
-    pgMessage: msg,
-    pgDetails: err?.details ?? null,
-    pgHint: err?.hint ?? null,
-    ...ctx,
-  });
-  const duplicate = code === "23505" || msg.toLowerCase().includes("duplicate");
-  const userMsg = duplicate ? "This roll was already recorded — try again" : "Failed to save roll";
-  return NextResponse.json(
-    {
-      success: false,
-      message: userMsg,
-      error: userMsg,
-      pgMessage: msg || null,
-      code: code || null,
-      details: err?.details ?? null,
-      hint: err?.hint ?? null,
-    },
-    { status: duplicate ? 409 : 500 }
-  );
-}
-
-function errJson(status: number, error: string, extra?: Record<string, unknown>) {
-  return NextResponse.json({ success: false, error, ...extra }, { status });
-}
-
-function okJson(data: Record<string, unknown>) {
-  return NextResponse.json({ success: true, ...data });
-}
-
-function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
-  return celoPlayerStakeCents(row);
-}
-
-function roundTotalPotCents(roundRow: Record<string, unknown>): number {
-  return Number(
-    roundRow.prize_pool_sc ?? roundRow.total_pot_sc ?? roundRow.total_pot_cents ?? 0
-  );
-}
-
-/** Platform fee on 2× gross payouts (10%). */
-function platformFeeFromGrossTenPct(grossCents: number): number {
-  return Math.floor(grossCents * 0.1);
-}
-
-/** Get the latest reroll_count for a player in this round. */
-async function countSeatedPlayersWithRole(
-  supabase: SupabaseClient,
-  roomId: string,
-  role: "player" | "banker"
-): Promise<{ count: number; error: string | null }> {
-  const { count, error } = await supabase
-    .from("celo_room_players")
-    .select("id", { count: "exact", head: true })
-    .eq("room_id", roomId)
-    .eq("role", role);
-  if (error) {
-    return { count: 0, error: error.message };
-  }
-  return { count: count ?? 0, error: null };
-}
-
-async function getPlayerRerollCount(
-  supabase: SupabaseClient,
-  roundId: string,
-  userId: string
-): Promise<number> {
-  const { data: rollRows } = await supabase
-    .from("celo_player_rolls")
-    .select("reroll_count")
-    .eq("round_id", roundId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  const data = celoFirstRow(rollRows);
-  if (!data) return 0;
-  return (data as { reroll_count?: number }).reroll_count ?? 0;
-}
-
-async function emitCeloRollStarted(
-  supabase: SupabaseClient,
-  roomId: string,
-  payload: ReturnType<typeof buildCeloRollStartedPayload>
-) {
-  console.log("[celo/roll] roll_started broadcast", {
-    roomId: payload.roomId,
-    roundId: payload.roundId,
-    kind: payload.kind,
-    serverStartTime: payload.serverStartTime,
-    animationDurationMs: payload.animationDurationMs,
-    syncKey: payload.syncKey,
-  });
-  try {
-    await broadcastCeloRoomEvent(supabase, roomId, "roll_started", payload);
-    console.log("[celo/roll] roll_started broadcast ok", payload.syncKey);
-  } catch (e) {
-    console.error("[celo/roll] roll_started broadcast failed", e);
-  }
-}
-
-// ── ROUTE HANDLER ──────────────────────────────────────────────────────────────
+import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { rollThreeDice, evaluateRoll, comparePoints, calculatePayout } from "@/lib/celo-engine";
+import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
-  try {
-    return await handleCeloRollPost(req);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unexpected error";
-    celoQaLog("celo_roll_unhandled", { message: msg });
-    console.error("[celo/roll] unhandled", e);
-    return NextResponse.json({ success: false, error: msg }, { status: 500 });
-  }
-}
-
-async function handleCeloRollPost(req: Request) {
   const userId = await getAuthUserIdStrict(req);
   if (!userId) {
-    return errJson(401, "Not authenticated");
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return errJson(503, "Service unavailable");
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  let body: unknown;
+  let body: { room_id?: string };
   try {
-    body = await req.json();
+    body = (await req.json()) as { room_id?: string };
   } catch {
-    return errJson(400, "Invalid JSON");
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = body as { room_id?: string; round_id?: string };
-  const { room_id } = parsed;
+  const { room_id } = body;
   if (!room_id) {
-    return errJson(400, "room_id required");
+    return NextResponse.json({ error: "room_id required" }, { status: 400 });
   }
 
-  // Verify user is in this room
-  const { data: playerRows } = await supabase
-    .from("celo_room_players")
-    .select("id, role, bet_cents, entry_sc, seat_number")
+  const { data: activeRoundRows, error: roundListErr } = await supabase
+    .from("celo_rounds")
+    .select("*")
     .eq("room_id", room_id)
-    .eq("user_id", userId)
+    .neq("status", "completed")
+    .order("created_at", { ascending: false })
     .limit(1);
 
-  const playerEntry = celoFirstRow(playerRows);
-  if (!playerEntry) {
-    return errJson(403, "Not in this room");
+  if (roundListErr) {
+    return NextResponse.json({ error: roundListErr.message }, { status: 500 });
   }
 
-  const playerRow = playerEntry as {
-    id: string;
-    role: string;
-    bet_cents?: number;
-    entry_sc?: number;
-    seat_number: number | null;
-  };
+  const activeRound = celoFirstRow(activeRoundRows);
+  if (!activeRound) {
+    return NextResponse.json({ error: "No active round" }, { status: 400 });
+  }
+
+  const round_id = activeRound.id as string;
+  const r = activeRound as Record<string, unknown>;
 
   const { data: roomRows, error: roomErr } = await supabase
     .from("celo_rooms")
     .select("*")
     .eq("id", room_id)
     .limit(1);
-  const room = celoFirstRow(roomRows);
 
-  if (roomErr || !room) {
-    return errJson(404, "Room not found");
+  const roomRow = celoFirstRow(roomRows);
+  if (roomErr || !roomRow) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const rm = normalizeCeloRoomRow(room as Record<string, unknown>) as NormalizedCeloRoom & {
-    banker_id: string;
-  };
-
-  const { data: authRoundRows, error: authRoundErr } = await supabase
-    .from("celo_rounds")
-    .select("*")
-    .eq("room_id", room_id)
-    .neq("status", CELO_ROUND_STATUS.completed)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  const authoritativeRound = celoFirstRow(authRoundRows);
-  if (authRoundErr) {
-    return errJson(500, authRoundErr.message);
-  }
-  if (!authoritativeRound) {
-    return errJson(400, "No active round");
+  const rm = normalizeCeloRoomRow(roomRow as Record<string, unknown>);
+  if (!rm) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  if (parsed.round_id && String(authoritativeRound.id) !== String(parsed.round_id)) {
-    return errJson(409, "Round is out of date — refresh and try again");
+  const bankerId = String(rm.banker_id ?? "");
+  if (!bankerId) {
+    return NextResponse.json({ error: "Room has no banker" }, { status: 400 });
   }
-
-  const round_id = authoritativeRound.id;
-  const round = authoritativeRound;
-
-  const r = round as {
-    id: string;
-    status: string;
-    banker_id: string;
-    banker_point: number | null;
-    banker_rerolls: number;
-    bank_covered: boolean;
-    covered_by: string | null;
-    completed_at: string | null;
-    current_player_seat: number | null;
-    banker_dice?: number[] | null;
-    banker_dice_result?: string | null;
-  };
-
-  if (r.completed_at || r.status === CELO_ROUND_STATUS.completed) {
-    return errJson(400, "Round is already completed");
-  }
-
-  console.log("[celo/roll] request", { userId, room_id, round_id });
 
   const now = new Date().toISOString();
+  const feePct = rm.platform_fee_pct || 10;
 
-  // ── BANKER ROLL ────────────────────────────────────────────────────────────
+  // ── BANKER ROLL ──────────────────────────────────────────────
 
-  if (r.status === CELO_ROUND_STATUS.banker_rolling) {
-    if (playerRow.role !== "banker") {
-      return errJson(403, "Invalid turn");
-    }
-    if (!celoSameAuthUserId(userId, rm.banker_id)) {
-      return errJson(403, "Invalid turn");
-    }
-
-    const { count: seatedPlayerCount, error: seatCountErr } = await countSeatedPlayersWithRole(
-      supabase,
-      room_id,
-      "player"
-    );
-    if (seatCountErr) {
-      return errJson(500, seatCountErr);
-    }
-    if (seatedPlayerCount < 1) {
-      return errJson(400, "No players in room");
-    }
-
-    const eligibleForBank = await getEligibleStakedPlayers(supabase, room_id, r.covered_by);
-    if (eligibleForBank.length === 0) {
-      celoQaLog("banker_roll_rejected", {
-        room_id,
-        round_id,
-        roomStatus: rm.status,
-        roundStatus: r.status,
-        reason: "no_eligible_players_with_stake",
-      });
-      return errJson(400, "Cannot roll: no players with stakes are seated at this table");
+  if (r.status === "banker_rolling") {
+    if (userId !== bankerId) {
+      return NextResponse.json({ error: "Not your turn" }, { status: 403 });
     }
 
     const dice = rollThreeDice();
     const roll = evaluateRoll(dice);
-    const feePct = rm.platform_fee_pct;
 
-    // First eligible seat when transitioning to player_rolling (must match game rules)
-    let firstSeatForPoint: number | null = null;
-    if (roll.result === "point") {
-      firstSeatForPoint = eligibleForBank[0]?.seat_number ?? 1;
+    const { data: playersData } = await supabase
+      .from("celo_room_players")
+      .select("user_id, entry_sc, bet_cents, seat_number")
+      .eq("room_id", room_id)
+      .eq("role", "player")
+      .gt("entry_sc", 0)
+      .order("seat_number", { ascending: true });
+
+    const players = (playersData ?? []) as Array<{
+      user_id: string;
+      entry_sc?: number;
+      bet_cents?: number;
+      seat_number: number | null;
+    }>;
+
+    let firstSeat = 1;
+    if (roll.result === "point" && players.length > 0) {
+      firstSeat = players[0]?.seat_number || 1;
     }
 
-    let platformFeeForRound: number | undefined;
-    if (roll.result === "instant_win") {
-      const totalPot = roundTotalPotCents(round as Record<string, unknown>);
-      platformFeeForRound = Math.floor((totalPot * feePct) / 100);
-    }
-
-    const completedAtInstant =
-      roll.result === "instant_win" || roll.result === "instant_loss" ? now : null;
-
-    const statusAfterRoll =
-      roll.result === "point"
-        ? CELO_ROUND_STATUS.player_rolling
-        : roll.result === "no_count"
-          ? CELO_ROUND_STATUS.banker_rolling
-          : CELO_ROUND_STATUS.completed;
-
-    const bankerPointValue =
-      roll.result === "point" && roll.point !== undefined ? roll.point : null;
-
-    const serverStartTime = new Date().toISOString();
-
-    // Persist dice + outcome immediately so Supabase realtime notifies all clients before payouts
-    const roundUpdate: Record<string, unknown> = {
-      banker_dice: dice,
-      banker_dice_name: roll.rollName,
-      banker_dice_result: roll.result,
-      banker_point: bankerPointValue,
-      status: statusAfterRoll,
-      current_player_seat: roll.result === "point" ? firstSeatForPoint : null,
-      completed_at: completedAtInstant,
-      roll_animation_start_at: serverStartTime,
-      roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
-    };
-
-    if (roll.result === "no_count") {
-      roundUpdate.banker_rerolls = r.banker_rerolls + 1;
-    }
-    if (roll.result === "instant_win" && platformFeeForRound !== undefined) {
-      roundUpdate.platform_fee_sc = platformFeeForRound;
-    }
-
-    let bankerUpdate = supabase
+    await supabase
       .from("celo_rounds")
-      .update(roundUpdate)
-      .eq("id", round_id)
-      .eq("status", CELO_ROUND_STATUS.banker_rolling);
-
-    const hasNoBankerDice =
-      r.banker_dice == null || !Array.isArray(r.banker_dice) || r.banker_dice.length !== 3;
-
-    if (hasNoBankerDice) {
-      bankerUpdate = bankerUpdate.is("banker_dice", null);
-    } else {
-      bankerUpdate = bankerUpdate
-        .eq("banker_dice_result", "no_count")
-        .eq("banker_rerolls", r.banker_rerolls);
-    }
-
-    const { data: bankerUpRows, error: bankerRoundUpErr } = await bankerUpdate.select("id");
-
-    if (bankerRoundUpErr) {
-      console.error("celo_rounds banker roll update:", bankerRoundUpErr);
-      celoQaLog("banker_roll_failed", {
-        phase: "banker_round_update",
-        pgCode: bankerRoundUpErr.code,
-        pgMessage: bankerRoundUpErr.message,
-        pgDetails: bankerRoundUpErr.details ?? null,
-        room_id,
-        round_id,
-      });
-      return errJson(500, bankerRoundUpErr.message || "Failed to save roll", {
-        code: bankerRoundUpErr.code ?? null,
-        details: bankerRoundUpErr.details ?? null,
-        hint: bankerRoundUpErr.hint ?? null,
-      });
-    }
-
-    if (!bankerUpRows || bankerUpRows.length === 0) {
-      console.warn("[celo/roll] banker conditional update matched 0 rows — duplicate or stale roll");
-      return errJson(409, "Roll already recorded or round state changed — try again");
-    }
-
-    await supabase.from("celo_audit_log").insert({
-      room_id,
-      round_id,
-      user_id: userId,
-      action: "banker_rolled",
-      details: { dice, roll_name: roll.rollName ?? "", result: roll.result, is_celo: roll.isCelo },
-    });
-
-    const bankerSync = buildCeloRollStartedPayload({
-      roomId: room_id,
-      roundId: round_id,
-      dice: dice as [number, number, number],
-      kind: "banker",
-      rollerUserId: rm.banker_id,
-      serverStartTime,
-    });
-    await emitCeloRollStarted(supabase, room_id, bankerSync);
+      .update({
+        banker_dice: dice,
+        banker_dice_name: roll.rollName,
+        banker_dice_result: roll.result,
+        banker_point: roll.result === "point" ? roll.point : null,
+        status:
+          roll.result === "point"
+            ? "player_rolling"
+            : roll.result === "no_count"
+              ? "banker_rolling"
+              : "completed",
+        current_player_seat: roll.result === "point" ? firstSeat : null,
+        completed_at:
+          roll.result === "instant_win" || roll.result === "instant_loss" ? now : null,
+        banker_rerolls: Number(r.banker_rerolls ?? 0) + (roll.result === "no_count" ? 1 : 0),
+      })
+      .eq("id", round_id);
 
     if (roll.result === "no_count") {
-      return okJson({
+      return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "no_count",
-        bankerRerolls: r.banker_rerolls + 1,
-        animationPayload: bankerSync,
       });
     }
 
     if (roll.result === "point") {
-      return okJson({
+      return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "point",
         bankerPoint: roll.point,
-        status: CELO_ROUND_STATUS.player_rolling,
-        currentPlayerSeat: firstSeatForPoint,
-        animationPayload: bankerSync,
+        status: "player_rolling",
+        currentPlayerSeat: firstSeat,
       });
     }
 
-    // ── INSTANT WIN (banker) — round row already completed above ──
     if (roll.result === "instant_win") {
-      const totalPot = roundTotalPotCents(round as Record<string, unknown>);
-      const platformFee = platformFeeForRound ?? Math.floor((totalPot * feePct) / 100);
-      const bankerWins = totalPot - platformFee;
+      const totalPot = players.reduce(
+        (sum, p) => sum + (p.entry_sc ?? p.bet_cents ?? 0),
+        0
+      );
+      const feeSC = Math.floor((totalPot * feePct) / 100);
+      const bankerWins = totalPot - feeSC;
 
-      await celoPayoutTestCredit(supabase, rm.banker_id);
+      if (bankerWins > 0) {
+        const led = await walletLedgerEntry(
+          bankerId,
+          "game_win",
+          bankerWins,
+          `celo_banker_win_${round_id}`
+        );
+        if (!("success" in led) || !led.success) {
+          return NextResponse.json(
+            { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+            { status: 500 }
+          );
+        }
+      }
 
-      const winRef = `celo_banker_win_${round_id}_${Date.now()}`;
-      await celoWalletCredit(supabase, rm.banker_id, bankerWins, winRef);
-      await insertCeloPlatformFee(supabase, round_id, platformFee, roll.rollName);
-
-      const newBankCents = rm.current_bank_cents + bankerWins;
-
+      const newBank = rm.current_bank_cents + bankerWins;
       await supabase
         .from("celo_rooms")
         .update(
-          mergeCeloRoomUpdate(newBankCents, {
+          mergeCeloRoomUpdate(newBank, {
             status: "active",
             last_activity: now,
             last_round_was_celo: roll.isCelo,
@@ -445,584 +178,293 @@ async function handleCeloRollPost(req: Request) {
         )
         .eq("id", room_id);
 
-      await settleCeloOpenSideBets(supabase, round_id, room_id);
-
-      const instantWinPayload: Record<string, unknown> = {
+      return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "instant_win",
         isCelo: roll.isCelo,
+        outcome: "banker_wins",
         bankerWinSC: bankerWins,
-        bankerWinCents: bankerWins,
-        platformFeeCents: platformFee,
-        newBankSC: newBankCents,
-        newBankCents,
-      };
-
-      if (roll.isCelo) {
-        instantWinPayload.outcome = "celo_banker_wins";
-        instantWinPayload.banker_can_adjust_bank = true;
-      } else {
-        instantWinPayload.outcome = "banker_wins";
-        instantWinPayload.banker_can_adjust_bank = false;
-      }
-
-      return okJson({ ...instantWinPayload, animationPayload: bankerSync });
+        newBankSC: newBank,
+        banker_can_adjust_bank: roll.isCelo,
+      });
     }
 
-    // ── INSTANT LOSS (banker) — Shit / Dick: pay table, bank drops by total payouts; banker stays unless broke ──
     if (roll.result === "instant_loss") {
-      const { data: activePlayers } = await supabase
-        .from("celo_room_players")
-        .select("user_id, bet_cents, entry_sc")
-        .eq("room_id", room_id)
-        .eq("role", "player");
-
-      const players = ((activePlayers ?? []) as { user_id: string; bet_cents?: number; entry_sc?: number }[])
-        .map((row) => ({ user_id: row.user_id, bet: playerBetCents(row) }))
-        .filter((p) => p.bet > 0);
-
-      const payouts: { user_id: string; payout: number; fee: number }[] = [];
       let totalPaidOut = 0;
-      let totalPlatformFeeCents = 0;
 
       for (const player of players) {
-        const gross = player.bet * 2;
-        const fee = platformFeeFromGrossTenPct(gross);
-        const payout = gross - fee;
-        payouts.push({ user_id: player.user_id, payout, fee });
-        totalPaidOut += payout;
-        totalPlatformFeeCents += fee;
-      }
+        const entry = player.entry_sc ?? player.bet_cents ?? 0;
+        if (entry <= 0) continue;
 
-      for (const { user_id, payout } of payouts) {
-        await celoWalletCredit(
-          supabase,
-          user_id,
-          payout,
-          `celo_player_win_${round_id}_${user_id}_${Date.now()}`
+        const { payoutSC } = calculatePayout(entry, "win", feePct);
+
+        const led = await walletLedgerEntry(
+          player.user_id,
+          "game_win",
+          payoutSC,
+          `celo_player_win_${round_id}_${player.user_id}`
         );
+        if (!("success" in led) || !led.success) {
+          return NextResponse.json(
+            { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+            { status: 500 }
+          );
+        }
+        totalPaidOut += payoutSC;
       }
-      await insertCeloPlatformFee(supabase, round_id, totalPlatformFeeCents, roll.rollName);
 
-      let newBankCents = Math.max(0, rm.current_bank_cents - totalPaidOut);
+      let newBank = Math.max(0, rm.current_bank_cents - totalPaidOut);
 
-      await supabase
-        .from("celo_rooms")
-        .update(
-          mergeCeloRoomUpdate(newBankCents, {
-            status: "active",
-            last_activity: now,
-            last_round_was_celo: false,
-            banker_celo_at: null,
-          })
-        )
-        .eq("id", room_id);
+      let bankerBroke = false;
+      let newBankerId = bankerId;
 
-      let bankerChanged = false;
-      let newBankerId: string | null = null;
-
-      const minimumEntry = rm.min_bet_cents;
-
-      if (newBankCents < minimumEntry) {
+      if (newBank < rm.min_bet_cents) {
+        bankerBroke = true;
         const { data: allPlayers } = await supabase
           .from("celo_room_players")
-          .select("user_id, seat_number, role")
+          .select("user_id, seat_number")
           .eq("room_id", room_id)
-          .neq("role", "spectator")
+          .neq("user_id", bankerId)
           .order("seat_number", { ascending: true });
 
-        for (const row of allPlayers ?? []) {
-          const player = row as { user_id: string; seat_number: number | null; role: string };
-          if (player.user_id === rm.banker_id) continue;
-
-          const balance = await getCanonicalBalanceCents(player.user_id);
-          if (balance >= newBankCents) {
+        for (const p of allPlayers ?? []) {
+          const row = p as { user_id: string };
+          const bal = await getCanonicalBalanceCents(row.user_id);
+          if (bal >= newBank) {
+            newBankerId = row.user_id;
             await supabase
               .from("celo_room_players")
               .update({ role: "player" })
               .eq("room_id", room_id)
-              .eq("user_id", rm.banker_id);
-
+              .eq("user_id", bankerId);
             await supabase
               .from("celo_room_players")
               .update({ role: "banker" })
               .eq("room_id", room_id)
-              .eq("user_id", player.user_id);
-
-            await supabase.from("celo_rooms").update({ banker_id: player.user_id }).eq("id", room_id);
-
-            bankerChanged = true;
-            newBankerId = player.user_id;
+              .eq("user_id", newBankerId);
+            await supabase.from("celo_rooms").update({ banker_id: newBankerId }).eq("id", room_id);
             break;
           }
         }
 
-        if (!bankerChanged) {
+        if (newBankerId === bankerId) {
           await supabase.from("celo_rooms").update({ status: "cancelled" }).eq("id", room_id);
         }
       }
 
-      await settleCeloOpenSideBets(supabase, round_id, room_id);
-
-      return okJson({
-        dice,
-        rollName: roll.rollName,
-        result: "instant_loss",
-        outcome: "banker_loses_players_win",
-        payouts,
-        newBankSC: newBankCents,
-        newBankCents,
-        bankerChanged,
-        newBankerId: newBankerId ?? undefined,
-        bankerBroke: newBankCents < minimumEntry,
-        animationPayload: bankerSync,
-      });
-    }
-  }
-
-  // ── PLAYER ROLL ────────────────────────────────────────────────────────────
-
-  if (r.status === CELO_ROUND_STATUS.player_rolling) {
-    if (playerRow.role !== "player") {
-      return errJson(403, "Invalid turn");
-    }
-    if (!Array.isArray(r.banker_dice) || r.banker_dice.length !== 3) {
-      return errJson(400, "Banker roll not recorded — wait for sync");
-    }
-
-    if (r.banker_point === null) {
-      return errJson(400, "No banker point set");
-    }
-
-    const eligible = await getEligibleStakedPlayers(supabase, room_id, r.covered_by);
-    if (eligible.length === 0) {
-      celoQaLog("player_roll_failed", {
-        reason: "no_eligible_players",
-        room_id,
-        round_id,
-        userId,
-        roomStatus: rm.status,
-        roundStatus: r.status,
-      });
-      return errJson(400, "No players remaining to roll");
-    }
-
-    const isStakedPlayer = eligible.some((e) => celoSameAuthUserId(e.user_id, userId));
-    if (!isStakedPlayer) {
-      celoQaLog("player_roll_failed", {
-        reason: "not_eligible_staked_player",
-        room_id,
-        round_id,
-        userId,
-        playerRowId: playerRow.id,
-        role: playerRow.role,
-        roomStatus: rm.status,
-        roundStatus: r.status,
-      });
-      return errJson(403, "Only players with an active stake can roll in this phase");
-    }
-
-    let currentSeat = r.current_player_seat;
-    if (currentSeat == null) {
-      const firstSeat = eligible[0]?.seat_number != null ? Number(eligible[0].seat_number) : 1;
-      await supabase.from("celo_rounds").update({ current_player_seat: firstSeat }).eq("id", round_id);
-      currentSeat = firstSeat;
-    }
-
-    const currentPlayer = resolveCurrentPlayerForSeat(eligible, currentSeat);
-
-    if (!currentPlayer || !celoSameAuthUserId(currentPlayer.user_id, userId)) {
-      celoQaLog("player_roll_failed", {
-        reason: "not_your_turn",
-        room_id,
-        round_id,
-        userId,
-        playerRowId: playerRow.id,
-        current_player_seat: r.current_player_seat,
-        resolvedSeat: currentSeat,
-        expectedRoller: currentPlayer?.user_id ?? null,
-        bet_cents: playerBetCents(playerRow),
-        roomStatus: rm.status,
-        roundStatus: r.status,
-      });
-      return errJson(403, "Not your turn to roll", {
-        details: currentPlayer ? "Another player's turn" : "Could not resolve turn order",
-      });
-    }
-
-    const playerBet = currentPlayer.bet_cents;
-    const rerollCount = await getPlayerRerollCount(supabase, round_id, userId);
-    const feePct = rm.platform_fee_pct;
-
-    const dice = rollThreeDice();
-    const roll = evaluateRoll(dice);
-
-    await supabase.from("celo_audit_log").insert({
-      room_id,
-      round_id,
-      user_id: userId,
-      action: "player_rolled",
-      details: {
-        dice,
-        roll_name: roll.rollName ?? "",
-        result: roll.result,
-        is_celo: roll.isCelo,
-        banker_point: r.banker_point,
-      },
-    });
-
-    // ── NO COUNT ──
-    if (roll.result === "no_count") {
-      const serverStartTime = new Date().toISOString();
-      const { data: prRowArr, error: prInsErr } = await supabase
-        .from("celo_player_rolls")
-        .insert({
-          round_id,
-          room_id,
-          user_id: userId,
-          dice,
-          roll_name: roll.rollName,
-          roll_result: roll.result,
-          entry_sc: playerBet,
-          outcome: "reroll",
-          payout_sc: 0,
-          platform_fee_sc: 0,
-          reroll_count: rerollCount + 1,
-        })
-        .select("id")
-        .limit(1);
-
-      const prRow = celoFirstRow(prRowArr);
-      if (prInsErr || !prRow) {
-        return playerRollSaveErrorResponse(prInsErr, "player_no_count_insert", {
-          room_id,
-          round_id,
-          userId,
-          playerRowId: playerRow.id,
-          roomStatus: rm.status,
-          roundStatus: r.status,
-          bet_cents: playerBet,
-          roll_result: roll.result,
-        });
-      }
-
-      const plSync = buildCeloRollStartedPayload({
-        roomId: room_id,
-        roundId: round_id,
-        dice: dice as [number, number, number],
-        kind: "player",
-        playerRollId: prRow.id,
-        rollerUserId: userId,
-        serverStartTime,
-      });
-      await emitCeloRollStarted(supabase, room_id, plSync);
-
-      return okJson({
-        dice,
-        rollName: roll.rollName,
-        result: "no_count",
-        rerollCount: rerollCount + 1,
-        animationPayload: plSync,
-      });
-    }
-
-    // ── INSTANT WIN (player) ──
-    if (roll.result === "instant_win") {
-      const gross = playerBet * 2;
-      const fee = platformFeeFromGrossTenPct(gross);
-      const payout = gross - fee;
-
-      await celoWalletCredit(
-        supabase,
-        userId,
-        payout,
-        `celo_player_win_${round_id}_${userId}_${Date.now()}`
-      );
-      await insertCeloPlatformFee(supabase, round_id, fee, roll.rollName);
-
-      const serverStartTime = new Date().toISOString();
-      const { data: prWinArr, error: prWinErr } = await supabase
-        .from("celo_player_rolls")
-        .insert({
-          round_id,
-          room_id,
-          user_id: userId,
-          dice,
-          roll_name: roll.rollName,
-          roll_result: roll.result,
-          entry_sc: playerBet,
-          outcome: "win",
-          payout_sc: payout,
-          platform_fee_sc: fee,
-          reroll_count: rerollCount,
-          player_celo_at: roll.isCelo ? now : null,
-        })
-        .select("id")
-        .limit(1);
-
-      const prWin = celoFirstRow(prWinArr);
-      if (prWinErr || !prWin) {
-        return playerRollSaveErrorResponse(prWinErr, "player_instant_win_insert", {
-          room_id,
-          round_id,
-          userId,
-          playerRowId: playerRow.id,
-          roomStatus: rm.status,
-          roundStatus: r.status,
-          bet_cents: playerBet,
-          roll_result: roll.result,
-        });
-      }
-
-      const plSync = buildCeloRollStartedPayload({
-        roomId: room_id,
-        roundId: round_id,
-        dice: dice as [number, number, number],
-        kind: "player",
-        playerRollId: prWin.id,
-        rollerUserId: userId,
-        serverStartTime,
-      });
-      await emitCeloRollStarted(supabase, room_id, plSync);
-
-      await supabase.from("celo_rooms").update({ last_activity: now }).eq("id", room_id);
-
-      const adv = await advanceAfterResolvingCeloPlayerRoll(
-        supabase,
-        room_id,
-        round_id,
-        userId,
-        r.covered_by,
-        now
-      );
-
-      const coverOffer = Boolean(r.bank_covered && r.covered_by && userId === r.covered_by);
-
-      return okJson({
-        dice,
-        rollName: roll.rollName,
-        result: "instant_win",
-        isCelo: roll.isCelo,
-        outcome: "win",
-        payoutCents: payout,
-        feeCents: fee,
-        roundComplete: adv.roundComplete,
-        summary: adv.summary,
-        player_can_become_banker: coverOffer,
-        banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
-        animationPayload: plSync,
-      });
-    }
-
-    // ── INSTANT LOSS (player) ──
-    if (roll.result === "instant_loss") {
-      const serverStartTime = new Date().toISOString();
-      const { data: prLossArr, error: prLossErr } = await supabase
-        .from("celo_player_rolls")
-        .insert({
-          round_id,
-          room_id,
-          user_id: userId,
-          dice,
-          roll_name: roll.rollName,
-          roll_result: roll.result,
-          entry_sc: playerBet,
-          outcome: "loss",
-          payout_sc: 0,
-          platform_fee_sc: 0,
-          reroll_count: rerollCount,
-        })
-        .select("id")
-        .limit(1);
-
-      const prLoss = celoFirstRow(prLossArr);
-      if (prLossErr || !prLoss) {
-        return playerRollSaveErrorResponse(prLossErr, "player_instant_loss_insert", {
-          room_id,
-          round_id,
-          userId,
-          playerRowId: playerRow.id,
-          roomStatus: rm.status,
-          roundStatus: r.status,
-          bet_cents: playerBet,
-          roll_result: roll.result,
-        });
-      }
-
-      const plSync = buildCeloRollStartedPayload({
-        roomId: room_id,
-        roundId: round_id,
-        dice: dice as [number, number, number],
-        kind: "player",
-        playerRollId: prLoss.id,
-        rollerUserId: userId,
-        serverStartTime,
-      });
-      await emitCeloRollStarted(supabase, room_id, plSync);
-
-      const bankerFee = Math.floor((playerBet * feePct) / 100);
-      const bankerNet = playerBet - bankerFee;
-      await celoWalletCredit(
-        supabase,
-        rm.banker_id,
-        bankerNet,
-        `celo_banker_win_player_loss_${round_id}_${userId}_${Date.now()}`
-      );
-      await insertCeloPlatformFee(supabase, round_id, bankerFee, roll.rollName);
       await supabase
         .from("celo_rooms")
         .update(
-          mergeCeloRoomUpdate(rm.current_bank_cents + bankerNet, {
+          mergeCeloRoomUpdate(newBank, {
+            status: bankerBroke && newBankerId === bankerId ? "cancelled" : "active",
             last_activity: now,
+            last_round_was_celo: false,
           })
         )
         .eq("id", room_id);
 
-      const adv = await advanceAfterResolvingCeloPlayerRoll(
-        supabase,
-        room_id,
-        round_id,
-        userId,
-        r.covered_by,
-        now
-      );
-
-      return okJson({
+      return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "instant_loss",
-        outcome: "loss",
-        roundComplete: adv.roundComplete,
-        summary: adv.summary,
-        animationPayload: plSync,
-      });
-    }
-
-    // ── POINT (player) ──
-    if (roll.result === "point" && roll.point !== undefined) {
-      const comparison = comparePoints(r.banker_point, roll.point);
-      const playerWins = comparison === "player_wins";
-
-      let payoutCents = 0;
-      let feeCents = 0;
-
-      if (playerWins) {
-        const gross = playerBet * 2;
-        feeCents = platformFeeFromGrossTenPct(gross);
-        payoutCents = gross - feeCents;
-
-        await celoWalletCredit(
-          supabase,
-          userId,
-          payoutCents,
-          `celo_player_point_win_${round_id}_${userId}_${Date.now()}`
-        );
-        await insertCeloPlatformFee(supabase, round_id, feeCents, roll.rollName);
-        const bankAfterPlayerWin = Math.max(0, rm.current_bank_cents - playerBet);
-        await supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(bankAfterPlayerWin, {
-              last_activity: now,
-            })
-          )
-          .eq("id", room_id);
-      } else {
-        const bankerFee = Math.floor((playerBet * feePct) / 100);
-        const bankerNet = playerBet - bankerFee;
-        await celoWalletCredit(
-          supabase,
-          rm.banker_id,
-          bankerNet,
-          `celo_banker_point_win_${round_id}_${userId}_${Date.now()}`
-        );
-        await insertCeloPlatformFee(supabase, round_id, bankerFee, roll.rollName);
-        await supabase
-          .from("celo_rooms")
-          .update(
-            mergeCeloRoomUpdate(rm.current_bank_cents + bankerNet, {
-              last_activity: now,
-            })
-          )
-          .eq("id", room_id);
-      }
-
-      const serverStartTime = new Date().toISOString();
-      const { data: prPointArr, error: prPointErr } = await supabase
-        .from("celo_player_rolls")
-        .insert({
-          round_id,
-          room_id,
-          user_id: userId,
-          dice,
-          roll_name: roll.rollName,
-          roll_result: roll.result,
-          point: roll.point,
-          entry_sc: playerBet,
-          outcome: playerWins ? "win" : "loss",
-          payout_sc: payoutCents,
-          platform_fee_sc: feeCents,
-          reroll_count: rerollCount,
-        })
-        .select("id")
-        .limit(1);
-
-      const prPoint = celoFirstRow(prPointArr);
-      if (prPointErr || !prPoint) {
-        return playerRollSaveErrorResponse(prPointErr, "player_point_insert", {
-          room_id,
-          round_id,
-          userId,
-          playerRowId: playerRow.id,
-          roomStatus: rm.status,
-          roundStatus: r.status,
-          bet_cents: playerBet,
-          roll_result: roll.result,
-        });
-      }
-
-      const plSync = buildCeloRollStartedPayload({
-        roomId: room_id,
-        roundId: round_id,
-        dice: dice as [number, number, number],
-        kind: "player",
-        playerRollId: prPoint.id,
-        rollerUserId: userId,
-        serverStartTime,
-      });
-      await emitCeloRollStarted(supabase, room_id, plSync);
-
-      const adv = await advanceAfterResolvingCeloPlayerRoll(
-        supabase,
-        room_id,
-        round_id,
-        userId,
-        r.covered_by,
-        now
-      );
-
-      const coverOffer = Boolean(
-        playerWins && r.bank_covered && r.covered_by && userId === r.covered_by
-      );
-
-      return okJson({
-        dice,
-        rollName: roll.rollName,
-        result: "point",
-        playerPoint: roll.point,
-        bankerPoint: r.banker_point,
-        outcome: playerWins ? "win" : "loss",
-        payoutCents,
-        feeCents,
-        roundComplete: adv.roundComplete,
-        summary: adv.summary,
-        player_can_become_banker: coverOffer,
-        banker_cost_sc: coverOffer ? rm.current_bank_cents : undefined,
-        animationPayload: plSync,
+        outcome: "players_win",
+        totalPaidOut,
+        newBankSC: newBank,
+        bankerStays: true,
+        bankerBroke,
+        newBankerId,
       });
     }
   }
 
-  return errJson(400, "Invalid turn — round is not in a rolling phase");
+  // ── PLAYER ROLL ───────────────────────────────────────────────
+
+  if (r.status === "player_rolling") {
+    if (r.banker_point === null || r.banker_point === undefined) {
+      return NextResponse.json({ error: "No banker point set" }, { status: 400 });
+    }
+
+    const { data: playersData } = await supabase
+      .from("celo_room_players")
+      .select("user_id, entry_sc, bet_cents, seat_number")
+      .eq("room_id", room_id)
+      .eq("role", "player")
+      .gt("entry_sc", 0)
+      .order("seat_number", { ascending: true });
+
+    const players = (playersData ?? []) as Array<{
+      user_id: string;
+      entry_sc?: number;
+      bet_cents?: number;
+      seat_number: number | null;
+    }>;
+
+    const currentSeat = Number(r.current_player_seat ?? players[0]?.seat_number ?? 1);
+    const currentPlayer =
+      players.find((p) => Number(p.seat_number ?? 0) === currentSeat) ?? players[0];
+
+    if (!currentPlayer) {
+      return NextResponse.json({ error: "No player found for this seat" }, { status: 400 });
+    }
+
+    if (currentPlayer.user_id !== userId) {
+      return NextResponse.json({ error: "Not your turn" }, { status: 403 });
+    }
+
+    const playerEntry = currentPlayer.entry_sc ?? currentPlayer.bet_cents ?? 0;
+
+    const { count: rerollCount } = await supabase
+      .from("celo_player_rolls")
+      .select("*", { count: "exact", head: true })
+      .eq("round_id", round_id)
+      .eq("user_id", userId)
+      .eq("outcome", "reroll");
+
+    const dice = rollThreeDice();
+    const roll = evaluateRoll(dice);
+
+    if (roll.result === "no_count") {
+      await supabase.from("celo_player_rolls").insert({
+        round_id,
+        room_id,
+        user_id: userId,
+        dice,
+        roll_name: roll.rollName,
+        roll_result: roll.result,
+        entry_sc: playerEntry,
+        outcome: "reroll",
+        payout_sc: 0,
+        platform_fee_sc: 0,
+        reroll_count: (rerollCount ?? 0) + 1,
+      });
+
+      return NextResponse.json({
+        dice,
+        rollName: roll.rollName,
+        result: "no_count",
+      });
+    }
+
+    let playerWins = false;
+    let payoutSC = 0;
+    let feeSC = 0;
+
+    if (roll.result === "instant_win") {
+      playerWins = true;
+    } else if (roll.result === "instant_loss") {
+      playerWins = false;
+    } else if (roll.result === "point" && roll.point !== undefined) {
+      playerWins =
+        comparePoints(Number(r.banker_point), roll.point) === "player_wins";
+    }
+
+    if (playerWins) {
+      const calc = calculatePayout(playerEntry, "win", feePct);
+      payoutSC = calc.payoutSC;
+      feeSC = calc.feeSC;
+
+      const led = await walletLedgerEntry(
+        userId,
+        "game_win",
+        payoutSC,
+        `celo_player_win_${round_id}_${userId}`
+      );
+      if (!("success" in led) || !led.success) {
+        return NextResponse.json(
+          { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+          { status: 500 }
+        );
+      }
+
+      const newBank = Math.max(0, rm.current_bank_cents - playerEntry);
+      await supabase
+        .from("celo_rooms")
+        .update(mergeCeloRoomUpdate(newBank, { last_activity: now }))
+        .eq("id", room_id);
+    } else {
+      const bankerNet = Math.floor((playerEntry * (100 - feePct)) / 100);
+      feeSC = playerEntry - bankerNet;
+
+      const led = await walletLedgerEntry(
+        bankerId,
+        "game_win",
+        bankerNet,
+        `celo_banker_win_point_${round_id}_${userId}`
+      );
+      if (!("success" in led) || !led.success) {
+        return NextResponse.json(
+          { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+          { status: 500 }
+        );
+      }
+
+      const newBank = rm.current_bank_cents + bankerNet;
+      await supabase
+        .from("celo_rooms")
+        .update(mergeCeloRoomUpdate(newBank, { last_activity: now }))
+        .eq("id", room_id);
+    }
+
+    await supabase.from("celo_player_rolls").insert({
+      round_id,
+      room_id,
+      user_id: userId,
+      dice,
+      roll_name: roll.rollName,
+      roll_result: roll.result,
+      point: roll.result === "point" ? roll.point : null,
+      entry_sc: playerEntry,
+      outcome: playerWins ? "win" : "loss",
+      payout_sc: payoutSC,
+      platform_fee_sc: feeSC,
+      reroll_count: rerollCount ?? 0,
+      player_celo_at: roll.isCelo ? now : null,
+    });
+
+    const currentIdx = players.findIndex((p) => Number(p.seat_number ?? 0) === currentSeat);
+    const nextPlayer = players[currentIdx + 1];
+
+    if (nextPlayer) {
+      await supabase
+        .from("celo_rounds")
+        .update({ current_player_seat: nextPlayer.seat_number })
+        .eq("id", round_id);
+
+      return NextResponse.json({
+        dice,
+        rollName: roll.rollName,
+        result: roll.result,
+        point: roll.point,
+        outcome: playerWins ? "win" : "loss",
+        payoutSC,
+        feeSC,
+        nextPlayerSeat: nextPlayer.seat_number,
+        roundComplete: false,
+      });
+    }
+
+    await supabase
+      .from("celo_rounds")
+      .update({
+        status: "completed",
+        completed_at: now,
+      })
+      .eq("id", round_id);
+
+    await supabase.from("celo_rooms").update({ status: "active", last_activity: now }).eq("id", room_id);
+
+    return NextResponse.json({
+      dice,
+      rollName: roll.rollName,
+      result: roll.result,
+      point: roll.point,
+      outcome: playerWins ? "win" : "loss",
+      payoutSC,
+      feeSC,
+      roundComplete: true,
+    });
+  }
+
+  return NextResponse.json({ error: "Round is not in a rollable state" }, { status: 400 });
 }

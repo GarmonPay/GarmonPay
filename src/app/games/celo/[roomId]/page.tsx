@@ -69,6 +69,8 @@ type Room = {
   speed: string;
   last_round_was_celo: boolean;
   banker_celo_at: string | null;
+  /** Banker-declared rule: covering player short stop = auto loss */
+  no_short_stop?: boolean;
 };
 
 type PlayerProfileEmbed = {
@@ -456,6 +458,7 @@ export default function CeloRoomPage() {
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
   /** Shown above dice during shared realtime animation */
   const [currentRollerName, setCurrentRollerName] = useState("");
+  const [noShortStop, setNoShortStop] = useState(false);
   /** True after Roll API succeeds until realtime dice animation sequence finishes */
   const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
   const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
@@ -564,10 +567,15 @@ export default function CeloRoomPage() {
           speed: String(raw.speed ?? "regular"),
           last_round_was_celo: Boolean(raw.last_round_was_celo),
           banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+          no_short_stop: Boolean(raw.no_short_stop),
         } as Room);
       }
     }
   }, [roomId]);
+
+  useEffect(() => {
+    if (room) setNoShortStop(Boolean(room.no_short_stop));
+  }, [room]);
 
   const fetchPlayers = useCallback(async () => {
     try {
@@ -594,6 +602,7 @@ export default function CeloRoomPage() {
               speed: String(raw.speed ?? "regular"),
               last_round_was_celo: Boolean(raw.last_round_was_celo),
               banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+              no_short_stop: Boolean(raw.no_short_stop),
             } as Room);
           }
         }
@@ -1065,6 +1074,7 @@ export default function CeloRoomPage() {
                 speed: String(raw.speed ?? "regular"),
                 last_round_was_celo: Boolean(raw.last_round_was_celo),
                 banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
+                no_short_stop: Boolean(raw.no_short_stop),
               } as Room);
             }
           }
@@ -1089,6 +1099,7 @@ export default function CeloRoomPage() {
               speed: String(row.speed ?? "regular"),
               last_round_was_celo: Boolean(row.last_round_was_celo),
               banker_celo_at: (row.banker_celo_at as string | null) ?? null,
+              no_short_stop: Boolean(row.no_short_stop),
             } as Room);
           } else {
             void loadRoomRef.current();
@@ -1527,11 +1538,7 @@ export default function CeloRoomPage() {
     // Other players/spectators get it via postgres_changes. Broadcast is additive dedup.
     if (rollData.animationPayload) {
       processRollStartedPayload(rollData.animationPayload, "api-response");
-    } else if (
-      wasBankerRolling &&
-      Array.isArray(rollData.dice) &&
-      rollData.dice.length === 3
-    ) {
+    } else if (Array.isArray(rollData.dice) && rollData.dice.length === 3) {
       window.setTimeout(() => {
         void triggerDiceAnimation(rollData.dice as number[], String(rollData.rollName ?? ""));
       }, 0);
@@ -1713,6 +1720,55 @@ export default function CeloRoomPage() {
     if (!ok) { setError((data.error as string) ?? "Failed to accept bet"); return; }
     await loadRound();
     await loadBalance();
+  }
+
+  async function handleToggleNoShortStop() {
+    const newVal = !noShortStop;
+    setNoShortStop(newVal);
+    const sb = createBrowserClient();
+    if (!sb) return;
+    const { error } = await sb.from("celo_rooms").update({ no_short_stop: newVal }).eq("id", roomId);
+    if (error) setError(error.message);
+    else void loadRoom();
+  }
+
+  async function handleShortStop(target: "banker" | "player") {
+    if (!currentRound) return;
+    setError(null);
+    try {
+      const res = await authFetch("/api/celo/round/short-stop", {
+        room_id: roomId,
+        round_id: currentRound.id,
+        target,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        result?: string;
+        message?: string;
+        error?: string;
+      };
+      setIsRolling(false);
+      setCurrentDice(null);
+      if (!res.ok) {
+        setError(data.error ?? data.message ?? "Short stop failed");
+        return;
+      }
+      if (data.result === "auto_loss") {
+        setFeltTableRollName("SHORT STOP DENIED! ❌ AUTO LOSS");
+        setLastRollResult((prev) =>
+          prev
+            ? { ...prev, result: "instant_loss", rollName: "SHORT STOP DENIED" }
+            : { result: "instant_loss", rollName: "SHORT STOP DENIED" }
+        );
+      } else {
+        setFeltTableRollName("✋ SHORT STOP — NO COUNT! Reroll!");
+        setLastRollResult((prev) =>
+          prev ? { ...prev, result: "no_count" } : { result: "no_count" }
+        );
+      }
+      await loadAll();
+    } catch {
+      setError("Short stop failed");
+    }
   }
 
   async function handleSendChat(e: React.FormEvent) {
@@ -2031,6 +2087,14 @@ export default function CeloRoomPage() {
   const canRollBanker = amIBanker && isBankerRolling && playersWithBets.length > 0;
   const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
   const showPlayerRollButton = amIPlayer && isPlayerRolling;
+
+  const isHeadToHead = Boolean(currentRound?.bank_covered);
+  const isCoveringPlayer = Boolean(
+    currentRound?.covered_by && sameCeloUserId(String(currentRound.covered_by), userId)
+  );
+  const canShortStopBanker =
+    isRolling && isHeadToHead && isCoveringPlayer && isBankerRolling;
+  const canShortStopPlayer = isRolling && isHeadToHead && amIBanker && isPlayerRolling;
 
   const lastResult = lastRollResult?.result;
 
@@ -2746,6 +2810,65 @@ export default function CeloRoomPage() {
           </div>
         ) : null}
 
+        {amIBanker && noActiveRound && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              background: "rgba(124,58,237,0.1)",
+              border: "1px solid rgba(124,58,237,0.3)",
+              borderRadius: 10,
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: "#fff",
+                  fontWeight: "bold",
+                  fontSize: 14,
+                }}
+              >
+                🚫 No Short Stop Rule
+              </div>
+              <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>
+                Player short stops your roll = auto loss
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleToggleNoShortStop()}
+              style={{
+                width: 54,
+                height: 28,
+                borderRadius: 14,
+                background: noShortStop ? "#7C3AED" : "#374151",
+                border: "none",
+                cursor: "pointer",
+                position: "relative",
+                transition: "background 0.2s",
+              }}
+              aria-pressed={noShortStop}
+              aria-label="Toggle no short stop rule"
+            >
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  position: "absolute",
+                  top: 3,
+                  left: noShortStop ? 29 : 3,
+                  transition: "left 0.2s",
+                }}
+              />
+            </button>
+          </div>
+        )}
+
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
           {amIBanker && room.status === "rolling" && !currentRound && (
@@ -3077,6 +3200,33 @@ export default function CeloRoomPage() {
             </button>
           </form>
         </div>
+
+        {(canShortStopBanker || canShortStopPlayer) && (
+          <button
+            type="button"
+            onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
+            style={{
+              position: "fixed",
+              bottom: 120,
+              left: "50%",
+              transform: "translateX(-50%)",
+              padding: "18px 48px",
+              background: "linear-gradient(135deg, #EF4444, #DC2626)",
+              border: "3px solid #FCA5A5",
+              borderRadius: 99,
+              color: "#fff",
+              fontSize: 22,
+              fontWeight: "bold",
+              cursor: "pointer",
+              zIndex: 200,
+              boxShadow: "0 0 40px rgba(239,68,68,0.7)",
+              letterSpacing: 3,
+              animation: "shortStopPulse 0.4s ease-in-out infinite alternate",
+            }}
+          >
+            ✋ SHORT STOP
+          </button>
+        )}
       </div>
     </main>
   );

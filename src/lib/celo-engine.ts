@@ -1,225 +1,189 @@
-import { randomInt } from "crypto";
+import { webcrypto } from "crypto";
 
-// ── TYPES ──────────────────────────────────────────────────────────────────────
+function randomInt(min: number, max: number): number {
+  const range = max - min + 1;
+  const bytes = webcrypto.getRandomValues(new Uint32Array(1));
+  return min + (bytes[0]! % range);
+}
+
+export function rollThreeDice(): [number, number, number] {
+  return [randomInt(1, 6), randomInt(1, 6), randomInt(1, 6)];
+}
 
 export type RollResult = {
   dice: [number, number, number];
-  rollName: string;
   result: "instant_win" | "instant_loss" | "point" | "no_count";
+  rollName: string;
   point?: number;
   isCelo: boolean;
+  isCraps: boolean;
 };
-
-export type PayoutResult = {
-  winnerCents: number;
-  platformFeeCents: number;
-  netPayoutCents: number;
-};
-
-// ── DICE ROLL ──────────────────────────────────────────────────────────────────
-
-export function rollThreeDice(): [number, number, number] {
-  const d1 = randomInt(1, 7);
-  const d2 = randomInt(1, 7);
-  const d3 = randomInt(1, 7);
-  return [d1, d2, d3];
-}
-
-// ── EVALUATE ROLL ──────────────────────────────────────────────────────────────
 
 export function evaluateRoll(dice: [number, number, number]): RollResult {
   const [a, b, c] = dice;
-  const sorted = [...dice].sort((x, y) => x - y) as [number, number, number];
-  const [s1, s2, s3] = sorted;
-
-  // ── INSTANT WINS ──
+  const sorted = [...dice].sort((x, y) => x - y);
+  const [lo, mid, hi] = sorted;
 
   // C-Lo: 4-5-6
-  if (s1 === 4 && s2 === 5 && s3 === 6) {
+  if (lo === 4 && mid === 5 && hi === 6) {
     return {
       dice,
+      result: "instant_win",
       rollName: "C-LO! 🎲",
-      result: "instant_win",
+      point: undefined,
       isCelo: true,
+      isCraps: false,
     };
   }
 
-  // Trips: all three the same
-  if (s1 === s2 && s2 === s3) {
-    const tripNames: Record<number, string> = {
-      1: "ACE OUT! 🎲",
-      2: "TRIP DEUCES! 🎲",
-      3: "TRIP THREES! 🎲",
-      4: "TRIP FOURS! 🎲",
-      5: "TRIP FIVES! 🎲",
-      6: "TRIP SIXES - THE BOSS! 👑",
+  // Trips: all same
+  if (a === b && b === c) {
+    const names: Record<number, string> = {
+      1: "ACE OUT! 🎯",
+      2: "TRIP DEUCES! ✌️",
+      3: "TRIP THREES! 🔥",
+      4: "TRIP FOURS! 💪",
+      5: "TRIP FIVES! ⭐",
+      6: "THE BOSS! 👑",
     };
     return {
       dice,
-      rollName: tripNames[s1] ?? `TRIPS ${s1}! 🎲`,
       result: "instant_win",
+      rollName: names[a] || "TRIPS!",
+      point: undefined,
       isCelo: false,
+      isCraps: false,
     };
   }
 
-  // Pair + 6 = Hand Crack (instant win)
+  // Pair + 6 = Hand Crack
   if (
-    (a === b && c === 6 && a !== 6) ||
-    (a === c && b === 6 && a !== 6) ||
-    (b === c && a === 6 && b !== 6)
+    (a === b && c === 6) ||
+    (a === c && b === 6) ||
+    (b === c && a === 6)
   ) {
     return {
       dice,
-      rollName: "HAND CRACK! 💥",
       result: "instant_win",
+      rollName: "HAND CRACK! 💥",
+      point: undefined,
       isCelo: false,
+      isCraps: false,
     };
   }
-
-  // ── INSTANT LOSSES ──
 
   // Shit: 1-2-3
-  if (s1 === 1 && s2 === 2 && s3 === 3) {
+  if (lo === 1 && mid === 2 && hi === 3) {
     return {
       dice,
-      rollName: "SHIT! 💩",
       result: "instant_loss",
+      rollName: "SHIT! 💩",
+      point: undefined,
       isCelo: false,
+      isCraps: true,
     };
   }
 
-  // Pair + 1 = Dick (instant loss)
+  // Dick: pair + 1
   if (
-    (a === b && c === 1 && a !== 1) ||
-    (a === c && b === 1 && a !== 1) ||
-    (b === c && a === 1 && b !== 1)
+    (a === b && c === 1) ||
+    (a === c && b === 1) ||
+    (b === c && a === 1)
   ) {
     return {
       dice,
-      rollName: "DICK! 😂",
       result: "instant_loss",
+      rollName: "DICK! 😬",
+      point: undefined,
       isCelo: false,
+      isCraps: true,
     };
   }
 
-  // ── POINTS ──
+  // Points: pair + 2, 3, 4, or 5
+  const pointNames: Record<number, string> = {
+    2: "SHORTLY! / JIT! 👶",
+    3: "GIRL! / HOE! 👩",
+    4: "ZOE! / HAITIAN! 🇭🇹",
+    5: "POLICE! / POUND! 🚔",
+  };
 
-  let pairValue: number | null = null;
-  let oddValue: number | null = null;
-
-  if (a === b && c !== a) {
-    pairValue = a;
-    oddValue = c;
-  } else if (a === c && b !== a) {
-    pairValue = a;
-    oddValue = b;
-  } else if (b === c && a !== b) {
-    pairValue = b;
-    oddValue = a;
-  }
-
-  if (pairValue !== null && oddValue !== null) {
-    const pointNames: Record<number, string[]> = {
-      5: ["POUND! 🔵", "POLICE! 🚔"],
-      4: ["ZOE! 🇭🇹", "HAITIAN! 🇭🇹"],
-      3: ["GIRL! 👧", "HOE! 😅"],
-      2: ["SHORTLY! 👶", "JIT! 👶"],
+  if ((a === b && c === 2) || (a === c && b === 2) || (b === c && a === 2)) {
+    return {
+      dice,
+      result: "point",
+      rollName: pointNames[2],
+      point: 2,
+      isCelo: false,
+      isCraps: false,
     };
-    const names = pointNames[oddValue];
-    if (names) {
-      const name = names[randomInt(0, 2)];
-      return {
-        dice,
-        rollName: name,
-        result: "point",
-        point: oddValue,
-        isCelo: false,
-      };
-    }
+  }
+  if ((a === b && c === 3) || (a === c && b === 3) || (b === c && a === 3)) {
+    return {
+      dice,
+      result: "point",
+      rollName: pointNames[3],
+      point: 3,
+      isCelo: false,
+      isCraps: false,
+    };
+  }
+  if ((a === b && c === 4) || (a === c && b === 4) || (b === c && a === 4)) {
+    return {
+      dice,
+      result: "point",
+      rollName: pointNames[4],
+      point: 4,
+      isCelo: false,
+      isCraps: false,
+    };
+  }
+  if ((a === b && c === 5) || (a === c && b === 5) || (b === c && a === 5)) {
+    return {
+      dice,
+      result: "point",
+      rollName: pointNames[5],
+      point: 5,
+      isCelo: false,
+      isCraps: false,
+    };
   }
 
-  // ── NO COUNT ──
   return {
     dice,
-    rollName: "No Count — Roll Again 🎲",
     result: "no_count",
+    rollName: "NO COUNT 🔄",
+    point: undefined,
     isCelo: false,
+    isCraps: false,
   };
 }
-
-// ── COMPARE POINTS ─────────────────────────────────────────────────────────────
 
 export function comparePoints(
   bankerPoint: number,
   playerPoint: number
 ): "player_wins" | "banker_wins" {
   if (playerPoint > bankerPoint) return "player_wins";
-  return "banker_wins"; // ties go to banker
+  return "banker_wins";
 }
-
-/** 1-2-3 — worst banker roll (full table loss path). */
-export function isBankerShitRoll(dice: [number, number, number]): boolean {
-  const sorted = [...dice].sort((x, y) => x - y);
-  return sorted[0] === 1 && sorted[1] === 2 && sorted[2] === 3;
-}
-
-/**
- * Pair + 1 ("Dick") — bad roll, banker loses a small amount from the bank only;
- * does not rotate banker or pay the whole table like shit.
- */
-export function isBankerDickRoll(dice: [number, number, number]): boolean {
-  if (isBankerShitRoll(dice)) return false;
-  const [a, b, c] = dice;
-  return (
-    (a === b && c === 1 && a !== 1) ||
-    (a === c && b === 1 && a !== 1) ||
-    (b === c && a === 1 && b !== 1)
-  );
-}
-
-// ── CALCULATE PAYOUT ──────────────────────────────────────────────────────────
 
 export function calculatePayout(
-  entryCents: number,
+  entrySC: number,
+  outcome: "win" | "loss" | "push",
   platformFeePct: number = 10
-): PayoutResult {
-  const grossPayout = entryCents * 2;
-  const platformFeeCents = Math.floor((grossPayout * platformFeePct) / 100);
-  const netPayoutCents = grossPayout - platformFeeCents;
-  return { winnerCents: grossPayout, platformFeeCents, netPayoutCents };
-}
-
-// ── VALIDATE ENTRY AMOUNT ─────────────────────────────────────────────────────
-
-export function validateEntry(
-  entryCents: number,
-  minimumCents: number
-): { valid: boolean; error?: string } {
-  if (entryCents < minimumCents) {
-    return {
-      valid: false,
-      error: `Minimum entry is ${minimumCents} cents`,
-    };
+): { payoutSC: number; feeSC: number } {
+  if (outcome === "win") {
+    const gross = entrySC * 2;
+    const feeSC = Math.floor((gross * platformFeePct) / 100);
+    return { payoutSC: gross - feeSC, feeSC };
   }
-  if (minimumCents > 0 && entryCents % minimumCents !== 0) {
-    return {
-      valid: false,
-      error: `Entry must be a multiple of ${minimumCents} cents`,
-    };
+  if (outcome === "push") {
+    return { payoutSC: entrySC, feeSC: 0 };
   }
-  return { valid: true };
+  return { payoutSC: 0, feeSC: 0 };
 }
 
-// ── CALCULATE BANK GROWTH ─────────────────────────────────────────────────────
-
-export function calculateBankGrowth(
-  currentBankCents: number,
-  bankerWinningsCents: number
-): number {
-  return currentBankCents + bankerWinningsCents;
-}
-
-// ── DICE TYPES ────────────────────────────────────────────────────────────────
+// ── Shop dice types (used by /api/celo/dice/buy) ───────────────────────────────
 
 export const DICE_TYPES = {
   standard: { name: "Standard", costCents: 0, color: "red" },
