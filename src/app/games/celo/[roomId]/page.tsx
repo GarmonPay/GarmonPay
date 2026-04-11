@@ -17,6 +17,12 @@ type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
+import { scToUsdDisplay } from "@/lib/coins";
+
+function formatScLine(sc: number): string {
+  const n = Math.max(0, Math.floor(Number(sc)));
+  return `${n.toLocaleString()} SC (${scToUsdDisplay(n)})`;
+}
 
 async function authFetch(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
@@ -716,10 +722,10 @@ export default function CeloRoomPage() {
 
   const refreshBalance = useCallback(async () => {
     try {
-      const res = await authFetchGet("/api/wallet/balance");
+      const res = await authFetchGet("/api/coins/balance");
       if (res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number };
-        const n = Number(d.balance_cents ?? 0);
+        const d = (await res.json().catch(() => ({}))) as { sweeps_coins?: number };
+        const n = Number(d.sweeps_coins ?? 0);
         const v = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
         setBalanceCents(v);
         balanceRef.current = v;
@@ -1069,20 +1075,20 @@ export default function CeloRoomPage() {
     let isMounted = true;
     const uid = session.userId;
     const ch = sb
-      .channel(`wallet-balance-${uid}`)
+      .channel(`user-sweeps-${uid}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "wallet_balances",
-          filter: `user_id=eq.${uid}`,
+          table: "users",
+          filter: `id=eq.${uid}`,
         },
         (payload) => {
           if (!isMounted) return;
-          const row = payload.new as { user_id?: string; balance?: number } | undefined;
-          if (!row || !sameCeloUserId(row.user_id, uid)) return;
-          const newBalance = Number(row.balance ?? 0);
+          const row = payload.new as { id?: string; sweeps_coins?: number } | undefined;
+          if (!row || !sameCeloUserId(row.id, uid)) return;
+          const newBalance = Number(row.sweeps_coins ?? 0);
           if (!Number.isFinite(newBalance)) return;
           const floored = Math.max(0, Math.floor(newBalance));
           const prev = balanceRef.current;
@@ -2245,7 +2251,7 @@ export default function CeloRoomPage() {
               />
               <div className="flex justify-between text-[10px] text-violet-400/50 mt-1">
                 <span>Min: ${(minBet / 100).toFixed(2)}</span>
-                <span>Balance: ${(balanceCents / 100).toFixed(2)}</span>
+                <span>Balance: {formatScLine(balanceCents)}</span>
               </div>
             </div>
 
@@ -2427,7 +2433,7 @@ export default function CeloRoomPage() {
                 ${(becomeBankerCostCents / 100).toFixed(2)}
               </p>
               <p className="text-xs text-violet-300/50">
-                Your balance: ${(balanceCents / 100).toFixed(2)}
+                Your balance: {formatScLine(balanceCents)}
               </p>
             </div>
             <p className="text-xs text-violet-400/60">
@@ -2687,7 +2693,7 @@ export default function CeloRoomPage() {
                     : "text-emerald-400"
               }`}
             >
-              ${(balanceCents / 100).toFixed(2)}
+              {formatScLine(balanceCents)}
             </p>
           </div>
         </div>

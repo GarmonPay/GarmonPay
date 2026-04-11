@@ -74,6 +74,11 @@ export async function GET(request: Request) {
     wdTodayRes,
     balRes,
     activeMembersRes,
+    userCoinsRes,
+    gcPurchaseTodayRes,
+    gcPurchaseMonthRes,
+    scDebitTodayRes,
+    scDebitMonthRes,
   ] = await Promise.all([
     supabase
       .from("platform_earnings")
@@ -103,6 +108,25 @@ export async function GET(request: Request) {
       .from("users")
       .select("*", { count: "exact", head: true })
       .neq("membership", "free"),
+    supabase.from("users").select("gold_coins, sweeps_coins"),
+    supabase
+      .from("coin_transactions")
+      .select("gold_coins")
+      .eq("type", "gc_purchase")
+      .gte("created_at", todayStart)
+      .lt("created_at", tomorrow),
+    supabase.from("coin_transactions").select("gold_coins").eq("type", "gc_purchase").gte("created_at", monthStart),
+    supabase
+      .from("coin_transactions")
+      .select("sweeps_coins")
+      .lt("sweeps_coins", 0)
+      .gte("created_at", todayStart)
+      .lt("created_at", tomorrow),
+    supabase
+      .from("coin_transactions")
+      .select("sweeps_coins")
+      .lt("sweeps_coins", 0)
+      .gte("created_at", monthStart),
   ]);
 
   if (peTodayRes.error) console.error("platform-metrics platform_earnings today", peTodayRes.error);
@@ -112,6 +136,29 @@ export async function GET(request: Request) {
   if (wdTodayRes.error) console.error("platform-metrics wallet_ledger withdrawals today", wdTodayRes.error);
   if (balRes.error) console.error("platform-metrics wallet_balances", balRes.error);
   if (activeMembersRes.error) console.error("platform-metrics users active count", activeMembersRes.error);
+  if (userCoinsRes.error) console.error("platform-metrics user coins sum", userCoinsRes.error);
+  if (gcPurchaseTodayRes.error) console.error("platform-metrics gc purchase today", gcPurchaseTodayRes.error);
+  if (gcPurchaseMonthRes.error) console.error("platform-metrics gc purchase month", gcPurchaseMonthRes.error);
+  if (scDebitTodayRes.error) console.error("platform-metrics sc debit today", scDebitTodayRes.error);
+  if (scDebitMonthRes.error) console.error("platform-metrics sc debit month", scDebitMonthRes.error);
+
+  let totalGoldCoinsCirculating = 0;
+  let totalSweepsCoinsCirculating = 0;
+  for (const u of userCoinsRes.data ?? []) {
+    const r = u as { gold_coins?: number; sweeps_coins?: number };
+    totalGoldCoinsCirculating += Math.max(0, Math.floor(Number(r.gold_coins ?? 0)));
+    totalSweepsCoinsCirculating += Math.max(0, Math.floor(Number(r.sweeps_coins ?? 0)));
+  }
+
+  const sumGold = (rows: { gold_coins?: number | null }[] | null) =>
+    (rows ?? []).reduce((s, x) => s + Math.max(0, Math.floor(Number(x.gold_coins ?? 0))), 0);
+  const sumScOut = (rows: { sweeps_coins?: number | null }[] | null) =>
+    (rows ?? []).reduce((s, x) => s + Math.abs(Math.min(0, Number(x.sweeps_coins ?? 0))), 0);
+
+  const gcPurchasedToday = sumGold(gcPurchaseTodayRes.data as { gold_coins?: number }[] | null);
+  const gcPurchasedMonth = sumGold(gcPurchaseMonthRes.data as { gold_coins?: number }[] | null);
+  const scRedeemedToday = sumScOut(scDebitTodayRes.data as { sweeps_coins?: number }[] | null);
+  const scRedeemedMonth = sumScOut(scDebitMonthRes.data as { sweeps_coins?: number }[] | null);
 
   const platformRevenueTodayCents = sumCents(peTodayRes.data as { amount_cents?: number }[] | null);
   const platformRevenueMonthCents = sumCents(peMonthRes.data as { amount_cents?: number }[] | null);
@@ -130,5 +177,11 @@ export async function GET(request: Request) {
     platformProfitTodayCents,
     activeMembersCount,
     userDepositsMonthCents,
+    totalGoldCoinsCirculating,
+    totalSweepsCoinsCirculating,
+    gcPurchasedToday,
+    gcPurchasedMonth,
+    scRedeemedToday,
+    scRedeemedMonth,
   });
 }

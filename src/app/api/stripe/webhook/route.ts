@@ -3,6 +3,7 @@ import { getStripe, isStripeConfigured } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditCoins } from "@/lib/coins";
 import { creditReferralUpgradeCommission } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
@@ -529,6 +530,71 @@ export async function POST(req: Request) {
       session_id: session_id,
       status: "completed",
     }).then(({ error }) => { if (error) console.error("[Stripe webhook] stripe_payments arena_season_pass:", error.message); });
+    return new Response("OK", { status: 200 });
+  }
+
+  if (product_type === "gc_package" && supabase) {
+    const gc_package_id = session.metadata?.gc_package_id as string | undefined;
+    const goldMeta = parseInt(String(session.metadata?.gold_coins ?? "0"), 10);
+    const bonusMeta = parseInt(String(session.metadata?.bonus_sweeps_coins ?? "0"), 10);
+    let goldCoins = Number.isFinite(goldMeta) ? goldMeta : 0;
+    let bonusSc = Number.isFinite(bonusMeta) ? bonusMeta : 0;
+    let pkgName = (session.metadata?.gc_package_name as string) || "GC package";
+
+    if (gc_package_id) {
+      const { data: pkgRow } = await supabase.from("gc_packages").select("name, gold_coins, bonus_sweeps_coins").eq("id", gc_package_id).maybeSingle();
+      if (pkgRow) {
+        const pr = pkgRow as { name?: string; gold_coins?: number; bonus_sweeps_coins?: number };
+        pkgName = pr.name ?? pkgName;
+        goldCoins = Math.floor(Number(pr.gold_coins ?? goldCoins));
+        bonusSc = Math.floor(Number(pr.bonus_sweeps_coins ?? bonusSc));
+      }
+    }
+
+    const ref = `stripe_gc_${session_id}`;
+    const cr = await creditCoins(
+      user_id,
+      goldCoins,
+      bonusSc,
+      `Purchased ${pkgName}`,
+      ref,
+      "gc_purchase"
+    );
+    if (!cr.success && !/duplicate/i.test(cr.message ?? "")) {
+      console.error("[Stripe webhook] gc_package credit failed", cr.message);
+      return new Response("Coin credit failed", { status: 500 });
+    }
+
+    await supabase
+      .from("platform_earnings")
+      .insert({
+        source: "gc_package",
+        source_id: gc_package_id ?? session_id,
+        amount_cents: amount_total,
+        description: `GC package: ${pkgName}`,
+        user_id,
+      })
+      .then(({ error }) => {
+        if (error) console.error("[Stripe webhook] platform_earnings gc_package:", error.message);
+      });
+
+    await supabase
+      .from("stripe_payments")
+      .insert({
+        user_id,
+        email: customer_email || "unknown",
+        amount: amount_dollars,
+        currency: (session.currency ?? "usd").toLowerCase(),
+        product_type: "gc_package",
+        stripe_session_id: session_id,
+        session_id,
+        status: "completed",
+      })
+      .then(({ error }) => {
+        if (error) console.error("[Stripe webhook] stripe_payments gc_package:", error.message);
+      });
+
+    recordRevenue(amount_total, "stripe").catch((e) => console.error("[Stripe webhook] platform_record_revenue gc_package:", e));
     return new Response("OK", { status: 200 });
   }
 

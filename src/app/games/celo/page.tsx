@@ -8,6 +8,12 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
+import { scToUsdDisplay } from "@/lib/coins";
+
+function formatScLine(sc: number): string {
+  const n = Math.max(0, Math.floor(Number(sc)));
+  return `${n.toLocaleString()} SC (${scToUsdDisplay(n)})`;
+}
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -60,7 +66,8 @@ export default function CeloLobbyPage() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [balanceCents, setBalanceCents] = useState(0);
+  /** Sweeps Coins — same integer units as room bank / entry fields (`*_cents` columns hold SC amounts). */
+  const [sweepsBalance, setSweepsBalance] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateForm>(DEFAULT_FORM);
   const [creating, setCreating] = useState(false);
@@ -129,11 +136,11 @@ export default function CeloLobbyPage() {
 
   useEffect(() => {
     if (!showCreate || !session?.accessToken) return;
-    fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${session.accessToken}` } })
+    fetch("/api/coins/balance", { headers: { Authorization: `Bearer ${session.accessToken}` } })
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { balance_cents?: number }) => {
-        const n = Number(d.balance_cents ?? 0);
-        setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+      .then((d: { sweeps_coins?: number }) => {
+        const n = Number(d.sweeps_coins ?? 0);
+        setSweepsBalance(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
       })
       .catch(() => {});
   }, [showCreate, session?.accessToken]);
@@ -146,11 +153,11 @@ export default function CeloLobbyPage() {
       }
       setSession(s);
       if (s.accessToken) {
-        fetch("/api/wallet/get", { headers: { Authorization: `Bearer ${s.accessToken}` } })
+        fetch("/api/coins/balance", { headers: { Authorization: `Bearer ${s.accessToken}` } })
           .then((r) => (r.ok ? r.json() : {}))
-          .then((d: { balance_cents?: number }) => {
-            const n = Number(d.balance_cents ?? 0);
-            setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+          .then((d: { sweeps_coins?: number }) => {
+            const n = Number(d.sweeps_coins ?? 0);
+            setSweepsBalance(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
           })
           .catch(() => {});
       }
@@ -159,9 +166,9 @@ export default function CeloLobbyPage() {
 
   /** Keep starting bank ≤ wallet; slider min/max/step are all in cents. */
   useEffect(() => {
-    if (!showCreate || balanceCents <= 0) return;
+    if (!showCreate || sweepsBalance <= 0) return;
     setForm((f) => {
-      const cap = Math.min(balanceCents, 200_000);
+      const cap = Math.min(sweepsBalance, 200_000);
       const step = f.minimum_entry_cents;
       let sb = f.starting_bank_cents;
       if (sb > cap) sb = Math.floor(cap / step) * step;
@@ -169,7 +176,7 @@ export default function CeloLobbyPage() {
       if (sb === f.starting_bank_cents) return f;
       return { ...f, starting_bank_cents: sb };
     });
-  }, [showCreate, balanceCents]);
+  }, [showCreate, sweepsBalance]);
 
   useEffect(() => {
     let isMounted = true;
@@ -340,7 +347,7 @@ export default function CeloLobbyPage() {
   }
 
   /** Both sides in cents (`minimum_entry_cents` / `starting_bank_cents` vs wallet). */
-  const userBalanceCents = balanceCents;
+  const userBalanceCents = sweepsBalance;
   const minimumEntryCents = form.minimum_entry_cents;
   const startingBankCents = form.starting_bank_cents;
   const hasEnough = userBalanceCents >= startingBankCents;
@@ -375,7 +382,7 @@ export default function CeloLobbyPage() {
           </Link>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balance</p>
-            <p className="text-base font-bold text-[#F5C842] font-mono">${(balanceCents / 100).toFixed(2)}</p>
+            <p className="text-base font-bold text-[#F5C842] font-mono">{formatScLine(sweepsBalance)}</p>
           </div>
         </div>
 
@@ -462,8 +469,8 @@ export default function CeloLobbyPage() {
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-[#F5C842] font-bold font-mono text-lg">${(room.current_bank_cents / 100).toFixed(2)}</p>
-                    <p className="text-[10px] text-violet-300/50 mt-0.5">min ${(room.min_bet_cents / 100).toFixed(2)}</p>
+                    <p className="text-[#F5C842] font-bold font-mono text-sm leading-tight">{formatScLine(room.current_bank_cents)}</p>
+                    <p className="text-[10px] text-violet-300/50 mt-0.5">min {formatScLine(room.min_bet_cents)}</p>
                   </div>
                 </div>
               </button>
@@ -581,7 +588,7 @@ export default function CeloLobbyPage() {
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Min Entry</label>
                   <span className="text-sm font-bold text-[#F5C842] font-mono">
-                    ${(form.minimum_entry_cents / 100).toFixed(2)}
+                    {formatScLine(form.minimum_entry_cents)}
                   </span>
                 </div>
                 <input
@@ -594,8 +601,8 @@ export default function CeloLobbyPage() {
                   className="mt-2 w-full accent-[#F5C842]"
                 />
                 <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
-                  <span>$5.00</span>
-                  <span>$100.00</span>
+                  <span>500 SC</span>
+                  <span>10,000 SC</span>
                 </div>
               </div>
 
@@ -604,7 +611,7 @@ export default function CeloLobbyPage() {
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Starting Bank</label>
                   <span className="text-sm font-bold text-[#F5C842] font-mono">
-                    ${(form.starting_bank_cents / 100).toFixed(2)}
+                    {formatScLine(form.starting_bank_cents)}
                   </span>
                 </div>
                 <input
@@ -627,11 +634,11 @@ export default function CeloLobbyPage() {
                   }`}
                 >
                   {hasEnough ? (
-                    <>Your balance: ${(userBalanceCents / 100).toFixed(2)} — enough to reserve this bank.</>
+                    <>Your balance: {formatScLine(userBalanceCents)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      Your balance: ${(userBalanceCents / 100).toFixed(2)} — you need $
-                      {(shortfallCents / 100).toFixed(2)} more to reserve ${(startingBankCents / 100).toFixed(2)}.
+                      Your balance: {formatScLine(userBalanceCents)} — you need {shortfallCents.toLocaleString()} more SC to
+                      reserve {formatScLine(startingBankCents)}.
                     </>
                   )}
                 </p>
@@ -641,12 +648,12 @@ export default function CeloLobbyPage() {
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-violet-300/70">You will reserve</span>
-                  <span className="font-bold text-[#F5C842] font-mono">${(form.starting_bank_cents / 100).toFixed(2)}</span>
+                  <span className="font-bold text-[#F5C842] font-mono text-xs">{formatScLine(form.starting_bank_cents)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
                   <span className="text-violet-300/70">Your balance</span>
-                  <span className={`font-bold font-mono ${hasEnough ? "text-emerald-400" : "text-red-400"}`}>
-                    ${(userBalanceCents / 100).toFixed(2)}
+                  <span className={`font-bold font-mono text-xs ${hasEnough ? "text-emerald-400" : "text-red-400"}`}>
+                    {formatScLine(userBalanceCents)}
                   </span>
                 </div>
               </div>
@@ -671,13 +678,13 @@ export default function CeloLobbyPage() {
                   ? "Creating…"
                   : !hasEnough
                   ? "Insufficient Balance"
-                  : `CREATE ROOM — $${(form.starting_bank_cents / 100).toFixed(2)}`}
+                  : `CREATE ROOM — ${formatScLine(form.starting_bank_cents)}`}
               </button>
 
               {!hasEnough && (
                 <p className="text-center text-[10px] text-violet-400/50">
-                  <Link href="/dashboard/finance" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
-                    Add funds to your wallet →
+                  <Link href="/dashboard/buy-coins" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
+                    Get coins or add USD →
                   </Link>
                 </p>
               )}

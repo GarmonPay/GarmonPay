@@ -8,6 +8,7 @@ import { createBrowserClient } from "@/lib/supabase";
 
 const nav: { href: string; label: string; soon?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/buy-coins", label: "🪙 Buy Coins" },
   { href: "/dashboard/arena", label: "GarmonPay Arena", soon: true },
   { href: "/dashboard/transactions", label: "Transactions" },
   { href: "/dashboard/leaderboard", label: "Leaderboard" },

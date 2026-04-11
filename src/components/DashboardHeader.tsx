@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { logout } from "@/lib/api";
 import { clearSession } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
+import { DashboardCoinBalances } from "@/components/DashboardCoinBalances";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard" },
@@ -41,9 +42,12 @@ export function DashboardHeader() {
     <header className="glass-bar border-b border-white/[0.06] shadow-soft">
       <div className="max-w-7xl mx-auto px-4 py-4" style={{ maxWidth: "80rem", marginLeft: "auto", marginRight: "auto", padding: "1rem 1.5rem" }}>
         <div className="flex flex-wrap items-center justify-between gap-4" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          <Link href="/dashboard" className="text-xl font-bold text-white" style={{ color: "#fff", fontSize: "1.25rem", fontWeight: 700, textDecoration: "none" }}>
-            GarmonPay
-          </Link>
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
+            <Link href="/dashboard" className="text-xl font-bold text-white shrink-0" style={{ color: "#fff", fontSize: "1.25rem", fontWeight: 700, textDecoration: "none" }}>
+              GarmonPay
+            </Link>
+            <DashboardCoinBalances />
+          </div>
           <nav className="flex flex-wrap items-center gap-1 sm:gap-2" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.25rem" }}>
             {nav.map(({ href, label }) => (
               <Link

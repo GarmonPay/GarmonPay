@@ -2,6 +2,9 @@ import { randomInt } from "crypto";
 
 export type CoinSide = "heads" | "tails";
 
+/** Coin flip stakes use Sweeps Coins; minimum bet (SC). */
+export const COIN_FLIP_MIN_BET_SC = 100;
+
 /** Total pot is 2× bet; winner receives 90%; house keeps 10%. */
 export function computePayoutAndHouseCut(betMinor: number): { payoutWinnerMinor: number; houseCutMinor: number } {
   const bet = Math.floor(Number(betMinor));

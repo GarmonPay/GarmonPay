@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionAsync } from "@/lib/session";
 import { CoinFlip3D } from "@/components/games/CoinFlip3D";
 
-const MIN_BET = 10;
+const MIN_BET = 100;
+const BET_PRESETS = [100, 500, 1000, 2500] as const;
 const API = "/api/coin-flip";
 const BG = "#0e0118";
 const GOLD = "#f5c842";
@@ -30,8 +31,8 @@ type HistoryRow = {
   netMinor: number;
 };
 
-function formatGp(n: number) {
-  return `${n.toLocaleString()} GP`;
+function formatSc(n: number) {
+  return `${n.toLocaleString()} SC`;
 }
 
 type PendingFlip = {
@@ -46,7 +47,7 @@ export function CoinFlipPanel() {
   const [balanceMinor, setBalanceMinor] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("house");
 
-  const [bet, setBet] = useState(25);
+  const [bet, setBet] = useState(100);
   const [sideHouse, setSideHouse] = useState<"heads" | "tails">("heads");
   const [sideCreate, setSideCreate] = useState<"heads" | "tails">("heads");
 
@@ -81,10 +82,16 @@ export function CoinFlipPanel() {
 
   const loadBalance = useCallback(async () => {
     if (!token) return;
-    const r = await fetch("/api/gpay/balance", { headers: authHeaders(false) });
+    const r = await fetch("/api/coins/balance", { headers: authHeaders(false) });
     if (r.ok) {
       const d = await r.json();
-      setBalanceMinor(typeof d.gpayAvailableBalanceMinor === "number" ? d.gpayAvailableBalanceMinor : 0);
+      const sc =
+        typeof d.sweeps_coins === "number"
+          ? d.sweeps_coins
+          : typeof d.gpayAvailableBalanceMinor === "number"
+            ? d.gpayAvailableBalanceMinor
+            : 0;
+      setBalanceMinor(typeof sc === "number" && Number.isFinite(sc) ? Math.floor(sc) : 0);
     }
   }, [token, authHeaders]);
 
@@ -171,7 +178,8 @@ export function CoinFlipPanel() {
       setTargetFace(res);
       setFlipGeneration((g) => g + 1);
       setIsFlipping(true);
-      if (typeof d.gpayBalanceMinor === "number") setBalanceMinor(d.gpayBalanceMinor);
+      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
+      if (typeof sc === "number") setBalanceMinor(sc);
     } finally {
       setBusy(false);
     }
@@ -181,7 +189,7 @@ export function CoinFlipPanel() {
     if (!token) return;
     setError(null);
     if (!betValid || balanceMinor == null || balanceMinor < betAmountMinor) {
-      setError(`Minimum bet is ${MIN_BET} GP and sufficient balance required`);
+      setError(`Minimum bet is ${MIN_BET} SC and sufficient balance required`);
       return;
     }
     setBusy(true);
@@ -196,7 +204,8 @@ export function CoinFlipPanel() {
         setError(typeof d.message === "string" ? d.message : "Create failed");
         return;
       }
-      if (typeof d.gpayBalanceMinor === "number") setBalanceMinor(d.gpayBalanceMinor);
+      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
+      if (typeof sc === "number") setBalanceMinor(sc);
       loadOpen();
       loadHistory();
     } finally {
@@ -232,7 +241,8 @@ export function CoinFlipPanel() {
       setTargetFace(res);
       setFlipGeneration((g) => g + 1);
       setIsFlipping(true);
-      if (typeof d.gpayBalanceMinor === "number") setBalanceMinor(d.gpayBalanceMinor);
+      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
+      if (typeof sc === "number") setBalanceMinor(sc);
       loadOpen();
     } finally {
       setBusy(false);
@@ -248,7 +258,7 @@ export function CoinFlipPanel() {
   if (!token) {
     return (
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-8 text-center">
-        <p className="text-fintech-muted">Sign in to play Coin Flip with GPay.</p>
+        <p className="text-fintech-muted">Sign in to play Coin Flip with Sweeps Coins (SC).</p>
       </div>
     );
   }
@@ -259,9 +269,11 @@ export function CoinFlipPanel() {
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ color: GOLD }}>
           Coin Flip
         </h1>
-        <p className="text-sm text-white/70 mt-1">GPay only — 10% house edge. Minimum bet {MIN_BET} GP.</p>
+        <p className="text-sm text-white/70 mt-1">
+          Sweeps Coins (SC) — 10% house edge on the doubled pot. Minimum bet {MIN_BET} SC.
+        </p>
         <p className="text-sm mt-2 font-medium" style={{ color: GOLD }}>
-          Balance: {balanceMinor != null ? formatGp(balanceMinor) : "—"}
+          Balance: {balanceMinor != null ? formatSc(balanceMinor) : "—"}
         </p>
       </div>
 
@@ -292,7 +304,7 @@ export function CoinFlipPanel() {
           </p>
           <p className={`text-sm mt-1 ${lastResult.netMinor >= 0 ? "text-emerald-400" : "text-red-300"}`}>
             {lastResult.netMinor >= 0 ? "+" : ""}
-            {formatGp(lastResult.netMinor)} net
+            {formatSc(lastResult.netMinor)} net
           </p>
         </div>
       )}
@@ -322,7 +334,7 @@ export function CoinFlipPanel() {
         <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-white">Play vs House</h2>
           <div>
-            <span className="text-xs text-white/50 uppercase tracking-wider">Bet (GP)</span>
+            <span className="text-xs text-white/50 uppercase tracking-wider">Bet (SC)</span>
             <input
               type="number"
               min={MIN_BET}
@@ -332,7 +344,7 @@ export function CoinFlipPanel() {
               className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white"
             />
             <div className="flex flex-wrap gap-2 mt-3">
-              {[10, 25, 50, 100].map((q) => (
+              {BET_PRESETS.map((q) => (
                 <button
                   key={q}
                   type="button"
@@ -383,7 +395,7 @@ export function CoinFlipPanel() {
           <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
             <h2 className="text-lg font-semibold text-white">Create game</h2>
             <div>
-              <span className="text-xs text-white/50 uppercase tracking-wider">Bet (GP)</span>
+              <span className="text-xs text-white/50 uppercase tracking-wider">Bet (SC)</span>
               <input
                 type="number"
                 min={MIN_BET}
@@ -393,7 +405,7 @@ export function CoinFlipPanel() {
                 className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white"
               />
               <div className="flex flex-wrap gap-2 mt-3">
-                {[10, 25, 50, 100].map((q) => (
+                {BET_PRESETS.map((q) => (
                   <button
                     key={q}
                     type="button"
@@ -452,7 +464,7 @@ export function CoinFlipPanel() {
                     <div>
                       <p className="text-sm text-white font-medium">{g.creatorLabel}</p>
                       <p className="text-xs text-white/50">
-                        {formatGp(g.betAmountMinor)} · plays {g.creatorSide}
+                        {formatSc(g.betAmountMinor)} · plays {g.creatorSide}
                       </p>
                     </div>
                     <button
@@ -497,10 +509,10 @@ export function CoinFlipPanel() {
                       {new Date(h.createdAt).toLocaleString()}
                     </td>
                     <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
-                    <td className="py-2 pr-3">{formatGp(h.betAmountMinor)}</td>
+                    <td className="py-2 pr-3">{formatSc(h.betAmountMinor)}</td>
                     <td className="py-2 pr-3">{h.result ?? "—"}</td>
                     <td className={`py-2 ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-300" : ""}`}>
-                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatGp(h.netMinor)}` : "—"}
+                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatSc(h.netMinor)}` : "—"}
                     </td>
                   </tr>
                 ))}
