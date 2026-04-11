@@ -1,12 +1,42 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin-auth";
-import { getPlatformTotals, listAllTransactions } from "@/lib/transactions-db";
+import { getWalletTotals } from "@/lib/wallet-ledger";
+
+export type RecentUserDepositRow = {
+  id: string;
+  user_id: string;
+  amount: number;
+  created_at: string;
+  user_email?: string;
+};
+
+async function sumPlatformEarningsAllTime(supabase: SupabaseClient): Promise<number> {
+  let total = 0;
+  let from = 0;
+  const page = 1000;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("platform_earnings")
+      .select("amount_cents")
+      .range(from, from + page - 1);
+    if (error) {
+      console.error("Admin stats sumPlatformEarningsAllTime:", error);
+      break;
+    }
+    if (!data?.length) break;
+    for (const r of data) {
+      total += Number((r as { amount_cents?: number }).amount_cents ?? 0);
+    }
+    if (data.length < page) break;
+    from += page;
+  }
+  return total;
+}
 
 /**
  * GET /api/admin/stats
- * Server-side only. Uses SUPABASE_SERVICE_ROLE_KEY only (no anon fallback).
- * Admin dashboard must call this API only — no direct Supabase from client.
+ * Balances and deposits from wallet tables; platform revenue from platform_earnings; profit = earnings − paid withdrawals.
  */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
@@ -24,8 +54,8 @@ export async function GET(request: Request) {
         totalWithdrawals: 0,
         totalBalance: 0,
         totalProfit: 0,
-        totalRevenue: 0,
-        recentTransactions: [],
+        platformRevenueAllTimeCents: 0,
+        recentUserDeposits: [] as RecentUserDepositRow[],
       },
       { status: 503 }
     );
@@ -38,80 +68,74 @@ export async function GET(request: Request) {
     .select("*", { count: "exact", head: true });
   const totalUsers = countError ? 0 : (count ?? 0);
 
-  const { data: balanceRows } = await supabase.from("users").select("balance");
-  let totalBalance = 0;
-  (balanceRows ?? []).forEach((r: { balance?: number | null }) => {
-    totalBalance += Number(r?.balance ?? 0);
-  });
-
-  // Prefer transactions-based totals (what Stripe webhook writes); fallback to deposits/withdrawals tables
   let totalDepositsCents = 0;
   let totalWithdrawalsCents = 0;
+  let totalBalanceCents = 0;
   try {
-    const totals = await getPlatformTotals();
-    totalDepositsCents = totals.totalDepositsCents;
-    totalWithdrawalsCents = totals.totalWithdrawalsCents;
+    const w = await getWalletTotals();
+    totalDepositsCents = w.totalDepositsCents;
+    totalWithdrawalsCents = w.totalWithdrawalsCents;
+    totalBalanceCents = w.totalBalanceCents;
   } catch (e) {
-    console.error("Admin stats getPlatformTotals error:", e);
-  }
-  if (totalDepositsCents === 0) {
-    const { data: depositsRows } = await supabase.from("deposits").select("amount");
-    const totalDepositsDollars = (depositsRows ?? []).reduce(
-      (sum: number, d: { amount?: number | null }) => sum + Number(d?.amount ?? 0),
-      0
-    );
-    totalDepositsCents = Math.round(totalDepositsDollars * 100);
-  }
-  if (totalWithdrawalsCents === 0) {
-    const { data: withdrawalAmountRows } = await supabase
-      .from("withdrawals")
-      .select("amount")
-      .in("status", ["approved", "completed", "paid"]);
-    (withdrawalAmountRows ?? []).forEach((r: { amount?: number | null }) => {
-      totalWithdrawalsCents += Number(r?.amount ?? 0);
-    });
+    console.error("Admin stats getWalletTotals error:", e);
   }
 
-  let recentTransactions: { id: string; user_id: string; type: string; amount: number; status: string; description: string | null; created_at: string; user_email?: string }[] = [];
+  let platformRevenueAllTimeCents = 0;
   try {
-    const all = await listAllTransactions();
-    recentTransactions = all.slice(0, 50).map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      type: r.type,
-      amount: r.amount,
-      status: r.status,
-      description: r.description ?? null,
-      created_at: r.created_at,
-      user_email: (r as { user_email?: string }).user_email,
-    }));
+    platformRevenueAllTimeCents = await sumPlatformEarningsAllTime(supabase);
   } catch (e) {
-    console.error("Admin stats transactions error:", e);
+    console.error("Admin stats platform_earnings sum:", e);
   }
 
-  let totalRevenueCents = 0;
-  const { data: withdrawalRows } = await supabase.from("withdrawals").select("platform_fee").in("status", ["approved", "completed"]);
-  (withdrawalRows ?? []).forEach((r: { platform_fee?: number | null }) => {
-    totalRevenueCents += Number(r?.platform_fee ?? 0);
-  });
-  const { data: revRows } = await supabase.from("platform_revenue").select("amount");
-  (revRows ?? []).forEach((r: { amount?: number | null }) => {
-    totalRevenueCents += Number(r?.amount ?? 0);
-  });
+  const totalProfitCents = platformRevenueAllTimeCents - totalWithdrawalsCents;
 
-  let totalProfitCents = 0;
-  const { data: profitRows } = await supabase.from("profit").select("amount");
-  (profitRows ?? []).forEach((r: { amount?: number | null }) => {
-    totalProfitCents += Number(r?.amount ?? 0);
-  });
+  let recentUserDeposits: RecentUserDepositRow[] = [];
+  try {
+    const { data: ledgerRows, error: ledgerErr } = await supabase
+      .from("wallet_ledger")
+      .select("id, user_id, amount, created_at")
+      .eq("type", "deposit")
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (ledgerErr) {
+      console.error("Admin stats wallet_ledger deposits:", ledgerErr);
+    } else {
+      const rows = (ledgerRows ?? []) as Array<{
+        id: string;
+        user_id: string;
+        amount: number;
+        created_at: string;
+      }>;
+      const ids = Array.from(new Set(rows.map((r) => r.user_id)));
+      let emailById = new Map<string, string>();
+      if (ids.length > 0) {
+        const { data: userRows } = await supabase.from("users").select("id, email").in("id", ids);
+        emailById = new Map(
+          (userRows ?? []).map((u: { id: string; email?: string | null }) => [
+            u.id,
+            String(u.email ?? ""),
+          ])
+        );
+      }
+      recentUserDeposits = rows.map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        amount: r.amount,
+        created_at: r.created_at,
+        user_email: emailById.get(r.user_id) || undefined,
+      }));
+    }
+  } catch (e) {
+    console.error("Admin stats recent deposits:", e);
+  }
 
   return NextResponse.json({
     totalUsers,
     totalDeposits: totalDepositsCents,
     totalWithdrawals: totalWithdrawalsCents,
-    totalBalance,
+    totalBalance: totalBalanceCents,
     totalProfit: totalProfitCents,
-    totalRevenue: totalRevenueCents,
-    recentTransactions,
+    platformRevenueAllTimeCents,
+    recentUserDeposits,
   });
 }

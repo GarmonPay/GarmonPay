@@ -18,8 +18,13 @@ export interface AdminRevenueResponse {
   monthlyRevenueCents: number;
   fightCount: number;
   chartData: RevenueChartPoint[];
-  /** Total from transactions type=deposit (Stripe top-ups). */
+  /**
+   * Legacy field: sum of `transactions` rows with type=deposit (user top-ups).
+   * Prefer `userDepositsAllTimeCents` — same value; not platform revenue.
+   */
   revenue: number;
+  /** User funds deposited (all time); same as `revenue` here — not GarmonPay earned revenue. */
+  userDepositsAllTimeCents: number;
   /** Platform fee lines (`platform_earnings`) — games, ads, etc. */
   today: {
     total: number;
@@ -136,6 +141,7 @@ export async function GET(request: Request) {
       fightCount: 0,
       chartData: buildEmptyChartData(now),
       revenue: 0,
+      userDepositsAllTimeCents: 0,
       today: emptyPe(),
       thisWeek: { total: 0, breakdown: {} },
       thisMonth: { total: 0, breakdown: {} },
@@ -183,6 +189,7 @@ export async function GET(request: Request) {
         fightCount: 0,
         chartData: buildEmptyChartData(now),
         revenue: depositRevenue,
+        userDepositsAllTimeCents: depositRevenue,
         today: {
           total: todayAgg.total,
           celo,
@@ -311,6 +318,7 @@ export async function GET(request: Request) {
       fightCount: fightIds.size,
       chartData,
       revenue: depositRevenue,
+      userDepositsAllTimeCents: depositRevenue,
       today: {
         total: todayAgg.total,
         celo: todayAgg.breakdown.celo ?? 0,
