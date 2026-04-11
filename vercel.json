@@ -4,10 +4,6 @@
     {
       "path": "/api/cron/membership-renewal",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/celo-cleanup",
-      "schedule": "0 */6 * * *"
     }
   ],
   "headers": [
