@@ -160,13 +160,13 @@ export default function HomePage() {
                 Get Known
               </span>
               <span className="mt-1 block bg-gradient-to-r from-[#fef08a] via-[#eab308] to-[#a16207] bg-clip-text text-transparent">
-                Get Paid
+                Get Rewarded
               </span>
             </h1>
             <p className="mx-auto mt-8 max-w-xl text-base text-violet-200/90 sm:text-lg">
-              Turn attention into income—ads, games, referrals, and arena prizes in one
-              purple-and-gold ecosystem. It is completely free to start—no credit card
-              required.
+              The only platform where you play games{" "}
+              <span className="font-semibold text-violet-100">AND</span> get rewarded to engage.
+              All in one.
             </p>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
               <Link
