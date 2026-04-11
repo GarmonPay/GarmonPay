@@ -440,6 +440,8 @@ export default function CeloRoomPage() {
   const [openSideBets, setOpenSideBets] = useState<SideBet[]>([]);
   const [myPlayer, setMyPlayer] = useState<Player | null>(null);
   const [balanceCents, setBalanceCents] = useState(0);
+  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
+  const balanceRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -712,18 +714,22 @@ export default function CeloRoomPage() {
     return round;
   }, [roomId]);
 
-  const loadBalance = useCallback(async () => {
+  const refreshBalance = useCallback(async () => {
     try {
-      const res = await authFetchGet("/api/wallet/get");
+      const res = await authFetchGet("/api/wallet/balance");
       if (res.ok) {
         const d = (await res.json().catch(() => ({}))) as { balance_cents?: number };
         const n = Number(d.balance_cents ?? 0);
-        setBalanceCents(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+        const v = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+        setBalanceCents(v);
+        balanceRef.current = v;
       }
     } catch {
       /* ignore */
     }
   }, []);
+
+  const loadBalance = refreshBalance;
 
   const loadChat = useCallback(async () => {
     const sb = createBrowserClient();
@@ -1056,6 +1062,52 @@ export default function CeloRoomPage() {
     });
   }, [roomId]);
 
+  // Live wallet balance (RPC updates `wallet_balances` after ledger entries)
+  useEffect(() => {
+    const sb = createBrowserClient();
+    if (!sb || !session?.userId) return;
+    let isMounted = true;
+    const uid = session.userId;
+    const ch = sb
+      .channel(`wallet-balance-${uid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "wallet_balances",
+          filter: `user_id=eq.${uid}`,
+        },
+        (payload) => {
+          if (!isMounted) return;
+          const row = payload.new as { user_id?: string; balance?: number } | undefined;
+          if (!row || !sameCeloUserId(row.user_id, uid)) return;
+          const newBalance = Number(row.balance ?? 0);
+          if (!Number.isFinite(newBalance)) return;
+          const floored = Math.max(0, Math.floor(newBalance));
+          const prev = balanceRef.current;
+          setBalanceCents(floored);
+          if (floored > prev) {
+            setBalanceFlash("up");
+            window.setTimeout(() => {
+              if (isMounted) setBalanceFlash(null);
+            }, 2000);
+          } else if (floored < prev) {
+            setBalanceFlash("down");
+            window.setTimeout(() => {
+              if (isMounted) setBalanceFlash(null);
+            }, 2000);
+          }
+          balanceRef.current = floored;
+        }
+      )
+      .subscribe();
+    return () => {
+      isMounted = false;
+      void sb.removeChannel(ch);
+    };
+  }, [session?.userId]);
+
   // ── Realtime + presence (initial fetch runs after SUBSCRIBED) ─────────────────
   useEffect(() => {
     const sb = createBrowserClient();
@@ -1237,6 +1289,7 @@ export default function CeloRoomPage() {
 
           if (newRound.status === "completed") {
             setRollInteractionBusy(false);
+            void loadBalanceRef.current();
             setTimeout(() => {
               if (isMounted) void loadRoundRef.current();
             }, 1000);
@@ -1551,6 +1604,7 @@ export default function CeloRoomPage() {
         window.alert(data.error ?? "Failed to close room");
         return;
       }
+      await loadBalanceRef.current();
       markCeloPublicLobbyStale();
       router.push("/games/celo");
     } catch {
@@ -1694,6 +1748,8 @@ export default function CeloRoomPage() {
       }
 
       void loadAll();
+      window.setTimeout(() => void loadBalanceRef.current(), 500);
+      window.setTimeout(() => void loadBalanceRef.current(), 2200);
       return;
     }
 
@@ -1733,6 +1789,7 @@ export default function CeloRoomPage() {
       celoBankModalCloseTimerRef.current = setTimeout(() => setShowCeloBankModal(false), 60_000);
     }
     await loadAll();
+    window.setTimeout(() => void loadBalanceRef.current(), 500);
 
     window.setTimeout(() => {
       void (async () => {
@@ -2621,7 +2678,15 @@ export default function CeloRoomPage() {
               <span className="text-[10px] text-violet-300/75">{onlineCount} online</span>
             )}
             <p className="text-[10px] text-violet-400/60 mt-1">Balance</p>
-            <p className="text-sm font-bold font-mono tabular-nums text-emerald-400">
+            <p
+              className={`text-sm font-bold font-mono tabular-nums transition-colors duration-300 ${
+                balanceFlash === "up"
+                  ? "text-emerald-300 ring-2 ring-emerald-400/60 rounded px-1 -mx-0.5"
+                  : balanceFlash === "down"
+                    ? "text-amber-200 ring-2 ring-amber-500/50 rounded px-1 -mx-0.5"
+                    : "text-emerald-400"
+              }`}
+            >
               ${(balanceCents / 100).toFixed(2)}
             </p>
           </div>

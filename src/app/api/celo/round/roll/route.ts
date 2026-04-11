@@ -3,6 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints, calculatePayout } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 
@@ -165,6 +166,12 @@ export async function POST(req: Request) {
         }
       }
 
+      if (feeSC > 0) {
+        await insertCeloPlatformFee(supabase, round_id, feeSC, roll.rollName, {
+          description: `C-Lo platform fee (banker instant win) - ${roll.rollName}`,
+        });
+      }
+
       const newBank = rm.current_bank_cents + bankerWins;
       await supabase
         .from("celo_rooms")
@@ -197,7 +204,7 @@ export async function POST(req: Request) {
         const entry = player.entry_sc ?? player.bet_cents ?? 0;
         if (entry <= 0) continue;
 
-        const { payoutSC } = calculatePayout(entry, "win", feePct);
+        const { payoutSC, feeSC: playerFeeSC } = calculatePayout(entry, "win", feePct);
 
         const led = await walletLedgerEntry(
           player.user_id,
@@ -210,6 +217,12 @@ export async function POST(req: Request) {
             { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
             { status: 500 }
           );
+        }
+        if (playerFeeSC > 0) {
+          await insertCeloPlatformFee(supabase, round_id, playerFeeSC, roll.rollName, {
+            userId: player.user_id,
+            description: `C-Lo platform fee (banker instant loss / player win) - ${roll.rollName}`,
+          });
         }
         totalPaidOut += payoutSC;
       }
@@ -377,6 +390,13 @@ export async function POST(req: Request) {
         );
       }
 
+      if (feeSC > 0) {
+        await insertCeloPlatformFee(supabase, round_id, feeSC, roll.rollName, {
+          userId,
+          description: `C-Lo player win fee - round ${round_id}`,
+        });
+      }
+
       const newBank = Math.max(0, rm.current_bank_cents - playerEntry);
       await supabase
         .from("celo_rooms")
@@ -397,6 +417,12 @@ export async function POST(req: Request) {
           { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
           { status: 500 }
         );
+      }
+
+      if (feeSC > 0) {
+        await insertCeloPlatformFee(supabase, round_id, feeSC, roll.rollName, {
+          description: `C-Lo platform fee (banker point win) - ${roll.rollName}`,
+        });
       }
 
       const newBank = rm.current_bank_cents + bankerNet;

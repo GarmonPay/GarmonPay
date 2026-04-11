@@ -38,14 +38,17 @@ export async function insertCeloPlatformFee(
   roundId: string,
   platformFeeCents: number,
   rollName: string,
+  opts?: { userId?: string | null; description?: string },
 ): Promise<void> {
   if (!Number.isFinite(platformFeeCents) || platformFeeCents <= 0) return;
-  const { error } = await supabase.from("platform_earnings").insert({
+  const row: Record<string, unknown> = {
     source: "celo_game",
     source_id: roundId,
     amount_cents: Math.round(platformFeeCents),
-    description: `C-Lo round fee - ${rollName}`,
-  });
+    description: opts?.description ?? `C-Lo platform fee - ${rollName}`,
+  };
+  if (opts?.userId) row.user_id = opts.userId;
+  const { error } = await supabase.from("platform_earnings").insert(row);
   if (error) {
     console.error("[celo/payout] platform_earnings insert failed:", error.message);
   }
