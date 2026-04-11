@@ -1265,6 +1265,16 @@ export default function CeloRoomPage() {
           /* Roller already ran local animation in handleRoll — observers only */
           if (sameCeloUserId(roll.user_id, uid)) {
             pendingPlayerRollMetaRef.current = null;
+            const skipKeyPayload = buildCeloRollStartedPayload({
+              roomId,
+              roundId: roll.round_id,
+              dice: roll.dice as [number, number, number],
+              kind: "player",
+              playerRollId: roll.id,
+              rollerUserId: roll.user_id,
+              ...(roll.created_at ? { serverStartTime: roll.created_at } : {}),
+            });
+            processedSyncKeysRef.current.add(skipKeyPayload.syncKey);
             void loadRoundRef.current();
             return;
           }
@@ -2255,23 +2265,28 @@ export default function CeloRoomPage() {
 
   /**
    * Values on dice when not tumbling; null = tumbling / hidden faces in AnimatedDice.
-   * While waiting for the realtime animation after our own roll, do not read banker_dice from DB
-   * (avoids flashing final faces before the shared animation).
+   * `currentDice` holds faces during player local sequence before `lastRollResult` is set.
+   * While in player_rolling, never fall back to `banker_dice` — that would show the wrong faces.
    */
+  const hasThreeDiceFaces =
+    lastRollResult?.dice?.length === 3 || currentDice?.length === 3;
+
   const hideFinalDiceFaces =
     isRolling ||
     diceUiPhase === "rolling" ||
-    (diceUiPhase === "revealing" && !(lastRollResult?.dice?.length === 3));
+    (diceUiPhase === "revealing" && !hasThreeDiceFaces);
 
   const simpleDiceValues: number[] | null = hideFinalDiceFaces
     ? null
     : lastRollResult?.dice?.length === 3
       ? lastRollResult.dice
-      : rollInteractionBusy && diceUiPhase === "idle"
-        ? null
-        : currentRound?.banker_dice?.length === 3
-          ? [...currentRound.banker_dice]
-          : null;
+      : currentDice?.length === 3
+        ? currentDice
+        : rollInteractionBusy && diceUiPhase === "idle"
+          ? null
+          : !isPlayerRolling && currentRound?.banker_dice?.length === 3
+            ? [...currentRound.banker_dice]
+            : null;
 
   const bankerPlayer = players.find((p) => sameCeloUserId(p.user_id, room.banker_id)) ?? null;
   const statusLine = getCeloRoomStatusLine({
