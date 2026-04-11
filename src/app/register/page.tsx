@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
@@ -49,6 +50,7 @@ function friendlyError(raw: string): string {
 const AVATARS = ["🧑", "👩", "👨", "🧑‍💼", "👩‍💼"];
 
 export default function RegisterPage() {
+  const router = useRouter();
   const supabase = createBrowserClient();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -185,12 +187,19 @@ export default function RegisterPage() {
             date_of_birth: dateOfBirth.trim(),
             residence_state: residenceState.trim().toUpperCase(),
             referralCode: refCode || undefined,
+            welcome: true,
           }),
         });
         const syncJson = (await syncRes.json().catch(() => ({}))) as { message?: string };
         if (!syncRes.ok) {
           setError(friendlyError(syncJson.message || "Could not complete registration. Please try again or contact support."));
           setLoading(false);
+          return;
+        }
+
+        if (data.session) {
+          router.push("/dashboard");
+          router.refresh();
           return;
         }
       }

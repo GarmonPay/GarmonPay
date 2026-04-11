@@ -3,6 +3,23 @@ import { createAdminClient } from "@/lib/supabase";
 import { getClientIp } from "@/lib/rate-limit";
 import { isAtLeastAge } from "@/lib/signup-compliance";
 import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
+import { sendWelcomeEmail } from "@/lib/send-email";
+import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/** Referrer bonus when someone signs up with their code (USD cents). */
+const REFERRAL_SIGNUP_BONUS_CENTS = 50;
+
+async function ensureWalletBalanceRow(supabase: SupabaseClient, userId: string): Promise<void> {
+  const { error: wbErr } = await supabase.from("wallet_balances").insert({
+    user_id: userId,
+    balance: 0,
+    updated_at: new Date().toISOString(),
+  });
+  if (wbErr && wbErr.code !== "23505") {
+    console.warn("sync-user wallet_balances insert:", wbErr.message);
+  }
+}
 
 const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
@@ -16,6 +33,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const sendWelcomeFlag = Boolean((body as { welcome?: boolean }).welcome);
     const userPayload = body?.user ?? body;
     const { id, email } = userPayload;
     const referralCode = body?.referralCode ?? userPayload?.referralCode ?? "";
@@ -110,6 +128,7 @@ export async function POST(req: Request) {
         console.error("Sync-user update error:", updateError);
         return NextResponse.json({ success: false, message: updateError.message }, { status: 500 });
       }
+      await ensureWalletBalanceRow(supabase, id);
     } else {
       const registrationIp = getClientIp(req);
       const { error: insertError } = await supabase.from("users").insert({
@@ -149,6 +168,7 @@ export async function POST(req: Request) {
       } catch {
         // ignore
       }
+      await ensureWalletBalanceRow(supabase, id);
     }
 
     const { error: profileUpsertErr } = await supabase.from("profiles").upsert(
@@ -185,10 +205,27 @@ export async function POST(req: Request) {
             referralCode: refCode,
             referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
           });
+          const refKey = `referral_signup_bonus_${id}`;
+          const bonus = await walletLedgerEntry(
+            referrerId,
+            "referral_bonus",
+            REFERRAL_SIGNUP_BONUS_CENTS,
+            refKey
+          );
+          if (
+            bonus.success === false &&
+            !/duplicate/i.test((bonus as { message?: string }).message ?? "")
+          ) {
+            console.warn("sync-user referral bonus:", (bonus as { message?: string }).message);
+          }
         }
       } catch (refErr) {
         console.warn("Sync-user referral apply (optional):", refErr);
       }
+    }
+
+    if (sendWelcomeFlag && emailVal) {
+      void sendWelcomeEmail({ to: emailVal, name: fullName || undefined }).catch(() => {});
     }
 
     return NextResponse.json({ success: true });

@@ -31,3 +31,25 @@ export async function sendNewLoginAlert(params: {
     return false;
   }
 }
+
+/** Welcome email after registration (best-effort; no RESEND_API_KEY = no-op). */
+export async function sendWelcomeEmail(params: { to: string; name?: string }): Promise<boolean> {
+  if (!resend) return false;
+  const name = params.name?.trim() || "there";
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: "Welcome to GarmonPay",
+      html: `
+        <p>Hi ${name},</p>
+        <p>Thanks for joining GarmonPay. Your account is ready—explore games, ads, referrals, and more from your dashboard.</p>
+        <p>If you didn’t create this account, you can ignore this email.</p>
+        <p>— The GarmonPay team</p>
+      `,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}

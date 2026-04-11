@@ -47,6 +47,8 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const method = request.method;
 
+  // Public marketing/auth routes (e.g. /register, /login) are not gated here—no session required.
+
   // IP-based rate limiting for sensitive API routes
   const rateKey = isRateLimitedPath(pathname, method);
   if (rateKey) {

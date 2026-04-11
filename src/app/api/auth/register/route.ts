@@ -1,3 +1,7 @@
+/**
+ * Legacy in-memory registration (auth-store). The live app uses `src/app/register/page.tsx`
+ * with Supabase `auth.signUp` + `/api/auth/sync-user`. Kept for tests or old clients only.
+ */
 import { NextResponse } from "next/server";
 import { createUserWithEmailPassword, findUserByEmail, generateReferralCode } from "@/lib/auth-store";
 import { createHash } from "crypto";
