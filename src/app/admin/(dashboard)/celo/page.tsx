@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { isCeloLobbyStatus } from "@/lib/celo-room-constants";
 
 const API_BASE = getApiRoot();
 
@@ -27,7 +28,9 @@ export default function AdminCeloRoomsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [bulkPending, setBulkPending] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   const load = useCallback(async (s: AdminSession) => {
     setLoading(true);
@@ -78,6 +81,38 @@ export default function AdminCeloRoomsPage() {
     }
   }
 
+  async function forceCloseAllLobby() {
+    if (!session) return;
+    setBulkPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/celo/rooms`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...adminApiHeaders(session) },
+        body: JSON.stringify({ action: "close_all_lobby" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Bulk close failed");
+      if (!data.ok || (data.failed ?? 0) > 0) {
+        const firstErr = (data.results as Array<{ ok?: boolean; message?: string }> | undefined)?.find(
+          (r) => r && r.ok === false
+        );
+        throw new Error(
+          `${data.failed ?? 0} room(s) failed to close${firstErr?.message ? `: ${firstErr.message}` : ""}`
+        );
+      }
+      setConfirmBulk(false);
+      await load(session);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Bulk close failed");
+    } finally {
+      setBulkPending(false);
+    }
+  }
+
+  const openLobbyCount = rooms.filter((r) => isCeloLobbyStatus(r.status)).length;
+
   if (!session) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
@@ -96,6 +131,22 @@ export default function AdminCeloRoomsPage() {
       {error && (
         <div className="rounded-lg bg-red-500/20 text-red-400 p-4 mb-4" role="alert">
           {error}
+        </div>
+      )}
+
+      {openLobbyCount > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+            disabled={bulkPending}
+            onClick={() => setConfirmBulk(true)}
+          >
+            {bulkPending ? "Closing…" : `Close all open lobby rooms (${openLobbyCount})`}
+          </button>
+          <span className="text-fintech-muted text-sm">
+            Refunds stakes and bank, same as single force-close — removes rooms from the public C-Lo list.
+          </span>
         </div>
       )}
 
@@ -179,6 +230,41 @@ export default function AdminCeloRoomsPage() {
                 onClick={() => void forceClose(confirmId)}
               >
                 Force Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBulk && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-close-title"
+        >
+          <div className="bg-fintech-bg-card border border-white/10 rounded-xl p-6 max-w-md w-full shadow-xl">
+            <h2 id="bulk-close-title" className="text-lg font-bold text-white mb-2">
+              Close all {openLobbyCount} open lobby rooms?
+            </h2>
+            <p className="text-fintech-muted text-sm mb-6">
+              Every room in waiting, active, or rolling will be force-closed with full refunds, same as individual
+              force-close. Completed or cancelled rooms are left unchanged.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-fintech-muted hover:text-white hover:bg-white/5"
+                onClick={() => setConfirmBulk(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                onClick={() => void forceCloseAllLobby()}
+              >
+                Close all
               </button>
             </div>
           </div>

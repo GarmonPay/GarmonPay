@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { celoFirstRow } from "@/lib/celo-first-row";
+import { adminForceCloseCeloRoom } from "@/lib/celo-admin-force-close-room";
+import { CELO_LOBBY_STATUSES } from "@/lib/celo-room-constants";
 import { createAdminClient } from "@/lib/supabase";
-import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
-import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
+import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 /** GET /api/admin/celo/rooms — all C-Lo rooms with banker email and player count. */
 export async function GET(request: Request) {
@@ -76,6 +73,79 @@ export async function GET(request: Request) {
   return NextResponse.json({ rooms: enriched });
 }
 
+/** POST /api/admin/celo/rooms — body: { action: "close_all_lobby" }; force-close every waiting|active|rolling room. */
+export async function POST(request: Request) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = createAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+
+  const action = (body as { action?: string }).action;
+  if (action !== "close_all_lobby") {
+    return NextResponse.json({ message: 'Expected { "action": "close_all_lobby" }' }, { status: 400 });
+  }
+
+  const { data: openRows, error: listErr } = await supabase
+    .from("celo_rooms")
+    .select("id")
+    .in("status", [...CELO_LOBBY_STATUSES]);
+
+  if (listErr) {
+    return NextResponse.json({ message: listErr.message }, { status: 500 });
+  }
+
+  const roomIds = (openRows ?? []).map((r) => String((r as { id: string }).id)).filter(Boolean);
+
+  const results: Array<{
+    roomId: string;
+    ok: boolean;
+    skipped?: boolean;
+    player_refunds?: number;
+    bank_refunded_cents?: number;
+    message?: string;
+    details?: unknown;
+  }> = [];
+
+  for (const roomId of roomIds) {
+    const res = await adminForceCloseCeloRoom(supabase, roomId);
+    if (res.ok) {
+      results.push({
+        roomId,
+        ok: true,
+        skipped: res.skipped === true,
+        player_refunds: res.player_refunds,
+        bank_refunded_cents: res.bank_refunded_cents,
+      });
+    } else {
+      results.push({ roomId, ok: false, message: res.message, details: res.details });
+    }
+  }
+
+  const failed = results.filter((r) => !r.ok);
+  const closed = results.filter((r) => r.ok && !r.skipped).length;
+  const skipped = results.filter((r) => r.ok && r.skipped).length;
+
+  return NextResponse.json({
+    ok: failed.length === 0,
+    total: roomIds.length,
+    closed,
+    skipped,
+    failed: failed.length,
+    results,
+  });
+}
+
 /** DELETE /api/admin/celo/rooms — body: { roomId }; force-close, refunds, cancelled. */
 export async function DELETE(request: Request) {
   if (!(await isAdmin(request))) {
@@ -99,113 +169,22 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: "roomId required" }, { status: 400 });
   }
 
-  const { data: roomRows, error: roomErr } = await supabase
-    .from("celo_rooms")
-    .select("*")
-    .eq("id", roomId)
-    .limit(1);
-  const room = celoFirstRow(roomRows);
-  if (roomErr || !room) {
-    return NextResponse.json({ message: "Room not found" }, { status: 404 });
+  const res = await adminForceCloseCeloRoom(supabase, roomId);
+  if (!res.ok) {
+    if (res.message === "Room not found") {
+      return NextResponse.json({ message: res.message }, { status: 404 });
+    }
+    return NextResponse.json({ message: res.message, details: res.details }, { status: 500 });
   }
 
-  const raw = room as Record<string, unknown>;
-  const normalized = normalizeCeloRoomRow(raw);
-  if (!normalized) {
-    return NextResponse.json({ message: "Room not found" }, { status: 404 });
-  }
-
-  const status = String(normalized.status ?? "");
-  if (status === "cancelled" || status === "completed") {
+  if (res.skipped) {
     return NextResponse.json({ ok: true, skipped: true, message: "Room already closed" });
   }
-
-  const bankerId = String(raw.banker_id ?? normalized.banker_id ?? "");
-
-  const { data: roundRows } = await supabase.from("celo_rounds").select("id").eq("room_id", roomId);
-  for (const rr of roundRows ?? []) {
-    const rid = String((rr as { id: string }).id);
-    await settleCeloOpenSideBets(supabase, rid, roomId);
-  }
-
-  await supabase.from("celo_rounds").delete().eq("room_id", roomId);
-
-  const { data: playerRows, error: playersErr } = await supabase
-    .from("celo_room_players")
-    .select("user_id, role, entry_sc, bet_cents")
-    .eq("room_id", roomId);
-
-  if (playersErr) {
-    return NextResponse.json({ message: playersErr.message }, { status: 500 });
-  }
-
-  let refundsIssued = 0;
-  for (const p of (playerRows ?? []) as Array<{
-    user_id: string;
-    role: string;
-    entry_sc?: number | null;
-    bet_cents?: number | null;
-  }>) {
-    if (p.role !== "player") continue;
-    const cents = celoPlayerStakeCents(p);
-    if (cents <= 0) continue;
-    const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
-    if (!result.success) {
-      return NextResponse.json(
-        { message: result.message ?? "Player refund failed", details: p.user_id },
-        { status: 500 }
-      );
-    }
-    if (!("skipped" in result && result.skipped)) refundsIssued += 1;
-  }
-
-  const bankCents = normalized.current_bank_cents ?? 0;
-  if (bankCents > 0 && bankerId) {
-    const bankRef = celoBankRefundReference(roomId);
-    const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);
-    if (!bankResult.success) {
-      return NextResponse.json(
-        { message: bankResult.message ?? "Bank refund failed" },
-        { status: 500 }
-      );
-    }
-  }
-
-  const { error: delPlayersErr } = await supabase.from("celo_room_players").delete().eq("room_id", roomId);
-  if (delPlayersErr) {
-    return NextResponse.json({ message: delPlayersErr.message ?? "Failed to clear players" }, { status: 500 });
-  }
-
-  const now = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("celo_rooms")
-    .update(
-      mergeCeloRoomUpdate(0, {
-        status: "cancelled",
-        last_activity: now,
-      })
-    )
-    .eq("id", roomId);
-
-  if (updErr) {
-    return NextResponse.json({ message: updErr.message ?? "Failed to update room" }, { status: 500 });
-  }
-
-  await supabase.from("celo_audit_log").insert({
-    room_id: roomId,
-    user_id: null,
-    action: "room_admin_force_closed",
-    details: {
-      player_refunds: refundsIssued,
-      bank_refunded_cents: bankCents > 0 && bankerId ? bankCents : 0,
-    },
-  });
 
   return NextResponse.json({
     ok: true,
     message: "Room force-closed and refunds issued",
-    player_refunds: refundsIssued,
-    bank_refunded_cents: bankCents > 0 && bankerId ? bankCents : 0,
+    player_refunds: res.player_refunds,
+    bank_refunded_cents: res.bank_refunded_cents,
   });
 }
