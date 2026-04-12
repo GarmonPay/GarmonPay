@@ -1,19 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
-import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { US_STATE_OPTIONS, isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
 import { isAtLeastAge, maxDateOfBirthForMinimumAge } from "@/lib/signup-compliance";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
 /** Shown once on dashboard if user signed in immediately with an unrecognized referral code. */
 const REFERRAL_NOTICE_SESSION_KEY = "garmonpay_referral_notice";
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -37,7 +35,6 @@ export default function RegisterPage() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [residenceState, setResidenceState] = useState("");
   const [agreed, setAgreed] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
   const [referralNotice, setReferralNotice] = useState("");
   const [success, setSuccess] = useState(false);
@@ -84,8 +81,6 @@ export default function RegisterPage() {
     return "";
   }
 
-  const onTurnstileVerify = useCallback((token: string) => setTurnstileToken(token), []);
-
   async function register() {
     setError("");
     setReferralNotice("");
@@ -111,17 +106,13 @@ export default function RegisterPage() {
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     if (!agreed) { setError("Please agree to the Terms of Service to continue."); return; }
-    if (TURNSTILE_SITE_KEY && !turnstileToken) {
-      setError("Please complete the security check.");
-      return;
-    }
 
     setLoading(true);
     try {
       const checkRes = await fetch("/api/auth/check-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmedEmail, turnstileToken: turnstileToken || undefined }),
+        body: JSON.stringify({ email: trimmedEmail }),
       });
       const checkData = (await checkRes.json().catch(() => ({}))) as {
         allowed?: boolean;
@@ -461,12 +452,6 @@ export default function RegisterPage() {
             </p>
           </div>
         </div>
-
-        {TURNSTILE_SITE_KEY && (
-          <div className="mt-4">
-            <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onVerify={onTurnstileVerify} />
-          </div>
-        )}
 
         <label className="mt-5 flex items-start gap-3 cursor-pointer">
           <input

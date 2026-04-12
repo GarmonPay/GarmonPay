@@ -7,7 +7,7 @@ const SIGNUP_WINDOW_MS = 60 * 60 * 1000; // 1 hour per IP
 
 /**
  * POST /api/auth/check-signup
- * Pre-signup checks: rate limit (5/hour per IP), Turnstile, disposable email.
+ * Pre-signup checks: rate limit (5/hour per IP), disposable email.
  * Returns { allowed: boolean, message?: string }.
  * Client must call this before supabase.auth.signUp().
  */
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { email?: string; turnstileToken?: string };
+  let body: { email?: string };
   try {
     body = await req.json();
   } catch {
@@ -38,37 +38,6 @@ export async function POST(req: Request) {
       { allowed: false, message: "Disposable email addresses are not allowed." },
       { status: 400 }
     );
-  }
-
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (secret) {
-    const token = typeof body.turnstileToken === "string" ? body.turnstileToken.trim() : "";
-    if (!token) {
-      return NextResponse.json(
-        { allowed: false, message: "Please complete the security check." },
-        { status: 400 }
-      );
-    }
-    try {
-      const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret, response: token, remoteip: ip }),
-      });
-      const verifyData = (await verifyRes.json()) as { success?: boolean; "error-codes"?: string[] };
-      if (!verifyData.success) {
-        return NextResponse.json(
-          { allowed: false, message: "Security check failed. Please try again." },
-          { status: 400 }
-        );
-      }
-    } catch (e) {
-      console.error("Turnstile verify error:", e);
-      return NextResponse.json(
-        { allowed: false, message: "Security check unavailable. Try again later." },
-        { status: 503 }
-      );
-    }
   }
 
   return NextResponse.json({ allowed: true });
