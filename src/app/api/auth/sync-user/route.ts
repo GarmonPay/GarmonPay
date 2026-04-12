@@ -54,6 +54,8 @@ export async function POST(req: Request) {
 
     const emailVal = typeof email === "string" ? email : "";
     const refCode = typeof referralCode === "string" ? referralCode.trim() : "";
+    /** When a code was sent: true if linked to a referrer, false if unknown (signup still succeeds). */
+    let referralApplied: boolean | undefined;
 
     // Security: allow only if (1) Bearer token subject matches id, or (2) id is a recently created auth user
     const authHeader = req.headers.get("authorization");
@@ -189,6 +191,7 @@ export async function POST(req: Request) {
     }
 
     if (refCode) {
+      referralApplied = false;
       try {
         const { data: referrer } = await supabase.from("users").select("id").eq("referral_code", refCode).maybeSingle();
         const referrerId = (referrer as { id?: string } | null)?.id;
@@ -205,6 +208,7 @@ export async function POST(req: Request) {
             referralCode: refCode,
             referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
           });
+          referralApplied = true;
           const refKey = `referral_signup_bonus_${id}`;
           const bonus = await walletLedgerEntry(
             referrerId,
@@ -228,7 +232,10 @@ export async function POST(req: Request) {
       void sendWelcomeEmail({ to: emailVal, name: fullName || undefined }).catch(() => {});
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      ...(typeof referralApplied === "boolean" ? { referralApplied } : {}),
+    });
   } catch (e) {
     console.error("Sync-user error:", e);
     return NextResponse.json({ success: false, message: String(e) }, { status: 500 });

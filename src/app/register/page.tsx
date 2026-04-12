@@ -11,6 +11,8 @@ import { US_STATE_OPTIONS, isStateExcludedFromParticipation, isValidUsStateCode 
 import { isAtLeastAge, maxDateOfBirthForMinimumAge } from "@/lib/signup-compliance";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
+/** Shown once on dashboard if user signed in immediately with an unrecognized referral code. */
+const REFERRAL_NOTICE_SESSION_KEY = "garmonpay_referral_notice";
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 const cinzel = Cinzel_Decorative({
@@ -19,33 +21,8 @@ const cinzel = Cinzel_Decorative({
   display: "swap",
 });
 
-/** Map raw Supabase/server errors to friendly messages shown to the user. */
-function friendlyError(raw: string): string {
-  const msg = raw.toLowerCase();
-  if (msg.includes("database error") || msg.includes("saving new user")) {
-    return "We had trouble creating your account. Please try again or contact support.";
-  }
-  if (msg.includes("already registered") || msg.includes("already been registered") || msg.includes("user already")) {
-    return "An account with this email already exists. Try logging in instead.";
-  }
-  if (msg.includes("invalid email")) {
-    return "Please enter a valid email address.";
-  }
-  if (msg.includes("password") && msg.includes("short")) {
-    return "Password must be at least 8 characters.";
-  }
-  if (msg.includes("rate limit") || msg.includes("too many")) {
-    return "Too many attempts. Please wait a moment and try again.";
-  }
-  if (msg.includes("network") || msg.includes("fetch")) {
-    return "Network error. Check your connection and try again.";
-  }
-  // For unknown errors, don't expose technical details
-  if (msg.includes("error") || msg.includes("exception") || msg.includes("violates")) {
-    return "We had trouble creating your account. Please try again or contact support.";
-  }
-  return raw;
-}
+const INVALID_REFERRAL_NOTICE =
+  "That referral code wasn't recognized. Your account was created without a referrer.";
 
 const AVATARS = ["🧑", "👩", "👨", "🧑‍💼", "👩‍💼"];
 
@@ -62,6 +39,7 @@ export default function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
+  const [referralNotice, setReferralNotice] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -110,6 +88,7 @@ export default function RegisterPage() {
 
   async function register() {
     setError("");
+    setReferralNotice("");
     if (!supabase) {
       setError("Registration not configured.");
       return;
@@ -144,30 +123,49 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: trimmedEmail, turnstileToken: turnstileToken || undefined }),
       });
-      const checkData = await checkRes.json().catch(() => ({}));
+      const checkData = (await checkRes.json().catch(() => ({}))) as {
+        allowed?: boolean;
+        message?: string;
+      };
+      console.error("[REGISTER] check-signup:", { ok: checkRes.ok, status: checkRes.status, checkData });
       if (!checkRes.ok || !checkData.allowed) {
-        setError(friendlyError(checkData.message || "Signup check failed. Try again."));
+        const msg = checkData.message || "Signup check failed. Try again.";
+        setError(msg);
         setLoading(false);
         return;
       }
 
       const refCode = getStoredReferralCode();
-      const { data, error: err } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password,
-        options: {
-          emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
-          data: {
-            full_name: trimmedName,
-            date_of_birth: dateOfBirth.trim(),
-            residence_state: residenceState.trim().toUpperCase(),
-            ...(refCode ? { referred_by_code: refCode } : {}),
+      // Referral is applied in /api/auth/sync-user only if the code exists — never pass invalid
+      // codes in auth metadata (avoids any trigger/hook edge cases).
+      let data: Awaited<ReturnType<typeof supabase.auth.signUp>>["data"];
+      let err: Awaited<ReturnType<typeof supabase.auth.signUp>>["error"];
+      try {
+        const result = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: {
+            emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
+            data: {
+              full_name: trimmedName,
+              date_of_birth: dateOfBirth.trim(),
+              residence_state: residenceState.trim().toUpperCase(),
+            },
           },
-        },
-      });
+        });
+        data = result.data;
+        err = result.error;
+        console.error("[REGISTER] result:", { data, error: err });
+      } catch (signupEx) {
+        console.error("[REGISTER] exception (signUp):", signupEx);
+        setError(signupEx instanceof Error ? signupEx.message : String(signupEx));
+        setLoading(false);
+        return;
+      }
 
       if (err) {
-        setError(friendlyError(err.message));
+        console.error("[REGISTER] error:", err.message, err.status, err);
+        setError(err.message);
         setLoading(false);
         return;
       }
@@ -190,14 +188,32 @@ export default function RegisterPage() {
             welcome: true,
           }),
         });
-        const syncJson = (await syncRes.json().catch(() => ({}))) as { message?: string };
+        const syncJson = (await syncRes.json().catch(() => ({}))) as {
+          message?: string;
+          referralApplied?: boolean;
+        };
+        console.error("[REGISTER] sync-user:", { ok: syncRes.ok, status: syncRes.status, syncJson });
         if (!syncRes.ok) {
-          setError(friendlyError(syncJson.message || "Could not complete registration. Please try again or contact support."));
+          setError(syncJson.message || "Could not complete registration. Please try again or contact support.");
           setLoading(false);
           return;
         }
 
+        const invalidRef =
+          Boolean(refCode) && syncJson.referralApplied === false;
+        if (invalidRef) {
+          setReferralNotice(INVALID_REFERRAL_NOTICE);
+          console.warn("[REGISTER] referral code not applied (unknown or self):", refCode);
+        }
+
         if (data.session) {
+          if (invalidRef) {
+            try {
+              sessionStorage.setItem(REFERRAL_NOTICE_SESSION_KEY, INVALID_REFERRAL_NOTICE);
+            } catch {
+              // ignore
+            }
+          }
           router.push("/dashboard");
           router.refresh();
           return;
@@ -205,8 +221,9 @@ export default function RegisterPage() {
       }
 
       setSuccess(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e) {
+      console.error("[REGISTER] exception:", e);
+      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -255,6 +272,14 @@ export default function RegisterPage() {
           <p className="mt-2 text-sm" style={{ color: "rgba(196,181,253,0.85)" }}>
             Click the link to activate your account
           </p>
+          {referralNotice ? (
+            <p
+              className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-xs"
+              style={{ color: "#fcd34d" }}
+            >
+              {referralNotice}
+            </p>
+          ) : null}
           <p className="mt-2 text-xs" style={{ color: "rgba(167,139,250,0.65)" }}>
             The link expires in 24 hours. Check your spam folder if you don&apos;t see it.
           </p>
