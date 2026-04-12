@@ -3,9 +3,12 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Cinzel_Decorative } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { scToUsdDisplay } from "@/lib/coins";
+
+const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
 type LedgerEntry = {
   id: string;
@@ -41,9 +44,15 @@ function WalletDashboardContent() {
   const [depositError, setDepositError] = useState<string | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
-  const [convertAmount, setConvertAmount] = useState("");
-  const [convertBusy, setConvertBusy] = useState(false);
-  const [convertErr, setConvertErr] = useState<string | null>(null);
+
+  const [convertAmount, setConvertAmount] = useState(10);
+  const [converting, setConverting] = useState(false);
+  const [convertSuccess, setConvertSuccess] = useState<string | null>(null);
+  const [convertApiErr, setConvertApiErr] = useState<string | null>(null);
+
+  const balanceDollars = balanceCents !== null ? balanceCents / 100 : 0;
+  const scFromConvertPreview =
+    Number.isFinite(convertAmount) && convertAmount > 0 ? Math.round(convertAmount * 100) : 0;
 
   const handleDeposit = async () => {
     const amount = Number(depositAmount);
@@ -118,45 +127,62 @@ function WalletDashboardContent() {
       .catch(() => setCoinHistory([]));
   }, [user?.accessToken, success]);
 
-  async function handleConvert() {
-    const dollars = Number(convertAmount);
-    if (!Number.isFinite(dollars) || dollars <= 0) {
-      setConvertErr("Enter a valid dollar amount.");
-      return;
-    }
-    const amountCents = Math.round(dollars * 100);
-    setConvertErr(null);
-    setConvertBusy(true);
+  const handleConvertToSC = async () => {
+    if (converting || convertAmount < 1) return;
+    setConvertApiErr(null);
+    setConvertSuccess(null);
+    setConverting(true);
     try {
       const session = await getSessionAsync();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-      const res = await fetch("/api/coins/convert", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ amountCents }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setConvertErr(typeof data.message === "string" ? data.message : "Conversion failed");
+      if (!session?.accessToken) {
+        setConvertApiErr("Not signed in.");
         return;
       }
-      setConvertAmount("");
-      await loadBalances();
-      const h = await fetch("/api/coins/history?limit=25", { headers: { Authorization: `Bearer ${session?.accessToken ?? ""}` } });
-      if (h.ok) {
-        const j = await h.json();
-        setCoinHistory(j.entries ?? []);
+      const amount_cents = Math.round(convertAmount * 100);
+      const res = await fetch("/api/wallet/convert-to-sc", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ amount_cents }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sc_awarded?: number;
+        new_usd_balance?: number;
+        message?: string;
+      };
+      if (res.ok && typeof data.sc_awarded === "number") {
+        const awarded = data.sc_awarded;
+        setSweepsCoins((prev) => prev + awarded);
+        if (typeof data.new_usd_balance === "number") {
+          setBalanceCents(data.new_usd_balance);
+        } else {
+          await loadBalances();
+        }
+        setConvertSuccess(`You received ${awarded.toLocaleString()} SC.`);
+        const h = await fetch("/api/coins/history?limit=25", {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        });
+        if (h.ok) {
+          const j = await h.json();
+          setCoinHistory(j.entries ?? []);
+        }
+        const wh = await fetch("/api/wallet/history?limit=20", {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        });
+        if (wh.ok) {
+          const j = await wh.json();
+          setHistory(j.entries ?? []);
+        }
+      } else {
+        setConvertApiErr(typeof data.error === "string" ? data.error : "Conversion failed");
       }
     } finally {
-      setConvertBusy(false);
+      setConverting(false);
     }
-  }
-
-  const dollarsToConvert = Number(convertAmount);
-  const centsPreview =
-    Number.isFinite(dollarsToConvert) && dollarsToConvert > 0 ? Math.round(dollarsToConvert * 100) : 0;
-  const scPreview = centsPreview > 0 ? Math.floor((centsPreview * 100) / 100) : 0;
+  };
 
   const formatType = (t: string) => t.replace(/_/g, " ");
 
@@ -169,8 +195,202 @@ function WalletDashboardContent() {
         </div>
       )}
 
+      {/* Top balances */}
+      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-2">
+        <p className="text-fintech-muted text-xs uppercase tracking-wider">Your balances</p>
+        {balanceLoad === "ok" && balanceCents !== null ? (
+          <>
+            <p className="text-white text-lg">
+              💵 USD Balance:{" "}
+              <span className="font-semibold tabular-nums">${(balanceCents / 100).toFixed(2)}</span>
+            </p>
+            <p className="text-white text-lg">
+              🪙 Gold Coins: <span className="font-semibold tabular-nums">{goldCoins.toLocaleString()} GC</span>
+            </p>
+            <p className="text-white text-lg">
+              ⭐ Sweeps Coins: <span className="font-semibold tabular-nums">{sweepsCoins.toLocaleString()} SC</span>
+              <span className="text-fintech-muted text-sm ml-2">(≈ {scToUsdDisplay(sweepsCoins)})</span>
+            </p>
+          </>
+        ) : balanceLoad === "err" ? (
+          <p className="text-red-400 text-sm">Could not load balances.</p>
+        ) : (
+          <p className="text-fintech-muted text-sm">Loading balances…</p>
+        )}
+      </div>
+
+      {/* Convert USD → SC */}
+      <div
+        style={{
+          background: "rgba(124,58,237,0.1)",
+          border: "1px solid rgba(124,58,237,0.4)",
+          borderRadius: 16,
+          padding: 24,
+          marginTop: 4,
+        }}
+      >
+        <h3
+          className={`${cinzel.className}`}
+          style={{
+            color: "#F5C842",
+            fontSize: 16,
+            marginBottom: 4,
+          }}
+        >
+          ⭐ Convert USD to Sweeps Coins
+        </h3>
+        <p
+          style={{
+            color: "#888",
+            fontSize: 13,
+            marginBottom: 20,
+          }}
+        >
+          Use Sweeps Coins to play C-Lo and other games. $1.00 = 100 SC
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          {[5, 10, 20, 50].map((amount) => (
+            <button
+              key={amount}
+              type="button"
+              onClick={() => setConvertAmount(amount)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: convertAmount === amount ? "2px solid #F5C842" : "1px solid #333",
+                background: convertAmount === amount ? "rgba(245,200,66,0.2)" : "transparent",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: 14,
+              }}
+            >
+              ${amount}
+            </button>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ position: "relative", flex: 1, minWidth: 120 }}>
+            <span
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#F5C842",
+                fontWeight: "bold",
+              }}
+            >
+              $
+            </span>
+            <input
+              type="number"
+              value={convertAmount}
+              onChange={(e) => setConvertAmount(Number(e.target.value))}
+              min={1}
+              max={Math.max(1, balanceDollars)}
+              step={0.01}
+              style={{
+                width: "100%",
+                padding: "12px 12px 12px 28px",
+                background: "#1a0535",
+                border: "1px solid #7C3AED",
+                borderRadius: 8,
+                color: "#fff",
+                fontSize: 18,
+              }}
+            />
+          </div>
+          <div style={{ color: "#888", fontSize: 20 }}>→</div>
+          <div
+            style={{
+              flex: 1,
+              minWidth: 120,
+              padding: 12,
+              background: "#0D0520",
+              border: "1px solid #10B981",
+              borderRadius: 8,
+              textAlign: "center",
+            }}
+          >
+            <span style={{ color: "#10B981", fontWeight: "bold", fontSize: 18 }}>
+              {scFromConvertPreview.toLocaleString()} SC
+            </span>
+          </div>
+        </div>
+
+        {convertApiErr && (
+          <p className="text-red-400 text-sm mb-2 text-center">{convertApiErr}</p>
+        )}
+        {convertSuccess && (
+          <p className="text-emerald-400 text-sm mb-2 text-center">{convertSuccess}</p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void handleConvertToSC()}
+          disabled={converting || convertAmount < 1 || convertAmount > balanceDollars || balanceLoad !== "ok"}
+          style={{
+            width: "100%",
+            padding: 14,
+            background:
+              converting || convertAmount < 1 || convertAmount > balanceDollars ? "#333" : "linear-gradient(135deg, #F5C842, #D4A017)",
+            color: converting || convertAmount < 1 || convertAmount > balanceDollars ? "#666" : "#0e0118",
+            border: "none",
+            borderRadius: 10,
+            fontWeight: "bold",
+            fontSize: 16,
+            cursor: converting || convertAmount < 1 || convertAmount > balanceDollars ? "not-allowed" : "pointer",
+          }}
+        >
+          {converting
+            ? "Converting..."
+            : `Convert $${Number.isFinite(convertAmount) ? convertAmount.toFixed(2) : "0.00"} → ${scFromConvertPreview.toLocaleString()} SC`}
+        </button>
+
+        {convertAmount > balanceDollars && balanceLoad === "ok" && (
+          <p
+            style={{
+              color: "#EF4444",
+              fontSize: 12,
+              marginTop: 8,
+              textAlign: "center",
+            }}
+          >
+            Insufficient USD balance
+          </p>
+        )}
+
+        <p
+          style={{
+            color: "#555",
+            fontSize: 11,
+            marginTop: 12,
+            textAlign: "center",
+          }}
+        >
+          One-way conversion. SC cannot be converted back to USD.
+        </p>
+      </div>
+
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-4">
-        <h2 className="text-lg font-bold text-white">USD balance</h2>
+        <h2 className="text-lg font-bold text-white">USD wallet</h2>
         {(balanceLoad === "pending" || balanceLoad === "idle") && user?.accessToken && (
           <p className="text-fintech-muted text-sm">Loading…</p>
         )}
@@ -181,41 +401,12 @@ function WalletDashboardContent() {
             <span className="text-white font-semibold text-xl">${(balanceCents / 100).toFixed(2)}</span>
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/dashboard/withdraw"
-            className="inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/5"
-          >
-            Withdraw
-          </Link>
-        </div>
-        <div id="convert-usd" className="border-t border-white/10 pt-4">
-          <p className="text-xs text-fintech-muted uppercase tracking-wider mb-2">Convert USD to Sweeps Coins</p>
-          <p className="text-[11px] text-fintech-muted mb-2">
-            Conversion is one-way. SC cannot be converted back to USD. $1 → 100 SC.
-          </p>
-          <input
-            type="number"
-            min={0.01}
-            step={0.01}
-            placeholder="Amount ($)"
-            value={convertAmount}
-            onChange={(e) => setConvertAmount(e.target.value)}
-            className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-2.5 text-white mb-2"
-          />
-          {scPreview > 0 && (
-            <p className="text-sm text-emerald-300/90 mb-2">You will receive ~{scPreview.toLocaleString()} SC</p>
-          )}
-          {convertErr && <p className="text-red-400 text-sm mb-2">{convertErr}</p>}
-          <button
-            type="button"
-            disabled={convertBusy}
-            onClick={handleConvert}
-            className="w-full rounded-xl bg-violet-600 text-white font-semibold py-2.5 hover:opacity-95 disabled:opacity-50"
-          >
-            {convertBusy ? "Converting…" : "Convert to SC"}
-          </button>
-        </div>
+        <Link
+          href="/dashboard/withdraw"
+          className="inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/5"
+        >
+          Withdraw
+        </Link>
       </div>
 
       <div className="rounded-xl bg-fintech-bg-card border border-amber-500/20 p-6">
@@ -231,9 +422,7 @@ function WalletDashboardContent() {
 
       <div className="rounded-xl bg-fintech-bg-card border border-violet-500/25 p-6">
         <h2 className="text-lg font-bold text-white mb-2">Sweeps Coins</h2>
-        <p className="text-2xl font-bold text-violet-200">
-          ⭐ {sweepsCoins.toLocaleString()} SC
-        </p>
+        <p className="text-2xl font-bold text-violet-200">⭐ {sweepsCoins.toLocaleString()} SC</p>
         <p className="text-sm text-fintech-muted mt-1">≈ {scToUsdDisplay(sweepsCoins)} value</p>
         <div className="flex flex-wrap gap-2 mt-4">
           <span className="inline-flex rounded-xl border border-white/10 px-3 py-2 text-xs text-fintech-muted cursor-not-allowed">
@@ -301,8 +490,18 @@ function WalletDashboardContent() {
               <li key={c.id} className="flex flex-wrap justify-between gap-2 py-2 border-b border-white/5 text-sm">
                 <span className="text-fintech-muted">{formatType(c.type)}</span>
                 <span className="text-white/90">
-                  {c.gold_coins !== 0 && <span className="text-amber-200">GC {c.gold_coins >= 0 ? "+" : ""}{c.gold_coins} </span>}
-                  {c.sweeps_coins !== 0 && <span className="text-violet-200">SC {c.sweeps_coins >= 0 ? "+" : ""}{c.sweeps_coins}</span>}
+                  {c.gold_coins !== 0 && (
+                    <span className="text-amber-200">
+                      GC {c.gold_coins >= 0 ? "+" : ""}
+                      {c.gold_coins}{" "}
+                    </span>
+                  )}
+                  {c.sweeps_coins !== 0 && (
+                    <span className="text-violet-200">
+                      SC {c.sweeps_coins >= 0 ? "+" : ""}
+                      {c.sweeps_coins}
+                    </span>
+                  )}
                 </span>
                 <span className="text-fintech-muted text-xs w-full sm:w-auto">{new Date(c.created_at).toLocaleString()}</span>
               </li>
