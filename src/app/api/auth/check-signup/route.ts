@@ -7,9 +7,9 @@ const SIGNUP_WINDOW_MS = 60 * 60 * 1000; // 1 hour per IP
 
 /**
  * POST /api/auth/check-signup
- * Pre-signup checks: rate limit (5/hour per IP), disposable email.
+ * Optional pre-signup checks: rate limit (5/hour per IP), disposable email.
  * Returns { allowed: boolean, message?: string }.
- * Client must call this before supabase.auth.signUp().
+ * Main `/register` page calls Supabase directly; this route is for clients that opt in.
  */
 export async function POST(req: Request) {
   const ip = getClientIp(req);
