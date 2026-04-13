@@ -23,6 +23,7 @@ import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-prices";
 import { TaxInfoBanner } from "@/components/dashboard/TaxInfoBanner";
 import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
+import { useCoins } from "@/hooks/useCoins";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -79,6 +80,7 @@ export default function DashboardPage() {
   const [renewBusy, setRenewBusy] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
   const [gpayBalance, setGpayBalance] = useState<GpayBalanceState>({ ...GPAY_ZERO });
+  const { sweepsCoins } = useCoins();
 
   const fetchGpayBalance = useCallback(async (accessToken?: string | null) => {
     const token =
@@ -109,7 +111,7 @@ export default function DashboardPage() {
     }).catch(() => setStripeStatusMessage(null));
   }, [depositModalOpen]);
 
-  // Main balance: GET /api/dashboard `balanceCents` (ledger-derived USD only).
+  // Main balance: GET /api/dashboard `balanceCents` (USD wallet) + SC face value (1 SC = $0.01).
   const refetchParam = searchParams.get("refetch");
   useEffect(() => {
     if (refetchParam !== "1") return;
@@ -246,6 +248,8 @@ export default function DashboardPage() {
   const apiBalanceErr = (data as { balanceError?: string | null } | null)?.balanceError ?? null;
   const balanceCents = data?.balanceCents ?? null;
   const balanceDisplayError = balanceCents === null ? (apiBalanceErr ?? "Balance unavailable") : null;
+  /** Total spendable face value: USD wallet cents + SC (each SC counts as 1¢ USD face). */
+  const totalAvailableCents = balanceCents !== null ? balanceCents + sweepsCoins : null;
   const adCreditBalanceCents = (data as { adCreditBalanceCents?: number }).adCreditBalanceCents ?? 0;
   const totalEarningsCents = (data as { totalEarningsCents?: number }).totalEarningsCents ?? 0;
   const totalWithdrawnCents = (data as { totalWithdrawnCents?: number }).totalWithdrawnCents ?? 0;
@@ -517,12 +521,27 @@ export default function DashboardPage() {
       {/* ——— Wallet-style Balance Card ——— */}
       <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
         <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
+        <p className="mt-0.5 text-[11px] text-fintech-muted/90">USD wallet + Sweeps Coins (face value)</p>
         {balanceDisplayError ? (
           <p className="mt-1 text-lg font-semibold text-red-400 tablet:text-xl">{balanceDisplayError}</p>
         ) : (
-          <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
-            {balanceCents != null ? formatCents(balanceCents) : "—"}
-          </p>
+          <>
+            <p className="mt-1 text-4xl font-bold tracking-tight text-white tablet:text-5xl">
+              {totalAvailableCents != null ? formatCents(totalAvailableCents) : "—"}
+            </p>
+            {balanceCents !== null && (balanceCents > 0 || sweepsCoins > 0) ? (
+              <p className="mt-2 text-xs leading-relaxed text-fintech-muted">
+                <span className="text-white/85">{formatCents(balanceCents)}</span> USD wallet
+                {sweepsCoins > 0 ? (
+                  <>
+                    {" "}
+                    · <span className="text-violet-200/95">{sweepsCoins.toLocaleString()} SC</span> (
+                    {formatCents(sweepsCoins)})
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </>
         )}
         <div className="mt-6 flex flex-col gap-3 tablet:flex-row tablet:gap-4">
           <button

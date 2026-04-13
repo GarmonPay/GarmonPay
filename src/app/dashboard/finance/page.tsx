@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals } from "@/lib/api";
 import { normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
+import { useCoins } from "@/hooks/useCoins";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -22,6 +23,7 @@ function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<stri
 
 export default function FinancePage() {
   const router = useRouter();
+  const { sweepsCoins } = useCoins();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [balanceFetchError, setBalanceFetchError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export default function FinancePage() {
 
   const pending = withdrawals.filter((w) => w.status === "pending").length;
   const completed = withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length;
+  const totalAvailableCents = balanceCents != null ? balanceCents + sweepsCoins : null;
 
   async function startMembershipCheckout(tier: MarketingPlanId) {
     if (!session) return;
@@ -117,15 +120,21 @@ export default function FinancePage() {
         <div className="mb-6 grid grid-cols-1 gap-4 tablet:grid-cols-2">
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Available Balance</p>
+            <p className="text-[10px] text-fintech-muted mt-0.5">USD wallet + SC (face value)</p>
             <p className="text-2xl font-bold text-fintech-money mt-1">
               {balanceFetchError ? (
                 <span className="text-red-400 text-base font-medium">{balanceFetchError}</span>
-              ) : balanceCents != null ? (
-                formatCents(balanceCents)
+              ) : totalAvailableCents != null ? (
+                formatCents(totalAvailableCents)
               ) : (
                 "—"
               )}
             </p>
+            {balanceCents != null && !balanceFetchError && (balanceCents > 0 || sweepsCoins > 0) ? (
+              <p className="mt-2 text-[11px] text-fintech-muted">
+                {formatCents(balanceCents)} USD · {sweepsCoins.toLocaleString()} SC
+              </p>
+            ) : null}
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Withdrawals</p>
