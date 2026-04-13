@@ -1,15 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
-import { US_STATE_OPTIONS, isStateExcludedFromParticipation } from "@/lib/us-states";
-import { isAtLeastAge, maxDateOfBirthForMinimumAge } from "@/lib/signup-compliance";
-
-/** US states available for signup (Washington excluded). */
-const US_STATES = US_STATE_OPTIONS.filter((s) => s.code !== "WA");
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,9 +13,6 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [state, setState] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,35 +38,14 @@ export default function RegisterPage() {
       setError("Please enter your full name");
       return;
     }
-    if (!email.trim()) {
-      setError("Please enter your email");
+    if (!email.trim() || !email.includes("@")) {
+      setError("Please enter a valid email");
       return;
     }
     if (!password || password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
     }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    if (!dateOfBirth) {
-      setError("Please enter your date of birth");
-      return;
-    }
-    if (!isAtLeastAge(dateOfBirth.trim(), 18)) {
-      setError("You must be 18 or older to participate");
-      return;
-    }
-    if (!state) {
-      setError("Please select your state");
-      return;
-    }
-    if (isStateExcludedFromParticipation(state)) {
-      setError("GarmonPay is not available in Washington state");
-      return;
-    }
-
     if (!agreed) {
       setError("Please agree to the Terms of Service");
       return;
@@ -84,25 +55,22 @@ export default function RegisterPage() {
 
     try {
       const trimmedEmail = email.trim().toLowerCase();
-      const trimmedName = fullName.trim();
       const refTrim = referralCode.trim();
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
         options: {
-          emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
           data: {
-            full_name: trimmedName,
-            date_of_birth: dateOfBirth.trim(),
-            residence_state: state.trim().toUpperCase(),
+            full_name: fullName.trim(),
           },
+          emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
         },
       });
 
       if (signUpError) {
         if (signUpError.message.toLowerCase().includes("already registered")) {
-          setError("An account with this email already exists. Please login.");
+          setError("Email already exists. Please login.");
         } else {
           setError(signUpError.message);
         }
@@ -120,16 +88,14 @@ export default function RegisterPage() {
           body: JSON.stringify({
             id: data.user.id,
             email: data.user.email ?? trimmedEmail,
-            full_name: trimmedName,
-            date_of_birth: dateOfBirth.trim(),
-            residence_state: state.trim().toUpperCase(),
+            full_name: fullName.trim(),
             referralCode: refTrim || undefined,
             welcome: true,
           }),
         });
         const syncJson = (await syncRes.json().catch(() => ({}))) as { message?: string };
         if (!syncRes.ok) {
-          setError(syncJson.message || "Could not finish creating your profile. Please try again or contact support.");
+          setError(syncJson.message || "Could not finish creating your account. Try again or contact support.");
           return;
         }
 
@@ -142,8 +108,7 @@ export default function RegisterPage() {
         setSuccess(true);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -164,7 +129,7 @@ export default function RegisterPage() {
       >
         <div
           style={{
-            maxWidth: 440,
+            maxWidth: 400,
             width: "100%",
             background: "rgba(13,5,32,0.9)",
             border: "1px solid rgba(124,58,237,0.4)",
@@ -182,27 +147,27 @@ export default function RegisterPage() {
               marginBottom: 12,
             }}
           >
-            Account Created!
+            Welcome to GarmonPay!
           </h2>
-          <p style={{ color: "#aaa", marginBottom: 8 }}>We sent a confirmation email to:</p>
-          <p style={{ color: "#fff", fontWeight: "bold", marginBottom: 24 }}>{email}</p>
-          <p style={{ color: "#888", fontSize: 14, marginBottom: 24 }}>
-            Click the link in your email to confirm your account then login.
+          <p style={{ color: "#aaa", marginBottom: 8 }}>Check your email to confirm your account:</p>
+          <p style={{ color: "#fff", fontWeight: "bold", marginBottom: 24, wordBreak: "break-all" }}>{email}</p>
+          <p style={{ color: "#888", fontSize: 13, marginBottom: 24 }}>
+            Click the confirmation link then login to start earning.
           </p>
           <Link
             href="/login"
             style={{
               display: "block",
               padding: "14px 24px",
-              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-              color: "#fff",
+              background: "linear-gradient(135deg, #F5C842, #D4A017)",
+              color: "#0e0118",
               borderRadius: 10,
               textDecoration: "none",
               fontWeight: "bold",
               fontSize: 16,
             }}
           >
-            Go to Login
+            Go to Login →
           </Link>
         </div>
       </div>
@@ -223,28 +188,29 @@ export default function RegisterPage() {
     >
       <div
         style={{
-          maxWidth: 480,
+          maxWidth: 420,
           width: "100%",
           background: "rgba(13,5,32,0.9)",
           border: "1px solid rgba(124,58,237,0.4)",
           borderRadius: 20,
-          padding: 40,
+          padding: 36,
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
           <Link href="/" style={{ textDecoration: "none" }}>
             <h1
               style={{
                 color: "#F5C842",
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: "bold",
                 letterSpacing: 2,
+                margin: 0,
               }}
             >
               GARMONPAY
             </h1>
           </Link>
-          <p style={{ color: "#888", marginTop: 8, fontSize: 14 }}>Create your free account</p>
+          <p style={{ color: "#888", marginTop: 6, fontSize: 14 }}>Join free — start earning today</p>
         </div>
 
         {error ? (
@@ -253,10 +219,10 @@ export default function RegisterPage() {
               background: "rgba(239,68,68,0.1)",
               border: "1px solid #EF4444",
               borderRadius: 8,
-              padding: "12px 16px",
+              padding: "10px 16px",
               color: "#EF4444",
-              fontSize: 14,
-              marginBottom: 20,
+              fontSize: 13,
+              marginBottom: 16,
               textAlign: "center",
             }}
           >
@@ -264,19 +230,8 @@ export default function RegisterPage() {
           </div>
         ) : null}
 
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            FULL NAME *
-          </label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>FULL NAME</label>
           <input
             type="text"
             value={fullName}
@@ -284,98 +239,20 @@ export default function RegisterPage() {
             placeholder="Your full name"
             style={{
               width: "100%",
-              padding: "12px 16px",
+              padding: "12px 14px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(124,58,237,0.4)",
               borderRadius: 8,
               color: "#fff",
-              fontSize: 16,
+              fontSize: 15,
               boxSizing: "border-box",
+              outline: "none",
             }}
           />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            DATE OF BIRTH *
-          </label>
-          <input
-            type="date"
-            value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
-            max={maxDateOfBirthForMinimumAge(18)}
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(124,58,237,0.4)",
-              borderRadius: 8,
-              color: "#fff",
-              fontSize: 16,
-              boxSizing: "border-box",
-            }}
-          />
-          <p style={{ color: "#666", fontSize: 11, marginTop: 4 }}>Must be 18 or older to participate</p>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            STATE *
-          </label>
-          <select
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              background: "#1a0535",
-              border: "1px solid rgba(124,58,237,0.4)",
-              borderRadius: 8,
-              color: state ? "#fff" : "#666",
-              fontSize: 16,
-              boxSizing: "border-box",
-            }}
-          >
-            <option value="">Select your state</option>
-            {US_STATES.map(({ code, label }) => (
-              <option key={code} value={code} style={{ background: "#1a0535" }}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            EMAIL *
-          </label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>EMAIL</label>
           <input
             type="email"
             value={email}
@@ -383,137 +260,83 @@ export default function RegisterPage() {
             placeholder="your@email.com"
             style={{
               width: "100%",
-              padding: "12px 16px",
+              padding: "12px 14px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(124,58,237,0.4)",
               borderRadius: 8,
               color: "#fff",
-              fontSize: 16,
+              fontSize: 15,
               boxSizing: "border-box",
+              outline: "none",
             }}
           />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            PASSWORD *
-          </label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>PASSWORD</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimum 8 characters"
+            placeholder="Min 8 characters"
             style={{
               width: "100%",
-              padding: "12px 16px",
+              padding: "12px 14px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(124,58,237,0.4)",
               borderRadius: 8,
               color: "#fff",
-              fontSize: 16,
+              fontSize: 15,
               boxSizing: "border-box",
-            }}
-          />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              color: "#F5C842",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            CONFIRM PASSWORD *
-          </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat your password"
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(124,58,237,0.4)",
-              borderRadius: 8,
-              color: "#fff",
-              fontSize: 16,
-              boxSizing: "border-box",
+              outline: "none",
             }}
           />
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label
-            style={{
-              color: "#aaa",
-              fontSize: 12,
-              fontWeight: "bold",
-              letterSpacing: 1,
-              display: "block",
-              marginBottom: 6,
-            }}
-          >
-            REFERRAL CODE (optional)
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>
+            REFERRAL CODE <span style={{ color: "#555" }}>(optional)</span>
           </label>
           <input
             type="text"
             value={referralCode}
             onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-            placeholder="Enter referral code"
+            placeholder="Enter code"
             style={{
               width: "100%",
-              padding: "12px 16px",
-              background: "rgba(255,255,255,0.05)",
+              padding: "12px 14px",
+              background: "rgba(255,255,255,0.03)",
               border: "1px solid rgba(124,58,237,0.2)",
               borderRadius: 8,
               color: "#fff",
-              fontSize: 16,
+              fontSize: 15,
               boxSizing: "border-box",
+              outline: "none",
             }}
           />
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "flex-start",
-            marginBottom: 24,
-          }}
-        >
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 20 }}>
           <input
             type="checkbox"
             id="terms"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
             style={{
-              width: 18,
-              height: 18,
-              marginTop: 2,
+              width: 16,
+              height: 16,
+              marginTop: 3,
               cursor: "pointer",
               accentColor: "#7C3AED",
+              flexShrink: 0,
             }}
           />
-          <label htmlFor="terms" style={{ color: "#aaa", fontSize: 13, lineHeight: 1.5, cursor: "pointer" }}>
+          <label htmlFor="terms" style={{ color: "#888", fontSize: 12, lineHeight: 1.5, cursor: "pointer" }}>
             I agree to the{" "}
             <Link href="/terms" style={{ color: "#F5C842" }}>
               Terms of Service
             </Link>{" "}
-            and confirm I am 18 years of age or older, and that my date of birth and state of residence are accurate.
+            and confirm I am 18+
           </label>
         </div>
 
@@ -523,37 +346,30 @@ export default function RegisterPage() {
           disabled={loading}
           style={{
             width: "100%",
-            padding: "16px 24px",
+            padding: "15px 24px",
             background: loading ? "#333" : "linear-gradient(135deg, #F5C842, #D4A017)",
             color: loading ? "#666" : "#0e0118",
             border: "none",
             borderRadius: 10,
             fontWeight: "bold",
-            fontSize: 18,
+            fontSize: 17,
             cursor: loading ? "not-allowed" : "pointer",
             marginBottom: 16,
           }}
         >
-          {loading ? "Creating Account..." : "Create My Account"}
+          {loading ? "Creating Account..." : "Create My Account 🚀"}
         </button>
 
-        <p style={{ textAlign: "center", color: "#888", fontSize: 14 }}>
+        <p style={{ textAlign: "center", color: "#888", fontSize: 13, margin: 0 }}>
           Already have an account?{" "}
           <Link href="/login" style={{ color: "#F5C842", fontWeight: "bold" }}>
             Login
           </Link>
         </p>
 
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: 24,
-            paddingTop: 24,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
-          }}
-        >
-          <p style={{ color: "#555", fontSize: 12 }}>🔒 Free to join. No credit card required.</p>
-        </div>
+        <p style={{ textAlign: "center", color: "#444", fontSize: 11, marginTop: 16 }}>
+          🔒 Free to join. No credit card required.
+        </p>
       </div>
     </div>
   );

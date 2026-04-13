@@ -89,20 +89,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    if (!rawDob || !isAtLeastAge(rawDob, 18)) {
+    if (rawDob && !isAtLeastAge(rawDob, 18)) {
       return NextResponse.json(
-        { message: "Valid date of birth (18+) is required." },
+        { message: "Valid date of birth (18+) is required when provided." },
         { status: 400 },
       );
     }
-    if (!rawState || !isValidUsStateCode(rawState)) {
-      return NextResponse.json({ message: "A valid US state is required." }, { status: 400 });
-    }
-    if (isStateExcludedFromParticipation(rawState)) {
-      return NextResponse.json(
-        { message: "Residents of Washington state are not eligible to register." },
-        { status: 403 },
-      );
+    if (rawState) {
+      if (!isValidUsStateCode(rawState)) {
+        return NextResponse.json({ message: "A valid US state is required when provided." }, { status: 400 });
+      }
+      if (isStateExcludedFromParticipation(rawState)) {
+        return NextResponse.json(
+          { message: "Residents of Washington state are not eligible to register." },
+          { status: 403 },
+        );
+      }
     }
 
     const { data: existing } = await supabase
@@ -112,8 +114,8 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     const complianceFields = {
-      date_of_birth: rawDob,
-      residence_state: rawState,
+      date_of_birth: rawDob || null,
+      residence_state: rawState || null,
     };
 
     if (existing) {
@@ -177,8 +179,8 @@ export async function POST(req: Request) {
       {
         id,
         email: emailVal || null,
-        date_of_birth: rawDob,
-        residence_state: rawState,
+        date_of_birth: rawDob || null,
+        residence_state: rawState || null,
       },
       { onConflict: "id" },
     );
