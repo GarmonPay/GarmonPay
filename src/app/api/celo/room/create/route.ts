@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import {
-  walletLedgerEntry,
-  getCanonicalBalanceCents,
-  ensureWalletBalancesRow,
-} from "@/lib/wallet-ledger";
+import { creditCoins, debitSweepsCoins, getUserCoins } from "@/lib/coins";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
@@ -134,8 +130,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const maxPlayersNum = max_players as number;
-
     if (!minimum_entry_cents || minimum_entry_cents < MIN_BET_CENTS) {
       return NextResponse.json(
         { error: `Minimum entry must be at least ${MIN_BET_CENTS} cents ($5)` },
@@ -150,12 +144,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const requiredBankCents = minimum_entry_cents * maxPlayersNum;
-    if (!starting_bank_cents || starting_bank_cents < requiredBankCents) {
+    if (!starting_bank_cents || starting_bank_cents < minimum_entry_cents) {
       return NextResponse.json(
-        {
-          error: `Banker must hold at least $${(requiredBankCents / 100).toFixed(2)} to cover all ${maxPlayersNum} players at the minimum entry of $${(minimum_entry_cents / 100).toFixed(2)}`,
-        },
+        { error: "Starting bank must be at least the minimum entry amount" },
         { status: 400 }
       );
     }
@@ -167,69 +158,18 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[celo/room/create] step: ensureWalletBalancesRow");
-    try {
-      const ensured = await ensureWalletBalancesRow(userId);
-      if (!ensured.ok) {
-        console.error("[celo/room/create] ensureWalletBalancesRow failed:", ensured.message, ensured.code);
-        return NextResponse.json(
-          { error: ensured.message, details: ensured.message, code: ensured.code ?? null },
-          { status: 500 }
-        );
-      }
-    } catch (err: unknown) {
-      console.error("[celo/room/create] ensureWalletBalancesRow threw:", err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
-        { status: 500 }
-      );
-    }
+    const { sweepsCoins } = await getUserCoins(userId);
+    console.error("[celo/room/create] step: sweepsCoins=", sweepsCoins, "starting_bank_cents=", starting_bank_cents);
 
-    console.error("[celo/room/create] step: getCanonicalBalanceCents (wallet_ledger)");
-    let balanceCents: number;
-    try {
-      balanceCents = await getCanonicalBalanceCents(userId);
-    } catch (err: unknown) {
-      console.error("[celo/room/create] getCanonicalBalanceCents threw:", err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : String(err), details: serializeErr(err) },
-        { status: 500 }
-      );
-    }
-
-    console.error(
-      "[celo/room/create] step: balanceCents=",
-      balanceCents,
-      "required_bankroll_cents=",
-      requiredBankCents,
-      "starting_bank_cents=",
-      starting_bank_cents
-    );
-
-    if (balanceCents < requiredBankCents) {
+    if (sweepsCoins < starting_bank_cents) {
       celoQaLog("room_create_failure", {
-        kind: "insufficient_required_bankroll",
+        kind: "insufficient_starting_bank_sc",
         httpStatus: 400,
-        balanceCents,
-        requiredBankCents,
+        sweepsCoins,
+        startingBankSc: starting_bank_cents,
       });
       return NextResponse.json(
-        {
-          error: `Insufficient balance: you need at least $${(requiredBankCents / 100).toFixed(2)} available to cover the required bankroll (minimum entry × max players).`,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (balanceCents < starting_bank_cents) {
-      celoQaLog("room_create_failure", {
-        kind: "insufficient_starting_bank",
-        httpStatus: 400,
-        balanceCents,
-        startingBankCents: starting_bank_cents,
-      });
-      return NextResponse.json(
-        { error: "Insufficient balance to cover the starting bank" },
+        { error: "Insufficient SC to cover the starting bank" },
         { status: 400 }
       );
     }
@@ -358,18 +298,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Single wallet debit for the table bank; banker_reserve_sc mirrors the liability cap (not a second debit).
-    console.error("[celo/room/create] step: walletLedgerEntry deduct (after room persisted)");
-    let deductResult: Awaited<ReturnType<typeof walletLedgerEntry>>;
+    // Single SC debit for the table bank; banker_reserve_sc mirrors the liability cap (not a second debit).
+    console.error("[celo/room/create] step: debitSweepsCoins (after room persisted)");
+    let deductResult: Awaited<ReturnType<typeof debitSweepsCoins>>;
     try {
-      deductResult = await walletLedgerEntry(
+      deductResult = await debitSweepsCoins(
         userId,
-        "game_play",
-        -starting_bank_cents,
+        starting_bank_cents,
+        "C-Lo bank reserve",
         `celo_bank_deposit_${room.id}`
       );
     } catch (err: unknown) {
-      console.error("[celo/room/create] walletLedgerEntry (deduct) threw:", err);
+      console.error("[celo/room/create] debitSweepsCoins threw:", err);
       try {
         await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
@@ -385,12 +325,12 @@ export async function POST(req: Request) {
 
     if (!deductResult.success) {
       celoQaLog("room_create_failure", {
-        kind: "ledger_deduct",
+        kind: "ledger_deduct_sc",
         httpStatus: 400,
         roomId: room.id,
         message: deductResult.message ?? null,
       });
-      console.error("[celo/room/create] walletLedgerEntry (deduct) failed:", deductResult.message);
+      console.error("[celo/room/create] debitSweepsCoins failed:", deductResult.message);
       try {
         await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
@@ -422,18 +362,21 @@ export async function POST(req: Request) {
     if (bankDebitSucceeded && !refundIssued && startingBankCentsForRefund > 0 && authedUserId) {
       refundIssued = true;
       try {
-        await walletLedgerEntry(
+        const ref = `celo_bank_refund_creation_failed_${Date.now()}`;
+        await creditCoins(
           authedUserId,
-          "game_win",
+          0,
           startingBankCentsForRefund,
-          `celo_bank_refund_creation_failed_${Date.now()}`
+          "C-Lo bank refund (room creation failed)",
+          ref,
+          "celo_refund"
         );
         celoQaLog("room_create_bank_refund_after_throw", {
           userId: authedUserId,
-          cents: startingBankCentsForRefund,
+          sc: startingBankCentsForRefund,
         });
       } catch (refundErr: unknown) {
-        console.error("[celo/room/create] emergency bank refund after error failed:", refundErr);
+        console.error("[celo/room/create] emergency SC refund after error failed:", refundErr);
       }
     }
     celoQaLog("room_create_failure", { kind: "unhandled", message: err instanceof Error ? err.message : String(err) });

@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CeloLobbyPage() {
   const router = useRouter();
-  const { sweepsCoins, formatSC, refresh: refreshCoins } = useCoins();
+  const { sweepsCoins, formatSC, refresh: refreshCoins, loading: coinsLoading } = useCoins();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -334,14 +334,16 @@ export default function CeloLobbyPage() {
     }));
   }
 
-  /** Form fields are SC amounts (legacy `_cents` names); compare to SC wallet. */
+  /** Form fields are SC amounts (legacy `_cents` names); compare to `users.sweeps_coins` only. */
   const minimumEntryCents = form.minimum_entry_cents;
-  const startingBankCents = form.starting_bank_cents;
-  const hasEnough = sweepsCoins >= startingBankCents;
-  const shortfallSc = Math.max(0, startingBankCents - sweepsCoins);
+  const startingBank = form.starting_bank_cents;
+  const hasEnoughForBank = sweepsCoins >= startingBank;
+  const canAfford = hasEnoughForBank;
+  const shortfallSc = Math.max(0, startingBank - sweepsCoins);
   const canSubmit =
     !creating &&
-    hasEnough &&
+    !coinsLoading &&
+    canAfford &&
     form.name.trim().length > 0 &&
     (form.room_type === "public" || form.join_code.trim().length >= 1);
 
@@ -608,7 +610,7 @@ export default function CeloLobbyPage() {
                   min={minimumEntryCents}
                   max={Math.max(minimumEntryCents, sweepsCoins > 0 ? sweepsCoins : minimumEntryCents)}
                   step={minimumEntryCents}
-                  value={startingBankCents}
+                  value={startingBank}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
@@ -619,15 +621,17 @@ export default function CeloLobbyPage() {
                 />
                 <p
                   className={`text-[10px] mt-1.5 font-medium ${
-                    hasEnough ? "text-emerald-400/90" : "text-red-400"
+                    coinsLoading ? "text-violet-400/70" : canAfford ? "text-emerald-400/90" : "text-red-400"
                   }`}
                 >
-                  {hasEnough ? (
-                    <>Your balance: {formatSC(sweepsCoins)} — enough to reserve this bank.</>
+                  {coinsLoading ? (
+                    <>Loading your SC balance…</>
+                  ) : canAfford ? (
+                    <>Your SC balance: {formatSC(sweepsCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      You need {shortfallSc.toLocaleString()} more SC to reserve {startingBankCents.toLocaleString()} SC (
-                      {scToUsdDisplay(startingBankCents)}).
+                      You need {shortfallSc.toLocaleString()} more SC to reserve {startingBank.toLocaleString()} SC (
+                      {scToUsdDisplay(startingBank)}).
                     </>
                   )}
                 </p>
@@ -641,7 +645,11 @@ export default function CeloLobbyPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
                   <span className="text-violet-300/70">Your balance</span>
-                  <span className={`font-bold font-mono text-xs ${hasEnough ? "text-emerald-400" : "text-red-400"}`}>
+                  <span
+                    className={`font-bold font-mono text-xs ${
+                      coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
                     {formatSC(sweepsCoins)}
                   </span>
                 </div>
@@ -658,19 +666,23 @@ export default function CeloLobbyPage() {
                 type="submit"
                 disabled={!canSubmit}
                 className={`w-full rounded-xl py-4 font-bold text-sm tracking-wide shadow-lg transition-all ${
-                  hasEnough
+                  coinsLoading
+                    ? "bg-white/10 border border-white/10 text-violet-200/80 cursor-wait"
+                    : canAfford
                     ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30 hover:from-[#fde047] hover:to-[#F5C842] disabled:opacity-60"
                     : "bg-red-900/40 border border-red-500/30 text-red-400 cursor-not-allowed"
                 }`}
               >
                 {creating
                   ? "Creating…"
-                  : !hasEnough
-                  ? "Insufficient Balance"
+                  : coinsLoading
+                  ? "Loading balance…"
+                  : !canAfford
+                  ? "Insufficient SC"
                   : `CREATE ROOM — ${formatScLine(form.starting_bank_cents)}`}
               </button>
 
-              {!hasEnough && (
+              {!coinsLoading && !canAfford && (
                 <p className="text-center text-[10px] text-violet-400/50">
                   <Link href="/dashboard/wallet" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
                     Get more SC →
