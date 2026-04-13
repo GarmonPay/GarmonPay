@@ -7,6 +7,7 @@ import { Cinzel_Decorative } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { scToUsdDisplay } from "@/lib/coins";
+import { useCoins } from "@/hooks/useCoins";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -35,10 +36,7 @@ function WalletDashboardContent() {
     searchParams.get("funded") === "true" ||
     searchParams.get("success") === "1";
   const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
-  const [goldCoins, setGoldCoins] = useState(0);
-  const [sweepsCoins, setSweepsCoins] = useState(0);
-  const [balanceLoad, setBalanceLoad] = useState<"idle" | "pending" | "ok" | "err">("idle");
+  const { sweepsCoins, goldCoins, usdBalance, loading: coinsLoading, refresh, formatUSD } = useCoins();
   const [history, setHistory] = useState<LedgerEntry[]>([]);
   const [coinHistory, setCoinHistory] = useState<CoinEntry[]>([]);
   const [depositError, setDepositError] = useState<string | null>(null);
@@ -50,7 +48,7 @@ function WalletDashboardContent() {
   const [convertSuccess, setConvertSuccess] = useState<string | null>(null);
   const [convertApiErr, setConvertApiErr] = useState<string | null>(null);
 
-  const balanceDollars = balanceCents !== null ? balanceCents / 100 : 0;
+  const balanceDollars = usdBalance / 100;
   const scFromConvertPreview =
     Number.isFinite(convertAmount) && convertAmount > 0 ? Math.round(convertAmount * 100) : 0;
 
@@ -86,22 +84,6 @@ function WalletDashboardContent() {
     }
   };
 
-  const loadBalances = async () => {
-    const session = await getSessionAsync();
-    if (!session?.accessToken) return;
-    const headers: Record<string, string> = { Authorization: `Bearer ${session.accessToken}` };
-    const r = await fetch("/api/coins/balance", { headers });
-    if (r.ok) {
-      const d = (await r.json()) as { balance_cents?: number; gold_coins?: number; sweeps_coins?: number };
-      setBalanceCents(typeof d.balance_cents === "number" ? d.balance_cents : 0);
-      setGoldCoins(Math.floor(Number(d.gold_coins ?? 0)));
-      setSweepsCoins(Math.floor(Number(d.sweeps_coins ?? 0)));
-      setBalanceLoad("ok");
-    } else {
-      setBalanceLoad("err");
-    }
-  };
-
   useEffect(() => {
     getSessionAsync().then((session) => {
       if (session) setUser({ id: session.userId, accessToken: session.accessToken });
@@ -109,10 +91,9 @@ function WalletDashboardContent() {
   }, []);
 
   useEffect(() => {
-    if (!user?.accessToken) return;
-    setBalanceLoad("pending");
-    loadBalances().catch(() => setBalanceLoad("err"));
-  }, [user?.accessToken, success]);
+    if (!user?.accessToken || !success) return;
+    void refresh();
+  }, [user?.accessToken, success, refresh]);
 
   useEffect(() => {
     if (!user?.accessToken) return;
@@ -155,12 +136,7 @@ function WalletDashboardContent() {
       };
       if (res.ok && typeof data.sc_awarded === "number") {
         const awarded = data.sc_awarded;
-        setSweepsCoins((prev) => prev + awarded);
-        if (typeof data.new_usd_balance === "number") {
-          setBalanceCents(data.new_usd_balance);
-        } else {
-          await loadBalances();
-        }
+        await refresh();
         setConvertSuccess(`You received ${awarded.toLocaleString()} SC.`);
         const h = await fetch("/api/coins/history?limit=25", {
           headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -198,11 +174,11 @@ function WalletDashboardContent() {
       {/* Top balances */}
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-2">
         <p className="text-fintech-muted text-xs uppercase tracking-wider">Your balances</p>
-        {balanceLoad === "ok" && balanceCents !== null ? (
+        {!coinsLoading ? (
           <>
             <p className="text-white text-lg">
               💵 USD Balance:{" "}
-              <span className="font-semibold tabular-nums">${(balanceCents / 100).toFixed(2)}</span>
+              <span className="font-semibold tabular-nums">{formatUSD(usdBalance)}</span>
             </p>
             <p className="text-white text-lg">
               🪙 Gold Coins: <span className="font-semibold tabular-nums">{goldCoins.toLocaleString()} GC</span>
@@ -212,8 +188,6 @@ function WalletDashboardContent() {
               <span className="text-fintech-muted text-sm ml-2">(≈ {scToUsdDisplay(sweepsCoins)})</span>
             </p>
           </>
-        ) : balanceLoad === "err" ? (
-          <p className="text-red-400 text-sm">Could not load balances.</p>
         ) : (
           <p className="text-fintech-muted text-sm">Loading balances…</p>
         )}
@@ -221,6 +195,7 @@ function WalletDashboardContent() {
 
       {/* Convert USD → SC */}
       <div
+        id="convert-usd-sc"
         style={{
           background: "rgba(124,58,237,0.1)",
           border: "1px solid rgba(124,58,237,0.4)",
@@ -345,18 +320,18 @@ function WalletDashboardContent() {
         <button
           type="button"
           onClick={() => void handleConvertToSC()}
-          disabled={converting || convertAmount < 1 || convertAmount > balanceDollars || balanceLoad !== "ok"}
+          disabled={converting || convertAmount < 1 || convertAmount > balanceDollars || coinsLoading}
           style={{
             width: "100%",
             padding: 14,
             background:
-              converting || convertAmount < 1 || convertAmount > balanceDollars ? "#333" : "linear-gradient(135deg, #F5C842, #D4A017)",
-            color: converting || convertAmount < 1 || convertAmount > balanceDollars ? "#666" : "#0e0118",
+              converting || convertAmount < 1 || convertAmount > balanceDollars || coinsLoading ? "#333" : "linear-gradient(135deg, #F5C842, #D4A017)",
+            color: converting || convertAmount < 1 || convertAmount > balanceDollars || coinsLoading ? "#666" : "#0e0118",
             border: "none",
             borderRadius: 10,
             fontWeight: "bold",
             fontSize: 16,
-            cursor: converting || convertAmount < 1 || convertAmount > balanceDollars ? "not-allowed" : "pointer",
+            cursor: converting || convertAmount < 1 || convertAmount > balanceDollars || coinsLoading ? "not-allowed" : "pointer",
           }}
         >
           {converting
@@ -364,7 +339,7 @@ function WalletDashboardContent() {
             : `Convert $${Number.isFinite(convertAmount) ? convertAmount.toFixed(2) : "0.00"} → ${scFromConvertPreview.toLocaleString()} SC`}
         </button>
 
-        {convertAmount > balanceDollars && balanceLoad === "ok" && (
+        {convertAmount > balanceDollars && !coinsLoading && (
           <p
             style={{
               color: "#EF4444",
@@ -391,22 +366,29 @@ function WalletDashboardContent() {
 
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-4">
         <h2 className="text-lg font-bold text-white">USD wallet</h2>
-        {(balanceLoad === "pending" || balanceLoad === "idle") && user?.accessToken && (
+        {coinsLoading && user?.accessToken && (
           <p className="text-fintech-muted text-sm">Loading…</p>
         )}
-        {balanceLoad === "err" && <p className="text-red-400 text-sm">Could not load balance.</p>}
-        {balanceLoad === "ok" && balanceCents !== null && (
+        {!coinsLoading && (
           <p className="text-fintech-muted">
             Available:{" "}
-            <span className="text-white font-semibold text-xl">${(balanceCents / 100).toFixed(2)}</span>
+            <span className="text-white font-semibold text-xl">{formatUSD(usdBalance)}</span>
           </p>
         )}
-        <Link
-          href="/dashboard/withdraw"
-          className="inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/5"
-        >
-          Withdraw
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="#convert-usd-sc"
+            className="inline-flex items-center justify-center rounded-xl bg-violet-600/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-600"
+          >
+            Convert to SC
+          </a>
+          <Link
+            href="/dashboard/withdraw"
+            className="inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/5"
+          >
+            Withdraw
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl bg-fintech-bg-card border border-amber-500/20 p-6">
@@ -416,7 +398,7 @@ function WalletDashboardContent() {
           href="/dashboard/buy-coins"
           className="mt-4 inline-block rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
         >
-          Buy more GC
+          Buy More
         </Link>
       </div>
 
@@ -429,10 +411,10 @@ function WalletDashboardContent() {
             Redeem for $GPAY (soon)
           </span>
           <Link
-            href="/games/celo"
+            href="/games"
             className="inline-flex rounded-xl bg-emerald-600/90 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
           >
-            Use in games (C-Lo)
+            Use in Games
           </Link>
         </div>
       </div>

@@ -107,7 +107,7 @@ function SnakeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function SnakePage() {
   return (
-    <GameStationPlay gameSlug="snake" gameName="Neon Snake" costCents={5}>
+    <GameStationPlay gameSlug="snake" gameName="Neon Snake" costSc={5}>
       {({ onGameEnd }) => <SnakeGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

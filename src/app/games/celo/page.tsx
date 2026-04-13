@@ -9,6 +9,7 @@ import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { scToUsdDisplay } from "@/lib/coins";
+import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
   const n = Math.max(0, Math.floor(Number(sc)));
@@ -63,11 +64,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CeloLobbyPage() {
   const router = useRouter();
+  const { sweepsCoins, formatSC, refresh: refreshCoins } = useCoins();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  /** Sweeps Coins — room create reserves SC from this balance (`*_cents` fields on the form are SC amounts). */
-  const [sweepsBalance, setSweepsBalance] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateForm>(DEFAULT_FORM);
   const [creating, setCreating] = useState(false);
@@ -134,22 +134,10 @@ export default function CeloLobbyPage() {
     }, 200);
   }, [loadPublicRooms]);
 
-  const fetchUserBalance = useCallback(async () => {
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const {
-      data: { session: s },
-    } = await sb.auth.getSession();
-    if (!s) return;
-    const { data } = await sb.from("users").select("sweeps_coins").eq("id", s.user.id).maybeSingle();
-    const sc = Math.max(0, Math.floor(Number((data as { sweeps_coins?: number } | null)?.sweeps_coins ?? 0)));
-    setSweepsBalance(sc);
-  }, []);
-
   useEffect(() => {
     if (!showCreate) return;
-    void fetchUserBalance();
-  }, [showCreate, fetchUserBalance]);
+    void refreshCoins();
+  }, [showCreate, refreshCoins]);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -159,16 +147,16 @@ export default function CeloLobbyPage() {
       }
       setSession(s);
       if (s.accessToken) {
-        void fetchUserBalance();
+        void refreshCoins();
       }
     });
-  }, [fetchUserBalance]);
+  }, [refreshCoins]);
 
   /** Keep starting bank ≤ SC balance. */
   useEffect(() => {
-    if (!showCreate || sweepsBalance <= 0) return;
+    if (!showCreate || sweepsCoins <= 0) return;
     setForm((f) => {
-      const cap = Math.min(sweepsBalance, 200_000);
+      const cap = Math.min(sweepsCoins, 200_000);
       const step = f.minimum_entry_cents;
       let sb = f.starting_bank_cents;
       if (sb > cap) sb = Math.floor(cap / step) * step;
@@ -176,7 +164,7 @@ export default function CeloLobbyPage() {
       if (sb === f.starting_bank_cents) return f;
       return { ...f, starting_bank_cents: sb };
     });
-  }, [showCreate, sweepsBalance]);
+  }, [showCreate, sweepsCoins]);
 
   useEffect(() => {
     let isMounted = true;
@@ -349,8 +337,8 @@ export default function CeloLobbyPage() {
   /** Form fields are SC amounts (legacy `_cents` names); compare to SC wallet. */
   const minimumEntryCents = form.minimum_entry_cents;
   const startingBankCents = form.starting_bank_cents;
-  const hasEnough = sweepsBalance >= startingBankCents;
-  const shortfallSc = Math.max(0, startingBankCents - sweepsBalance);
+  const hasEnough = sweepsCoins >= startingBankCents;
+  const shortfallSc = Math.max(0, startingBankCents - sweepsCoins);
   const canSubmit =
     !creating &&
     hasEnough &&
@@ -381,9 +369,8 @@ export default function CeloLobbyPage() {
           </Link>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
-            <p className="text-[11px] text-violet-300/50 uppercase tracking-widest">Your SC balance</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              {sweepsBalance.toLocaleString()} SC ({scToUsdDisplay(sweepsBalance)})
+              Your balance: {formatSC(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -619,7 +606,7 @@ export default function CeloLobbyPage() {
                 <input
                   type="range"
                   min={minimumEntryCents}
-                  max={Math.max(minimumEntryCents, sweepsBalance > 0 ? sweepsBalance : minimumEntryCents)}
+                  max={Math.max(minimumEntryCents, sweepsCoins > 0 ? sweepsCoins : minimumEntryCents)}
                   step={minimumEntryCents}
                   value={startingBankCents}
                   onChange={(e) =>
@@ -636,10 +623,7 @@ export default function CeloLobbyPage() {
                   }`}
                 >
                   {hasEnough ? (
-                    <>
-                      Your SC balance: {sweepsBalance.toLocaleString()} SC ({scToUsdDisplay(sweepsBalance)}) — enough to
-                      reserve this bank.
-                    </>
+                    <>Your balance: {formatSC(sweepsCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
                       You need {shortfallSc.toLocaleString()} more SC to reserve {startingBankCents.toLocaleString()} SC (
@@ -658,7 +642,7 @@ export default function CeloLobbyPage() {
                 <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
                   <span className="text-violet-300/70">Your balance</span>
                   <span className={`font-bold font-mono text-xs ${hasEnough ? "text-emerald-400" : "text-red-400"}`}>
-                    {sweepsBalance.toLocaleString()} SC ({scToUsdDisplay(sweepsBalance)})
+                    {formatSC(sweepsCoins)}
                   </span>
                 </div>
               </div>
@@ -688,8 +672,8 @@ export default function CeloLobbyPage() {
 
               {!hasEnough && (
                 <p className="text-center text-[10px] text-violet-400/50">
-                  <Link href="/dashboard/buy-coins" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
-                    Get Sweeps Coins →
+                  <Link href="/dashboard/wallet" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
+                    Get more SC →
                   </Link>
                 </p>
               )}

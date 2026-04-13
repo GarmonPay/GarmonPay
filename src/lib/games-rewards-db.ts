@@ -1,9 +1,10 @@
 /**
  * Profit-protected games: reward_budget (daily cap) + games_rewards log.
- * All reward calculations server-side. Balance updates via users + transactions (not core).
+ * Rewards credit Sweeps Coins via credit_coins (not legacy users.balance).
  */
 
 import { createAdminClient } from "@/lib/supabase";
+import { creditCoins } from "@/lib/coins";
 
 const BUDGET_ROW_ID = "default";
 
@@ -41,100 +42,98 @@ export async function getRewardBudget(): Promise<RewardBudgetRow | null> {
 }
 
 /** Check if we can pay amount (daily_used + amount <= daily_limit). Returns message if no rewards remaining. */
-export async function canPayReward(amountCents: number): Promise<{ allowed: boolean; message?: string }> {
+export async function canPayReward(amountSc: number): Promise<{ allowed: boolean; message?: string }> {
   const budget = await getRewardBudget();
   if (!budget) return { allowed: false, message: "Reward budget not configured" };
   if (budget.daily_used >= budget.daily_limit) return { allowed: false, message: "No rewards remaining today" };
-  if (budget.daily_used + amountCents > budget.daily_limit) return { allowed: false, message: "No rewards remaining today" };
+  if (budget.daily_used + amountSc > budget.daily_limit) return { allowed: false, message: "No rewards remaining today" };
   return { allowed: true };
 }
 
-/** Deduct from reward_budget and credit user balance. Inserts games_rewards + transaction. */
+/** Deduct from reward_budget and credit Sweeps Coins. */
 export async function creditGameReward(
   userId: string,
-  amountCents: number,
+  amountSc: number,
   gameType: GameType
 ): Promise<{ success: boolean; message?: string }> {
-  if (amountCents <= 0) return { success: true };
-  const allowed = await canPayReward(amountCents);
+  if (amountSc <= 0) return { success: true };
+  const allowed = await canPayReward(amountSc);
   if (!allowed.allowed) return { success: false, message: allowed.message };
 
   const sb = supabase();
-  const { data: userRow, error: userErr } = await sb.from("users").select("balance").eq("id", userId).single();
-  if (userErr || !userRow) return { success: false, message: "User not found" };
-  const balance = Number((userRow as { balance?: number }).balance ?? 0);
+  const ref = `game_reward_${gameType}_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const credit = await creditCoins(
+    userId,
+    0,
+    amountSc,
+    `Game reward: ${gameType}`,
+    ref,
+    gameType
+  );
+  if (!credit.success) return { success: false, message: credit.message };
 
-  await sb.from("users").update({ balance: balance + amountCents, updated_at: new Date().toISOString() }).eq("id", userId);
-  await sb.from("games_rewards").insert({ user_id: userId, game_type: gameType, reward_amount: amountCents });
-  const txType = gameType === "daily_bonus" ? "earning" : gameType;
-  await sb.from("transactions").insert({
-    user_id: userId,
-    type: txType,
-    amount: amountCents,
-    status: "completed",
-    description: `Game reward: ${gameType}`,
-  });
+  await sb.from("games_rewards").insert({ user_id: userId, game_type: gameType, reward_amount: amountSc });
   const budget = await getRewardBudget();
   if (budget) {
     await sb.from("reward_budget").update({
-      daily_used: budget.daily_used + amountCents,
+      daily_used: budget.daily_used + amountSc,
       updated_at: new Date().toISOString(),
     }).eq("id", BUDGET_ROW_ID);
   }
   return { success: true };
 }
 
-/** Spin wheel chances (cents): 0(50%), 1(25%), 2(15%), 5(8%), 10(2%). Admin can override via config later. */
-const SPIN_CHANCES: { cents: number; pct: number }[] = [
-  { cents: 0, pct: 50 },
-  { cents: 1, pct: 25 },
-  { cents: 2, pct: 15 },
-  { cents: 5, pct: 8 },
-  { cents: 10, pct: 2 },
+/** Spin wheel chances (SC): 0(50%), 1(25%), 2(15%), 5(8%), 10(2%). */
+const SPIN_CHANCES: { sc: number; pct: number }[] = [
+  { sc: 0, pct: 50 },
+  { sc: 1, pct: 25 },
+  { sc: 2, pct: 15 },
+  { sc: 5, pct: 8 },
+  { sc: 10, pct: 2 },
 ];
 
-function weightedRandom(chances: { cents: number; pct: number }[]): number {
+function weightedRandomSc(chances: { sc: number; pct: number }[]): number {
   const r = Math.random() * 100;
   let acc = 0;
   for (const c of chances) {
     acc += c.pct;
-    if (r < acc) return c.cents;
+    if (r < acc) return c.sc;
   }
-  return chances[chances.length - 1].cents;
+  return chances[chances.length - 1].sc;
 }
 
-export async function performSpinWheel(userId: string): Promise<{ success: boolean; amountCents: number; message?: string }> {
-  const amountCents = weightedRandom(SPIN_CHANCES);
-  const result = await creditGameReward(userId, amountCents, "spin_wheel");
-  return result.success ? { success: true, amountCents } : { success: false, amountCents: 0, message: result.message };
+export async function performSpinWheel(userId: string): Promise<{ success: boolean; amountSc: number; message?: string }> {
+  const amountSc = weightedRandomSc(SPIN_CHANCES);
+  const result = await creditGameReward(userId, amountSc, "spin_wheel");
+  return result.success ? { success: true, amountSc } : { success: false, amountSc: 0, message: result.message };
 }
 
 /** Scratch card: same budget, random from same distribution. */
-export async function performScratchCard(userId: string): Promise<{ success: boolean; amountCents: number; message?: string }> {
-  const amountCents = weightedRandom(SPIN_CHANCES);
-  const result = await creditGameReward(userId, amountCents, "scratch_card");
-  return result.success ? { success: true, amountCents } : { success: false, amountCents: 0, message: result.message };
+export async function performScratchCard(userId: string): Promise<{ success: boolean; amountSc: number; message?: string }> {
+  const amountSc = weightedRandomSc(SPIN_CHANCES);
+  const result = await creditGameReward(userId, amountSc, "scratch_card");
+  return result.success ? { success: true, amountSc } : { success: false, amountSc: 0, message: result.message };
 }
 
 /** Mystery box: 50% nothing, 50% random small reward. */
-const MYSTERY_CHANCES: { cents: number; pct: number }[] = [
-  { cents: 0, pct: 50 },
-  { cents: 1, pct: 20 },
-  { cents: 2, pct: 15 },
-  { cents: 5, pct: 10 },
-  { cents: 10, pct: 5 },
+const MYSTERY_CHANCES: { sc: number; pct: number }[] = [
+  { sc: 0, pct: 50 },
+  { sc: 1, pct: 20 },
+  { sc: 2, pct: 15 },
+  { sc: 5, pct: 10 },
+  { sc: 10, pct: 5 },
 ];
 
-export async function performMysteryBox(userId: string): Promise<{ success: boolean; amountCents: number; message?: string }> {
-  const amountCents = weightedRandom(MYSTERY_CHANCES);
-  const result = await creditGameReward(userId, amountCents, "mystery_box");
-  return result.success ? { success: true, amountCents } : { success: false, amountCents: 0, message: result.message };
+export async function performMysteryBox(userId: string): Promise<{ success: boolean; amountSc: number; message?: string }> {
+  const amountSc = weightedRandomSc(MYSTERY_CHANCES);
+  const result = await creditGameReward(userId, amountSc, "mystery_box");
+  return result.success ? { success: true, amountSc } : { success: false, amountSc: 0, message: result.message };
 }
 
-const DAILY_BONUS_CENTS = 5;
+const DAILY_BONUS_SC = 5;
 
 /** Daily bonus: once per 24 hours per user. */
-export async function performDailyBonus(userId: string): Promise<{ success: boolean; amountCents: number; message?: string }> {
+export async function performDailyBonus(userId: string): Promise<{ success: boolean; amountSc: number; message?: string }> {
   const sb = supabase();
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: last } = await sb
@@ -145,7 +144,7 @@ export async function performDailyBonus(userId: string): Promise<{ success: bool
     .gte("created_at", cutoff)
     .limit(1)
     .maybeSingle();
-  if (last) return { success: false, amountCents: 0, message: "Already claimed in the last 24 hours" };
-  const result = await creditGameReward(userId, DAILY_BONUS_CENTS, "daily_bonus");
-  return result.success ? { success: true, amountCents: DAILY_BONUS_CENTS } : { success: false, amountCents: 0, message: result.message };
+  if (last) return { success: false, amountSc: 0, message: "Already claimed in the last 24 hours" };
+  const result = await creditGameReward(userId, DAILY_BONUS_SC, "daily_bonus");
+  return result.success ? { success: true, amountSc: DAILY_BONUS_SC } : { success: false, amountSc: 0, message: result.message };
 }

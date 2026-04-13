@@ -18,6 +18,7 @@ import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { scToUsdDisplay } from "@/lib/coins";
+import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
   const n = Math.max(0, Math.floor(Number(sc)));
@@ -236,7 +237,7 @@ function getPlayerBetCents(player: { entry_sc?: number; bet_cents?: number }): n
 
 /** Display stake for seat cards */
 function getPlayerEntry(player: { entry_sc?: number; bet_cents?: number }): string {
-  return `$${(getEntryAmount(player) / 100).toFixed(2)}`;
+  return formatScLine(getEntryAmount(player));
 }
 
 function getDisplayName(
@@ -397,7 +398,7 @@ function SeatCard({
           )}
           {outcome === "win" && (
             <span className="text-xs text-emerald-400 font-semibold">
-              +${(resolvedRoll!.payout_sc / 100).toFixed(2)} ✓
+              +{formatScLine(resolvedRoll!.payout_sc)} ✓
             </span>
           )}
           {outcome === "loss" && (
@@ -437,6 +438,7 @@ export default function CeloRoomPage() {
   const params = useParams();
   const roomId = params.roomId as string;
   const router = useRouter();
+  const { sweepsCoins, formatSC, refresh: refreshCoins } = useCoins();
 
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -445,11 +447,8 @@ export default function CeloRoomPage() {
   const [playerRolls, setPlayerRolls] = useState<PlayerRoll[]>([]);
   const [openSideBets, setOpenSideBets] = useState<SideBet[]>([]);
   const [myPlayer, setMyPlayer] = useState<Player | null>(null);
-  /** USD wallet cents — C-Lo stakes still use wallet ledger USD. */
-  const [balanceCents, setBalanceCents] = useState(0);
-  const [sweepsBalanceDisplay, setSweepsBalanceDisplay] = useState(0);
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
-  const balanceRef = useRef(0);
+  const prevSweepsRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -554,7 +553,7 @@ export default function CeloRoomPage() {
       try {
         await navigator.share({
           title: "Join my C-Lo game on GarmonPay!",
-          text: `${room?.name || "C-Lo Game"} — Min entry $${((room?.min_bet_cents || 500) / 100).toFixed(0)}. Join now!`,
+          text: `${room?.name || "C-Lo Game"} — Min entry ${(room?.min_bet_cents || 500).toLocaleString()} SC. Join now!`,
           url,
         });
         return;
@@ -722,24 +721,9 @@ export default function CeloRoomPage() {
     return round;
   }, [roomId]);
 
-  const refreshBalance = useCallback(async () => {
-    try {
-      const res = await authFetchGet("/api/coins/balance");
-      if (res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { balance_cents?: number; sweeps_coins?: number };
-        const usd = Number(d.balance_cents ?? 0);
-        const v = Number.isFinite(usd) ? Math.max(0, Math.floor(usd)) : 0;
-        setBalanceCents(v);
-        balanceRef.current = v;
-        const sc = Number(d.sweeps_coins ?? 0);
-        setSweepsBalanceDisplay(Number.isFinite(sc) ? Math.max(0, Math.floor(sc)) : 0);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const loadBalance = refreshBalance;
+  const loadBalance = useCallback(() => {
+    void refreshCoins();
+  }, [refreshCoins]);
 
   const loadChat = useCallback(async () => {
     const sb = createBrowserClient();
@@ -1072,72 +1056,18 @@ export default function CeloRoomPage() {
     });
   }, [roomId]);
 
-  // Live wallet balance (RPC updates `wallet_balances` after ledger entries)
+  /** Flash balance indicator when SC changes (useCoins keeps sweepsCoins live). */
   useEffect(() => {
-    const sb = createBrowserClient();
-    if (!sb || !session?.userId) return;
-    let isMounted = true;
-    const uid = session.userId;
-    const chWallet = sb
-      .channel(`wallet-balance-${uid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "wallet_balances",
-          filter: `user_id=eq.${uid}`,
-        },
-        (payload) => {
-          if (!isMounted) return;
-          const row = payload.new as { user_id?: string; balance?: number } | undefined;
-          if (!row || !sameCeloUserId(row.user_id, uid)) return;
-          const newBalance = Number(row.balance ?? 0);
-          if (!Number.isFinite(newBalance)) return;
-          const floored = Math.max(0, Math.floor(newBalance));
-          const prev = balanceRef.current;
-          setBalanceCents(floored);
-          if (floored > prev) {
-            setBalanceFlash("up");
-            window.setTimeout(() => {
-              if (isMounted) setBalanceFlash(null);
-            }, 2000);
-          } else if (floored < prev) {
-            setBalanceFlash("down");
-            window.setTimeout(() => {
-              if (isMounted) setBalanceFlash(null);
-            }, 2000);
-          }
-          balanceRef.current = floored;
-        }
-      )
-      .subscribe();
-
-    const chSweeps = sb
-      .channel(`user-sweeps-${uid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "users",
-          filter: `id=eq.${uid}`,
-        },
-        (payload) => {
-          if (!isMounted) return;
-          const row = payload.new as { id?: string; sweeps_coins?: number } | undefined;
-          if (!row || !sameCeloUserId(row.id, uid)) return;
-          const sc = Math.max(0, Math.floor(Number(row.sweeps_coins ?? 0)));
-          setSweepsBalanceDisplay(sc);
-        }
-      )
-      .subscribe();
-    return () => {
-      isMounted = false;
-      void sb.removeChannel(chWallet);
-      void sb.removeChannel(chSweeps);
-    };
-  }, [session?.userId]);
+    if (prevSweepsRef.current === null) {
+      prevSweepsRef.current = sweepsCoins;
+      return;
+    }
+    if (sweepsCoins > prevSweepsRef.current) setBalanceFlash("up");
+    else if (sweepsCoins < prevSweepsRef.current) setBalanceFlash("down");
+    prevSweepsRef.current = sweepsCoins;
+    const t = window.setTimeout(() => setBalanceFlash(null), 2000);
+    return () => clearTimeout(t);
+  }, [sweepsCoins]);
 
   // ── Realtime + presence (initial fetch runs after SUBSCRIBED) ─────────────────
   useEffect(() => {
@@ -2052,8 +1982,8 @@ export default function CeloRoomPage() {
   // ── Render: unauthenticated preview (BUG 1) ───────────────────────────────
   if (!session) {
     const previewBankerName = room ? `${room.name}` : "C-Lo Room";
-    const previewBank = room ? `$${(room.current_bank_cents / 100).toFixed(2)}` : "—";
-    const previewMin = room ? `$${(room.min_bet_cents / 100).toFixed(2)}` : "—";
+    const previewBank = room ? formatScLine(room.current_bank_cents) : "—";
+    const previewMin = room ? formatScLine(room.min_bet_cents) : "—";
     const previewPlayers = players.filter((p) => p.role !== "spectator").length;
     const previewMax = room?.max_players ?? "?";
     const redirectParam = encodeURIComponent(`/games/celo/${roomId}`);
@@ -2157,7 +2087,7 @@ export default function CeloRoomPage() {
       .filter((p) => p.role === "player")
       .reduce((s, p) => s + celoPlayerStakeCents(p), 0);
     const remainingCover = Math.max(0, room.banker_reserve_cents - totalCommittedStakes);
-    const joinEntryCap = Math.min(room.max_bet_cents, balanceCents, remainingCover);
+    const joinEntryCap = Math.min(room.max_bet_cents, sweepsCoins, remainingCover);
     const entryChipMults = [1, 2, 5, 10];
 
     return (
@@ -2196,7 +2126,7 @@ export default function CeloRoomPage() {
               <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-xs text-violet-300/70">
                 <span>
                   Min entry:{" "}
-                  <span className="text-white font-mono">${(room.min_bet_cents / 100).toFixed(2)}</span>
+                  <span className="text-white font-mono">{formatScLine(room.min_bet_cents)}</span>
                 </span>
                 <span>
                   Players:{" "}
@@ -2206,7 +2136,7 @@ export default function CeloRoomPage() {
                 </span>
                 <span>
                   Bank:{" "}
-                  <span className="text-[#F5C842] font-mono">${(room.current_bank_cents / 100).toFixed(2)}</span>
+                  <span className="text-[#F5C842] font-mono">{formatScLine(room.current_bank_cents)}</span>
                 </span>
                 <span>{room.platform_fee_pct}% fee</span>
               </div>
@@ -2238,7 +2168,7 @@ export default function CeloRoomPage() {
               {entryChipMults.map((m) => {
                 const cents = minBet * m;
                 if (cents > room.max_bet_cents) return null;
-                const capped = Math.min(cents, balanceCents, room.max_bet_cents, remainingCover);
+                const capped = Math.min(cents, sweepsCoins, room.max_bet_cents, remainingCover);
                 if (capped < minBet) return null;
                 return (
                   <button
@@ -2251,7 +2181,7 @@ export default function CeloRoomPage() {
                         : "bg-white/5 text-violet-200 border border-white/10 hover:bg-white/10"
                     }`}
                   >
-                    ${(cents / 100).toFixed(0)}
+                    {formatScLine(cents)}
                   </button>
                 );
               })}
@@ -2259,7 +2189,7 @@ export default function CeloRoomPage() {
 
             <div className="mb-5">
               <label className="text-[10px] uppercase tracking-widest text-violet-400/70">
-                Entry Amount — <span className="text-[#F5C842]">${(joinEntryCents / 100).toFixed(2)}</span>
+                Entry Amount — <span className="text-[#F5C842]">{formatScLine(joinEntryCents)}</span>
               </label>
               <input
                 type="range"
@@ -2274,11 +2204,9 @@ export default function CeloRoomPage() {
                 onChange={(e) => setJoinEntryCents(Number(e.target.value))}
                 className="mt-2 w-full accent-[#F5C842]"
               />
-              <div className="flex justify-between text-[10px] text-violet-400/50 mt-1">
-                <span>Min: ${(minBet / 100).toFixed(2)}</span>
-                <span>
-              USD ${(balanceCents / 100).toFixed(2)} · SC {formatScLine(sweepsBalanceDisplay)}
-            </span>
+              <div className="flex justify-between text-[10px] text-violet-400/50 mt-1 gap-2">
+                <span>Min: {formatScLine(minBet)}</span>
+                <span className="text-right">Your balance: {formatSC(sweepsCoins)}</span>
               </div>
             </div>
 
@@ -2287,13 +2215,13 @@ export default function CeloRoomPage() {
               disabled={
                 joinLoading ||
                 joinEntryCents < minBet ||
-                balanceCents < joinEntryCents ||
+                sweepsCoins < joinEntryCents ||
                 joinEntryCents > joinEntryCap
               }
               onClick={() => handleJoin(false)}
               className="w-full rounded-xl bg-gradient-to-r from-[#eab308] via-[#F5C842] to-[#eab308] py-3.5 font-bold text-[#0e0118] shadow-lg shadow-amber-900/30 disabled:opacity-50 transition-all mb-3"
             >
-              {joinLoading ? "Joining…" : `JOIN FOR $${(joinEntryCents / 100).toFixed(2)}`}
+              {joinLoading ? "Joining…" : `JOIN FOR ${formatScLine(joinEntryCents)}`}
             </button>
             <button
               type="button"
@@ -2456,12 +2384,8 @@ export default function CeloRoomPage() {
             <p className="text-sm text-violet-200/80">Want to become the banker?</p>
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
               <p className="text-xs text-violet-300/60">Bank coverage required</p>
-              <p className="text-xl font-bold text-[#F5C842] font-mono">
-                ${(becomeBankerCostCents / 100).toFixed(2)}
-              </p>
-              <p className="text-xs text-violet-300/50">
-                Your USD wallet: ${(balanceCents / 100).toFixed(2)} · SC {sweepsBalanceDisplay.toLocaleString()}
-              </p>
+              <p className="text-xl font-bold text-[#F5C842] font-mono">{formatScLine(becomeBankerCostCents)}</p>
+              <p className="text-xs text-violet-300/50">Your balance: {formatSC(sweepsCoins)}</p>
             </div>
             <p className="text-xs text-violet-400/60">
               {becomeBankerSecondsLeft}s remaining
@@ -2469,7 +2393,7 @@ export default function CeloRoomPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                disabled={actionLoading === "become_banker" || balanceCents < becomeBankerCostCents}
+                disabled={actionLoading === "become_banker" || sweepsCoins < becomeBankerCostCents}
                 onClick={handleBecomeBanker}
                 className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-3 font-bold text-black disabled:opacity-50 transition-all text-sm"
               >
@@ -2557,7 +2481,7 @@ export default function CeloRoomPage() {
                         cursor: "pointer",
                       }}
                     >
-                      ${(amount / 100).toFixed(0)}
+                      {formatScLine(amount)}
                     </button>
                   );
                 })}
@@ -2610,7 +2534,7 @@ export default function CeloRoomPage() {
                       fontSize: 12,
                     }}
                   >
-                    ${(min / 100).toFixed(0)}
+                    {formatScLine(min)}
                   </button>
                 ))}
               </div>
@@ -2649,7 +2573,7 @@ export default function CeloRoomPage() {
                   cursor: "pointer",
                 }}
               >
-                KEEP ${(celoModalBankSC / 100).toFixed(0)}
+                KEEP {formatScLine(celoModalBankSC)}
               </button>
             </div>
 
@@ -2720,7 +2644,7 @@ export default function CeloRoomPage() {
                     : "text-emerald-400"
               }`}
             >
-              ${(balanceCents / 100).toFixed(2)} USD · {formatScLine(sweepsBalanceDisplay)}
+              {formatSC(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -2748,7 +2672,7 @@ export default function CeloRoomPage() {
                 color: "#fff",
               }}
             >
-              +${(lastPayoutAmount / 100).toFixed(2)}
+              +{formatScLine(lastPayoutAmount)}
             </div>
             <div style={{ color: "#D1FAE5", fontSize: 14 }}>Added to your balance</div>
           </div>
@@ -2829,7 +2753,7 @@ export default function CeloRoomPage() {
                 type="button"
                 onClick={() => {
                   const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
-                  const text = `Join my C-Lo game on GarmonPay! Min $${((room.min_bet_cents || 500) / 100).toFixed(0)} entry. ${u}`;
+                  const text = `Join my C-Lo game on GarmonPay! Min ${(room.min_bet_cents || 500).toLocaleString()} SC entry. ${u}`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }}
                 style={{
@@ -2918,12 +2842,13 @@ export default function CeloRoomPage() {
                   "0 2px 8px rgba(0,0,0,0.45), 0 0 24px rgba(245,200,66,0.25)",
               }}
             >
-              ${(room.current_bank_cents / 100).toFixed(2)}
+              {formatScLine(room.current_bank_cents)}
             </p>
           </div>
           <div className="text-right text-xs text-violet-200/75 space-y-1 shrink-0 pl-3 border-l border-white/[0.08] min-w-[7.5rem]">
             <p>
-              Min entry <span className="text-white/95 font-mono tabular-nums">${(room.min_bet_cents / 100).toFixed(2)}</span>
+              Min entry{" "}
+              <span className="text-white/95 font-mono tabular-nums">{formatScLine(room.min_bet_cents)}</span>
             </p>
             <p>
               Fee <span className="text-white/95 font-medium">{room.platform_fee_pct}%</span>
@@ -3045,7 +2970,7 @@ export default function CeloRoomPage() {
               )}
               {lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0 && (
                 <p className="text-sm text-emerald-400 font-semibold">
-                  +${(lastRollResult.payoutCents / 100).toFixed(2)} payout
+                  +{formatScLine(lastRollResult.payoutCents)} payout
                 </p>
               )}
               {lastRollResult.banker_can_adjust_bank && showCeloBankModal && (
@@ -3353,13 +3278,13 @@ export default function CeloRoomPage() {
           {canCoverBank && (
             <button
               type="button"
-              disabled={!!actionLoading || balanceCents < room.current_bank_cents}
+              disabled={!!actionLoading || sweepsCoins < room.current_bank_cents}
               onClick={handleCoverBank}
               className="flex-1 rounded-xl border border-emerald-500/50 bg-emerald-500/10 py-4 font-semibold text-emerald-400 disabled:opacity-50 transition-all text-sm hover:bg-emerald-500/20"
             >
               {actionLoading === "cover"
                 ? "Covering…"
-                : `Cover Bank $${(room.current_bank_cents / 100).toFixed(2)}`}
+                : `Cover Bank ${formatScLine(room.current_bank_cents)}`}
             </button>
           )}
 
@@ -3466,10 +3391,10 @@ export default function CeloRoomPage() {
                             <p className="text-[10px] text-violet-400/60">{b.odds_multiplier}× odds</p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-xs font-bold text-[#F5C842] font-mono">${(b.amount_cents / 100).toFixed(2)}</p>
+                            <p className="text-xs font-bold text-[#F5C842] font-mono">{formatScLine(b.amount_cents)}</p>
                             <button
                               type="button"
-                              disabled={balanceCents < b.amount_cents}
+                              disabled={sweepsCoins < b.amount_cents}
                               onClick={() => handleAcceptSideBet(b.id)}
                               className="mt-1 text-[10px] rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-400 disabled:opacity-40 hover:bg-emerald-500/20 transition-all"
                             >
@@ -3490,7 +3415,9 @@ export default function CeloRoomPage() {
                       .map((b) => (
                         <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.01] px-4 py-3">
                           <p className="text-xs text-violet-300/70 capitalize">{b.bet_type.replace(/_/g, " ")}</p>
-                          <p className="text-xs font-mono text-[#F5C842]">${(b.amount_cents / 100).toFixed(2)} · {b.odds_multiplier}×</p>
+                          <p className="text-xs font-mono text-[#F5C842]">
+                            {formatScLine(b.amount_cents)} · {b.odds_multiplier}×
+                          </p>
                         </div>
                       ))}
                   </div>
@@ -3535,7 +3462,7 @@ export default function CeloRoomPage() {
                         type="number"
                         min={100}
                         step={100}
-                        max={balanceCents}
+                        max={sweepsCoins}
                         value={sbAmount}
                         onChange={(e) => setSbAmount(Number(e.target.value))}
                         className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-white text-sm outline-none focus:border-[#F5C842]/50 font-mono"
@@ -3544,7 +3471,7 @@ export default function CeloRoomPage() {
                     </div>
                     <button
                       type="submit"
-                      disabled={sbLoading || sbAmount < 100 || balanceCents < sbAmount}
+                      disabled={sbLoading || sbAmount < 100 || sweepsCoins < sbAmount}
                       className="rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 px-4 py-2.5 text-[#F5C842] text-sm font-semibold disabled:opacity-40 hover:bg-[#F5C842]/20 transition-all"
                     >
                       {sbLoading ? "…" : "Bet"}
@@ -3553,7 +3480,11 @@ export default function CeloRoomPage() {
 
                   {sbError && <p className="text-xs text-red-400">{sbError}</p>}
                   <p className="text-[10px] text-violet-400/40">
-                    Win: ${(sbAmount * (SIDE_BET_OPTIONS.find((o) => o.value === sbType)?.odds ?? 2) / 100).toFixed(2)} · Min $1.00
+                    Win:{" "}
+                    {formatScLine(
+                      sbAmount * (SIDE_BET_OPTIONS.find((o) => o.value === sbType)?.odds ?? 2)
+                    )}{" "}
+                    · Min 100 SC ($1.00)
                   </p>
                 </form>
               </div>

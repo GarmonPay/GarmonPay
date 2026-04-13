@@ -91,7 +91,7 @@ function DodgeGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function DodgePage() {
   return (
-    <GameStationPlay gameSlug="dodge" gameName="Dodge Arena" costCents={5}>
+    <GameStationPlay gameSlug="dodge" gameName="Dodge Arena" costSc={5}>
       {({ onGameEnd }) => <DodgeGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
-import { getCanonicalBalanceCents, walletLedgerEntry } from "@/lib/wallet-ledger";
+import { getUserCoins, debitSweepsCoins } from "@/lib/coins";
 import type { GameSlug } from "@/lib/game-station-db";
 
-const COST: Record<string, number> = {
+/** Per-play cost in Sweeps Coins (not USD cents). */
+const COST_SC: Record<string, number> = {
   runner: 5,
   snake: 5,
   shooter: 5,
@@ -14,7 +15,7 @@ const COST: Record<string, number> = {
   spin: 0,
 };
 
-/** POST /api/games/station/start — deduct credits to start a game. Body: { game_slug }. */
+/** POST /api/games/station/start — deduct SC to start a game. Body: { game_slug }. */
 export async function POST(req: Request) {
   const userId = await getAuthUserId(req);
   if (!userId) {
@@ -27,25 +28,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const slug = typeof body.game_slug === "string" ? body.game_slug.trim() as GameSlug : null;
-  if (!slug || !COST.hasOwnProperty(slug)) {
+  if (!slug || !COST_SC.hasOwnProperty(slug)) {
     return NextResponse.json({ error: "Invalid game_slug" }, { status: 400 });
   }
-  const costCents = COST[slug];
-  if (costCents > 0) {
-    const balance = await getCanonicalBalanceCents(userId);
-    if (balance < costCents) {
+  const costSc = COST_SC[slug];
+  if (costSc > 0) {
+    const ref = `game_station_${slug}_${userId}_${Date.now()}`;
+    const result = await debitSweepsCoins(userId, costSc, `Game Station: ${slug}`, ref);
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Insufficient balance", required_cents: costCents },
+        { error: result.message ?? "Insufficient SC", required_sc: costSc },
         { status: 400 }
       );
     }
-    const ref = `game_${slug}_${userId}_${Date.now()}`;
-    const result = await walletLedgerEntry(userId, "game_play", -costCents, ref);
-    if (!result.success) {
-      return NextResponse.json({ error: result.message }, { status: 400 });
-    }
-    return NextResponse.json({ ok: true, balance_cents: result.balance_cents, cost_cents: costCents });
+    const { sweepsCoins } = await getUserCoins(userId);
+    return NextResponse.json({ ok: true, sweeps_coins: sweepsCoins, cost_sc: costSc });
   }
-  const balance = await getCanonicalBalanceCents(userId);
-  return NextResponse.json({ ok: true, balance_cents: balance, cost_cents: 0 });
+  const { sweepsCoins } = await getUserCoins(userId);
+  return NextResponse.json({ ok: true, sweeps_coins: sweepsCoins, cost_sc: 0 });
 }

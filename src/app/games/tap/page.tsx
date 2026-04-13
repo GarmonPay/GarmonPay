@@ -50,7 +50,7 @@ function TapGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function TapPage() {
   return (
-    <GameStationPlay gameSlug="tap" gameName="Speed Tap Challenge" costCents={5}>
+    <GameStationPlay gameSlug="tap" gameName="Speed Tap Challenge" costSc={5}>
       {({ onGameEnd }) => <TapGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

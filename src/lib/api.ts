@@ -536,19 +536,19 @@ export async function getGamesBudget(accessTokenOrUserId: string, isToken: boole
 }
 
 export async function gamesSpin(accessTokenOrUserId: string, isToken: boolean) {
-  return api<{ success: boolean; amountCents: number }>("/games/spin", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
+  return api<{ success: boolean; amountSc: number }>("/games/spin", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
 export async function gamesScratch(accessTokenOrUserId: string, isToken: boolean) {
-  return api<{ success: boolean; amountCents: number }>("/games/scratch", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
+  return api<{ success: boolean; amountSc: number }>("/games/scratch", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
 export async function gamesDailyBonus(accessTokenOrUserId: string, isToken: boolean) {
-  return api<{ success: boolean; amountCents: number }>("/games/daily-bonus", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
+  return api<{ success: boolean; amountSc: number }>("/games/daily-bonus", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
 export async function gamesMysteryBox(accessTokenOrUserId: string, isToken: boolean) {
-  return api<{ success: boolean; amountCents: number }>("/games/mystery-box", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
+  return api<{ success: boolean; amountSc: number }>("/games/mystery-box", { method: "POST", headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
 export async function getTournaments(accessTokenOrUserId: string, isToken: boolean) {

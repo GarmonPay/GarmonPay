@@ -90,7 +90,7 @@ function RunnerGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function RunnerPage() {
   return (
-    <GameStationPlay gameSlug="runner" gameName="Crypto Runner" costCents={5}>
+    <GameStationPlay gameSlug="runner" gameName="Crypto Runner" costSc={5}>
       {({ onGameEnd }) => <RunnerGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

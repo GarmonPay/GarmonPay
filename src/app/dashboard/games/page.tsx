@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getGamesBudget, gamesDailyBonus } from "@/lib/api";
+import { scToUsdDisplay } from "@/lib/coins";
 
 export default function DashboardGamesPage() {
   const router = useRouter();
@@ -12,7 +13,7 @@ export default function DashboardGamesPage() {
   const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState<{ remaining: number; noRewardsRemaining: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ game: string; amountCents: number } | null>(null);
+  const [result, setResult] = useState<{ game: string; amountSc: number } | null>(null);
 
   const [claimingDaily, setClaimingDaily] = useState(false);
 
@@ -46,16 +47,12 @@ export default function DashboardGamesPage() {
     setClaimingDaily(true);
     gamesDailyBonus(session.tokenOrId, session.isToken)
       .then((r) => {
-        setResult({ game: "Daily Bonus", amountCents: r.amountCents });
+        setResult({ game: "Daily Bonus", amountSc: r.amountSc });
         refreshBudget();
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Claim failed"))
       .finally(() => setClaimingDaily(false));
   };
-
-  function formatCents(c: number) {
-    return `$${(c / 100).toFixed(2)}`;
-  }
 
   if (loading || !session) {
     return (
@@ -95,7 +92,9 @@ export default function DashboardGamesPage() {
 
       {result && (
         <div className="rounded-xl bg-green-500/15 border border-green-500/40 p-4 animate-in fade-in duration-300">
-          <p className="text-green-200 font-medium">{result.game}: You won {formatCents(result.amountCents)}!</p>
+          <p className="text-green-200 font-medium">
+            {result.game}: You won {result.amountSc.toLocaleString()} SC ({scToUsdDisplay(result.amountSc)})!
+          </p>
         </div>
       )}
 

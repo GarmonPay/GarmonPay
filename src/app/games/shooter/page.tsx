@@ -95,7 +95,7 @@ function ShooterGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function ShooterPage() {
   return (
-    <GameStationPlay gameSlug="shooter" gameName="Token Shooter" costCents={5}>
+    <GameStationPlay gameSlug="shooter" gameName="Token Shooter" costSc={5}>
       {({ onGameEnd }) => <ShooterGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   const result = await performSpinWheel(userId);
   if (!result.success) {
-    return NextResponse.json({ message: result.message ?? "Spin failed", amountCents: 0 }, { status: 400 });
+    return NextResponse.json({ message: result.message ?? "Spin failed", amountSc: 0 }, { status: 400 });
   }
-  return NextResponse.json({ success: true, amountCents: result.amountCents });
+  return NextResponse.json({ success: true, amountSc: result.amountSc });
 }

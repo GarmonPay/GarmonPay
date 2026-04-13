@@ -85,7 +85,7 @@ function MemoryGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function MemoryPage() {
   return (
-    <GameStationPlay gameSlug="memory" gameName="Memory Match" costCents={5}>
+    <GameStationPlay gameSlug="memory" gameName="Memory Match" costSc={5}>
       {({ onGameEnd }) => <MemoryGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

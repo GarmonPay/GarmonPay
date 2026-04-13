@@ -69,7 +69,7 @@ function ReactionGame({ onGameEnd }: { onGameEnd: (score: number) => void }) {
 
 export default function ReactionPage() {
   return (
-    <GameStationPlay gameSlug="reaction" gameName="Reaction Test" costCents={5}>
+    <GameStationPlay gameSlug="reaction" gameName="Reaction Test" costSc={5}>
       {({ onGameEnd }) => <ReactionGame onGameEnd={onGameEnd} />}
     </GameStationPlay>
   );

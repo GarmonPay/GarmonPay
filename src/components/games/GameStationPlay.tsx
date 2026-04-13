@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+import { useCoins } from "@/hooks/useCoins";
+import { scToUsdDisplay } from "@/lib/coins";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -14,15 +16,16 @@ function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<stri
 type GameStationPlayProps = {
   gameSlug: string;
   gameName: string;
-  costCents: number;
+  /** Entry cost in Sweeps Coins (whole SC, not USD cents). */
+  costSc: number;
   children: (props: { onGameEnd: (score: number) => void; started: boolean }) => React.ReactNode;
 };
 
-export function GameStationPlay({ gameSlug, gameName, costCents, children }: GameStationPlayProps) {
+export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameStationPlayProps) {
   const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [loading, setLoading] = useState(true);
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const { sweepsCoins, refresh } = useCoins();
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,14 +34,6 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
 
   const tokenOrId = session?.accessToken ?? session?.userId ?? "";
   const isToken = !!session?.accessToken;
-
-  const fetchBalance = useCallback(() => {
-    if (!tokenOrId) return;
-    fetch(`${API_BASE}/wallet/get`, { headers: authHeaders(tokenOrId, isToken), credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { balance_cents: 0 }))
-      .then((d: { balance_cents?: number }) => setBalanceCents(d.balance_cents ?? 0))
-      .catch(() => setBalanceCents(0));
-  }, [tokenOrId, isToken]);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -51,12 +46,8 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
     });
   }, [router, gameSlug]);
 
-  useEffect(() => {
-    if (tokenOrId) fetchBalance();
-  }, [tokenOrId, isToken, fetchBalance]);
-
   const handleStart = () => {
-    if (!tokenOrId || starting || (costCents > 0 && (balanceCents ?? 0) < costCents)) return;
+    if (!tokenOrId || starting || (costSc > 0 && sweepsCoins < costSc)) return;
     setError(null);
     setSubmitResult(null);
     setLastScore(null);
@@ -71,8 +62,8 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
         if (!r.ok) return r.json().then((d: { error?: string }) => Promise.reject(new Error(d.error ?? "Failed to start")));
         return r.json();
       })
-      .then((d: { balance_cents?: number }) => {
-        setBalanceCents(d.balance_cents ?? 0);
+      .then(() => {
+        void refresh();
         setStarted(true);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to start"))
@@ -92,12 +83,12 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
         .then((r) => (r.ok ? r.json() : {}))
         .then((d: { rank?: number }) => {
           setSubmitResult({ rank: d.rank ?? null });
-          fetchBalance();
+          void refresh();
         })
         .catch(() => {});
       setStarted(false);
     },
-    [tokenOrId, isToken, gameSlug, fetchBalance]
+    [tokenOrId, isToken, gameSlug, refresh]
   );
 
   if (loading || !session) {
@@ -108,7 +99,8 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
     );
   }
 
-  const canPlay = costCents === 0 || (balanceCents != null && balanceCents >= costCents);
+  const canPlay = costSc === 0 || sweepsCoins >= costSc;
+  const balanceLine = `${sweepsCoins.toLocaleString()} SC (${scToUsdDisplay(sweepsCoins)})`;
 
   return (
     <div className="min-h-screen bg-[#0a0a12] text-white">
@@ -118,7 +110,7 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
             <Link href="/games" className="text-[#00f0ff]/80 hover:text-[#00f0ff] text-sm font-medium">← Game Station</Link>
             <h1 className="text-2xl font-bold" style={{ color: "#00f0ff", textShadow: "0 0 20px rgba(0,240,255,0.5)" }}>{gameName}</h1>
           </div>
-          <span className="text-[#39ff14] font-mono font-semibold">Balance: ${((balanceCents ?? 0) / 100).toFixed(2)}</span>
+          <span className="text-[#39ff14] font-mono font-semibold">Balance: {balanceLine}</span>
         </div>
         {error && (
           <div className="rounded-xl bg-red-500/20 border border-red-500/50 p-4 flex justify-between items-center">
@@ -134,14 +126,16 @@ export function GameStationPlay({ gameSlug, gameName, costCents, children }: Gam
         )}
         {!started ? (
           <div className="rounded-xl border-2 border-[#00f0ff]/40 bg-black/40 p-8 text-center">
-            <p className="text-[#00f0ff]/90 mb-4">{costCents === 0 ? "Free to play." : `Cost: ${costCents}¢ per game.`}</p>
+            <p className="text-[#00f0ff]/90 mb-4">
+              {costSc === 0 ? "Free to play." : `Cost: ${costSc.toLocaleString()} SC (${scToUsdDisplay(costSc)}) per game.`}
+            </p>
             <button
               type="button"
               onClick={handleStart}
               disabled={!canPlay || starting}
               className="px-8 py-4 rounded-xl font-bold text-lg bg-[#00f0ff]/20 border-2 border-[#00f0ff] text-[#00f0ff] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00f0ff]/30 transition-all"
             >
-              {starting ? "Starting…" : canPlay ? (costCents === 0 ? "Play" : `Play for ${costCents}¢`) : "Insufficient balance"}
+              {starting ? "Starting…" : canPlay ? (costSc === 0 ? "Play" : `Play for ${costSc} SC`) : "Insufficient SC"}
             </button>
           </div>
         ) : (

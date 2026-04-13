@@ -1,8 +1,9 @@
-'use client'
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionAsync } from "@/lib/session";
 import { CoinFlip3D } from "@/components/games/CoinFlip3D";
+import { useCoins } from "@/hooks/useCoins";
 
 const MIN_BET = 100;
 const BET_PRESETS = [100, 500, 1000, 2500] as const;
@@ -31,10 +32,6 @@ type HistoryRow = {
   netMinor: number;
 };
 
-function formatSc(n: number) {
-  return `${n.toLocaleString()} SC`;
-}
-
 type PendingFlip = {
   youWon: boolean;
   netMinor: number;
@@ -42,9 +39,9 @@ type PendingFlip = {
 };
 
 export function CoinFlipPanel() {
+  const { sweepsCoins, formatSC, refresh } = useCoins();
   const [token, setToken] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [balanceMinor, setBalanceMinor] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("house");
 
   const [bet, setBet] = useState(100);
@@ -80,21 +77,6 @@ export function CoinFlipPanel() {
     [token]
   );
 
-  const loadBalance = useCallback(async () => {
-    if (!token) return;
-    const r = await fetch("/api/coins/balance", { headers: authHeaders(false) });
-    if (r.ok) {
-      const d = await r.json();
-      const sc =
-        typeof d.sweeps_coins === "number"
-          ? d.sweeps_coins
-          : typeof d.gpayAvailableBalanceMinor === "number"
-            ? d.gpayAvailableBalanceMinor
-            : 0;
-      setBalanceMinor(typeof sc === "number" && Number.isFinite(sc) ? Math.floor(sc) : 0);
-    }
-  }, [token, authHeaders]);
-
   const loadHistory = useCallback(async () => {
     if (!token) return;
     const r = await fetch(`${API}/history`, { headers: authHeaders(false) });
@@ -122,10 +104,10 @@ export function CoinFlipPanel() {
 
   useEffect(() => {
     if (!token) return;
-    loadBalance();
+    void refresh();
     loadHistory();
     loadOpen();
-  }, [token, loadBalance, loadHistory, loadOpen]);
+  }, [token, refresh, loadHistory, loadOpen]);
 
   const handleCoinResult = useCallback(
     (result: "heads" | "tails") => {
@@ -138,18 +120,17 @@ export function CoinFlipPanel() {
         mode: p?.mode ?? "vs_house",
       });
       pendingRef.current = null;
-      loadBalance();
+      void refresh();
       loadHistory();
       loadOpen();
     },
-    [loadBalance, loadHistory, loadOpen]
+    [refresh, loadHistory, loadOpen]
   );
 
   const betAmountMinor = Math.floor(bet);
-  const canAfford = balanceMinor != null && balanceMinor >= betAmountMinor;
+  const canAfford = sweepsCoins >= betAmountMinor;
   const betValid = Number.isFinite(bet) && betAmountMinor >= MIN_BET;
-  const flipDisabled =
-    busy || isFlipping || !betValid || !canAfford || balanceMinor == null;
+  const flipDisabled = busy || isFlipping || !betValid || !canAfford;
 
   async function handleVsHouse() {
     if (!token || flipDisabled) return;
@@ -178,8 +159,7 @@ export function CoinFlipPanel() {
       setTargetFace(res);
       setFlipGeneration((g) => g + 1);
       setIsFlipping(true);
-      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
-      if (typeof sc === "number") setBalanceMinor(sc);
+      void refresh();
     } finally {
       setBusy(false);
     }
@@ -188,7 +168,7 @@ export function CoinFlipPanel() {
   async function handleCreatePlayer() {
     if (!token) return;
     setError(null);
-    if (!betValid || balanceMinor == null || balanceMinor < betAmountMinor) {
+    if (!betValid || sweepsCoins < betAmountMinor) {
       setError(`Minimum bet is ${MIN_BET} SC and sufficient balance required`);
       return;
     }
@@ -204,8 +184,7 @@ export function CoinFlipPanel() {
         setError(typeof d.message === "string" ? d.message : "Create failed");
         return;
       }
-      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
-      if (typeof sc === "number") setBalanceMinor(sc);
+      void refresh();
       loadOpen();
       loadHistory();
     } finally {
@@ -241,8 +220,7 @@ export function CoinFlipPanel() {
       setTargetFace(res);
       setFlipGeneration((g) => g + 1);
       setIsFlipping(true);
-      const sc = typeof d.sweepsCoins === "number" ? d.sweepsCoins : d.gpayBalanceMinor;
-      if (typeof sc === "number") setBalanceMinor(sc);
+      void refresh();
       loadOpen();
     } finally {
       setBusy(false);
@@ -273,7 +251,7 @@ export function CoinFlipPanel() {
           Sweeps Coins (SC) — 10% house edge on the doubled pot. Minimum bet {MIN_BET} SC.
         </p>
         <p className="text-sm mt-2 font-medium" style={{ color: GOLD }}>
-          Balance: {balanceMinor != null ? formatSc(balanceMinor) : "—"}
+          Balance: {formatSC(sweepsCoins)}
         </p>
       </div>
 
@@ -304,7 +282,7 @@ export function CoinFlipPanel() {
           </p>
           <p className={`text-sm mt-1 ${lastResult.netMinor >= 0 ? "text-emerald-400" : "text-red-300"}`}>
             {lastResult.netMinor >= 0 ? "+" : ""}
-            {formatSc(lastResult.netMinor)} net
+            {formatSC(lastResult.netMinor)} net
           </p>
         </div>
       )}
@@ -442,7 +420,7 @@ export function CoinFlipPanel() {
             </div>
             <button
               type="button"
-              disabled={busy || !betValid || balanceMinor == null || balanceMinor < betAmountMinor}
+              disabled={busy || !betValid || sweepsCoins < betAmountMinor}
               onClick={handleCreatePlayer}
               className="w-full rounded-xl border border-[#f5c842]/40 bg-[#f5c842]/10 py-3.5 font-semibold text-[#f5c842] hover:bg-[#f5c842]/15 disabled:opacity-40"
             >
@@ -464,7 +442,7 @@ export function CoinFlipPanel() {
                     <div>
                       <p className="text-sm text-white font-medium">{g.creatorLabel}</p>
                       <p className="text-xs text-white/50">
-                        {formatSc(g.betAmountMinor)} · plays {g.creatorSide}
+                        {formatSC(g.betAmountMinor)} · plays {g.creatorSide}
                       </p>
                     </div>
                     <button
@@ -509,10 +487,10 @@ export function CoinFlipPanel() {
                       {new Date(h.createdAt).toLocaleString()}
                     </td>
                     <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
-                    <td className="py-2 pr-3">{formatSc(h.betAmountMinor)}</td>
+                    <td className="py-2 pr-3">{formatSC(h.betAmountMinor)}</td>
                     <td className="py-2 pr-3">{h.result ?? "—"}</td>
                     <td className={`py-2 ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-300" : ""}`}>
-                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatSc(h.netMinor)}` : "—"}
+                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatSC(h.netMinor)}` : "—"}
                     </td>
                   </tr>
                 ))}
