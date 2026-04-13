@@ -5,7 +5,7 @@ import { getUserCoins } from "@/lib/coins";
 
 /**
  * GET /api/coins/balance
- * USD (wallet_balances) + GC + SC for the authenticated user.
+ * USD (wallet_balances) + GC + GPay Coins (sweeps_coins) for the authenticated user.
  */
 export async function GET(request: Request) {
   const userId = await getAuthUserIdStrict(request);

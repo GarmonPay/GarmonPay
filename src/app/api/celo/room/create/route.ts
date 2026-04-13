@@ -169,7 +169,7 @@ export async function POST(req: Request) {
         startingBankSc: starting_bank_cents,
       });
       return NextResponse.json(
-        { error: "Insufficient SC to cover the starting bank" },
+        { error: "Insufficient GPay Coins to cover the starting bank" },
         { status: 400 }
       );
     }

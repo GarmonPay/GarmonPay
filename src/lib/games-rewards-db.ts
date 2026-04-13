@@ -1,6 +1,6 @@
 /**
  * Profit-protected games: reward_budget (daily cap) + games_rewards log.
- * Rewards credit Sweeps Coins via credit_coins (not legacy users.balance).
+ * Rewards credit GPay Coins via credit_coins (not legacy users.balance).
  */
 
 import { createAdminClient } from "@/lib/supabase";
@@ -50,7 +50,7 @@ export async function canPayReward(amountSc: number): Promise<{ allowed: boolean
   return { allowed: true };
 }
 
-/** Deduct from reward_budget and credit Sweeps Coins. */
+/** Deduct from reward_budget and credit GPay Coins. */
 export async function creditGameReward(
   userId: string,
   amountSc: number,
@@ -83,7 +83,7 @@ export async function creditGameReward(
   return { success: true };
 }
 
-/** Spin wheel chances (SC): 0(50%), 1(25%), 2(15%), 5(8%), 10(2%). */
+/** Spin wheel chances (GPC): 0(50%), 1(25%), 2(15%), 5(8%), 10(2%). */
 const SPIN_CHANCES: { sc: number; pct: number }[] = [
   { sc: 0, pct: 50 },
   { sc: 1, pct: 25 },

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   if (!side || !mode || !Number.isFinite(betRaw) || betAmountSc < COIN_FLIP_MIN_BET_SC) {
     return NextResponse.json(
       {
-        message: `Invalid body: betAmountMinor is SC (min ${COIN_FLIP_MIN_BET_SC}), side (heads|tails), mode (vs_house|vs_player)`,
+        message: `Invalid body: betAmountMinor is GPC (min ${COIN_FLIP_MIN_BET_SC}), side (heads|tails), mode (vs_house|vs_player)`,
       },
       { status: 400 }
     );
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
   const { sweepsCoins } = await getUserCoins(userId);
   if (sweepsCoins < betAmountSc) {
-    return NextResponse.json({ message: "Insufficient Sweeps Coins (SC)" }, { status: 400 });
+    return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
   if (mode === "vs_player") {

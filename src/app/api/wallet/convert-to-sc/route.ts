@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   if (rpcErr) {
     const refundRef = `usd_to_sc_refund_${userId}_${Date.now()}`;
     await walletLedgerEntry(userId, "admin_adjustment", amount_cents, refundRef);
-    return NextResponse.json({ error: "Failed to credit SC" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to credit GPay Coins" }, { status: 500 });
   }
 
   const logRef = `usd_to_sc_log_${userId}_${Date.now()}`;
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     type: "usd_to_sc",
     gold_coins: 0,
     sweeps_coins: scToAward,
-    description: `Converted $${(amount_cents / 100).toFixed(2)} USD to ${scToAward} SC`,
+    description: `Converted $${(amount_cents / 100).toFixed(2)} USD to ${scToAward} GPC`,
     reference: logRef,
   });
   if (insErr) {
@@ -81,6 +81,6 @@ export async function POST(req: Request) {
     success: true,
     sc_awarded: scToAward,
     new_usd_balance: deductResult.balance_cents,
-    message: `Successfully converted to ${scToAward} SC`,
+    message: `Successfully converted to ${scToAward} GPay Coins`,
   });
 }

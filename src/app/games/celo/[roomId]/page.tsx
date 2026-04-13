@@ -18,11 +18,11 @@ import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { scToUsdDisplay } from "@/lib/coins";
+import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
-  const n = Math.max(0, Math.floor(Number(sc)));
-  return `${n.toLocaleString()} SC (${scToUsdDisplay(n)})`;
+  return formatGpcWithUsd(Math.max(0, Math.floor(Number(sc))));
 }
 
 async function authFetch(url: string, body: Record<string, unknown>) {
@@ -438,7 +438,7 @@ export default function CeloRoomPage() {
   const params = useParams();
   const roomId = params.roomId as string;
   const router = useRouter();
-  const { sweepsCoins, formatSC, refresh: refreshCoins } = useCoins();
+  const { sweepsCoins, formatGPC, refresh: refreshCoins } = useCoins();
 
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -553,7 +553,7 @@ export default function CeloRoomPage() {
       try {
         await navigator.share({
           title: "Join my C-Lo game on GarmonPay!",
-          text: `${room?.name || "C-Lo Game"} — Min entry ${(room?.min_bet_cents || 500).toLocaleString()} SC. Join now!`,
+          text: `${room?.name || "C-Lo Game"} — Min entry ${(room?.min_bet_cents || 500).toLocaleString()} GPC. Join now!`,
           url,
         });
         return;
@@ -2206,7 +2206,7 @@ export default function CeloRoomPage() {
               />
               <div className="flex justify-between text-[10px] text-violet-400/50 mt-1 gap-2">
                 <span>Min: {formatScLine(minBet)}</span>
-                <span className="text-right">Your balance: {formatSC(sweepsCoins)}</span>
+                <span className="text-right">Your balance: {formatGPC(sweepsCoins)}</span>
               </div>
             </div>
 
@@ -2385,7 +2385,7 @@ export default function CeloRoomPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
               <p className="text-xs text-violet-300/60">Bank coverage required</p>
               <p className="text-xl font-bold text-[#F5C842] font-mono">{formatScLine(becomeBankerCostCents)}</p>
-              <p className="text-xs text-violet-300/50">Your balance: {formatSC(sweepsCoins)}</p>
+              <p className="text-xs text-violet-300/50">Your balance: {formatGPC(sweepsCoins)}</p>
             </div>
             <p className="text-xs text-violet-400/60">
               {becomeBankerSecondsLeft}s remaining
@@ -2644,7 +2644,7 @@ export default function CeloRoomPage() {
                     : "text-emerald-400"
               }`}
             >
-              {formatSC(sweepsCoins)}
+              {formatGPC(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -2753,7 +2753,7 @@ export default function CeloRoomPage() {
                 type="button"
                 onClick={() => {
                   const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
-                  const text = `Join my C-Lo game on GarmonPay! Min ${(room.min_bet_cents || 500).toLocaleString()} SC entry. ${u}`;
+                  const text = `Join my C-Lo game on GarmonPay! Min ${(room.min_bet_cents || 500).toLocaleString()} GPC entry. ${u}`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }}
                 style={{
@@ -3484,7 +3484,7 @@ export default function CeloRoomPage() {
                     {formatScLine(
                       sbAmount * (SIDE_BET_OPTIONS.find((o) => o.value === sbType)?.odds ?? 2)
                     )}{" "}
-                    · Min 100 SC ($1.00)
+                    · Min 100 GPC ($1.00)
                   </p>
                 </form>
               </div>

@@ -17,10 +17,10 @@ export function DashboardCoinBalances() {
 
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-      <span className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-violet-100/95" title="Sweeps Coins">
+      <span className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-violet-100/95" title="GPay Coins">
         <span aria-hidden>⭐</span>
         <span className="font-semibold tabular-nums">{sweepsCoins.toLocaleString()}</span>
-        <span className="text-violet-200/70">SC</span>
+        <span className="text-violet-200/70">GPC</span>
       </span>
       <span className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-100/95" title="Gold Coins">
         <span aria-hidden>🪙</span>
@@ -36,7 +36,7 @@ export function DashboardCoinBalances() {
         href="/dashboard/wallet"
         className="inline-flex items-center rounded-lg border border-[#F5C842]/40 bg-[#F5C842]/10 px-2.5 py-1 text-[11px] font-semibold text-[#F5C842] hover:bg-[#F5C842]/15 transition-colors"
       >
-        Get More SC
+        Get More GPay Coins
       </Link>
     </div>
   );

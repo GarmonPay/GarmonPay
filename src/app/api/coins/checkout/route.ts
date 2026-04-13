@@ -78,7 +78,7 @@ export async function POST(request: Request) {
             currency: "usd",
             unit_amount: p.price_cents,
             product_data: {
-              name: `${p.name} — ${p.gold_coins.toLocaleString()} GC + ${p.bonus_sweeps_coins.toLocaleString()} bonus SC`,
+              name: `${p.name} — ${p.gold_coins.toLocaleString()} GC + ${p.bonus_sweeps_coins.toLocaleString()} bonus GPC`,
             },
           },
         },

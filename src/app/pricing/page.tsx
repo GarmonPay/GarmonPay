@@ -16,6 +16,7 @@ import {
   type MarketingPlanId,
 } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
+import { getMonthlyGpcBonusForPlan } from "@/lib/membership-monthly-gpc-bonus";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -377,6 +378,13 @@ export default function PricingPage() {
             Upgrade your membership and unlock higher earnings, better referral commissions,
             and faster payouts.
           </p>
+          <div className="mx-auto mt-6 max-w-xl rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-3 text-sm text-violet-100/95">
+            <span className="font-semibold text-white">Gold Coins &amp; GPay Coins</span> are separate from membership —{" "}
+            <Link href="/dashboard/buy-coins" className="text-[#fde047] font-medium underline-offset-2 hover:underline">
+              shop coin packs
+            </Link>{" "}
+            for games and bonuses.
+          </div>
           <p className="mt-2 text-xs text-violet-400/80">
             {loading
               ? "Loading plans from Supabase…"
@@ -427,6 +435,24 @@ export default function PricingPage() {
                     <span className="text-3xl font-bold text-[#fde047]">{priceLabel}</span>
                     <span className="text-sm text-violet-300/80">{period}</span>
                   </div>
+                  {(() => {
+                    const monthlyGpc = getMonthlyGpcBonusForPlan(p.id);
+                    return (
+                      <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/25 px-3 py-2.5 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400/95">
+                          Monthly GPay Coins bonus
+                        </p>
+                        <p className="mt-1 text-lg font-bold tabular-nums text-emerald-300">
+                          {monthlyGpc === 0 ? "—" : `+${monthlyGpc.toLocaleString()} GPC`}
+                        </p>
+                        {monthlyGpc > 0 ? (
+                          <p className="mt-0.5 text-[10px] text-violet-300/75">Included each billing month</p>
+                        ) : (
+                          <p className="mt-0.5 text-[10px] text-violet-400/60">Upgrade for monthly GPC</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <ul className="mt-6 flex-1 space-y-3 text-sm text-violet-100/90">
                     {feats.map((f) => (
                       <li key={f} className="flex items-start">

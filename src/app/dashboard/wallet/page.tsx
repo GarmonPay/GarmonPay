@@ -137,7 +137,7 @@ function WalletDashboardContent() {
       if (res.ok && typeof data.sc_awarded === "number") {
         const awarded = data.sc_awarded;
         await refresh();
-        setConvertSuccess(`You received ${awarded.toLocaleString()} SC.`);
+        setConvertSuccess(`You received ${awarded.toLocaleString()} GPay Coins (GPC).`);
         const h = await fetch("/api/coins/history?limit=25", {
           headers: { Authorization: `Bearer ${session.accessToken}` },
         });
@@ -184,7 +184,7 @@ function WalletDashboardContent() {
               🪙 Gold Coins: <span className="font-semibold tabular-nums">{goldCoins.toLocaleString()} GC</span>
             </p>
             <p className="text-white text-lg">
-              ⭐ Sweeps Coins: <span className="font-semibold tabular-nums">{sweepsCoins.toLocaleString()} SC</span>
+              ⭐ GPay Coins: <span className="font-semibold tabular-nums">{sweepsCoins.toLocaleString()} GPC</span>
               <span className="text-fintech-muted text-sm ml-2">(≈ {scToUsdDisplay(sweepsCoins)})</span>
             </p>
           </>
@@ -193,7 +193,7 @@ function WalletDashboardContent() {
         )}
       </div>
 
-      {/* Convert USD → SC */}
+      {/* Convert USD → GPay Coins */}
       <div
         id="convert-usd-sc"
         style={{
@@ -212,7 +212,7 @@ function WalletDashboardContent() {
             marginBottom: 4,
           }}
         >
-          ⭐ Convert USD to Sweeps Coins
+          ⭐ Convert USD to GPay Coins
         </h3>
         <p
           style={{
@@ -221,7 +221,7 @@ function WalletDashboardContent() {
             marginBottom: 20,
           }}
         >
-          Use Sweeps Coins to play C-Lo and other games. $1.00 = 100 SC
+          Use GPay Coins to play C-Lo and other games. $1.00 = 100 GPC
         </p>
 
         <div
@@ -305,7 +305,7 @@ function WalletDashboardContent() {
             }}
           >
             <span style={{ color: "#10B981", fontWeight: "bold", fontSize: 18 }}>
-              {scFromConvertPreview.toLocaleString()} SC
+              {scFromConvertPreview.toLocaleString()} GPC
             </span>
           </div>
         </div>
@@ -336,7 +336,7 @@ function WalletDashboardContent() {
         >
           {converting
             ? "Converting..."
-            : `Convert $${Number.isFinite(convertAmount) ? convertAmount.toFixed(2) : "0.00"} → ${scFromConvertPreview.toLocaleString()} SC`}
+            : `Convert $${Number.isFinite(convertAmount) ? convertAmount.toFixed(2) : "0.00"} → ${scFromConvertPreview.toLocaleString()} GPC`}
         </button>
 
         {convertAmount > balanceDollars && !coinsLoading && (
@@ -360,7 +360,7 @@ function WalletDashboardContent() {
             textAlign: "center",
           }}
         >
-          One-way conversion. SC cannot be converted back to USD.
+          One-way conversion. GPay Coins cannot be converted back to USD.
         </p>
       </div>
 
@@ -380,7 +380,7 @@ function WalletDashboardContent() {
             href="#convert-usd-sc"
             className="inline-flex items-center justify-center rounded-xl bg-violet-600/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-600"
           >
-            Convert to SC
+            Convert to GPay Coins
           </a>
           <Link
             href="/dashboard/withdraw"
@@ -403,8 +403,8 @@ function WalletDashboardContent() {
       </div>
 
       <div className="rounded-xl bg-fintech-bg-card border border-violet-500/25 p-6">
-        <h2 className="text-lg font-bold text-white mb-2">Sweeps Coins</h2>
-        <p className="text-2xl font-bold text-violet-200">⭐ {sweepsCoins.toLocaleString()} SC</p>
+        <h2 className="text-lg font-bold text-white mb-2">GPay Coins</h2>
+        <p className="text-2xl font-bold text-violet-200">⭐ {sweepsCoins.toLocaleString()} GPC</p>
         <p className="text-sm text-fintech-muted mt-1">≈ {scToUsdDisplay(sweepsCoins)} value</p>
         <div className="flex flex-wrap gap-2 mt-4">
           <span className="inline-flex rounded-xl border border-white/10 px-3 py-2 text-xs text-fintech-muted cursor-not-allowed">
@@ -480,7 +480,7 @@ function WalletDashboardContent() {
                   )}
                   {c.sweeps_coins !== 0 && (
                     <span className="text-violet-200">
-                      SC {c.sweeps_coins >= 0 ? "+" : ""}
+                      GPC {c.sweeps_coins >= 0 ? "+" : ""}
                       {c.sweeps_coins}
                     </span>
                   )}

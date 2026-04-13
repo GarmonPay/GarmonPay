@@ -9,11 +9,11 @@ import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { scToUsdDisplay } from "@/lib/coins";
+import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
-  const n = Math.max(0, Math.floor(Number(sc)));
-  return `${n.toLocaleString()} SC (${scToUsdDisplay(n)})`;
+  return formatGpcWithUsd(Math.max(0, Math.floor(Number(sc))));
 }
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CeloLobbyPage() {
   const router = useRouter();
-  const { sweepsCoins, formatSC, refresh: refreshCoins, loading: coinsLoading } = useCoins();
+  const { sweepsCoins, formatGPC, refresh: refreshCoins, loading: coinsLoading } = useCoins();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +75,34 @@ export default function CeloLobbyPage() {
   const [lobbyCode, setLobbyCode] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [myOpenRoom, setMyOpenRoom] = useState<{ id: string; name: string; room_type: string } | null>(null);
+
+  const fetchMyOpenRoom = useCallback(async () => {
+    const s = await getSessionAsync();
+    if (!s?.accessToken) {
+      setMyOpenRoom(null);
+      return;
+    }
+    try {
+      const r = await fetch("/api/celo/room/my-open", {
+        headers: { Authorization: `Bearer ${s.accessToken}` },
+      });
+      const d = (await r.json()) as {
+        room?: { id: string; name?: string; room_type?: string } | null;
+      };
+      if (d.room?.id) {
+        setMyOpenRoom({
+          id: d.room.id,
+          name: d.room.name ?? "Room",
+          room_type: d.room.room_type ?? "public",
+        });
+      } else {
+        setMyOpenRoom(null);
+      }
+    } catch {
+      setMyOpenRoom(null);
+    }
+  }, []);
 
   const mapRowToLobbyRoom = useCallback((raw: Record<string, unknown>, playerCount?: number): Room | null => {
     const n = normalizeCeloRoomRow(raw);
@@ -120,10 +148,11 @@ export default function CeloLobbyPage() {
         join_codes: rows.map((row) => String(row.join_code ?? "")),
       });
       setRooms(mapped);
+      void fetchMyOpenRoom();
     } catch (e) {
       console.warn("[celo-lobby-debug] loadPublicRooms error", e);
     }
-  }, [mapRowToLobbyRoom]);
+  }, [mapRowToLobbyRoom, fetchMyOpenRoom]);
 
   const lobbyRefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleLobbyRefetch = useCallback(() => {
@@ -138,6 +167,14 @@ export default function CeloLobbyPage() {
     if (!showCreate) return;
     void refreshCoins();
   }, [showCreate, refreshCoins]);
+
+  useEffect(() => {
+    if (!session?.accessToken) {
+      setMyOpenRoom(null);
+      return;
+    }
+    void fetchMyOpenRoom();
+  }, [session?.accessToken, fetchMyOpenRoom]);
 
   useEffect(() => {
     getSessionAsync().then((s) => {
@@ -372,7 +409,7 @@ export default function CeloLobbyPage() {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              Your balance: {formatSC(sweepsCoins)}
+              Your balance: {formatGPC(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -425,6 +462,22 @@ export default function CeloLobbyPage() {
           </form>
         </div>
         {joinError && <p className="text-center text-sm text-red-400 mb-4">{joinError}</p>}
+
+        {myOpenRoom && (
+          <div className="mb-4 rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-left">
+            <p className="text-[11px] uppercase tracking-wider text-emerald-400/90">Your table</p>
+            <p className="text-sm font-semibold text-white mt-0.5 truncate">{myOpenRoom.name}</p>
+            <p className="text-[11px] text-violet-300/70 mt-0.5">
+              {myOpenRoom.room_type === "private" ? "Private — won’t show in public list" : "Banker — open to continue"}
+            </p>
+            <Link
+              href={`/games/celo/${myOpenRoom.id}`}
+              className="mt-2 inline-flex text-sm font-semibold text-[#F5C842] hover:underline"
+            >
+              Open your room →
+            </Link>
+          </div>
+        )}
 
         {/* Room list */}
         <div className="space-y-2">
@@ -592,8 +645,8 @@ export default function CeloLobbyPage() {
                   className="mt-2 w-full accent-[#F5C842]"
                 />
                 <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
-                  <span>500 SC ($5.00)</span>
-                  <span>10,000 SC ($100.00)</span>
+                  <span>500 GPC ($5.00)</span>
+                  <span>10,000 GPC ($100.00)</span>
                 </div>
               </div>
 
@@ -625,12 +678,12 @@ export default function CeloLobbyPage() {
                   }`}
                 >
                   {coinsLoading ? (
-                    <>Loading your SC balance…</>
+                    <>Loading your GPay Coins balance…</>
                   ) : canAfford ? (
-                    <>Your SC balance: {formatSC(sweepsCoins)} — enough to reserve this bank.</>
+                    <>Your GPay Coins: {formatGPC(sweepsCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      You need {shortfallSc.toLocaleString()} more SC to reserve {startingBank.toLocaleString()} SC (
+                      You need {shortfallSc.toLocaleString()} more GPC to reserve {startingBank.toLocaleString()} GPC (
                       {scToUsdDisplay(startingBank)}).
                     </>
                   )}
@@ -650,7 +703,7 @@ export default function CeloLobbyPage() {
                       coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
-                    {formatSC(sweepsCoins)}
+                    {formatGPC(sweepsCoins)}
                   </span>
                 </div>
               </div>
@@ -678,14 +731,14 @@ export default function CeloLobbyPage() {
                   : coinsLoading
                   ? "Loading balance…"
                   : !canAfford
-                  ? "Insufficient SC"
+                  ? "Insufficient GPay Coins"
                   : `CREATE ROOM — ${formatScLine(form.starting_bank_cents)}`}
               </button>
 
               {!coinsLoading && !canAfford && (
                 <p className="text-center text-[10px] text-violet-400/50">
                   <Link href="/dashboard/wallet" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
-                    Get more SC →
+                    Get more GPay Coins →
                   </Link>
                 </p>
               )}

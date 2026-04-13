@@ -3,7 +3,7 @@ import { getAuthUserId } from "@/lib/auth-request";
 import { getUserCoins, debitSweepsCoins } from "@/lib/coins";
 import type { GameSlug } from "@/lib/game-station-db";
 
-/** Per-play cost in Sweeps Coins (not USD cents). */
+/** Per-play cost in GPay Coins / GPC (not USD cents). */
 const COST_SC: Record<string, number> = {
   runner: 5,
   snake: 5,
@@ -15,7 +15,7 @@ const COST_SC: Record<string, number> = {
   spin: 0,
 };
 
-/** POST /api/games/station/start — deduct SC to start a game. Body: { game_slug }. */
+/** POST /api/games/station/start — deduct GPC to start a game. Body: { game_slug }. */
 export async function POST(req: Request) {
   const userId = await getAuthUserId(req);
   if (!userId) {
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const result = await debitSweepsCoins(userId, costSc, `Game Station: ${slug}`, ref);
     if (!result.success) {
       return NextResponse.json(
-        { error: result.message ?? "Insufficient SC", required_sc: costSc },
+        { error: result.message ?? "Insufficient GPay Coins", required_sc: costSc },
         { status: 400 }
       );
     }

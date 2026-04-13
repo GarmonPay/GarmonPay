@@ -39,7 +39,7 @@ type PendingFlip = {
 };
 
 export function CoinFlipPanel() {
-  const { sweepsCoins, formatSC, refresh } = useCoins();
+  const { sweepsCoins, formatGPC, refresh } = useCoins();
   const [token, setToken] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [tab, setTab] = useState<Tab>("house");
@@ -169,7 +169,7 @@ export function CoinFlipPanel() {
     if (!token) return;
     setError(null);
     if (!betValid || sweepsCoins < betAmountMinor) {
-      setError(`Minimum bet is ${MIN_BET} SC and sufficient balance required`);
+      setError(`Minimum bet is ${MIN_BET} GPC and sufficient balance required`);
       return;
     }
     setBusy(true);
@@ -236,7 +236,7 @@ export function CoinFlipPanel() {
   if (!token) {
     return (
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-8 text-center">
-        <p className="text-fintech-muted">Sign in to play Coin Flip with Sweeps Coins (SC).</p>
+        <p className="text-fintech-muted">Sign in to play Coin Flip with GPay Coins (GPC).</p>
       </div>
     );
   }
@@ -248,10 +248,10 @@ export function CoinFlipPanel() {
           Coin Flip
         </h1>
         <p className="text-sm text-white/70 mt-1">
-          Sweeps Coins (SC) — 10% house edge on the doubled pot. Minimum bet {MIN_BET} SC.
+          GPay Coins (GPC) — 10% house edge on the doubled pot. Minimum bet {MIN_BET} GPC.
         </p>
         <p className="text-sm mt-2 font-medium" style={{ color: GOLD }}>
-          Balance: {formatSC(sweepsCoins)}
+          Balance: {formatGPC(sweepsCoins)}
         </p>
       </div>
 
@@ -282,7 +282,7 @@ export function CoinFlipPanel() {
           </p>
           <p className={`text-sm mt-1 ${lastResult.netMinor >= 0 ? "text-emerald-400" : "text-red-300"}`}>
             {lastResult.netMinor >= 0 ? "+" : ""}
-            {formatSC(lastResult.netMinor)} net
+            {formatGPC(lastResult.netMinor)} net
           </p>
         </div>
       )}
@@ -312,7 +312,7 @@ export function CoinFlipPanel() {
         <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-white">Play vs House</h2>
           <div>
-            <span className="text-xs text-white/50 uppercase tracking-wider">Bet (SC)</span>
+            <span className="text-xs text-white/50 uppercase tracking-wider">Bet (GPC)</span>
             <input
               type="number"
               min={MIN_BET}
@@ -373,7 +373,7 @@ export function CoinFlipPanel() {
           <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
             <h2 className="text-lg font-semibold text-white">Create game</h2>
             <div>
-              <span className="text-xs text-white/50 uppercase tracking-wider">Bet (SC)</span>
+              <span className="text-xs text-white/50 uppercase tracking-wider">Bet (GPC)</span>
               <input
                 type="number"
                 min={MIN_BET}
@@ -442,7 +442,7 @@ export function CoinFlipPanel() {
                     <div>
                       <p className="text-sm text-white font-medium">{g.creatorLabel}</p>
                       <p className="text-xs text-white/50">
-                        {formatSC(g.betAmountMinor)} · plays {g.creatorSide}
+                        {formatGPC(g.betAmountMinor)} · plays {g.creatorSide}
                       </p>
                     </div>
                     <button
@@ -487,10 +487,10 @@ export function CoinFlipPanel() {
                       {new Date(h.createdAt).toLocaleString()}
                     </td>
                     <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
-                    <td className="py-2 pr-3">{formatSC(h.betAmountMinor)}</td>
+                    <td className="py-2 pr-3">{formatGPC(h.betAmountMinor)}</td>
                     <td className="py-2 pr-3">{h.result ?? "—"}</td>
                     <td className={`py-2 ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-300" : ""}`}>
-                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatSC(h.netMinor)}` : "—"}
+                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatGPC(h.netMinor)}` : "—"}
                     </td>
                   </tr>
                 ))}

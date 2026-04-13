@@ -521,7 +521,7 @@ export default function DashboardPage() {
       {/* ——— Wallet-style Balance Card ——— */}
       <section className="animate-slide-up card-lux overflow-hidden p-6 tablet:p-8">
         <p className="text-sm font-medium text-fintech-muted">Available Balance</p>
-        <p className="mt-0.5 text-[11px] text-fintech-muted/90">USD wallet + Sweeps Coins (face value)</p>
+        <p className="mt-0.5 text-[11px] text-fintech-muted/90">USD wallet + GPay Coins (face value)</p>
         {balanceDisplayError ? (
           <p className="mt-1 text-lg font-semibold text-red-400 tablet:text-xl">{balanceDisplayError}</p>
         ) : (
@@ -535,7 +535,7 @@ export default function DashboardPage() {
                 {sweepsCoins > 0 ? (
                   <>
                     {" "}
-                    · <span className="text-violet-200/95">{sweepsCoins.toLocaleString()} SC</span> (
+                    · <span className="text-violet-200/95">{sweepsCoins.toLocaleString()} GPC</span> (
                     {formatCents(sweepsCoins)})
                   </>
                 ) : null}

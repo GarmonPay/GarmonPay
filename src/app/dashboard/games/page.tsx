@@ -93,7 +93,7 @@ export default function DashboardGamesPage() {
       {result && (
         <div className="rounded-xl bg-green-500/15 border border-green-500/40 p-4 animate-in fade-in duration-300">
           <p className="text-green-200 font-medium">
-            {result.game}: You won {result.amountSc.toLocaleString()} SC ({scToUsdDisplay(result.amountSc)})!
+            {result.game}: You won {result.amountSc.toLocaleString()} GPay Coins ({scToUsdDisplay(result.amountSc)})!
           </p>
         </div>
       )}

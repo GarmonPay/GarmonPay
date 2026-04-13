@@ -15,7 +15,7 @@ export default function SpinPage() {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { sweepsCoins, refresh, formatSC } = useCoins();
+  const { sweepsCoins, refresh, formatGPC } = useCoins();
 
   const tokenOrId = session?.accessToken ?? session?.userId ?? "";
   const isToken = !!session?.accessToken;
@@ -59,7 +59,7 @@ export default function SpinPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link href="/games" className="text-[#00f0ff]/80 hover:text-[#00f0ff] text-sm font-medium">← Game Station</Link>
           <h1 className="text-2xl font-bold" style={{ color: "#ffd700", textShadow: "0 0 20px rgba(255,215,0,0.5)" }}>Spin Wheel Jackpot</h1>
-          <span className="text-[#39ff14] font-mono">{formatSC(sweepsCoins)}</span>
+          <span className="text-[#39ff14] font-mono">{formatGPC(sweepsCoins)}</span>
         </div>
         {error && (
           <div className="rounded-xl bg-red-500/20 border border-red-500/50 p-4 flex justify-between">
@@ -70,12 +70,12 @@ export default function SpinPage() {
         {result != null && (
           <div className="rounded-xl bg-[#39ff14]/15 border border-[#39ff14]/50 p-4">
             <p className="text-[#39ff14] font-medium">
-              You won {result.toLocaleString()} SC ({scToUsdDisplay(result)})!
+              You won {result.toLocaleString()} GPC ({scToUsdDisplay(result)})!
             </p>
           </div>
         )}
         <div className="rounded-2xl border-2 border-[#ffd700]/50 bg-black/40 p-8 text-center">
-          <p className="text-[#ffd700]/90 mb-4">Uses platform reward budget. Spin for a random Sweeps Coins reward.</p>
+          <p className="text-[#ffd700]/90 mb-4">Uses platform reward budget. Spin for random GPay Coins rewards.</p>
           <button
             type="button"
             onClick={handleSpin}

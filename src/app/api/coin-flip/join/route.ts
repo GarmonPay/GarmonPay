@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   const { sweepsCoins } = await getUserCoins(userId);
   if (sweepsCoins < betAmountSc) {
-    return NextResponse.json({ message: "Insufficient Sweeps Coins (SC)" }, { status: 400 });
+    return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
   const debitRef = `coin_flip_join_${gameId}`;

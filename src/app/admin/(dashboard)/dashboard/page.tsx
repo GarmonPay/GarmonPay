@@ -341,11 +341,11 @@ export default function Dashboard() {
         {platformMetrics && (
           <section className="mb-10 rounded-xl border border-amber-500/20 bg-fintech-bg-card/90 p-5 shadow-lg">
             <h2 className="text-sm font-semibold text-amber-200/90 uppercase tracking-wider mb-4">
-              Gold &amp; Sweeps (circulation)
+              Gold &amp; GPay Coins (circulation)
             </h2>
             <p className="text-xs text-fintech-muted mb-4">
               Aggregates from <code className="text-fintech-muted">users</code> balances and{" "}
-              <code className="text-fintech-muted">coin_transactions</code> (GC purchases, SC debits).
+              <code className="text-fintech-muted">coin_transactions</code> (GC purchases, GPC debits).
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-sm">
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
@@ -355,7 +355,7 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-[10px] text-fintech-muted uppercase">SC in circulation</p>
+                <p className="text-[10px] text-fintech-muted uppercase">GPC in circulation</p>
                 <p className="text-lg font-bold text-violet-200">
                   {(platformMetrics.totalSweepsCoinsCirculating ?? 0).toLocaleString()}
                 </p>
@@ -369,11 +369,11 @@ export default function Dashboard() {
                 <p className="text-lg font-bold text-white">{(platformMetrics.gcPurchasedMonth ?? 0).toLocaleString()}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-[10px] text-fintech-muted uppercase">SC debited (today)</p>
+                <p className="text-[10px] text-fintech-muted uppercase">GPC debited (today)</p>
                 <p className="text-lg font-bold text-fintech-muted">{(platformMetrics.scRedeemedToday ?? 0).toLocaleString()}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-[10px] text-fintech-muted uppercase">SC debited (MTD)</p>
+                <p className="text-[10px] text-fintech-muted uppercase">GPC debited (MTD)</p>
                 <p className="text-lg font-bold text-fintech-muted">{(platformMetrics.scRedeemedMonth ?? 0).toLocaleString()}</p>
               </div>
             </div>
@@ -382,10 +382,10 @@ export default function Dashboard() {
 
         <section className="mb-10 rounded-xl border border-emerald-500/25 bg-fintech-bg-card/90 p-5 shadow-lg">
           <h2 className="text-sm font-semibold text-emerald-300 uppercase tracking-wider mb-4">
-            Coin Flip (Sweeps Coins)
+            Coin Flip (GPay Coins)
           </h2>
           <p className="text-xs text-fintech-muted mb-4">
-            Completed flips with <code className="text-fintech-muted">resolved_at</code> today (UTC). Stakes use SC;
+            Completed flips with <code className="text-fintech-muted">resolved_at</code> today (UTC). Stakes use GPC;
             house cut is 10% of the 2× pot.
           </p>
           {coinFlipStats ? (
@@ -395,13 +395,13 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold text-white mt-1">{coinFlipStats.totalFlipsToday}</p>
               </div>
               <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
-                <p className="text-xs text-fintech-muted uppercase">House cut today (SC)</p>
+                <p className="text-xs text-fintech-muted uppercase">House cut today (GPC)</p>
                 <p className="text-2xl font-bold text-emerald-400 mt-1">
                   {coinFlipStats.totalHouseCutTodayMinor.toLocaleString()}
                 </p>
               </div>
               <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
-                <p className="text-xs text-fintech-muted uppercase">SC wagered today</p>
+                <p className="text-xs text-fintech-muted uppercase">GPC wagered today</p>
                 <p className="text-2xl font-bold text-amber-200 mt-1">
                   {coinFlipStats.totalWageredTodayMinor.toLocaleString()}
                 </p>

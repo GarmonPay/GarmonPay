@@ -120,7 +120,7 @@ export default function FinancePage() {
         <div className="mb-6 grid grid-cols-1 gap-4 tablet:grid-cols-2">
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-xs text-fintech-muted uppercase">Available Balance</p>
-            <p className="text-[10px] text-fintech-muted mt-0.5">USD wallet + SC (face value)</p>
+            <p className="text-[10px] text-fintech-muted mt-0.5">USD wallet + GPay Coins (face value)</p>
             <p className="text-2xl font-bold text-fintech-money mt-1">
               {balanceFetchError ? (
                 <span className="text-red-400 text-base font-medium">{balanceFetchError}</span>
@@ -132,7 +132,7 @@ export default function FinancePage() {
             </p>
             {balanceCents != null && !balanceFetchError && (balanceCents > 0 || sweepsCoins > 0) ? (
               <p className="mt-2 text-[11px] text-fintech-muted">
-                {formatCents(balanceCents)} USD · {sweepsCoins.toLocaleString()} SC
+                {formatCents(balanceCents)} USD · {sweepsCoins.toLocaleString()} GPC
               </p>
             ) : null}
           </div>

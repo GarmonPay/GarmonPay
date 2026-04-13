@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
-import { scToUsdDisplay } from "@/lib/coins";
+import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -16,7 +16,7 @@ function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<stri
 type GameStationPlayProps = {
   gameSlug: string;
   gameName: string;
-  /** Entry cost in Sweeps Coins (whole SC, not USD cents). */
+  /** Entry cost in GPay Coins (whole GPC; maps to `sweeps_coins`, not USD cents). */
   costSc: number;
   children: (props: { onGameEnd: (score: number) => void; started: boolean }) => React.ReactNode;
 };
@@ -100,7 +100,7 @@ export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameSt
   }
 
   const canPlay = costSc === 0 || sweepsCoins >= costSc;
-  const balanceLine = `${sweepsCoins.toLocaleString()} SC (${scToUsdDisplay(sweepsCoins)})`;
+  const balanceLine = formatGpcWithUsd(sweepsCoins);
 
   return (
     <div className="min-h-screen bg-[#0a0a12] text-white">
@@ -127,7 +127,7 @@ export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameSt
         {!started ? (
           <div className="rounded-xl border-2 border-[#00f0ff]/40 bg-black/40 p-8 text-center">
             <p className="text-[#00f0ff]/90 mb-4">
-              {costSc === 0 ? "Free to play." : `Cost: ${costSc.toLocaleString()} SC (${scToUsdDisplay(costSc)}) per game.`}
+              {costSc === 0 ? "Free to play." : `Cost: ${formatGpcWithUsd(costSc)} per game.`}
             </p>
             <button
               type="button"
@@ -135,7 +135,7 @@ export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameSt
               disabled={!canPlay || starting}
               className="px-8 py-4 rounded-xl font-bold text-lg bg-[#00f0ff]/20 border-2 border-[#00f0ff] text-[#00f0ff] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00f0ff]/30 transition-all"
             >
-              {starting ? "Starting…" : canPlay ? (costSc === 0 ? "Play" : `Play for ${costSc} SC`) : "Insufficient SC"}
+              {starting ? "Starting…" : canPlay ? (costSc === 0 ? "Play" : `Play for ${costSc} GPC`) : "Insufficient GPay Coins"}
             </button>
           </div>
         ) : (

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
+import { creditSweepsIdempotent } from "@/lib/coins";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { celoQaLog } from "@/lib/celo-qa-log";
 import { processCeloTurnTimeouts } from "@/lib/celo-turn-timeout";
@@ -114,11 +115,27 @@ async function runCeloCleanup(request: Request) {
 
       const normalized = normalizeCeloRoomRow(room);
       const bankerId = String(room.banker_id ?? normalized?.banker_id ?? "");
-      const bankCents = normalized?.current_bank_cents ?? 0;
+      const bankCents = Math.max(
+        0,
+        Math.round(
+          Number(
+            (room as { current_bank_sc?: unknown }).current_bank_sc ??
+              (room as { current_bank_cents?: unknown }).current_bank_cents ??
+              normalized?.current_bank_cents ??
+              0
+          )
+        )
+      );
 
       if (bankCents > 0 && bankerId) {
         const bankRef = expireBankReference(roomId);
-        const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);
+        const bankResult = await creditSweepsIdempotent(
+          bankerId,
+          bankCents,
+          "C-Lo bank refund (cron stale room)",
+          bankRef,
+          "celo_bank_refund"
+        );
         if (!bankResult.success) {
           errors.push(`${roomId}: bank refund — ${bankResult.message ?? "failed"}`);
           continue;

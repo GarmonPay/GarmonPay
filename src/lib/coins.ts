@@ -3,9 +3,9 @@ import { walletLedgerEntry } from "@/lib/wallet-ledger";
 
 /** 1000 GC ≈ $1 (display) */
 export const GC_TO_USD = 0.001;
-/** 1 SC = $0.01 face value; 100 SC = $1 (matches C-Lo “1000 SC ($10)” style copy) */
+/** 1 GPC = $0.01 face value; 100 GPC = $1 (user-facing: GPay Coins / GPC; DB: sweeps_coins) */
 export const SC_TO_USD = 0.01;
-/** $1 → 100 SC */
+/** $1 → 100 GPC */
 export const USD_TO_SC = 100;
 
 export function scToUsdDisplay(sc: number): string {
@@ -78,6 +78,27 @@ export async function creditCoins(
   return { success: true };
 }
 
+/**
+ * Credit SC idempotently: duplicate `reference` in coin_transactions counts as success.
+ * Used for C-Lo bank refunds so system close / cron can safely retry.
+ */
+export async function creditSweepsIdempotent(
+  userId: string,
+  amountSc: number,
+  description: string,
+  reference: string,
+  type = "celo_bank_refund"
+): Promise<{ success: boolean; message?: string }> {
+  const amt = Math.floor(amountSc);
+  if (amt <= 0) return { success: true };
+  const r = await creditCoins(userId, 0, amt, description, reference, type);
+  if (r.success) return { success: true };
+  if (typeof r.message === "string" && r.message.toLowerCase().includes("duplicate")) {
+    return { success: true };
+  }
+  return r;
+}
+
 export async function debitSweepsCoins(
   userId: string,
   amount: number,
@@ -94,7 +115,7 @@ export async function debitSweepsCoins(
   if (sweepsCoins < amt) {
     return {
       success: false,
-      message: `Insufficient SC. You have ${sweepsCoins} SC but need ${amt} SC`,
+      message: `Insufficient GPay Coins. You have ${sweepsCoins} GPC but need ${amt} GPC`,
     };
   }
 
@@ -110,7 +131,14 @@ export async function debitSweepsCoins(
     p_amount: amt,
   });
 
-  if (error) return { success: false, message: error.message };
+  if (error) {
+    const msg = error.message ?? "";
+    const friendly =
+      /insufficient.*sweeps/i.test(msg) || /sweeps coins/i.test(msg)
+        ? "Insufficient GPay Coins"
+        : msg;
+    return { success: false, message: friendly };
+  }
 
   const { error: insErr } = await supabase.from("coin_transactions").insert({
     user_id: userId,
@@ -120,7 +148,18 @@ export async function debitSweepsCoins(
     description,
     reference,
   });
-  if (insErr) console.error("[debitSweepsCoins] insert failed after RPC:", insErr.message);
+  if (insErr) {
+    console.error("[debitSweepsCoins] insert failed after RPC — reversing debit:", insErr.message);
+    const repairRef = `${reference}_repair_${Date.now()}`;
+    await creditCoins(
+      userId,
+      0,
+      amt,
+      "Repair: ledger insert failed after debit_sweeps_coins RPC",
+      repairRef,
+      "debit_repair"
+    );
+  }
 
   return { success: true };
 }
@@ -165,13 +204,13 @@ export async function convertUSDToSC(
     userId,
     0,
     scToAward,
-    `Converted $${(cents / 100).toFixed(2)} USD to ${scToAward} SC`,
+    `Converted $${(cents / 100).toFixed(2)} USD to ${scToAward} GPC`,
     creditRef,
     "usd_to_sc"
   );
 
   if (!credit.success) {
-    return { success: false, message: credit.message ?? "Failed to credit SC" };
+    return { success: false, message: credit.message ?? "Failed to credit GPay Coins" };
   }
 
   return { success: true, scAwarded: scToAward };

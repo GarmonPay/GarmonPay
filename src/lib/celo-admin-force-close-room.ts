@@ -4,6 +4,7 @@ import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schem
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { creditSweepsIdempotent } from "@/lib/coins";
 import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
 
 export type AdminForceCloseCeloRoomResult =
@@ -92,10 +93,21 @@ export async function adminForceCloseCeloRoom(
     if (!("skipped" in result && result.skipped)) refundsIssued += 1;
   }
 
-  const bankCents = normalized.current_bank_cents ?? 0;
+  const bankCents = Math.max(
+    0,
+    Math.round(
+      Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0)
+    )
+  );
   if (bankCents > 0 && bankerId) {
     const bankRef = celoBankRefundReference(roomId);
-    const bankResult = await walletLedgerGameWinIdempotent(bankerId, bankCents, bankRef);
+    const bankResult = await creditSweepsIdempotent(
+      bankerId,
+      bankCents,
+      "C-Lo bank refund (admin force close)",
+      bankRef,
+      "celo_bank_refund"
+    );
     if (!bankResult.success) {
       return { ok: false, message: bankResult.message ?? "Bank refund failed" };
     }

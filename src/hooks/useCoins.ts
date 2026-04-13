@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createBrowserClient } from "@/lib/supabase";
-import { scToUsdDisplay } from "@/lib/coins";
+import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
 
 export function useCoins() {
   const supabase = useMemo(() => createBrowserClient(), []);
@@ -57,10 +57,7 @@ export function useCoins() {
     setLoading(false);
   }, [supabase]);
 
-  const formatSC = useCallback((amount: number) => {
-    const n = Math.max(0, Math.floor(Number(amount)));
-    return `${n.toLocaleString()} SC (${scToUsdDisplay(n)})`;
-  }, []);
+  const formatGPC = useCallback((amount: number) => formatGpcWithUsd(amount), []);
 
   const formatUSD = useCallback((cents: number) => `$${(Math.max(0, cents) / 100).toFixed(2)}`, []);
 
@@ -127,7 +124,7 @@ export function useCoins() {
     usdBalance,
     loading,
     refresh,
-    formatSC,
+    formatGPC,
     formatUSD,
   };
 }
