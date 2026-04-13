@@ -100,7 +100,7 @@ export default function RegisterPage() {
         }
 
         if (data.session) {
-          router.push("/dashboard");
+          router.push("/dashboard?welcome_gpc=100");
           router.refresh();
           return;
         }
@@ -151,6 +151,9 @@ export default function RegisterPage() {
           </h2>
           <p style={{ color: "#aaa", marginBottom: 8 }}>Check your email to confirm your account:</p>
           <p style={{ color: "#fff", fontWeight: "bold", marginBottom: 24, wordBreak: "break-all" }}>{email}</p>
+          <p style={{ color: "#a78bfa", fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
+            🎉 Welcome! You received 100 GPC!
+          </p>
           <p style={{ color: "#888", fontSize: 13, marginBottom: 24 }}>
             Click the confirmation link then login to start earning.
           </p>

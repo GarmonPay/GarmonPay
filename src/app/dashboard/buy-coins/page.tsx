@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+
+/** Rows from GET /api/coins/packages (`gc_packages` where is_active). Expected: Starter, Popular, Pro, Elite, VIP — prices $9.99–$249.99. */
 type PackageRow = {
   id: string;
   name: string;

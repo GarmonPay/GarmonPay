@@ -279,7 +279,12 @@ export default function PricingPage() {
         return;
       }
       const label = MARKETING_PLANS[confirmTier].label;
-      setSuccessMsg(`You're now a ${label} member! 🎉`);
+      const gpcBonus = typeof (data as { gpcBonus?: number }).gpcBonus === "number" ? (data as { gpcBonus: number }).gpcBonus : 0;
+      setSuccessMsg(
+        gpcBonus > 0
+          ? `You're now a ${label} member! 🎉 You received ${gpcBonus.toLocaleString()} GPC upgrade bonus!`
+          : `You're now a ${label} member! 🎉`
+      );
       setConfirmTier(null);
       setBalanceCents(typeof data.newBalance === "number" ? data.newBalance : null);
       setMembershipTierUi(normalizeUserMembershipTier(confirmTier));

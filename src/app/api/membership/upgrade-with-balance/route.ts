@@ -9,6 +9,7 @@ import {
 } from "@/lib/wallet-ledger";
 import { normalizeUserMembershipTier, membershipTierRank, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
+import { grantMembershipUpgradeBonusGpc } from "@/lib/gpay-bonus-credits";
 
 export const runtime = "nodejs";
 
@@ -164,6 +165,13 @@ export async function POST(req: Request) {
       if (error) console.error("[upgrade-with-balance] transactions insert:", error.message);
     });
 
+  let gpcBonus = 0;
+  if (!renew) {
+    const bonusRef = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const bonusResult = await grantMembershipUpgradeBonusGpc(userId, tier, bonusRef);
+    if (bonusResult.granted) gpcBonus = bonusResult.amount;
+  }
+
   const newBalance = await getCanonicalBalanceCents(userId);
 
   return NextResponse.json({
@@ -172,5 +180,6 @@ export async function POST(req: Request) {
     amountCharged: tierPrice,
     expiresAt: expiresIso,
     newBalance,
+    gpcBonus: renew ? 0 : gpcBonus,
   });
 }

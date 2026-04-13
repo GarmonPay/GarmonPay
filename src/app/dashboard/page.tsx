@@ -24,6 +24,7 @@ import { PAID_TIER_PRICES_CENTS, isPaidTierId } from "@/lib/membership-balance-p
 import { TaxInfoBanner } from "@/components/dashboard/TaxInfoBanner";
 import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 import { useCoins } from "@/hooks/useCoins";
+import { MEMBERSHIP_UPGRADE_BONUS_GPC } from "@/lib/gpay-bonus-credits";
 
 const AdDisplay = dynamic(() => import("@/components/AdDisplay").then((m) => ({ default: m.AdDisplay })), { ssr: false });
 
@@ -81,6 +82,7 @@ export default function DashboardPage() {
   const [renewError, setRenewError] = useState<string | null>(null);
   const [gpayBalance, setGpayBalance] = useState<GpayBalanceState>({ ...GPAY_ZERO });
   const { sweepsCoins } = useCoins();
+  const [gpcPromoBanner, setGpcPromoBanner] = useState<string | null>(null);
 
   const fetchGpayBalance = useCallback(async (accessToken?: string | null) => {
     const token =
@@ -113,6 +115,20 @@ export default function DashboardPage() {
 
   // Main balance: GET /api/dashboard `balanceCents` (USD wallet) + SC face value (1 SC = $0.01).
   const refetchParam = searchParams.get("refetch");
+  useEffect(() => {
+    const w = searchParams.get("welcome_gpc");
+    const up = searchParams.get("upgraded");
+    const tier = searchParams.get("tier");
+    if (w === "100" || w === "1") {
+      setGpcPromoBanner("🎉 Welcome! You received 100 GPC!");
+      router.replace("/dashboard", { scroll: false });
+    } else if (up === "true") {
+      const n = tier ? MEMBERSHIP_UPGRADE_BONUS_GPC[tier.toLowerCase()] ?? 0 : 0;
+      setGpcPromoBanner(n > 0 ? `🎉 You received ${n.toLocaleString()} GPC upgrade bonus!` : "🎉 Membership upgraded!");
+      router.replace("/dashboard", { scroll: false });
+    }
+  }, [searchParams, router]);
+
   useEffect(() => {
     if (refetchParam !== "1") return;
     const t = setTimeout(() => {
@@ -413,6 +429,18 @@ export default function DashboardPage() {
           loadDashboardData(tokenOrId, !!session.accessToken);
         }}
       />
+      {gpcPromoBanner && (
+        <div className="animate-slide-up rounded-xl border border-emerald-500/35 bg-emerald-950/50 px-4 py-3 text-center text-emerald-100 shadow-lg shadow-emerald-900/20">
+          <p className="font-semibold text-base">{gpcPromoBanner}</p>
+          <button
+            type="button"
+            className="mt-2 text-sm text-emerald-300/90 underline underline-offset-2 hover:text-emerald-200"
+            onClick={() => setGpcPromoBanner(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <SupabaseEarningsTracker
         userId={session.userId}
         membershipTier={planForUi}

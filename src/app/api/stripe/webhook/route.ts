@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { creditCoins } from "@/lib/coins";
+import { grantMembershipUpgradeBonusGpc } from "@/lib/gpay-bonus-credits";
 import { creditReferralUpgradeCommission } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
@@ -355,6 +356,11 @@ export async function POST(req: Request) {
       membership_expires_at: null,
       membership_payment_source: "stripe",
     });
+
+    const bonusRes = await grantMembershipUpgradeBonusGpc(user_id, targetTier, session_id);
+    if (!bonusRes.ok) {
+      console.error("[Stripe webhook] membership upgrade GPC bonus failed", { user_id, targetTier, session_id });
+    }
 
     await supabase.from("transactions").insert({
       user_id,

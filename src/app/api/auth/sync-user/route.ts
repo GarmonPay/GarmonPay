@@ -173,6 +173,12 @@ export async function POST(req: Request) {
         // ignore
       }
       await ensureWalletBalanceRow(supabase, id);
+      try {
+        const { grantSignupBonusGpc } = await import("@/lib/gpay-bonus-credits");
+        await grantSignupBonusGpc(id);
+      } catch (e) {
+        console.warn("sync-user signup GPC bonus:", e);
+      }
     }
 
     const { error: profileUpsertErr } = await supabase.from("profiles").upsert(
