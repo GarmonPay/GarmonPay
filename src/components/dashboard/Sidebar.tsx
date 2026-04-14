@@ -43,11 +43,10 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
         isActive: (p) => p.startsWith("/games/celo"),
       },
       {
-        href: "/dashboard/coinflip",
+        href: "/dashboard/coin-flip",
         label: "Coin Flip",
         icon: "🪙",
-        soon: true,
-        isActive: (p) => p.startsWith("/dashboard/coinflip"),
+        isActive: (p) => p.startsWith("/dashboard/coin-flip"),
       },
       {
         href: "/dashboard/arena",

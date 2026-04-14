@@ -21,6 +21,7 @@ const tabs: {
     icon: "🎮",
     isActive: (p) =>
       p.startsWith("/games") ||
+      p.startsWith("/dashboard/coin-flip") ||
       p.startsWith("/dashboard/coinflip") ||
       p.startsWith("/dashboard/arena"),
   },
