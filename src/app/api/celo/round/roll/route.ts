@@ -6,6 +6,8 @@ import { creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints, calculatePayout } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
+import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
+import { buildCeloRollStartedPayload, broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -121,8 +123,20 @@ export async function POST(req: Request) {
         completed_at:
           roll.result === "instant_win" || roll.result === "instant_loss" ? now : null,
         banker_rerolls: Number(r.banker_rerolls ?? 0) + (roll.result === "no_count" ? 1 : 0),
+        roll_animation_start_at: now,
+        roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
       })
       .eq("id", round_id);
+
+    const bankerRollPayload = buildCeloRollStartedPayload({
+      roomId: room_id,
+      roundId: round_id,
+      dice: dice as [number, number, number],
+      kind: "banker",
+      rollerUserId: bankerId,
+      serverStartTime: now,
+    });
+    await broadcastCeloRoomEvent(supabase, room_id, "roll_started", bankerRollPayload);
 
     if (roll.result === "no_count") {
       return NextResponse.json({
@@ -334,19 +348,37 @@ export async function POST(req: Request) {
     const roll = evaluateRoll(dice);
 
     if (roll.result === "no_count") {
-      await supabase.from("celo_player_rolls").insert({
-        round_id,
-        room_id,
-        user_id: userId,
-        dice,
-        roll_name: roll.rollName,
-        roll_result: roll.result,
-        entry_sc: playerEntry,
-        outcome: "reroll",
-        payout_sc: 0,
-        platform_fee_sc: 0,
-        reroll_count: (rerollCount ?? 0) + 1,
-      });
+      const { data: prInsert, error: prInsErr } = await supabase
+        .from("celo_player_rolls")
+        .insert({
+          round_id,
+          room_id,
+          user_id: userId,
+          dice,
+          roll_name: roll.rollName,
+          roll_result: roll.result,
+          entry_sc: playerEntry,
+          outcome: "reroll",
+          payout_sc: 0,
+          platform_fee_sc: 0,
+          reroll_count: (rerollCount ?? 0) + 1,
+          roll_animation_start_at: now,
+          roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
+        })
+        .select("id")
+        .single();
+      if (!prInsErr && prInsert?.id) {
+        const pPayload = buildCeloRollStartedPayload({
+          roomId: room_id,
+          roundId: round_id,
+          dice: dice as [number, number, number],
+          kind: "player",
+          playerRollId: prInsert.id,
+          rollerUserId: userId,
+          serverStartTime: now,
+        });
+        await broadcastCeloRoomEvent(supabase, room_id, "roll_started", pPayload);
+      }
 
       return NextResponse.json({
         dice,
@@ -424,21 +456,39 @@ export async function POST(req: Request) {
         .eq("id", room_id);
     }
 
-    await supabase.from("celo_player_rolls").insert({
-      round_id,
-      room_id,
-      user_id: userId,
-      dice,
-      roll_name: roll.rollName,
-      roll_result: roll.result,
-      point: roll.result === "point" ? roll.point : null,
-      entry_sc: playerEntry,
-      outcome: playerWins ? "win" : "loss",
-      payout_sc: payoutSC,
-      platform_fee_sc: feeSC,
-      reroll_count: rerollCount ?? 0,
-      player_celo_at: roll.isCelo ? now : null,
-    });
+    const { data: prResolving, error: prResErr } = await supabase
+      .from("celo_player_rolls")
+      .insert({
+        round_id,
+        room_id,
+        user_id: userId,
+        dice,
+        roll_name: roll.rollName,
+        roll_result: roll.result,
+        point: roll.result === "point" ? roll.point : null,
+        entry_sc: playerEntry,
+        outcome: playerWins ? "win" : "loss",
+        payout_sc: payoutSC,
+        platform_fee_sc: feeSC,
+        reroll_count: rerollCount ?? 0,
+        player_celo_at: roll.isCelo ? now : null,
+        roll_animation_start_at: now,
+        roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
+      })
+      .select("id")
+      .single();
+    if (!prResErr && prResolving?.id) {
+      const pPayload = buildCeloRollStartedPayload({
+        roomId: room_id,
+        roundId: round_id,
+        dice: dice as [number, number, number],
+        kind: "player",
+        playerRollId: prResolving.id,
+        rollerUserId: userId,
+        serverStartTime: now,
+      });
+      await broadcastCeloRoomEvent(supabase, room_id, "roll_started", pPayload);
+    }
 
     const currentIdx = players.findIndex((p) => Number(p.seat_number ?? 0) === currentSeat);
     const nextPlayer = players[currentIdx + 1];
