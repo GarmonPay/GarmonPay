@@ -1,2503 +1,1966 @@
 "use client";
 
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
-import { useParams, usePathname, useRouter } from "next/navigation";
-import Link from "next/link";
-import { celoFirstRow } from "@/lib/celo-first-row";
-import { getSessionAsync } from "@/lib/session";
-import { createBrowserClient } from "@/lib/supabase";
-import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { celoSeatsEqual } from "@/lib/celo-room-rules";
-import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
-import { DiceDisplay } from "@/components/celo/DiceDisplay";
-import VoiceChat from "@/components/celo/VoiceChat";
-import { Cinzel_Decorative } from "next/font/google";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
+import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 
-type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
-import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
-import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
-import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
-import { formatGpayAmount } from "@/lib/gpay-coins-branding";
-import { useCoins } from "@/hooks/useCoins";
+const VoiceChat = dynamic(() => import("@/components/celo/VoiceChat"), { ssr: false });
 
-const cinzelRoom = Cinzel_Decorative({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
-});
+// =============================================================================
+// TYPES
+// =============================================================================
 
-function waitNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
-  });
-}
-
-function formatScLine(sc: number): string {
-  return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
-}
-
-function celoRollNameVisual(name: string): { className: string; style: CSSProperties } {
-  const raw = name.trim();
-  const n = raw.toUpperCase();
-  const scaleIn: CSSProperties = { animation: "celoRollNameScaleIn 0.4s ease-out" };
-  if (/\bC-?\s*LO\b/i.test(raw) || n.includes("C-LO") || n === "CLO") {
-    return {
-      className: cinzelRoom.className,
-      style: {
-        ...scaleIn,
-        fontSize: 56,
-        color: "#F5C842",
-        textShadow: "0 0 10px #F5C842, 0 0 20px #F5C842, 0 0 40px #F5C842",
-        lineHeight: 1.05,
-        textAlign: "center",
-      },
-    };
-  }
-  if (n.includes("SHIT") || n.includes("DICK")) {
-    return {
-      className: "",
-      style: {
-        fontSize: 44,
-        fontWeight: 800,
-        color: "#EF4444",
-        textShadow: "0 0 20px #EF4444",
-        animation: "celoRollNameShake 0.4s ease-out",
-        textAlign: "center",
-      },
-    };
-  }
-  if (n.includes("HAND") || n.includes("CRACK") || raw.includes("💥")) {
-    return {
-      className: "",
-      style: {
-        ...scaleIn,
-        fontSize: 48,
-        fontWeight: 800,
-        color: "#F5C842",
-        textShadow: "0 0 30px #F5C842",
-        textAlign: "center",
-      },
-    };
-  }
-  if (n.includes("POLICE") || n.includes("POUND")) {
-    return {
-      className: "",
-      style: {
-        ...scaleIn,
-        fontSize: 44,
-        fontWeight: 800,
-        color: "#3B82F6",
-        textShadow: "0 0 20px #3B82F6",
-        textAlign: "center",
-      },
-    };
-  }
-  if (n.includes("ZOE") || n.includes("HAITIAN")) {
-    return {
-      className: "",
-      style: {
-        ...scaleIn,
-        fontSize: 44,
-        fontWeight: 800,
-        color: "#10B981",
-        textShadow: "0 0 20px #10B981",
-        textAlign: "center",
-      },
-    };
-  }
-  if (n.includes("TRIP")) {
-    return {
-      className: "",
-      style: {
-        ...scaleIn,
-        fontSize: 44,
-        fontWeight: 800,
-        color: "#A855F7",
-        textShadow: "0 0 20px #A855F7",
-        textAlign: "center",
-      },
-    };
-  }
-  return {
-    className: cinzelRoom.className,
-    style: {
-      ...scaleIn,
-      fontSize: 44,
-      color: "#F5C842",
-      textShadow: "0 0 16px rgba(245,200,66,0.5)",
-      textAlign: "center",
-    },
-  };
-}
-
-async function authFetch(url: string, body: Record<string, unknown>) {
-  const supabase = createBrowserClient();
-  if (!supabase) throw new Error("Not authenticated");
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("Not authenticated");
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-async function authFetchGet(url: string) {
-  const supabase = createBrowserClient();
-  if (!supabase) throw new Error("Not authenticated");
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("Not authenticated");
-  return fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-type Room = {
-  id: string;
-  name: string;
-  creator_id: string;
-  status: string;
-  banker_id: string;
-  room_type: string;
-  max_players: number;
-  min_bet_cents: number;
-  max_bet_cents: number;
-  current_bank_cents: number;
-  banker_reserve_cents: number;
-  platform_fee_pct: number;
-  speed: string;
-  last_round_was_celo: boolean;
-  banker_celo_at: string | null;
-  /** Banker-declared rule: covering player short stop = auto loss */
-  no_short_stop?: boolean;
-};
-
-type PlayerProfileEmbed = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-};
+type DiceType =
+  | "standard"
+  | "gold"
+  | "diamond"
+  | "blood"
+  | "street"
+  | "midnight"
+  | "fire";
 
 type Player = {
   id: string;
   user_id: string;
-  role: string;
-  bet_cents: number;
-  entry_sc?: number;
-  seat_number: number | null;
-  dice_type?: string;
-  /** From PostgREST embed (FK user_id → public.users) */
-  users?: PlayerProfileEmbed | null;
-  /** If FK to profiles exists in DB */
-  profiles?: PlayerProfileEmbed | null;
+  name: string;
+  role: "banker" | "player" | "spectator";
+  seat_number: number;
+  entry_sc: number;
+  dice_type: DiceType;
+  is_active: boolean;
+};
+
+type Room = {
+  id: string;
+  name: string;
+  banker_id: string;
+  status: string;
+  minimum_entry_sc: number;
+  current_bank_sc: number;
+  max_players: number;
 };
 
 type Round = {
   id: string;
-  room_id?: string;
   status: string;
-  banker_id: string;
-  banker_dice: number[] | null;
-  banker_dice_name: string | null;
-  banker_dice_result: string | null;
-  banker_point: number | null;
-  banker_rerolls: number;
+  banker_dice: number[];
+  banker_roll_name: string;
+  banker_roll_result: string;
+  banker_point: number;
   prize_pool_sc: number;
-  platform_fee_sc: number;
   bank_covered: boolean;
-  covered_by: string | null;
-  completed_at: string | null;
+  covered_by: string;
   current_player_seat?: number | null;
-  /** Server UTC start for synchronized banker roll animation */
-  roll_animation_start_at?: string | null;
-  roll_animation_duration_ms?: number | null;
 };
 
-type PlayerRoll = {
+type ChatMessage = {
   id: string;
-  round_id: string;
-  room_id?: string;
   user_id: string;
-  dice: number[];
-  roll_name: string | null;
-  roll_result: string | null;
-  outcome: string | null;
-  payout_sc: number;
-  platform_fee_sc: number;
-  player_celo_at: string | null;
+  message: string;
+  is_system: boolean;
   created_at: string;
-  roll_animation_start_at?: string | null;
-  point?: number | null;
+  user_name?: string;
 };
 
 type SideBet = {
   id: string;
   creator_id: string;
-  acceptor_id: string | null;
+  creator_name: string;
   bet_type: string;
-  amount_cents: number;
+  amount_sc: number;
   odds_multiplier: number;
   status: string;
-  specific_point: number | null;
+  expires_at: string;
 };
 
-type RoundSummaryPayload = {
-  playerResults: Array<{
-    userId: string;
-    outcome: string;
-    amountCents: number;
-    label: string;
-  }>;
-  bankerNetCents: number;
-  bankerLabel: string;
-};
-
-type RollResponse = {
-  dice?: number[];
-  rollName?: string;
-  result?: string;
-  status?: string;
-  currentPlayerSeat?: number | null;
-  isCelo?: boolean;
-  outcome?: string;
-  payoutCents?: number;
-  /** API may return cents as payoutSC */
-  payoutSC?: number;
-  feeSC?: number;
-  /** Player's point when result is `point` */
-  point?: number;
-  playerPoint?: number;
-  nextPlayerSeat?: number | null;
-  bankerWinCents?: number;
-  newBankSC?: number;
-  newBankCents?: number;
-  bankerPoint?: number;
-  newBankerId?: string;
-  banker_can_adjust_bank?: boolean;
-  player_can_become_banker?: boolean;
-  banker_cost_sc?: number;
-  roundComplete?: boolean;
-  summary?: RoundSummaryPayload;
-  animationPayload?: CeloRollStartedPayload;
-  error?: string;
-};
-
-type ChatMessage = {
+type DbPlayerRow = Record<string, unknown> & {
   id: string;
-  room_id?: string;
   user_id: string;
-  message: string;
-  created_at: string;
+  role: string;
+  seat_number: number | null;
+  entry_sc?: number | null;
+  bet_cents?: number | null;
+  dice_type?: string | null;
+  users?: { full_name?: string | null; email?: string | null } | null;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// =============================================================================
+// CONSTANTS
+// =============================================================================
 
-
-const SIDE_BET_OPTIONS = [
-  { value: "celo", label: "C-Lo (4-5-6)", odds: 8 },
-  { value: "shit", label: "Shit (1-2-3)", odds: 8 },
-  { value: "trips", label: "Trips", odds: 8 },
-  { value: "hand_crack", label: "Hand Crack", odds: 4.5 },
-  { value: "banker_wins", label: "Banker Wins Round", odds: 1.8 },
-  { value: "player_wins", label: "Player Wins Round", odds: 1.8 },
-  { value: "specific_point", label: "Specific Point", odds: 6 },
-];
-
-const RESULT_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  instant_win: { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/30" },
-  instant_loss: { bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/30" },
-  point: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/30" },
-  no_count: { bg: "bg-white/5", text: "text-violet-300/70", border: "border-white/10" },
+const DICE_COLORS: Record<
+  DiceType,
+  {
+    bg: string;
+    dot: string;
+    glow: string;
+  }
+> = {
+  standard: {
+    bg: "#CC2200",
+    dot: "#ffffff",
+    glow: "rgba(204,34,0,0.6)",
+  },
+  gold: {
+    bg: "#D4A017",
+    dot: "#1a1a1a",
+    glow: "rgba(212,160,23,0.6)",
+  },
+  diamond: {
+    bg: "#E8F4FD",
+    dot: "#1a3a5c",
+    glow: "rgba(232,244,253,0.6)",
+  },
+  blood: {
+    bg: "#8B0000",
+    dot: "#F5C842",
+    glow: "rgba(139,0,0,0.6)",
+  },
+  street: {
+    bg: "#1a5c1a",
+    dot: "#ffffff",
+    glow: "rgba(26,92,26,0.6)",
+  },
+  midnight: {
+    bg: "#0a0a2e",
+    dot: "#ffffff",
+    glow: "rgba(10,10,46,0.6)",
+  },
+  fire: {
+    bg: "#FF4500",
+    dot: "#FFD700",
+    glow: "rgba(255,69,0,0.6)",
+  },
 };
 
-/** Compare Supabase auth user ids to FK uuids (avoids strict === misses from formatting). */
-function sameCeloUserId(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (a == null || b == null) return false;
+const DOT_GRID: Record<number, number[][]> = {
+  1: [[1, 1]],
+  2: [
+    [0, 0],
+    [2, 2],
+  ],
+  3: [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+  ],
+  4: [
+    [0, 0],
+    [0, 2],
+    [2, 0],
+    [2, 2],
+  ],
+  5: [
+    [0, 0],
+    [0, 2],
+    [1, 1],
+    [2, 0],
+    [2, 2],
+  ],
+  6: [
+    [0, 0],
+    [0, 2],
+    [1, 0],
+    [1, 2],
+    [2, 0],
+    [2, 2],
+  ],
+};
+
+const FACE_ROTATIONS: Record<number, string> = {
+  1: "rotateX(0deg) rotateY(0deg)",
+  2: "rotateX(-90deg) rotateY(0deg)",
+  3: "rotateX(0deg) rotateY(90deg)",
+  4: "rotateX(0deg) rotateY(-90deg)",
+  5: "rotateX(90deg) rotateY(0deg)",
+  6: "rotateX(180deg) rotateY(0deg)",
+};
+
+void FACE_ROTATIONS;
+
+const ROLL_STYLES: Record<
+  string,
+  {
+    color: string;
+    size: number;
+    glow: string;
+    animation: string;
+  }
+> = {
+  "C-LO! 🎲": {
+    color: "#F5C842",
+    size: 56,
+    glow: "0 0 40px #F5C842, 0 0 80px rgba(245,200,66,0.4)",
+    animation: "cloFlash 0.4s ease infinite alternate",
+  },
+  "HAND CRACK! 💥": {
+    color: "#F5C842",
+    size: 44,
+    glow: "0 0 30px #F5C842",
+    animation: "explode 0.4s ease",
+  },
+  "SHIT! 💩": {
+    color: "#EF4444",
+    size: 44,
+    glow: "0 0 30px #EF4444",
+    animation: "shake 0.5s ease",
+  },
+  "DICK! 😂": {
+    color: "#EF4444",
+    size: 44,
+    glow: "0 0 20px #EF4444",
+    animation: "explode 0.3s ease",
+  },
+  "TRIP SIXES - THE BOSS! 👑": {
+    color: "#F5C842",
+    size: 36,
+    glow: "0 0 40px #F5C842",
+    animation: "rainbow 1s linear infinite",
+  },
+  "ACE OUT! 🎲": {
+    color: "#F5C842",
+    size: 44,
+    glow: "0 0 30px #F5C842",
+    animation: "explode 0.4s ease",
+  },
+};
+
+function getRollStyle(rollName: string) {
+  if (ROLL_STYLES[rollName]) return ROLL_STYLES[rollName];
+  if (rollName.includes("ZOE") || rollName.includes("HAITIAN"))
+    return { color: "#10B981", size: 44, glow: "0 0 20px #10B981", animation: "explode 0.3s ease" };
+  if (rollName.includes("POLICE") || rollName.includes("POUND"))
+    return { color: "#3B82F6", size: 44, glow: "0 0 20px #3B82F6", animation: "explode 0.3s ease" };
+  if (rollName.includes("GIRL") || rollName.includes("HOE"))
+    return { color: "#EC4899", size: 44, glow: "0 0 20px #EC4899", animation: "explode 0.3s ease" };
+  if (rollName.includes("SHORTLY") || rollName.includes("JIT"))
+    return { color: "#A855F7", size: 44, glow: "0 0 20px #A855F7", animation: "explode 0.3s ease" };
+  if (rollName.includes("TRIP"))
+    return { color: "#F5C842", size: 40, glow: "0 0 30px #F5C842", animation: "explode 0.4s ease" };
+  return { color: "#666", size: 24, glow: "none", animation: "none" };
+}
+
+function mapDiceType(raw: string | null | undefined): DiceType {
+  const t = String(raw ?? "standard").toLowerCase();
+  if (t in DICE_COLORS) return t as DiceType;
+  return "standard";
+}
+
+function normalizeRoomRow(row: Record<string, unknown>): Room {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    banker_id: String(row.banker_id ?? ""),
+    status: String(row.status ?? ""),
+    minimum_entry_sc: Number(row.minimum_entry_sc ?? row.min_bet_cents ?? 0),
+    current_bank_sc: Number(row.current_bank_sc ?? row.current_bank_cents ?? 0),
+    max_players: Number(row.max_players ?? 6),
+  };
+}
+
+function normalizeRoundRow(r: Record<string, unknown>): Round {
+  const bankerDice = (r.banker_dice ?? r.banker_roll) as number[] | undefined;
+  const name = String(r.banker_roll_name ?? r.banker_dice_name ?? "");
+  const result = String(r.banker_roll_result ?? r.banker_dice_result ?? "");
+  return {
+    id: String(r.id ?? ""),
+    status: String(r.status ?? ""),
+    banker_dice: Array.isArray(bankerDice) ? bankerDice : [1, 1, 1],
+    banker_roll_name: name,
+    banker_roll_result: result,
+    banker_point: Number(r.banker_point ?? 0),
+    prize_pool_sc: Number(r.prize_pool_sc ?? r.total_pot_cents ?? 0),
+    bank_covered: Boolean(r.bank_covered),
+    covered_by: String(r.covered_by ?? ""),
+    current_player_seat: r.current_player_seat as number | null | undefined,
+  };
+}
+
+function mapPlayerRow(p: DbPlayerRow): Player {
+  const entry = Number(p.entry_sc ?? p.bet_cents ?? 0);
+  const nm =
+    p.users?.full_name?.trim() ||
+    (p.users?.email?.split("@")[0] ?? "").trim() ||
+    "Player";
+  return {
+    id: String(p.id),
+    user_id: String(p.user_id),
+    name: nm,
+    role: (p.role === "banker" || p.role === "spectator" ? p.role : "player") as Player["role"],
+    seat_number: Number(p.seat_number ?? 0),
+    entry_sc: entry,
+    dice_type: mapDiceType(p.dice_type as string | undefined),
+    is_active: true,
+  };
+}
+
+// =============================================================================
+// DIE / DICE / SEAT
+// =============================================================================
+
+function DieFace({
+  value,
+  diceType = "standard",
+  rolling = false,
+  rollEpoch = 0,
+  size = 72,
+}: {
+  value: number;
+  diceType?: DiceType;
+  rolling?: boolean;
+  rollEpoch?: number;
+  size?: number;
+}) {
+  const colors = DICE_COLORS[diceType];
+  const dots = DOT_GRID[value] || DOT_GRID[1];
+
   return (
-    String(a).trim().toLowerCase().replace(/-/g, "") === String(b).trim().toLowerCase().replace(/-/g, "")
+    <div
+      style={{
+        width: size,
+        height: size,
+        perspective: 400,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        key={`die-${rollEpoch}`}
+        style={{
+          width: "100%",
+          height: "100%",
+          background: colors.bg,
+          borderRadius: 12,
+          border: "2px solid rgba(255,255,255,0.2)",
+          boxShadow: rolling
+            ? `0 0 30px ${colors.glow}, 
+               inset 0 1px 0 rgba(255,255,255,0.3)`
+            : `0 4px 20px rgba(0,0,0,0.6),
+               inset 0 1px 0 rgba(255,255,255,0.2)`,
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateRows: "repeat(3, 1fr)",
+          padding: size * 0.12,
+          gap: size * 0.04,
+          animation: rolling ? `rollDie${rollEpoch % 3} 2.5s ease-out forwards` : "none",
+          position: "relative",
+          transformStyle: "preserve-3d",
+        }}
+      >
+        {[0, 1, 2].map((row) =>
+          [0, 1, 2].map((col) => {
+            const hasDot = dots.some(([r, c]) => r === row && c === col);
+            return (
+              <div
+                key={`${row}-${col}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {hasDot && (
+                  <div
+                    style={{
+                      width: size * 0.14,
+                      height: size * 0.14,
+                      borderRadius: "50%",
+                      background: colors.dot,
+                      boxShadow: "inset 0 1px 3px rgba(0,0,0,0.4)",
+                    }}
+                  />
+                )}
+              </div>
+            );
+          }),
+        )}
+      </div>
+    </div>
   );
 }
 
-/** Stake in cents from row (join writes both; 0 default on entry_sc must not hide bet_cents). */
-function getEntryAmount(player: { entry_sc?: number; bet_cents?: number }): number {
-  return celoPlayerStakeCents(player);
-}
-
-/** Alias for round / action logic */
-function getPlayerBetCents(player: { entry_sc?: number; bet_cents?: number }): number {
-  return getEntryAmount(player);
-}
-
-/** Display stake for seat cards */
-function getPlayerEntry(player: { entry_sc?: number; bet_cents?: number }): string {
-  return formatScLine(getEntryAmount(player));
-}
-
-function getDisplayName(
-  player:
-    | Player
-    | { user_id?: string; profiles?: PlayerProfileEmbed | null; users?: PlayerProfileEmbed | null }
-    | null
-    | undefined
-) {
-  if (!player) return "Unknown";
-  const p =
-    (player as Player).profiles ?? (player as Player).users ?? player;
-  if (p && typeof p === "object" && "full_name" in p && (p as PlayerProfileEmbed).full_name?.trim()) {
-    return (p as PlayerProfileEmbed).full_name!.trim();
-  }
-  if (p && typeof p === "object" && "email" in p && (p as PlayerProfileEmbed).email) {
-    return (p as PlayerProfileEmbed).email!.split("@")[0];
-  }
-  if ("user_id" in player && player.user_id) {
-    return player.user_id.substring(0, 8).toUpperCase();
-  }
-  return "Player";
-}
-
-/** Lobby / between-rounds copy (banker vs player; uses seated players + stakes). */
-function getLobbyStatusLine(opts: {
-  isBanker: boolean;
-  activePlayers: Player[];
-  playersWithBets: Player[];
-}): string {
-  const { isBanker, activePlayers, playersWithBets } = opts;
-  if (isBanker) {
-    if (activePlayers.length === 0) return "Waiting for players to join…";
-    if (playersWithBets.length === 0) return "Players joined but no bets placed yet";
-    return `Ready! ${playersWithBets.length} player(s) ready`;
-  }
-  return "Waiting for banker to start…";
-}
-
-function getRoundStatusLine(opts: {
-  round: Round | null;
-  amIBanker: boolean;
-  amIPlayer: boolean;
-  currentTurnPlayer: Player | null;
-  isMyTurn: boolean;
-  noActiveRound: boolean;
-}): string {
-  const { round, amIBanker, amIPlayer, currentTurnPlayer, isMyTurn, noActiveRound } = opts;
-  if (noActiveRound || !round) {
-    return "";
-  }
-  const st = round.status;
-  if (st === "completed") {
-    return "Round complete — see results below";
-  }
-  if (st === "banker_rolling") {
-    return amIBanker ? "Roll the dice!" : "Waiting for banker to roll…";
-  }
-  if (st === "player_rolling") {
-    const bp = round.banker_point;
-    const name = currentTurnPlayer ? getDisplayName(currentTurnPlayer) : "Player";
-    if (amIBanker) {
-      return `Waiting for ${name} to roll…`;
-    }
-    if (amIPlayer && isMyTurn && bp != null) {
-      return `YOUR TURN — Beat ${bp}!`;
-    }
-    if (amIPlayer && !isMyTurn) {
-      return `${name} is rolling…`;
-    }
-    return `Waiting for ${name} to roll…`;
-  }
-  return amIBanker ? "Start a new round when ready." : "Waiting for banker to start…";
-}
-
-function getCeloRoomStatusLine(opts: {
-  noActiveRound: boolean;
-  round: Round | null;
-  roomStatus?: string;
-  isBanker: boolean;
-  amIPlayer: boolean;
-  currentTurnPlayer: Player | null;
-  isMyTurn: boolean;
-  activePlayers: Player[];
-  playersWithBets: Player[];
-}): string {
-  const {
-    noActiveRound,
-    round,
-    roomStatus,
-    isBanker,
-    amIPlayer,
-    currentTurnPlayer,
-    isMyTurn,
-    activePlayers,
-    playersWithBets,
-  } = opts;
-  if (roomStatus === "rolling" && !round) {
-    return isBanker ? "Round started — loading table…" : "Round in progress…";
-  }
-  if (noActiveRound || !round) {
-    return getLobbyStatusLine({ isBanker, activePlayers, playersWithBets });
-  }
-  return getRoundStatusLine({
-    round,
-    amIBanker: isBanker,
-    amIPlayer,
-    currentTurnPlayer,
-    isMyTurn,
-    noActiveRound: false,
-  });
-}
-
-// ── Seat display ──────────────────────────────────────────────────────────────
-
-function initialsFromName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0]![0] + parts[1]![0]).toUpperCase();
-  const s = parts[0] ?? "?";
-  return s.length >= 2 ? s.slice(0, 2).toUpperCase() : s.toUpperCase().padEnd(2, "•");
-}
-
-function SeatCard({
-  player,
-  isMe,
-  isBanker,
-  isCurrentTurn,
-  resolvedRoll,
-  phasePlayerRolling,
+function DiceDisplay({
+  dice,
+  rolling,
+  rollEpoch,
+  diceType = "standard",
 }: {
-  player: Player;
-  isMe: boolean;
-  isBanker: boolean;
-  isCurrentTurn: boolean;
-  resolvedRoll: PlayerRoll | null;
-  phasePlayerRolling?: boolean;
+  dice: [number, number, number];
+  rolling: boolean;
+  rollEpoch: number;
+  diceType?: DiceType;
 }) {
-  const displayName = getDisplayName(player);
-  const label = player.role === "banker" ? "Banker" : `Seat ${player.seat_number || 1}`;
-  const outcome = resolvedRoll?.outcome;
-  const hasResolved = outcome === "win" || outcome === "loss";
-  const showBankerRollingPulse = !phasePlayerRolling && isCurrentTurn && !hasResolved;
-  const ini = initialsFromName(isMe ? "You" : displayName);
+  const [displayDice, setDisplayDice] = useState<[number, number, number]>([1, 1, 1]);
 
-  const baseCard: CSSProperties = {
-    background: "rgba(13,5,32,0.85)",
-    borderRadius: 12,
-    padding: 12,
-    backdropFilter: "blur(10px)",
-    minWidth: 120,
-    border: "1px solid rgba(124,58,237,0.4)",
-  };
-
-  if (isBanker) {
-    baseCard.border = "1px solid #F5C842";
-    baseCard.boxShadow = "0 0 15px rgba(245,200,66,0.2)";
-  }
-  if (isCurrentTurn && !isBanker) {
-    baseCard.border = "1px solid #10B981";
-    baseCard.boxShadow = "0 0 15px rgba(16,185,129,0.3)";
-    baseCard.animation = "celoSeatPulse 2s ease-in-out infinite";
-  }
+  useEffect(() => {
+    if (!rolling) {
+      setDisplayDice(dice);
+      return;
+    }
+    const interval = setInterval(() => {
+      setDisplayDice([
+        Math.ceil(Math.random() * 6),
+        Math.ceil(Math.random() * 6),
+        Math.ceil(Math.random() * 6),
+      ] as [number, number, number]);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [rolling, dice]);
 
   return (
-    <div style={baseCard}>
-      <div className="flex flex-col items-center text-center gap-2">
+    <div
+      style={{
+        display: "flex",
+        gap: 20,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {displayDice.map((val, i) => (
+        <DieFace
+          key={i}
+          value={val}
+          diceType={diceType}
+          rolling={rolling}
+          rollEpoch={rollEpoch}
+          size={72}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PlayerSeat({
+  player,
+  isCurrentUser,
+  isActive,
+  isBankCovered,
+  onJoin,
+  isEmpty,
+  seatNumber,
+}: {
+  player?: Player;
+  isCurrentUser?: boolean;
+  isActive?: boolean;
+  isBankCovered?: boolean;
+  onJoin?: () => void;
+  isEmpty?: boolean;
+  seatNumber: number;
+}) {
+  void seatNumber;
+  if (isEmpty || !player) {
+    return (
+      <div
+        onClick={onJoin}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+          cursor: onJoin ? "pointer" : "default",
+          opacity: 0.5,
+        }}
+      >
         <div
-          className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white shrink-0"
           style={{
-            background: isBanker ? "linear-gradient(135deg,#F5C842,#b45309)" : "linear-gradient(135deg,#7C3AED,#4c1d95)",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            border: "2px dashed #444",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 20,
+            color: "#444",
+            transition: "all 0.2s",
           }}
         >
-          {ini}
+          +
         </div>
-        <div className="min-w-0 w-full">
-          <p className="text-[10px] uppercase tracking-wider text-violet-400/80">{label}</p>
-          <p className="text-sm font-semibold text-white truncate">
-            {isMe ? "You" : displayName}
-            {isBanker ? <span className="ml-1">👑</span> : null}
-          </p>
-        </div>
-        <div className="w-full text-center">
-          {player.role !== "banker" && (
-            <p className="text-xs font-bold text-[#F5C842] font-mono">{getPlayerEntry(player)}</p>
-          )}
-          {outcome === "win" && (
-            <span className="text-[11px] text-emerald-400 font-bold">
-              WIN +{formatScLine(resolvedRoll!.payout_sc)}
-            </span>
-          )}
-          {outcome === "loss" && <span className="text-[11px] text-red-400 font-bold">LOSS</span>}
-          {player.role === "player" && phasePlayerRolling && !hasResolved && (
-            <span
-              className={`text-[10px] flex items-center justify-center gap-1 mt-1 ${
-                isCurrentTurn ? "text-[#F5C842] font-medium" : "text-violet-400/70"
-              }`}
-            >
-              {isCurrentTurn ? (
-                <>
-                  <span className="inline-block h-3 w-3 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin shrink-0" />
-                  Rolling…
-                </>
-              ) : (
-                "Waiting…"
-              )}
-            </span>
-          )}
-          {showBankerRollingPulse && (
-            <span className="text-[10px] text-[#F5C842] animate-pulse block mt-1">Rolling…</span>
-          )}
-        </div>
+        <span
+          style={{
+            fontSize: 10,
+            color: "#555",
+            fontFamily: "Courier New",
+          }}
+        >
+          OPEN
+        </span>
       </div>
-      {resolvedRoll?.roll_name && (
-        <p className="text-[9px] text-violet-300/50 mt-2 truncate text-center">{resolvedRoll.roll_name}</p>
+    );
+  }
+
+  const initial = (player.name || "P")[0].toUpperCase();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        animation: "seatJoin 0.4s ease-out",
+        position: "relative",
+      }}
+    >
+      {isActive && (
+        <div
+          style={{
+            position: "absolute",
+            top: -4,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 10,
+            color: "#F5C842",
+            fontFamily: "Courier New",
+            whiteSpace: "nowrap",
+            animation: "pulse 1s ease infinite",
+          }}
+        >
+          ROLLING...
+        </div>
+      )}
+
+      {isBankCovered && (
+        <div
+          style={{
+            position: "absolute",
+            top: -16,
+            fontSize: 14,
+          }}
+        >
+          💰
+        </div>
+      )}
+
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: isCurrentUser
+            ? "linear-gradient(135deg, #7C3AED, #F5C842)"
+            : "linear-gradient(135deg, #4C1D95, #7C3AED)",
+          border: isCurrentUser
+            ? "3px solid #F5C842"
+            : isActive
+              ? "3px solid #F5C842"
+              : "2px solid rgba(124,58,237,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 18,
+          fontWeight: "bold",
+          color: "#fff",
+          boxShadow: isActive
+            ? "0 0 20px rgba(245,200,66,0.6)"
+            : isCurrentUser
+              ? "0 0 15px rgba(124,58,237,0.5)"
+              : "none",
+          animation: isActive ? "turnPulse 1s ease infinite" : "none",
+          transition: "all 0.3s",
+        }}
+      >
+        {initial}
+      </div>
+
+      <span
+        style={{
+          fontSize: 10,
+          color: isCurrentUser ? "#F5C842" : "#ccc",
+          fontFamily: "Courier New",
+          maxWidth: 60,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {isCurrentUser ? "YOU" : player.name}
+      </span>
+
+      {player.entry_sc > 0 && (
+        <span
+          style={{
+            fontSize: 9,
+            color: "#10B981",
+            fontFamily: "Courier New",
+          }}
+        >
+          {player.entry_sc} SC
+        </span>
       )}
     </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function CeloRoomPage() {
   const params = useParams();
-  const pathname = usePathname();
   const roomId = params.roomId as string;
   const router = useRouter();
-  const celoBasePath = pathname?.startsWith("/dashboard/games/celo") ? "/dashboard/games/celo" : "/games/celo";
-  const { sweepsCoins, refresh: refreshCoins } = useCoins();
 
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
+  const supabase = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) return null;
+    return createBrowserClient(url, key);
+  }, []);
+
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
-  const [playerRolls, setPlayerRolls] = useState<PlayerRoll[]>([]);
-  const [openSideBets, setOpenSideBets] = useState<SideBet[]>([]);
-  const [myPlayer, setMyPlayer] = useState<Player | null>(null);
-  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
-  const prevSweepsRef = useRef<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
+  const [myBalance, setMyBalance] = useState(0);
+  const [dice, setDice] = useState<[number, number, number]>([1, 1, 1]);
+  const [rolling, setRolling] = useState(false);
+  const [rollEpoch, setRollEpoch] = useState(0);
+  const [rollName, setRollName] = useState<string | null>(null);
+  const [rollResult, setRollResult] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sideBets, setSideBets] = useState<SideBet[]>([]);
+  const [onlineCount, setOnlineCount] = useState(1);
+  const [connected, setConnected] = useState(true);
+  const [myStreak, setMyStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDiceShop, setShowDiceShop] = useState(false);
+  const [showLowerBank, setShowLowerBank] = useState(false);
+  const [showBecomeBanker, setShowBecomeBanker] = useState(false);
+  const [showCoverBank, setShowCoverBank] = useState(false);
+  const [showSideBetModal, setShowSideBetModal] = useState(false);
+  const [showJoinSeat, setShowJoinSeat] = useState(false);
+  const [joinSeatNumber, setJoinSeatNumber] = useState(1);
+  const [canLowerBank, setCanLowerBank] = useState(false);
+  const [canBecomeBanker, setCanBecomeBanker] = useState(false);
+  const [lowerBankTimer, setLowerBankTimer] = useState(60);
+  const [becomeBankerTimer, setBecomeBankerTimer] = useState(30);
+  const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
+  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
+  const [sideBetType, setSideBetType] = useState("celo");
+  const [sideBetAmount, setSideBetAmount] = useState(100);
+  const [lowerBankAmount, setLowerBankAmount] = useState(500);
+  const [lowerMinAmount, setLowerMinAmount] = useState(500);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const rollingRef = useRef(false);
+  const currentUserIdRef = useRef<string | null>(null);
 
-  // Rolling animation state (server-synced)
-  const [isRolling, setIsRolling] = useState(false);
-  const [diceUiPhase, setDiceUiPhase] = useState<DiceUiPhase>("idle");
-  const [dicePhaseStatusText, setDicePhaseStatusText] = useState("");
-  const [lastRollResult, setLastRollResult] = useState<RollResponse | null>(null);
-  /** Dice faces for RealisticDice (null while tumbling). */
-  const [currentDice, setCurrentDice] = useState<number[] | null>(null);
-  /** Roll name under felt (synced with reveal). */
-  const [feltTableRollName, setFeltTableRollName] = useState<string | null>(null);
-  /** Bumps to remount dice so keyframes restart. */
-  const [rollAnimEpoch, setRollAnimEpoch] = useState(0);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const [initialSyncDone, setInitialSyncDone] = useState(false);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const [onlineCount, setOnlineCount] = useState(0);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatSending, setChatSending] = useState(false);
-  const [systemFeed, setSystemFeed] = useState<string[]>([]);
-  /** Shown above dice during shared realtime animation */
-  const [currentRollerName, setCurrentRollerName] = useState("");
-  /** Dice skin on felt follows whoever is rolling (not the local viewer). */
-  const [currentRollerDiceType, setCurrentRollerDiceType] = useState<string>("standard");
-  const [noShortStop, setNoShortStop] = useState(false);
-  /** True after Roll API succeeds until realtime dice animation sequence finishes */
-  const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
-  const [roundSummary, setRoundSummary] = useState<RoundSummaryPayload | null>(null);
-  const [lastPayoutAmount, setLastPayoutAmount] = useState(0);
-  const [showPayoutFlash, setShowPayoutFlash] = useState(false);
-  /** Point battle display (player vs banker) after a point roll resolves */
-  const [playerPointCompare, setPlayerPointCompare] = useState<number | null>(null);
-  const [bankerPointCompare, setBankerPointCompare] = useState<number | null>(null);
-  const [showRoundSummaryBanner, setShowRoundSummaryBanner] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const roomChannelRef = useRef<RealtimeChannel | null>(null);
-  /** Processed roll_started sync keys (broadcast + postgres fallback) */
-  const processedSyncKeysRef = useRef<Set<string>>(new Set());
-  const cancelRollAnimRef = useRef<(() => void) | null>(null);
-  const lastRollPayloadRef = useRef<CeloRollStartedPayload | null>(null);
-  const reconnectAnimAttemptedRef = useRef<string>("");
-  const playersRef = useRef<Player[]>([]);
-  const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Postgres INSERT row — merged into UI when realtime player animation reveals */
-  const pendingPlayerRollMetaRef = useRef<PlayerRoll | null>(null);
-  const currentRoundRef = useRef<Round | null>(null);
-
-  // Join form state — default to min_bet_cents once room loads
-  const [joinEntryCents, setJoinEntryCents] = useState(0);
   useEffect(() => {
-    if (room && joinEntryCents === 0) setJoinEntryCents(room.min_bet_cents);
-  }, [room, joinEntryCents]);
-  const [joinLoading, setJoinLoading] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState("");
-  const [closeRoomLoading, setCloseRoomLoading] = useState(false);
+    currentUserIdRef.current = currentUser?.id ?? null;
+  }, [currentUser?.id]);
 
-  // C-Lo become-banker modal state (cover-bank or other offers)
-  const [showBecomeBankerModal, setShowBecomeBankerModal] = useState(false);
-  const [becomeBankerCostCents, setBecomeBankerCostCents] = useState(0);
-  const [becomeBankerDeadline, setBecomeBankerDeadline] = useState<number | null>(null);
+  const myPlayer = players.find((p) => p.user_id === currentUser?.id);
+  const banker = players.find((p) => p.role === "banker");
+  const activePlayers = players.filter((p) => p.role === "player").sort((a, b) => a.seat_number - b.seat_number);
+  const isMyTurn =
+    currentRound?.status === "player_rolling" && myPlayer?.role === "player";
+  const isBankerTurn = currentRound?.status === "banker_rolling" && myPlayer?.role === "banker";
+  const isMyRoll = isMyTurn || isBankerTurn;
+  const canStartRound =
+    Boolean(myPlayer?.role === "banker" && !currentRound && activePlayers.some((p) => p.entry_sc > 0));
 
-  // Banker C-Lo bank / min adjustment modal
-  const [showCeloBankModal, setShowCeloBankModal] = useState(false);
-  const [adjustedBank, setAdjustedBank] = useState(0);
-  const [adjustedMinBet, setAdjustedMinBet] = useState(500);
-  const [celoModalBankSC, setCeloModalBankSC] = useState(0);
-
-  // Side bet form state
-  const [showSideBets, setShowSideBets] = useState(false);
-  const [sbType, setSbType] = useState("celo");
-  const [sbAmount, setSbAmount] = useState(100);
-  const [sbPoint, setSbPoint] = useState(2);
-  const [sbLoading, setSbLoading] = useState(false);
-  const [sbError, setSbError] = useState<string | null>(null);
-
-  const [bankAdjustLoading, setBankAdjustLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showCreatedShareBanner, setShowCreatedShareBanner] = useState(false);
-
-  // Ticker for countdowns (1s)
-  const [, tick] = useState(0);
   useEffect(() => {
-    const iv = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(iv);
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const flashBalance = (direction: "up" | "down") => {
+    setBalanceFlash(direction);
+    setTimeout(() => setBalanceFlash(null), 1000);
+  };
+
+  const addSystemMessage = useCallback((text: string) => {
+    setMessages((prev) => [
+      ...prev.slice(-49),
+      {
+        id: `sys-${Date.now()}`,
+        user_id: "system",
+        message: text,
+        is_system: true,
+        created_at: new Date().toISOString(),
+      },
+    ]);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const q = new URLSearchParams(window.location.search);
-    if (q.get("created") !== "1") return;
-    setShowCreatedShareBanner(true);
-    router.replace(`${celoBasePath}/${roomId}`, { scroll: false });
-  }, [roomId, router, celoBasePath]);
-
-  const handleShare = useCallback(async () => {
-    const url = `${typeof window !== "undefined" ? window.location.origin : ""}${celoBasePath}/${roomId}`;
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({
-          title: "Join my C-Lo game on GarmonPay!",
-          text: `${room?.name || "C-Lo Game"} — Min entry ${(room?.min_bet_cents || 500).toLocaleString()} $GPAY. Join now!`,
-          url,
-        });
-        return;
-      } catch {
-        // fall through to clipboard
-      }
-    }
+  const fetchRoomData = useCallback(async () => {
+    if (!supabase) return;
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      const input = document.createElement("input");
-      input.value = url;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      document.body.removeChild(input);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    }
-  }, [roomId, room?.name, room?.min_bet_cents, celoBasePath]);
-
-  // ── Data loaders ───────────────────────────────────────────────────────────
-  const loadRoom = useCallback(async () => {
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const { data: roomRows } = await sb.from("celo_rooms").select("*").eq("id", roomId).limit(1);
-    const data = celoFirstRow(roomRows);
-    if (data) {
-      const raw = data as Record<string, unknown>;
-      const n = normalizeCeloRoomRow(raw);
-      if (n) {
-        setRoom({
-          ...n,
-          speed: String(raw.speed ?? "regular"),
-          last_round_was_celo: Boolean(raw.last_round_was_celo),
-          banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
-          no_short_stop: Boolean(raw.no_short_stop),
-        } as Room);
-      }
-    }
-  }, [roomId]);
-
-  useEffect(() => {
-    if (room) setNoShortStop(Boolean(room.no_short_stop));
-  }, [room]);
-
-  const fetchPlayers = useCallback(async () => {
-    try {
-      const res = await authFetchGet(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`);
-      if (res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          players?: Player[];
-          room?: Record<string, unknown>;
-          round?: Round | null;
-        };
-        if (data.players) {
-          const plist = data.players;
-          setPlayers(plist);
-          if (session?.userId) {
-            setMyPlayer(plist.find((p) => sameCeloUserId(p.user_id, session.userId)) ?? null);
-          }
-        }
-        if (data.room) {
-          const raw = data.room;
-          const n = normalizeCeloRoomRow(raw);
-          if (n) {
-            setRoom({
-              ...n,
-              speed: String(raw.speed ?? "regular"),
-              last_round_was_celo: Boolean(raw.last_round_was_celo),
-              banker_celo_at: (raw.banker_celo_at as string | null) ?? null,
-              no_short_stop: Boolean(raw.no_short_stop),
-            } as Room);
-          }
-        }
-        if ("round" in data) {
-          setCurrentRound(data.round ?? null);
-        }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
         return;
       }
-    } catch {
-      /* fallback to direct Supabase */
-    }
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const { data } = await sb
-      .from("celo_room_players")
-      .select(
-        `
-        *,
+      setCurrentUser(user);
+
+      const { data: roomData, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+
+      if (roomErr || !roomData) {
+        setError("Room not found");
+        setLoading(false);
+        return;
+      }
+      setRoom(normalizeRoomRow(roomData as Record<string, unknown>));
+
+      const { data: userData } = await supabase.from("users").select("sweeps_coins, balance_cents").eq("id", user.id).maybeSingle();
+
+      const balRow = userData as { sweeps_coins?: number; balance_cents?: number } | null;
+      setMyBalance(Number(balRow?.sweeps_coins ?? balRow?.balance_cents ?? 0));
+
+      const { data: playersData } = await supabase
+        .from("celo_room_players")
+        .select(
+          `*,
         users (
-          id,
           full_name,
           email
+        )`,
         )
-      `
-      )
-      .eq("room_id", roomId)
-      .order("seat_number", { ascending: true });
-    const plist = (data as Player[]) ?? [];
-    setPlayers(plist);
-    if (session?.userId) {
-      setMyPlayer(plist.find((p) => sameCeloUserId(p.user_id, session.userId)) ?? null);
-    }
-  }, [roomId, session?.userId]);
+        .eq("room_id", roomId)
+        .order("seat_number", { ascending: true });
 
-  const loadRound = useCallback(async (): Promise<Round | null> => {
-    const applyRollsForRound = async (round: Round | null) => {
-      const sb = createBrowserClient();
-      if (!sb) {
-        setPlayerRolls([]);
-        setOpenSideBets([]);
-        return;
+      if (playersData) {
+        const mapped = (playersData as DbPlayerRow[]).map(mapPlayerRow);
+        setPlayers(mapped);
+        const mine = mapped.find((p) => p.user_id === user.id);
+        if (mine?.dice_type) setMyDiceType(mine.dice_type);
       }
-      if (round) {
-        const { data: rolls } = await sb
-          .from("celo_player_rolls")
-          .select("*")
-          .eq("round_id", round.id)
-          .order("created_at", { ascending: true });
-        setPlayerRolls((rolls as PlayerRoll[]) ?? []);
 
-        const { data: bets } = await sb
-          .from("celo_side_bets")
-          .select("*")
-          .eq("round_id", round.id)
-          .eq("status", "open");
-        setOpenSideBets((bets as SideBet[]) ?? []);
-      } else {
-        setPlayerRolls([]);
-        setOpenSideBets([]);
-      }
-    };
+      const { data: roundData } = await supabase
+        .from("celo_rounds")
+        .select("*")
+        .eq("room_id", roomId)
+        .neq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    try {
-      const res = await authFetchGet(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`);
-      if (res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { round?: Round | null };
-        const round = data.round ?? null;
-        setCurrentRound(round);
-        await applyRollsForRound(round);
-        return round;
-      }
-    } catch {
-      /* fall through to Supabase */
-    }
-
-    const sb = createBrowserClient();
-    if (!sb) return null;
-    const { data: roundRows, error } = await sb
-      .from("celo_rounds")
-      .select("*")
-      .eq("room_id", roomId)
-      .neq("status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    if (error) {
-      console.debug("[celo/ui] loadRound Supabase fallback error", error.message);
-    }
-    const round = (celoFirstRow(roundRows) as Round | null) ?? null;
-    setCurrentRound(round);
-    await applyRollsForRound(round);
-    return round;
-  }, [roomId]);
-
-  const loadBalance = useCallback(() => {
-    void refreshCoins();
-  }, [refreshCoins]);
-
-  const loadChat = useCallback(async () => {
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const { data } = await sb
-      .from("celo_chat")
-      .select("id,user_id,message,created_at")
-      .eq("room_id", roomId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-    setChatMessages(((data ?? []) as ChatMessage[]) ?? []);
-  }, [roomId]);
-
-  const loadAll = useCallback(async () => {
-    await Promise.all([loadRoom(), fetchPlayers(), loadRound(), loadBalance(), loadChat()]);
-  }, [loadRoom, fetchPlayers, loadRound, loadBalance, loadChat]);
-
-  useEffect(() => {
-    if (!session?.userId || !roomId) return;
-    if (myPlayer !== null) return;
-    void fetchPlayers();
-  }, [session?.userId, roomId, myPlayer, fetchPlayers]);
-
-  const loadRoomRef = useRef(loadRoom);
-  const loadPlayersRef = useRef(fetchPlayers);
-  const loadRoundRef = useRef(loadRound);
-  const loadBalanceRef = useRef(loadBalance);
-  const loadChatRef = useRef(loadChat);
-  const loadAllRef = useRef(loadAll);
-  loadRoomRef.current = loadRoom;
-  loadPlayersRef.current = fetchPlayers;
-  loadRoundRef.current = loadRound;
-  loadBalanceRef.current = loadBalance;
-  loadChatRef.current = loadChat;
-  loadAllRef.current = loadAll;
-
-  const processRollStartedPayload = useCallback((payload: CeloRollStartedPayload, source: string) => {
-    if (processedSyncKeysRef.current.has(payload.syncKey)) {
-      console.log("[celo/client] skip duplicate sync", payload.syncKey, source);
-      return;
-    }
-    processedSyncKeysRef.current.add(payload.syncKey);
-    while (processedSyncKeysRef.current.size > 80) {
-      const iter = processedSyncKeysRef.current.values();
-      const first = iter.next().value as string | undefined;
-      if (first) processedSyncKeysRef.current.delete(first);
-    }
-
-    cancelRollAnimRef.current?.();
-    lastRollPayloadRef.current = payload;
-    setPlayerPointCompare(null);
-    setBankerPointCompare(null);
-    console.log("[celo/client] roll_started", source, {
-      syncKey: payload.syncKey,
-      roundId: payload.roundId,
-      kind: payload.kind,
-      serverStartTime: payload.serverStartTime,
-      revealAt: payload.revealAt,
-    });
-
-    const rollerLabel =
-      payload.kind === "banker"
-        ? "Banker"
-        : getDisplayName(
-            playersRef.current.find((p) => sameCeloUserId(p.user_id, payload.rollerUserId)) ?? {
-              user_id: payload.rollerUserId ?? "",
-            }
-          ) || "Player";
-
-    if (payload.rollerUserId) {
-      const rollerPl =
-        playersRef.current.find((p) => sameCeloUserId(p.user_id, payload.rollerUserId)) ?? null;
-      setCurrentRollerDiceType(rollerPl?.dice_type ? String(rollerPl.dice_type) : "standard");
-    } else {
-      setCurrentRollerDiceType("standard");
-    }
-
-    setRollAnimEpoch((e) => e + 1);
-    setCurrentDice(null);
-    setFeltTableRollName(null);
-    setCurrentRollerName(rollerLabel);
-    setRollInteractionBusy(true);
-    setLastRollResult(null);
-    setDiceUiPhase("rolling");
-    setDicePhaseStatusText("Rolling…");
-    setIsRolling(true);
-
-    cancelRollAnimRef.current = scheduleCeloRollSequence(payload, {
-      onRollingStart: () => {
-        console.log("[celo/client] animation begin", payload.syncKey);
-        setDiceUiPhase("rolling");
-        setDicePhaseStatusText("Rolling…");
-        setIsRolling(true);
-      },
-      onRevealStart: (dice) => {
-        console.log("[celo/client] reveal begin", payload.syncKey);
-        setDiceUiPhase("revealing");
-        setDicePhaseStatusText("Revealing result…");
-        setIsRolling(false);
-        setCurrentDice([...dice]);
-        const meta = pendingPlayerRollMetaRef.current;
-        pendingPlayerRollMetaRef.current = null;
-        if (payload.kind === "player" && meta) {
-          const bp = currentRoundRef.current?.banker_point ?? null;
-          setLastRollResult({
-            dice,
-            rollName: meta.roll_name ?? undefined,
-            result: meta.roll_result ?? undefined,
-            outcome: meta.outcome ?? undefined,
-            payoutCents: meta.payout_sc,
-            bankerPoint: bp ?? undefined,
-            playerPoint: meta.point ?? undefined,
-          });
-          setFeltTableRollName(meta.roll_name ?? null);
-          if (meta.point != null && meta.roll_result === "point") {
-            setPlayerPointCompare(meta.point);
-            setBankerPointCompare(bp);
-          }
-        } else {
-          setLastRollResult({
-            dice,
-            rollName: undefined,
-            result: undefined,
-            bankerPoint: undefined,
-          });
+      if (roundData) {
+        const nr = normalizeRoundRow(roundData as Record<string, unknown>);
+        setCurrentRound(nr);
+        if (nr.banker_dice?.length === 3) {
+          setDice(nr.banker_dice as [number, number, number]);
         }
-        void loadRoundRef.current();
-      },
-      onRollFinished: () => {
-        console.log("[celo/client] roll_finished (sequence)", payload.syncKey);
-        setDiceUiPhase("completed");
-        setDicePhaseStatusText("Round complete");
-        setIsRolling(false);
-        setCurrentRollerName("");
-        setRollInteractionBusy(false);
-        lastRollPayloadRef.current = null;
-        void loadRoundRef.current();
-        window.setTimeout(() => {
-          setDiceUiPhase("idle");
-          setDicePhaseStatusText("");
-        }, 700);
-      },
-    });
-  }, []);
-
-  /** Postgres/broadcast fallback — same timed sequence for every client (no “only observers” gate). */
-  const triggerDiceAnimation = useCallback(
-    async (
-      rollData: {
-        dice: [number, number, number];
-        rollName: string | null;
-        result?: string;
-        userId?: string;
-        playerRoll?: PlayerRoll | null;
-      },
-      rollerLabel: string
-    ) => {
-      if (rollData.userId) {
-        const rollerPl =
-          playersRef.current.find((p) => sameCeloUserId(p.user_id, rollData.userId)) ?? null;
-        setCurrentRollerDiceType(rollerPl?.dice_type ? String(rollerPl.dice_type) : "standard");
       } else {
-        setCurrentRollerDiceType("standard");
+        setCurrentRound(null);
       }
 
-      cancelRollAnimRef.current?.();
-      cancelRollAnimRef.current = null;
-      setRollAnimEpoch((e) => e + 1);
-      setIsRolling(true);
-      setCurrentDice(null);
-      setFeltTableRollName(null);
-      setLastRollResult(null);
-      setPlayerPointCompare(null);
-      setBankerPointCompare(null);
-      setDiceUiPhase("rolling");
-      setDicePhaseStatusText("Rolling…");
-      setRollInteractionBusy(true);
-      setCurrentRollerName(rollerLabel);
-      await waitNextPaint();
+      const { data: chatData } = await supabase
+        .from("celo_chat")
+        .select(
+          `*,
+        users (full_name, email)`,
+        )
+        .eq("room_id", roomId)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+      if (chatData) {
+        setMessages(
+          (chatData as Array<Record<string, unknown> & { users?: { full_name?: string | null; email?: string | null } }>).map((m) => ({
+            id: String(m.id),
+            user_id: String(m.user_id),
+            message: String(m.message ?? ""),
+            is_system: false,
+            created_at: String(m.created_at ?? ""),
+            user_name: m.users?.full_name?.trim() || m.users?.email?.split("@")[0] || "Player",
+          })),
+        );
+      }
+
+      const { data: betsData } = await supabase
+        .from("celo_side_bets")
+        .select(
+          `*,
+        users (full_name, email)`,
+        )
+        .eq("room_id", roomId)
+        .eq("status", "open")
+        .order("created_at", { ascending: false });
+
+      if (betsData) {
+        setSideBets(
+          (betsData as Array<Record<string, unknown> & { users?: { full_name?: string | null; email?: string | null } }>).map((b) => ({
+            id: String(b.id),
+            creator_id: String(b.creator_id),
+            creator_name: b.users?.full_name?.trim() || b.users?.email?.split("@")[0] || "Player",
+            bet_type: String(b.bet_type ?? ""),
+            amount_sc: Number(b.amount_cents ?? b.amount_sc ?? 0),
+            odds_multiplier: Number(b.odds_multiplier ?? 2),
+            status: String(b.status ?? "open"),
+            expires_at: String(b.expires_at ?? ""),
+          })),
+        );
+      }
+
+      setLoading(false);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setError("Failed to load room");
+      setLoading(false);
+    }
+  }, [roomId, router, supabase]);
+
+  const triggerRollAnimation = useCallback(
+    async (rollData: Record<string, unknown>) => {
+      if (rollingRef.current) return;
+      rollingRef.current = true;
+      setRolling(true);
+      setRollName(null);
+      setRollResult(null);
+      setRollEpoch((e) => e + 1);
+
       await new Promise((r) => setTimeout(r, 2500));
-      setIsRolling(false);
-      setCurrentDice([...rollData.dice]);
-      setDiceUiPhase("revealing");
-      setDicePhaseStatusText("Revealing result…");
-      await new Promise((r) => setTimeout(r, 400));
 
-      const pr = rollData.playerRoll;
-      if (pr) {
-        setFeltTableRollName(pr.roll_name ?? null);
-        const bp = currentRoundRef.current?.banker_point ?? null;
-        setLastRollResult({
-          dice: rollData.dice,
-          rollName: pr.roll_name ?? undefined,
-          result: pr.roll_result ?? undefined,
-          outcome: pr.outcome ?? undefined,
-          payoutCents: pr.payout_sc,
-          bankerPoint: bp ?? undefined,
-          playerPoint: pr.point ?? undefined,
-        });
-        if (pr.point != null && pr.roll_result === "point") {
-          setPlayerPointCompare(pr.point);
-          setBankerPointCompare(bp);
-        }
-      } else {
-        setFeltTableRollName(rollData.rollName ?? null);
-        setLastRollResult({
-          dice: rollData.dice,
-          rollName: rollData.rollName ?? undefined,
-          result: rollData.result ?? undefined,
-        });
-      }
+      setRolling(false);
+      const d = rollData.dice as number[] | undefined;
+      setDice((d?.length === 3 ? d : [1, 1, 1]) as [number, number, number]);
+      rollingRef.current = false;
+
+      await new Promise((r) => setTimeout(r, 400));
+      setRollName((rollData.roll_name as string) ?? null);
 
       await new Promise((r) => setTimeout(r, 1500));
-      setDiceUiPhase("completed");
-      setDicePhaseStatusText("Round complete");
-      setRollInteractionBusy(false);
-      setCurrentRollerName("");
-      window.setTimeout(() => {
-        setDiceUiPhase("idle");
-        setDicePhaseStatusText("");
-      }, 700);
-      void loadAllRef.current();
+      setRollResult((rollData.outcome as string) ?? null);
+
+      const rn = rollData.roll_name as string | undefined;
+      if (rn) addSystemMessage(`🎲 ${rn}`);
     },
-    []
+    [addSystemMessage],
   );
 
-  // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
   useEffect(() => {
-    if (!roomId) return;
-    const poll = setInterval(() => {
-      void loadPlayersRef.current();
-    }, 5000);
-    return () => clearInterval(poll);
-  }, [roomId]);
+    if (!supabase) return;
+    void fetchRoomData();
 
-  useEffect(() => {
-    const sb = createBrowserClient();
-    if (!sb || !roomId) return;
-    const poll = setInterval(() => {
-      void loadRoundRef.current();
-    }, 3000);
-    return () => clearInterval(poll);
-  }, [roomId]);
-
-  const addSystemMessage = useCallback((line: string) => {
-    setSystemFeed((prev) => [...prev.slice(-25), line]);
-  }, []);
-
-  useEffect(() => {
-    playersRef.current = players;
-  }, [players]);
-
-  useEffect(() => {
-    currentRoundRef.current = currentRound;
-  }, [currentRound]);
-
-  useEffect(() => {
-    setInitialSyncDone(false);
-  }, [roomId]);
-
-  useEffect(() => {
-    if (!roundSummary) return;
-    const t = window.setTimeout(() => setRoundSummary(null), 5000);
-    return () => clearTimeout(t);
-  }, [roundSummary]);
-
-  /** If realtime is delayed or missed, never leave the roll button stuck disabled */
-  useEffect(() => {
-    if (!rollInteractionBusy) return;
-    const t = window.setTimeout(() => {
-      setRollInteractionBusy(false);
-      setIsRolling(false);
-    }, 15_000);
-    return () => clearTimeout(t);
-  }, [rollInteractionBusy]);
-
-  useEffect(() => {
-    console.log("[celo/client] dice UI", {
-      phase: diceUiPhase,
-      isRolling,
-      hasDice: Boolean(lastRollResult?.dice),
-      rollName: lastRollResult?.rollName,
+    const channel = supabase.channel(`celo-room-${roomId}`, {
+      config: { broadcast: { self: true } },
     });
-  }, [diceUiPhase, isRolling, lastRollResult?.dice, lastRollResult?.rollName]);
 
-  useEffect(() => {
-    if (!initialSyncDone || !currentRound) return;
-    const roomIdStr = String(currentRound.room_id ?? roomId);
-
-    let payload: CeloRollStartedPayload | null = null;
-    if (
-      currentRound.roll_animation_start_at &&
-      currentRound.banker_dice &&
-      currentRound.banker_dice.length === 3
-    ) {
-      const p = buildCeloRollStartedPayload({
-        roomId: roomIdStr,
-        roundId: currentRound.id,
-        dice: currentRound.banker_dice as [number, number, number],
-        kind: "banker",
-        rollerUserId: currentRound.banker_id,
-        serverStartTime: currentRound.roll_animation_start_at,
-      });
-      if (Date.now() < Date.parse(p.sequenceEndAt)) payload = p;
-    } else {
-      for (let i = playerRolls.length - 1; i >= 0; i--) {
-        const r = playerRolls[i];
-        if (!r.created_at || !r.dice || r.dice.length < 3) continue;
-        const p = buildCeloRollStartedPayload({
-          roomId: roomIdStr,
-          roundId: currentRound.id,
-          dice: r.dice as [number, number, number],
-          kind: "player",
-          playerRollId: r.id,
-          rollerUserId: r.user_id,
-          serverStartTime: r.created_at,
-        });
-        if (Date.now() < Date.parse(p.sequenceEndAt)) {
-          payload = p;
-          break;
-        }
-      }
-    }
-    if (!payload) return;
-    if (reconnectAnimAttemptedRef.current === payload.syncKey) return;
-    reconnectAnimAttemptedRef.current = payload.syncKey;
-    console.log("[celo/client] reconnect restore roll animation", payload.syncKey);
-    processRollStartedPayload(payload, "reconnect-db");
-  }, [initialSyncDone, currentRound, playerRolls, roomId, processRollStartedPayload]);
-
-  useEffect(() => {
-    const p = lastRollPayloadRef.current;
-    if (!p || !lastRollResult?.dice || lastRollResult.rollName) return;
-
-    if (p.kind === "banker" && currentRound?.id === p.roundId && currentRound.banker_dice_name) {
-      setLastRollResult((prev) =>
-        prev
-          ? {
-              ...prev,
-              rollName: currentRound.banker_dice_name ?? undefined,
-              result: currentRound.banker_dice_result ?? undefined,
-              bankerPoint: currentRound.banker_point ?? prev.bankerPoint,
-            }
-          : prev
-      );
-    }
-    if (p.kind === "player" && p.playerRollId) {
-      const pr = playerRolls.find((r) => r.id === p.playerRollId);
-      if (pr?.roll_name) {
-        setLastRollResult((prev) =>
-          prev
-            ? {
-                ...prev,
-                rollName: pr.roll_name ?? undefined,
-                result: pr.roll_result ?? undefined,
-                outcome: pr.outcome ?? undefined,
-                payoutCents: pr.payout_sc,
-              }
-            : prev
-        );
-      }
-    }
-  }, [currentRound, playerRolls, lastRollResult?.dice, lastRollResult?.rollName]);
-
-  // ── Init ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    getSessionAsync().then((s) => {
-      // Don't redirect unauthenticated users — show room preview instead
-      setSession(s);
-      setLoading(false);
-    });
-  }, [roomId]);
-
-  /** Flash balance indicator when $GPAY balance changes (useCoins keeps sweepsCoins live). */
-  useEffect(() => {
-    if (prevSweepsRef.current === null) {
-      prevSweepsRef.current = sweepsCoins;
-      return;
-    }
-    if (sweepsCoins > prevSweepsRef.current) setBalanceFlash("up");
-    else if (sweepsCoins < prevSweepsRef.current) setBalanceFlash("down");
-    prevSweepsRef.current = sweepsCoins;
-    const t = window.setTimeout(() => setBalanceFlash(null), 2000);
-    return () => clearTimeout(t);
-  }, [sweepsCoins]);
-
-  // ── Realtime: room channel (no login required — spectators + anon public rooms get dice events)
-  useEffect(() => {
-    const sb = createBrowserClient();
-    if (!sb || !roomId) return;
-    let isMounted = true;
-    processedSyncKeysRef.current.clear();
-
-    const fetchRoomData = async () => {
-      await loadAllRef.current();
-      if (isMounted) setInitialSyncDone(true);
-    };
-
-    const roomChannel = sb
-      .channel(`celo-room-${roomId}`, {
-        config: { broadcast: { self: true } },
-      })
-      .on(
-        "broadcast",
-        { event: "roll_started" },
-        ({ payload }) => {
-          void (async () => {
-            if (!isMounted) return;
-            const p = payload as CeloRollStartedPayload;
-            if (!p?.syncKey || String(p.roomId) !== roomId || !Array.isArray(p.finalDice) || p.finalDice.length !== 3) {
-              return;
-            }
-            console.log("[celo/client] ws broadcast roll_started", p.syncKey);
-            if (p.kind === "player" && p.playerRollId) {
-              const { data: prRow } = await sb
-                .from("celo_player_rolls")
-                .select("*")
-                .eq("id", p.playerRollId)
-                .maybeSingle();
-              if (!isMounted) return;
-              if (prRow) pendingPlayerRollMetaRef.current = prRow as PlayerRoll;
-            }
-            if (!isMounted) return;
-            processRollStartedPayload(p, "realtime-broadcast");
-          })();
-        }
-      )
+    channel
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_player_rolls",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
         (payload) => {
-          void (async () => {
-            if (!isMounted) return;
-            const roll = payload.new as PlayerRoll;
-            if (!roll || String(roll.room_id) !== roomId) return;
-
-            const animStart = roll.roll_animation_start_at ?? roll.created_at;
-            const syncKey = buildCeloRollStartedPayload({
-              roomId,
-              roundId: roll.round_id,
-              dice: roll.dice as [number, number, number],
-              kind: "player",
-              playerRollId: roll.id,
-              rollerUserId: roll.user_id,
-              ...(animStart ? { serverStartTime: animStart } : {}),
-            }).syncKey;
-            if (processedSyncKeysRef.current.has(syncKey)) {
-              pendingPlayerRollMetaRef.current = null;
-              await fetchRoomData();
-              return;
-            }
-            processedSyncKeysRef.current.add(syncKey);
-            pendingPlayerRollMetaRef.current = roll;
-            const rollerLabel =
-              getDisplayName(
-                playersRef.current.find((p) => sameCeloUserId(p.user_id, roll.user_id)) ?? {
-                  user_id: roll.user_id,
-                }
-              ) || "Player";
-            await triggerDiceAnimation(
-              {
-                dice: roll.dice as [number, number, number],
-                rollName: roll.roll_name,
-                result: roll.roll_result ?? undefined,
-                userId: roll.user_id,
-                playerRoll: roll,
-              },
-              rollerLabel
-            );
-            pendingPlayerRollMetaRef.current = null;
-          })();
-        }
+          if (payload.new) setRoom(normalizeRoomRow(payload.new as Record<string, unknown>));
+        },
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_rounds",
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          if (!isMounted) return;
-          const newRound = payload.new as Round | null;
-          if (!newRound || String(newRound.room_id) !== roomId) return;
-          setCurrentRound(newRound);
-          await fetchRoomData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "celo_rounds",
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          if (!isMounted) return;
-          const newRound = payload.new as Round | null;
-          if (!newRound || String(newRound.room_id) !== roomId) return;
-          const oldRound = (payload.old ?? {}) as Partial<Round>;
-
-          setCurrentRound((prev) => {
-            if (prev && prev.id === newRound.id) return { ...prev, ...newRound };
-            return newRound;
-          });
-
-          const br = newRound.banker_dice;
-          const prevDice = oldRound.banker_dice;
-          const diceChanged =
-            Array.isArray(br) &&
-            br.length === 3 &&
-            JSON.stringify(br) !== JSON.stringify(prevDice ?? null);
-
-          if (diceChanged) {
-            const syncKey = buildCeloRollStartedPayload({
-              roomId,
-              roundId: newRound.id,
-              dice: br as [number, number, number],
-              kind: "banker",
-              rollerUserId: newRound.banker_id,
-              ...(newRound.roll_animation_start_at
-                ? { serverStartTime: newRound.roll_animation_start_at }
-                : {}),
-            }).syncKey;
-            if (processedSyncKeysRef.current.has(syncKey)) {
-              await fetchRoomData();
-              return;
-            }
-            processedSyncKeysRef.current.add(syncKey);
-            const bankerUid = newRound.banker_id;
-            const rollerLabel =
-              getDisplayName(
-                playersRef.current.find((p) => sameCeloUserId(p.user_id, bankerUid)) ?? {
-                  user_id: bankerUid,
-                }
-              ) || "Banker";
-            await triggerDiceAnimation(
-              {
-                dice: br as [number, number, number],
-                rollName: newRound.banker_dice_name ?? null,
-                result: newRound.banker_dice_result ?? undefined,
-                userId: bankerUid,
-              },
-              rollerLabel
-            );
-          } else if (newRound.status === "completed") {
-            setRollInteractionBusy(false);
-            void loadBalanceRef.current();
-            setTimeout(() => {
-              if (isMounted) void loadRoundRef.current();
-            }, 1000);
-          } else {
-            void loadRoundRef.current();
-          }
-          await fetchRoomData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "*", schema: "public", table: "celo_room_players", filter: `room_id=eq.${roomId}` },
         async () => {
-          if (!isMounted) return;
-          await fetchRoomData();
-        }
+          const { data } = await supabase
+            .from("celo_room_players")
+            .select(
+              `*,
+            users (full_name, email)`,
+            )
+            .eq("room_id", roomId)
+            .order("seat_number", { ascending: true });
+          if (data) setPlayers((data as DbPlayerRow[]).map(mapPlayerRow));
+        },
       )
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "celo_rooms",
-          filter: `id=eq.${roomId}`,
-        },
-        async (payload) => {
-          if (!isMounted) return;
-          const row = payload.new as Record<string, unknown> | undefined;
-          if (!row || String(row.id) !== roomId) return;
-          const n = normalizeCeloRoomRow(row);
-          if (n) {
-            setRoom({
-              ...n,
-              speed: String(row.speed ?? "regular"),
-              last_round_was_celo: Boolean(row.last_round_was_celo),
-              banker_celo_at: (row.banker_celo_at as string | null) ?? null,
-              no_short_stop: Boolean(row.no_short_stop),
-            } as Room);
-          } else {
-            void loadRoomRef.current();
-          }
-          await fetchRoomData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_side_bets",
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          if (!isMounted) return;
-          const row = (payload.new ?? payload.old) as Record<string, unknown> | null;
-          if (row && String(row.room_id) !== roomId) return;
-          await loadRoundRef.current();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_chat",
-          filter: `room_id=eq.${roomId}`,
-        },
+        { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
         (payload) => {
-          if (!isMounted) return;
-          const msg = payload.new as ChatMessage;
-          if (!msg?.id) return;
-          if (String(msg.room_id ?? "") !== roomId) return;
-          setChatMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg];
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            if (payload.new) setCurrentRound(normalizeRoundRow(payload.new as Record<string, unknown>));
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>;
+          if (row.user_id === currentUserIdRef.current) return;
+          void triggerRollAnimation(row);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
+        async () => {
+          const { data } = await supabase
+            .from("celo_side_bets")
+            .select(
+              `*,
+            users (full_name, email)`,
+            )
+            .eq("room_id", roomId)
+            .eq("status", "open")
+            .order("created_at", { ascending: false });
+          if (data) {
+            setSideBets(
+              (data as Array<Record<string, unknown> & { users?: { full_name?: string | null; email?: string | null } }>).map((b) => ({
+                id: String(b.id),
+                creator_id: String(b.creator_id),
+                creator_name: b.users?.full_name?.trim() || b.users?.email?.split("@")[0] || "Player",
+                bet_type: String(b.bet_type ?? ""),
+                amount_sc: Number(b.amount_cents ?? b.amount_sc ?? 0),
+                odds_multiplier: Number(b.odds_multiplier ?? 2),
+                status: String(b.status ?? "open"),
+                expires_at: String(b.expires_at ?? ""),
+              })),
+            );
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
+        async (payload) => {
+          const raw = payload.new as Record<string, unknown>;
+          const msgId = String(raw.id);
+          const uid = String(raw.user_id ?? "");
+          const { data: u } = await supabase.from("users").select("full_name, email").eq("id", uid).maybeSingle();
+          const ur = u as { full_name?: string | null; email?: string | null } | null;
+          const userName = ur?.full_name?.trim() || ur?.email?.split("@")[0] || "Player";
+          const incoming: ChatMessage = {
+            id: msgId,
+            user_id: uid,
+            message: String(raw.message ?? ""),
+            is_system: false,
+            created_at: String(raw.created_at ?? new Date().toISOString()),
+            user_name: userName,
+          };
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msgId)) return prev;
+            return [...prev.slice(-49), incoming];
           });
-          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-        }
+        },
       )
       .subscribe((status) => {
-        if (!isMounted) return;
-        setRealtimeConnected(status === "SUBSCRIBED");
-        if (status === "SUBSCRIBED") {
-          console.log("[celo/client] room channel subscribed", { roomId });
-          void (async () => {
-            if (!isMounted) return;
-            await fetchRoomData();
-          })();
-        }
+        setConnected(status === "SUBSCRIBED");
+        if (status === "SUBSCRIBED") void fetchRoomData();
       });
 
-    roomChannelRef.current = roomChannel;
-
     return () => {
-      isMounted = false;
-      cancelRollAnimRef.current?.();
-      cancelRollAnimRef.current = null;
-      roomChannelRef.current = null;
-      setRealtimeConnected(false);
-      sb.removeChannel(roomChannel);
+      supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loaders via refs; room channel only depends on roomId
-  }, [roomId, addSystemMessage, processRollStartedPayload, triggerDiceAnimation]);
+  }, [roomId, supabase, fetchRoomData, triggerRollAnimation]);
 
-  // Presence (logged-in users only)
   useEffect(() => {
-    const sb = createBrowserClient();
-    if (!sb || !session?.userId || !roomId) return;
-    let isMounted = true;
-    const uid = session.userId;
-    const displayName = session.email?.split("@")[0] ?? "Player";
-    let presenceSyncTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const presenceChannel = sb.channel(`presence-celo-${roomId}`, {
-      config: { presence: { key: uid } },
-    });
-
+    if (!supabase || !currentUser?.id) return;
+    const presenceChannel = supabase.channel(`presence-${roomId}`);
     presenceChannel
       .on("presence", { event: "sync" }, () => {
-        if (!isMounted) return;
         const state = presenceChannel.presenceState();
-        setOnlineCount(Object.keys(state).length);
-      })
-      .on("presence", { event: "join" }, ({ newPresences }) => {
-        if (!isMounted) return;
-        newPresences.forEach((p) => {
-          const meta = (p as unknown as { metas?: Array<{ name?: string }> }).metas?.[0];
-          const name = meta?.name ?? "Someone";
-          addSystemMessage(`${name} joined the room`);
-        });
-        if (presenceSyncTimer) clearTimeout(presenceSyncTimer);
-        presenceSyncTimer = setTimeout(() => {
-          presenceSyncTimer = null;
-          if (!isMounted) return;
-          void loadPlayersRef.current();
-        }, 400);
-      })
-      .on("presence", { event: "leave" }, ({ leftPresences }) => {
-        if (!isMounted) return;
-        leftPresences.forEach((p) => {
-          const meta = (p as unknown as { metas?: Array<{ name?: string }> }).metas?.[0];
-          const name = meta?.name ?? "Someone";
-          addSystemMessage(`${name} left the room`);
-        });
+        setOnlineCount(Math.max(1, Object.keys(state).length));
       })
       .subscribe(async (status) => {
-        if (status === "SUBSCRIBED" && isMounted) {
+        if (status === "SUBSCRIBED") {
           await presenceChannel.track({
-            user_id: uid,
-            name: displayName,
-            joined_at: new Date().toISOString(),
+            user_id: currentUser.id,
+            online_at: new Date().toISOString(),
           });
         }
       });
-
     return () => {
-      isMounted = false;
-      if (presenceSyncTimer) clearTimeout(presenceSyncTimer);
-      sb.removeChannel(presenceChannel);
+      supabase.removeChannel(presenceChannel);
     };
-  }, [session?.userId, session?.email, roomId, addSystemMessage]);
+  }, [roomId, supabase, currentUser?.id]);
 
   useEffect(() => {
-    if (realtimeConnected) return;
-    const id = window.setInterval(() => {
-      roomChannelRef.current?.subscribe();
-    }, 3000);
-    return () => clearInterval(id);
-  }, [realtimeConnected]);
+    if (!canLowerBank) return;
+    if (lowerBankTimer <= 0) {
+      setCanLowerBank(false);
+      return;
+    }
+    const t = setInterval(() => setLowerBankTimer((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [canLowerBank, lowerBankTimer]);
 
   useEffect(() => {
-    return () => {
-      if (celoBankModalCloseTimerRef.current) clearTimeout(celoBankModalCloseTimerRef.current);
-    };
-  }, []);
-
-  // ── Derived state ─────────────────────────────────────────────────────────
-  const userId = session?.userId ?? "";
-  const amIBanker = myPlayer?.role === "banker" || sameCeloUserId(room?.banker_id, userId);
-  const amIPlayer = myPlayer?.role === "player";
-  const isInRoom = myPlayer !== null;
-
-  // Resolved player IDs in current round
-  const resolvedIds = new Set(
-    playerRolls.filter((r) => r.outcome === "win" || r.outcome === "loss").map((r) => r.user_id)
-  );
-
-  // Seated players eligible to roll this round (respects bank_covered)
-  const roundEligiblePlayers = players
-    .filter((p) => p.role === "player")
-    .filter(
-      (p) =>
-        !currentRound?.bank_covered ||
-        sameCeloUserId(p.user_id, currentRound.covered_by as string | null | undefined)
-    )
-    .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0));
-
-  const currentTurnPlayer =
-    currentRound?.status === "player_rolling"
-      ? (() => {
-          const seat = currentRound.current_player_seat;
-          if (seat != null) {
-            const bySeat = roundEligiblePlayers.find((p) => celoSeatsEqual(p.seat_number, seat));
-            if (bySeat) return bySeat;
-          }
-          return roundEligiblePlayers.find((p) => !resolvedIds.has(p.user_id)) ?? null;
-        })()
-      : null;
-  const isMyTurn = sameCeloUserId(currentTurnPlayer?.user_id, userId);
-
-  const becomeBankerSecondsLeft = useMemo(() => {
-    if (becomeBankerDeadline == null) return 0;
-    void tick;
-    return Math.max(0, Math.ceil((becomeBankerDeadline - Date.now()) / 1000));
-  }, [becomeBankerDeadline, tick]);
-
-  useEffect(() => {
-    if (!showBecomeBankerModal) return;
-    if (becomeBankerSecondsLeft <= 0) {
-      setShowBecomeBankerModal(false);
-      setBecomeBankerDeadline(null);
-    }
-  }, [showBecomeBankerModal, becomeBankerSecondsLeft]);
-
-  // ── Action handlers ───────────────────────────────────────────────────────
-
-  async function handleJoin(asSpectator = false) {
-    setJoinLoading(true);
-    setJoinError(null);
-    if (!asSpectator && room) {
-      const totalCommitted = players
-        .filter((p) => p.role === "player")
-        .reduce((s, p) => s + celoPlayerStakeCents(p), 0);
-      const remainingCover = room.banker_reserve_cents - totalCommitted;
-      if (joinEntryCents > remainingCover) {
-        setJoinLoading(false);
-        setJoinError(
-          "Your bet cannot exceed the banker's remaining coverage for this table (total player stakes cannot exceed the reserved bank)."
-        );
-        return;
-      }
-    }
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/room/join", {
-        room_id: roomId,
-        role: asSpectator ? "spectator" : "player",
-        entry_cents: asSpectator ? undefined : joinEntryCents,
-        join_code: room?.room_type === "private" ? joinCode : undefined,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setJoinLoading(false);
-      setJoinError("Not authenticated");
+    if (!canBecomeBanker) return;
+    if (becomeBankerTimer <= 0) {
+      setCanBecomeBanker(false);
       return;
     }
-    const ok = res.ok;
-    setJoinLoading(false);
-    if (!ok) { setJoinError((data.error as string) ?? "Failed to join"); return; }
-    markCeloPublicLobbyStale();
-    await loadAll();
-    await fetchPlayers();
-  }
+    const t = setInterval(() => setBecomeBankerTimer((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [canBecomeBanker, becomeBankerTimer]);
 
-  async function handleStartRound() {
-    setActionLoading("start");
-    setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/round/start", { room_id: roomId });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setActionLoading(null);
-      setError("Not authenticated");
-      return;
-    }
-    const ok = res.ok;
-    setActionLoading(null);
-    if (!ok) {
-      const msg = (data.error as string) ?? "Failed to start round";
-      const det = data.details as string | undefined;
-      setError(det ? `${msg}: ${det}` : msg);
-      return;
-    }
-    await loadAll();
-    let r = await loadRound();
-    if (!r) {
-      await new Promise((resolve) => setTimeout(resolve, 450));
-      r = await loadRound();
-    }
-    if (!r) {
-      setError("Round started but state did not sync. Tap Retry or refresh the page.");
-    }
-  }
+  const getAccessToken = async () => (await supabase?.auth.getSession())?.data.session?.access_token;
 
-  async function handleCloseRoom() {
-    if (
-      !window.confirm(
-        "Are you sure you want to close this room? All players will be refunded their entries."
-      )
-    ) {
-      return;
-    }
-    setCloseRoomLoading(true);
-    setError(null);
-    try {
-      const res = await authFetch("/api/celo/room/close", { room_id: roomId });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Failed to close room");
-        window.alert(data.error ?? "Failed to close room");
-        return;
-      }
-      await loadBalanceRef.current();
-      markCeloPublicLobbyStale();
-      router.push(celoBasePath);
-    } catch {
-      setError("Not authenticated");
-      window.alert("Not authenticated");
-    } finally {
-      setCloseRoomLoading(false);
-    }
-  }
+  const handleRoll = async () => {
+    if (!supabase || rollingRef.current || !currentRound) return;
+    rollingRef.current = true;
+    setRolling(true);
+    setRollName(null);
+    setRollResult(null);
+    setRollEpoch((e) => e + 1);
 
-  async function handleRoll() {
-    if (!currentRound) return;
-    const wasBankerRolling = currentRound.status === "banker_rolling";
-    setActionLoading("roll");
-    setRollInteractionBusy(true);
-    setLastRollResult(null);
-    setError(null);
-    let res: Response | undefined;
-    let data: Record<string, unknown> = {};
-    try {
-      res = await authFetch("/api/celo/round/roll", {
-        room_id: roomId,
-        round_id: currentRound.id,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setRollInteractionBusy(false);
-      setIsRolling(false);
-      setError("Network error — try again");
-    } finally {
-      setActionLoading(null);
-    }
-    if (!res || !res.ok) {
-      if (res && !res.ok) {
-        const errMsg =
-          (typeof data.error === "string" && data.error) ||
-          (typeof data.message === "string" && data.message) ||
-          "Roll failed";
-        setRollInteractionBusy(false);
-        setIsRolling(false);
-        setError(errMsg);
-      }
-      return;
-    }
-    const rollData = data as unknown as RollResponse;
-    console.log("[ROLL RESPONSE]", rollData);
+    const token = await getAccessToken();
 
-    /* ── Player phase: payouts / banners only — dice animation comes from realtime INSERT for all clients ── */
-    if (
-      !wasBankerRolling &&
-      Array.isArray(rollData.dice) &&
-      rollData.dice.length === 3
-    ) {
-      const payCents = Number(rollData.payoutSC ?? rollData.payoutCents ?? 0);
-      const oc = String(rollData.outcome ?? "");
-      if (oc === "win" && payCents > 0) {
-        setLastPayoutAmount(payCents);
-        setShowPayoutFlash(true);
-        window.setTimeout(() => setShowPayoutFlash(false), 3000);
-      }
+    const [, res] = await Promise.all([
+      new Promise((r) => setTimeout(r, 2500)),
+      fetch("/api/celo/round/roll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ room_id: roomId, round_id: currentRound.id }),
+      }).then((r) => r.json() as Promise<Record<string, unknown>>),
+    ]);
 
-      if (rollData.roundComplete) {
-        setShowRoundSummaryBanner(true);
-        window.setTimeout(() => setShowRoundSummaryBanner(false), 8000);
-      }
+    setRolling(false);
+    rollingRef.current = false;
 
-      if (rollData.roundComplete && rollData.summary) {
-        setRoundSummary(rollData.summary);
-      }
-      if (rollData.player_can_become_banker) {
-        setBecomeBankerCostCents(
-          Number(rollData.banker_cost_sc ?? room?.current_bank_cents ?? 0)
-        );
-        setBecomeBankerDeadline(Date.now() + 30_000);
-        setShowBecomeBankerModal(true);
-      }
-
-      void loadAll();
-      window.setTimeout(() => void loadBalanceRef.current(), 500);
-      window.setTimeout(() => void loadBalanceRef.current(), 2200);
+    if (res.error) {
+      setRollName("Error — try again");
       return;
     }
 
-    if (rollData.roundComplete && rollData.summary) {
-      setRoundSummary(rollData.summary);
-    }
-    if (rollData.player_can_become_banker) {
-      setBecomeBankerCostCents(
-        Number(rollData.banker_cost_sc ?? room?.current_bank_cents ?? 0)
-      );
-      setBecomeBankerDeadline(Date.now() + 30_000);
-      setShowBecomeBankerModal(true);
-    }
-    if (
-      rollData.banker_can_adjust_bank &&
-      room &&
-      sameCeloUserId(room.banker_id, session?.userId ?? "")
-    ) {
-      const nb = Number(rollData.newBankSC ?? rollData.newBankCents ?? 0);
-      setCeloModalBankSC(nb);
-      setAdjustedBank(nb);
-      setAdjustedMinBet(room.min_bet_cents || 500);
-      setShowCeloBankModal(true);
-      if (celoBankModalCloseTimerRef.current) clearTimeout(celoBankModalCloseTimerRef.current);
-      celoBankModalCloseTimerRef.current = setTimeout(() => setShowCeloBankModal(false), 60_000);
-    }
-    await loadAll();
-    window.setTimeout(() => void loadBalanceRef.current(), 500);
-  }
+    const d = res.dice as number[] | undefined;
+    setDice((d?.length === 3 ? d : [1, 1, 1]) as [number, number, number]);
 
-  async function handleCoverBank() {
-    if (!currentRound) return;
-    setActionLoading("cover");
-    setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/room/cover-bank", {
-        room_id: roomId,
-        round_id: currentRound.id,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setActionLoading(null);
-      setError("Not authenticated");
-      return;
-    }
-    const ok = res.ok;
-    setActionLoading(null);
-    if (!ok) { setError((data.error as string) ?? "Failed to cover bank"); return; }
-    await loadAll();
-  }
+    await new Promise((r) => setTimeout(r, 400));
+    setRollName((res.rollName as string) ?? null);
 
-  async function handleAdjustBank(newBank: number, newMinBet: number) {
-    if (!room) return;
-    setBankAdjustLoading(true);
-    setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/room/lower-bank", {
-        room_id: roomId,
-        new_bank_sc: newBank,
-        new_minimum_sc: newMinBet,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setBankAdjustLoading(false);
-      setError("Not authenticated");
-      return;
-    }
-    const ok = res.ok;
-    setBankAdjustLoading(false);
-    if (!ok) {
-      setError((data.error as string) ?? "Failed to adjust bank");
-      return;
-    }
-    setShowCeloBankModal(false);
-    setRoom((prev) =>
-      prev
-        ? {
-            ...prev,
-            current_bank_cents: newBank,
-            min_bet_cents: newMinBet,
-          }
-        : prev
-    );
-    await loadAll();
-  }
+    await new Promise((r) => setTimeout(r, 1500));
+    setRollResult((res.outcome as string) ?? null);
 
-  async function handleBecomeBanker() {
-    if (!currentRound) return;
-    setActionLoading("become_banker");
-    setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/banker/accept", {
-        room_id: roomId,
-        round_id: currentRound.id,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setActionLoading(null);
-      setError("Not authenticated");
-      return;
+    if (res.banker_can_adjust_bank) {
+      setCanLowerBank(true);
+      setLowerBankTimer(60);
+      setShowLowerBank(true);
     }
-    const ok = res.ok;
-    setActionLoading(null);
-    setShowBecomeBankerModal(false);
-    setBecomeBankerDeadline(null);
-    if (!ok) { setError((data.error as string) ?? "Failed to become banker"); return; }
-    await loadAll();
-  }
-
-  async function handleCreateSideBet(e: React.FormEvent) {
-    e.preventDefault();
-    if (!currentRound) return;
-    setSbLoading(true);
-    setSbError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/sidebet/create", {
-        room_id: roomId,
-        round_id: currentRound.id,
-        bet_type: sbType,
-        amount_cents: sbAmount,
-        specific_point: sbType === "specific_point" ? sbPoint : undefined,
-      });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setSbLoading(false);
-      setSbError("Not authenticated");
-      return;
+    const rollNm = String(res.rollName ?? "");
+    if (/\bC-?\s*LO\b/i.test(rollNm) || rollNm.includes("C-LO")) {
+      setCanBecomeBanker(true);
+      setBecomeBankerTimer(30);
+      setShowBecomeBanker(true);
     }
-    const ok = res.ok;
-    setSbLoading(false);
-    if (!ok) { setSbError((data.error as string) ?? "Failed to create bet"); return; }
-    setSbAmount(100);
-    await loadRound();
-  }
 
-  async function handleAcceptSideBet(betId: string) {
-    setError(null);
-    let res: Response;
-    let data: Record<string, unknown>;
-    try {
-      res = await authFetch("/api/celo/sidebet/accept", { bet_id: betId });
-      data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    } catch {
-      setError("Not authenticated");
-      return;
+    if (currentUser?.id) {
+      const { data: userData } = await supabase.from("users").select("sweeps_coins, balance_cents").eq("id", currentUser.id).maybeSingle();
+      const row = userData as { sweeps_coins?: number; balance_cents?: number } | null;
+      const newBal = Number(row?.sweeps_coins ?? row?.balance_cents ?? 0);
+      if (newBal > myBalance) flashBalance("up");
+      if (newBal < myBalance) flashBalance("down");
+      setMyBalance(newBal);
     }
-    const ok = res.ok;
-    if (!ok) { setError((data.error as string) ?? "Failed to accept bet"); return; }
-    await loadRound();
-    await loadBalance();
-  }
 
-  async function handleToggleNoShortStop() {
-    const newVal = !noShortStop;
-    setNoShortStop(newVal);
-    const sb = createBrowserClient();
-    if (!sb) return;
-    const { error } = await sb.from("celo_rooms").update({ no_short_stop: newVal }).eq("id", roomId);
-    if (error) setError(error.message);
-    else void loadRoom();
-  }
-
-  async function handleShortStop(target: "banker" | "player") {
-    if (!currentRound) return;
-    setError(null);
-    try {
-      const res = await authFetch("/api/celo/round/short-stop", {
-        room_id: roomId,
-        round_id: currentRound.id,
-        target,
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        result?: string;
-        message?: string;
-        error?: string;
-      };
-      setIsRolling(false);
-      setCurrentDice(null);
-      if (!res.ok) {
-        setError(data.error ?? data.message ?? "Short stop failed");
-        return;
-      }
-      if (data.result === "auto_loss") {
-        setFeltTableRollName("SHORT STOP DENIED! ❌ AUTO LOSS");
-        setLastRollResult((prev) =>
-          prev
-            ? { ...prev, result: "instant_loss", rollName: "SHORT STOP DENIED" }
-            : { result: "instant_loss", rollName: "SHORT STOP DENIED" }
-        );
-      } else {
-        setFeltTableRollName("✋ SHORT STOP — NO COUNT! Reroll!");
-        setLastRollResult((prev) =>
-          prev ? { ...prev, result: "no_count" } : { result: "no_count" }
-        );
-      }
-      await loadAll();
-    } catch {
-      setError("Short stop failed");
+    const oc = res.outcome as string | undefined;
+    if (myPlayer?.role === "player") {
+      if (oc === "win") setMyStreak((s) => s + 1);
+      else if (oc === "loss") setMyStreak(0);
     }
-  }
 
-  async function handleSendChat(e: React.FormEvent) {
-    e.preventDefault();
-    const text = chatInput.trim();
-    if (!text || !session?.userId) return;
-    const sb = createBrowserClient();
-    if (!sb) return;
-    setChatSending(true);
-    const { error } = await sb.from("celo_chat").insert({
-      room_id: roomId,
-      user_id: session.userId,
-      message: text.slice(0, 500),
+    void fetchRoomData();
+  };
+
+  const handleStartRound = async () => {
+    const token = await getAccessToken();
+    await fetch("/api/celo/round/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ room_id: roomId }),
     });
-    setChatSending(false);
-    if (!error) setChatInput("");
-  }
+  };
 
-  // ── Render: loading ───────────────────────────────────────────────────────
-  if (loading) {
+  const sendChat = async () => {
+    if (!chatInput.trim() || !currentUser || !supabase) return;
+    const msg = chatInput.trim();
+    setChatInput("");
+    await supabase.from("celo_chat").insert({
+      room_id: roomId,
+      user_id: currentUser.id,
+      message: msg,
+    });
+  };
+
+  const acceptSideBet = async (betId: string) => {
+    const token = await getAccessToken();
+    await fetch("/api/celo/sidebet/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ bet_id: betId }),
+    });
+    void fetchRoomData();
+  };
+
+  const createSideBet = async () => {
+    if (!currentRound || !currentUser) return;
+    const token = await getAccessToken();
+    await fetch("/api/celo/sidebet/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        room_id: roomId,
+        round_id: currentRound.id,
+        bet_type: sideBetType,
+        amount_cents: sideBetAmount,
+      }),
+    });
+    setShowSideBetModal(false);
+    void fetchRoomData();
+  };
+
+  const joinSeat = async () => {
+    if (!room) return;
+    const token = await getAccessToken();
+    await fetch("/api/celo/room/join", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        room_id: roomId,
+        role: "player",
+        entry_cents: Math.max(room.minimum_entry_sc, 100),
+      }),
+    });
+    setShowJoinSeat(false);
+    void fetchRoomData();
+  };
+
+  if (!supabase) {
     return (
-      <div className="min-h-screen bg-[#0e0118] flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
+      <div style={{ height: "100vh", background: "#0A0A0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
+        Missing Supabase configuration
       </div>
     );
   }
 
-  // ── Render: unauthenticated preview (BUG 1) ───────────────────────────────
-  if (!session) {
-    const previewBankerName = room ? `${room.name}` : "C-Lo Room";
-    const previewBank = room ? formatScLine(room.current_bank_cents) : "—";
-    const previewMin = room ? formatScLine(room.min_bet_cents) : "—";
-    const previewPlayers = players.filter((p) => p.role !== "spectator").length;
-    const previewMax = room?.max_players ?? "?";
-    const redirectParam = encodeURIComponent(`${celoBasePath}/${roomId}`);
-
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#050208] text-white flex flex-col items-center justify-center px-4 py-12"
-        style={{ background: "radial-gradient(ellipse at top, rgba(124,58,237,0.18) 0%, transparent 60%), #050208" }}
+      <div
+        style={{
+          height: "100vh",
+          background: "#0A0A0F",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 16,
+        }}
       >
-        <div className="mb-8 text-center">
-          <p className="text-4xl mb-3">🎲</p>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">GarmonPay</p>
-          <p className="text-2xl font-bold text-white">C-Lo Street Dice</p>
-        </div>
+        <div
+          style={{
+            width: 60,
+            height: 60,
+            border: "3px solid rgba(245,200,66,0.3)",
+            borderTop: "3px solid #F5C842",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite",
+          }}
+        />
+        <p style={{ color: "#F5C842", fontFamily: "Courier New", fontSize: 14, letterSpacing: 2 }}>LOADING ROOM...</p>
+      </div>
+    );
+  }
 
-        <div className="w-full max-w-sm rounded-2xl border border-[#F5C842]/25 bg-[#0d0520]/90 p-6 space-y-5"
-          style={{ boxShadow: "0 0 40px rgba(124,58,237,0.2)", backdropFilter: "blur(12px)" }}
+  if (error || !room) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          background: "#0A0A0F",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        <p style={{ color: "#EF4444", fontSize: 24 }}>{error || "Room not found"}</p>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/games/celo")}
+          style={{
+            background: "linear-gradient(135deg, #F5C842, #D4A017)",
+            border: "none",
+            borderRadius: 8,
+            color: "#000",
+            padding: "12px 24px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontFamily: "Courier New",
+          }}
         >
-          <div className="text-center">
-            <p className="text-lg font-bold text-[#F5C842]">{previewBankerName}</p>
-            {room && (
-              <p className="text-xs text-violet-400/60 mt-1">
-                {room.room_type === "private" ? "🔒 Private Room" : "🌐 Public Room"}
-              </p>
-            )}
+          BACK TO LOBBY
+        </button>
+      </div>
+    );
+  }
+
+  const rollStyle = rollName ? getRollStyle(rollName) : null;
+  const currentSeat = currentRound?.current_player_seat;
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes cloFlash {
+          from { opacity: 1; transform: scale(1) }
+          to { opacity: 0.7; transform: scale(1.08) }
+        }
+        @keyframes shake {
+          0%,100% { transform: translateX(0) }
+          20% { transform: translateX(-12px) }
+          40% { transform: translateX(12px) }
+          60% { transform: translateX(-12px) }
+          80% { transform: translateX(12px) }
+        }
+        @keyframes explode {
+          0% { transform: scale(0.3); opacity: 0 }
+          60% { transform: scale(1.15) }
+          100% { transform: scale(1); opacity: 1 }
+        }
+        @keyframes turnPulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(245,200,66,0.6) }
+          50% { box-shadow: 0 0 0 14px rgba(245,200,66,0) }
+        }
+        @keyframes seatJoin {
+          from { opacity: 0; transform: scale(0.8) translateY(10px) }
+          to { opacity: 1; transform: scale(1) translateY(0) }
+        }
+        @keyframes pulse {
+          0%,100% { opacity: 1 }
+          50% { opacity: 0.5 }
+        }
+        @keyframes livePulse {
+          0%,100% { transform: scale(1); opacity: 1 }
+          50% { transform: scale(1.4); opacity: 0.6 }
+        }
+        @keyframes rainbow {
+          0% { color: #F5C842 }
+          25% { color: #10B981 }
+          50% { color: #A855F7 }
+          75% { color: #3B82F6 }
+          100% { color: #F5C842 }
+        }
+        @keyframes rollDie0 {
+          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
+          30%  { transform: rotateX(540deg) rotateY(270deg) rotateZ(180deg) }
+          70%  { transform: rotateX(900deg) rotateY(450deg) rotateZ(270deg) }
+          100% { transform: rotateX(1080deg) rotateY(540deg) rotateZ(360deg) }
+        }
+        @keyframes rollDie1 {
+          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
+          30%  { transform: rotateX(270deg) rotateY(540deg) rotateZ(90deg) }
+          70%  { transform: rotateX(450deg) rotateY(720deg) rotateZ(180deg) }
+          100% { transform: rotateX(720deg) rotateY(900deg) rotateZ(360deg) }
+        }
+        @keyframes rollDie2 {
+          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
+          30%  { transform: rotateX(360deg) rotateY(180deg) rotateZ(270deg) }
+          70%  { transform: rotateX(540deg) rotateY(360deg) rotateZ(450deg) }
+          100% { transform: rotateX(900deg) rotateY(720deg) rotateZ(360deg) }
+        }
+        ::-webkit-scrollbar { width: 4px }
+        ::-webkit-scrollbar-track { background: transparent }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(124,58,237,0.4);
+          border-radius: 2px;
+        }
+      `}</style>
+
+      <div
+        style={{
+          height: "100vh",
+          background: "#0A0A0F",
+          backgroundImage: `
+          radial-gradient(ellipse at 15% 50%,
+            rgba(124,58,237,0.08) 0%, transparent 55%),
+          radial-gradient(ellipse at 85% 50%,
+            rgba(245,200,66,0.05) 0%, transparent 55%)
+        `,
+          display: "grid",
+          gridTemplateRows: "60px 1fr 80px",
+          overflow: "hidden",
+          fontFamily: "DM Sans, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(13,5,32,0.95)",
+            borderBottom: "1px solid rgba(124,58,237,0.25)",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 20px",
+            gap: 16,
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard/games/celo")}
+            style={{
+              background: "none",
+              border: "1px solid rgba(124,58,237,0.3)",
+              borderRadius: 8,
+              color: "#aaa",
+              padding: "6px 12px",
+              cursor: "pointer",
+              fontSize: 12,
+              fontFamily: "Courier New",
+            }}
+          >
+            ← LOBBY
+          </button>
+
+          <h1
+            style={{
+              fontFamily: "Cinzel Decorative, serif",
+              fontSize: 16,
+              color: "#F5C842",
+              flex: 1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {room.name}
+          </h1>
+
+          <div
+            style={{
+              background: "rgba(245,200,66,0.1)",
+              border: "1px solid rgba(245,200,66,0.3)",
+              borderRadius: 8,
+              padding: "4px 14px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 10, color: "#888", fontFamily: "Courier New", letterSpacing: 1 }}>BANK</div>
+            <div style={{ fontSize: 16, color: "#F5C842", fontWeight: "bold", fontFamily: "Courier New" }}>
+              {(room.current_bank_sc / 100).toFixed(0)} SC
+            </div>
           </div>
 
-          {room && (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Bank</p>
-                <p className="text-base font-bold text-[#F5C842] font-mono mt-1">{previewBank}</p>
-              </div>
-              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Min Entry</p>
-                <p className="text-base font-bold text-white font-mono mt-1">{previewMin}</p>
-              </div>
-              <div className="rounded-xl bg-white/5 border border-white/[0.07] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Players</p>
-                <p className="text-base font-bold text-white font-mono mt-1">{previewPlayers}/{previewMax}</p>
+          {currentRound && (
+            <div
+              style={{
+                background: "rgba(124,58,237,0.1)",
+                border: "1px solid rgba(124,58,237,0.3)",
+                borderRadius: 8,
+                padding: "4px 14px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#888", fontFamily: "Courier New" }}>PRIZE POOL</div>
+              <div style={{ fontSize: 16, color: "#A855F7", fontWeight: "bold", fontFamily: "Courier New" }}>
+                {(currentRound.prize_pool_sc / 100).toFixed(0)} SC
               </div>
             </div>
           )}
 
-          <div className="space-y-3 pt-2">
-            <Link
-              href={`/login?redirect=${redirectParam}`}
-              className="block w-full rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-3.5 text-center font-bold text-black text-sm shadow-lg shadow-amber-900/30"
-            >
-              Login to Join
-            </Link>
-            <Link
-              href={`/register?redirect=${redirectParam}`}
-              className="block w-full rounded-xl border border-[#7C3AED]/50 bg-[#7C3AED]/15 py-3.5 text-center font-semibold text-violet-300 text-sm hover:bg-[#7C3AED]/25 transition-all"
-            >
-              Sign Up &amp; Join
-            </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "#666", fontFamily: "Courier New" }}>👁 {onlineCount}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: connected ? "#10B981" : "#EF4444",
+                  animation: connected ? "livePulse 2s ease infinite" : "none",
+                }}
+              />
+              <span style={{ fontSize: 10, color: connected ? "#10B981" : "#EF4444", fontFamily: "Courier New" }}>
+                {connected ? "LIVE" : "RECONNECTING"}
+              </span>
+            </div>
           </div>
-
-          <p className="text-center text-xs text-violet-400/50">
-            Already have an account?{" "}
-            <Link href={`/login?redirect=${redirectParam}`} className="text-[#F5C842] hover:underline">
-              Login to join instantly
-            </Link>
-          </p>
         </div>
 
-        <Link href={celoBasePath} className="mt-6 text-xs text-violet-400/50 hover:text-violet-300 transition-colors">
-          ← View all C-Lo rooms
-        </Link>
-      </div>
-    );
-  }
-
-  if (!initialSyncDone) {
-    return (
-      <div className="min-h-screen bg-[#0e0118] flex flex-col items-center justify-center gap-3">
-        <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
-        <p className="text-xs text-violet-400/60">
-          {realtimeConnected ? "Syncing room…" : "Connecting to live channel…"}
-        </p>
-      </div>
-    );
-  }
-
-  if (!room) {
-    return (
-      <div className="min-h-screen bg-[#0e0118] flex flex-col items-center justify-center gap-4">
-        <p className="text-violet-200/70">Room not found.</p>
-        <Link href={celoBasePath} className="text-sm text-violet-300 underline">← Back to lobby</Link>
-      </div>
-    );
-  }
-
-  // ── Render: join panel ────────────────────────────────────────────────────
-  if (!isInRoom) {
-    const minBet = room.min_bet_cents;
-    const joinBanker = players.find((p) => p.role === "banker");
-    const joinBankerTitle = `${getDisplayName(joinBanker ?? { user_id: room.banker_id })}'s C-Lo Room`;
-    const joinPlayerCount = players.filter((p) => p.role !== "spectator").length;
-    const totalCommittedStakes = players
-      .filter((p) => p.role === "player")
-      .reduce((s, p) => s + celoPlayerStakeCents(p), 0);
-    const remainingCover = Math.max(0, room.banker_reserve_cents - totalCommittedStakes);
-    const joinEntryCap = Math.min(room.max_bet_cents, sweepsCoins, remainingCover);
-    const entryChipMults = [1, 2, 5, 10];
-
-    return (
-      <div className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
-        <div className="pointer-events-none fixed inset-0">
-          <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/20 blur-[130px]" />
-        </div>
-        <div className="relative z-10 mx-auto max-w-md px-4 py-12">
-          <div className="flex items-start justify-between gap-3 mb-6">
-            <Link href={celoBasePath} className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
-              ← C-Lo Lobby
-            </Link>
-            <button
-              type="button"
-              onClick={() => void handleShare()}
+        <div style={{ display: "flex", overflow: "hidden" }}>
+          <div
+            style={{
+              flex: 1,
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "20px 20px",
+              overflow: "hidden",
+            }}
+          >
+            <div
               style={{
-                padding: "6px 14px",
-                background: copied ? "rgba(16,185,129,0.2)" : "rgba(124,58,237,0.2)",
-                border: `1px solid ${copied ? "#10B981" : "#7C3AED"}`,
-                borderRadius: 8,
-                color: copied ? "#10B981" : "#A855F7",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: "bold",
-                fontFamily: "Courier New, monospace",
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%,-50%) rotate(-15deg)",
+                fontSize: 200,
+                fontWeight: 900,
+                color: "#7C3AED",
+                opacity: 0.03,
+                userSelect: "none",
+                pointerEvents: "none",
+                fontFamily: "Cinzel Decorative",
+                whiteSpace: "nowrap",
               }}
             >
-              {copied ? "✓ COPIED!" : "🔗 SHARE"}
-            </button>
-          </div>
-          <div className="rounded-2xl border border-[#F5C842]/20 bg-[#12081f]/90 p-6 shadow-2xl shadow-violet-900/40">
-            <div className="text-center mb-6">
-              <p className="text-4xl mb-2">🎲</p>
-              <h1 className="text-xl font-bold text-[#F5C842]">{joinBankerTitle}</h1>
-              <p className="text-sm text-violet-200/80 mt-1">{room.name}</p>
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-xs text-violet-300/70">
-                <span>
-                  Min entry:{" "}
-                  <span className="text-white font-mono">{formatScLine(room.min_bet_cents)}</span>
-                </span>
-                <span>
-                  Players:{" "}
-                  <span className="text-white font-mono">
-                    {joinPlayerCount}/{room.max_players}
-                  </span>
-                </span>
-                <span>
-                  Bank:{" "}
-                  <span className="text-[#F5C842] font-mono">{formatScLine(room.current_bank_cents)}</span>
-                </span>
-                <span>{room.platform_fee_pct}% fee</span>
-              </div>
-              <p className="text-center text-[11px] text-violet-300/80 font-mono mt-3">
-                Lobby room code:{" "}
-                <span className="text-[#F5C842] font-semibold">{room.id.slice(0, 8).toUpperCase()}</span>
-              </p>
+              C-LO
             </div>
 
-            {joinError && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-4">{joinError}</div>
-            )}
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                background: "linear-gradient(to bottom, transparent, #7C3AED, transparent)",
+                boxShadow: "0 0 30px rgba(124,58,237,0.5)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                background: "linear-gradient(to bottom, transparent, #F5C842, transparent)",
+                boxShadow: "0 0 30px rgba(245,200,66,0.3)",
+              }}
+            />
 
-            {room.room_type === "private" && (
-              <div className="mb-4">
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Private join password</label>
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  maxLength={12}
-                  placeholder="Enter room code"
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono text-sm"
-                />
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, zIndex: 2 }}>
+              <div style={{ fontSize: 20 }}>👑</div>
+              <div
+                style={{
+                  width: 70,
+                  height: 70,
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #4C1D95, #7C3AED)",
+                  border: "3px solid #F5C842",
+                  boxShadow: "0 0 25px rgba(245,200,66,0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24,
+                  fontWeight: "bold",
+                  color: "#fff",
+                }}
+              >
+                {(banker?.name || "B")[0].toUpperCase()}
               </div>
-            )}
+              <span style={{ color: "#F5C842", fontFamily: "Courier New", fontSize: 11, letterSpacing: 1 }}>
+                {banker?.name || "BANKER"}
+              </span>
+              <div
+                style={{
+                  background: "rgba(245,200,66,0.15)",
+                  border: "1px solid rgba(245,200,66,0.4)",
+                  borderRadius: 99,
+                  padding: "2px 10px",
+                  fontSize: 10,
+                  color: "#F5C842",
+                  fontFamily: "Courier New",
+                }}
+              >
+                BANKER
+              </div>
 
-            <div className="mb-3 flex flex-wrap gap-2 justify-center">
-              {entryChipMults.map((m) => {
-                const cents = minBet * m;
-                if (cents > room.max_bet_cents) return null;
-                const capped = Math.min(cents, sweepsCoins, room.max_bet_cents, remainingCover);
-                if (capped < minBet) return null;
+              {myPlayer?.role === "banker" && (
+                <button
+                  type="button"
+                  onClick={() => setShowDiceShop(true)}
+                  style={{
+                    background: "rgba(124,58,237,0.2)",
+                    border: "1px solid rgba(124,58,237,0.4)",
+                    borderRadius: 6,
+                    color: "#A855F7",
+                    padding: "4px 10px",
+                    fontSize: 10,
+                    cursor: "pointer",
+                    fontFamily: "Courier New",
+                  }}
+                >
+                  🎲 CHANGE DICE
+                </button>
+              )}
+            </div>
+
+            <div
+              style={{
+                position: "relative",
+                width: 360,
+                height: 230,
+                borderRadius: "50%",
+                background: "radial-gradient(circle, #1a3a2a 0%, #0d2018 60%, #080f0c 100%)",
+                border: "4px solid #2a5a3a",
+                boxShadow: `
+                0 0 60px rgba(0,0,0,0.9),
+                inset 0 0 40px rgba(0,0,0,0.6),
+                0 0 30px rgba(16,185,129,0.1)
+              `,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+                zIndex: 2,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "50%",
+                  background:
+                    "repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)",
+                }}
+              />
+
+              <DiceDisplay dice={dice} rolling={rolling} rollEpoch={rollEpoch} diceType={myDiceType} />
+
+              {rollName && !rolling && (
+                <div
+                  style={{
+                    fontFamily: "Cinzel Decorative, serif",
+                    fontSize: rollStyle?.size || 32,
+                    color: rollStyle?.color || "#fff",
+                    textShadow: rollStyle?.glow || "none",
+                    animation: rollStyle?.animation || "none",
+                    textAlign: "center",
+                    lineHeight: 1.2,
+                    zIndex: 1,
+                  }}
+                >
+                  {rollName}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 20,
+                alignItems: "flex-start",
+                justifyContent: "center",
+                flexWrap: "wrap",
+                zIndex: 2,
+              }}
+            >
+              {Array.from({ length: room.max_players }).map((_, i) => {
+                const player = activePlayers[i];
+                const isCurrentUser = player?.user_id === currentUser?.id;
+                const isActive =
+                  currentRound?.status === "player_rolling" &&
+                  player &&
+                  currentSeat != null &&
+                  Number(player.seat_number) === Number(currentSeat);
+                const isCovered = currentRound?.bank_covered && currentRound?.covered_by === player?.user_id;
+
                 return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setJoinEntryCents(capped)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-colors ${
-                      joinEntryCents === capped
-                        ? "bg-[#F5C842]/25 text-[#F5C842] border border-[#F5C842]/50"
-                        : "bg-white/5 text-violet-200 border border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    {formatScLine(cents)}
-                  </button>
+                  <PlayerSeat
+                    key={i}
+                    seatNumber={i + 1}
+                    player={player}
+                    isEmpty={!player}
+                    isCurrentUser={isCurrentUser}
+                    isActive={isActive}
+                    isBankCovered={isCovered}
+                    onJoin={
+                      !player
+                        ? () => {
+                            setJoinSeatNumber(i + 1);
+                            setShowJoinSeat(true);
+                          }
+                        : undefined
+                    }
+                  />
                 );
               })}
             </div>
 
-            <div className="mb-5">
-              <label className="text-[10px] uppercase tracking-widest text-violet-400/70">
-                Entry Amount — <span className="text-[#F5C842]">{formatScLine(joinEntryCents)}</span>
-              </label>
-              <input
-                type="range"
-                min={minBet}
-                max={joinEntryCap < minBet ? minBet : Math.max(minBet, joinEntryCap)}
-                step={minBet}
-                value={
-                  joinEntryCap < minBet
-                    ? minBet
-                    : Math.max(minBet, Math.min(joinEntryCents, joinEntryCap))
-                }
-                onChange={(e) => setJoinEntryCents(Number(e.target.value))}
-                className="mt-2 w-full accent-[#F5C842]"
+            {myStreak >= 2 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 20,
+                  left: 20,
+                  background: "rgba(245,200,66,0.15)",
+                  border: "1px solid rgba(245,200,66,0.4)",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontFamily: "Courier New",
+                  fontSize: 12,
+                  color: "#F5C842",
+                }}
+              >
+                🔥 {myStreak} WIN STREAK
+              </div>
+            )}
+
+            {myPlayer?.role === "player" && currentRound && !currentRound.bank_covered && (
+              <button
+                type="button"
+                onClick={() => setShowCoverBank(true)}
+                style={{
+                  position: "absolute",
+                  top: 20,
+                  right: 20,
+                  background: "rgba(16,185,129,0.15)",
+                  border: "1px solid rgba(16,185,129,0.4)",
+                  borderRadius: 8,
+                  color: "#10B981",
+                  padding: "8px 14px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
+                  letterSpacing: 1,
+                }}
+              >
+                💰 COVER THE BANK
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              width: 340,
+              background: "rgba(8,5,20,0.95)",
+              borderLeft: "1px solid rgba(124,58,237,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ padding: "12px 12px 0" }}>
+              <VoiceChat
+                roomId={roomId}
+                userId={currentUser?.id || ""}
+                userName={myPlayer?.name || "Player"}
+                role={myPlayer?.role || "spectator"}
               />
-              <div className="flex justify-between text-[10px] text-violet-400/50 mt-1 gap-2">
-                <span>Min: {formatScLine(minBet)}</span>
-                <span className="text-right">Your balance: {formatGpayAmount(sweepsCoins)}</span>
+            </div>
+
+            <div
+              style={{
+                flex: "0 0 auto",
+                maxHeight: "35%",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                borderBottom: "1px solid rgba(124,58,237,0.15)",
+              }}
+            >
+              <div
+                style={{
+                  padding: "10px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ color: "#F5C842", fontFamily: "Courier New", fontSize: 11, fontWeight: "bold", letterSpacing: 2 }}>
+                  SIDE BETS
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSideBetModal(true)}
+                  style={{
+                    background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "#000",
+                    padding: "4px 10px",
+                    fontSize: 10,
+                    cursor: "pointer",
+                    fontFamily: "Courier New",
+                    fontWeight: "bold",
+                  }}
+                >
+                  + CREATE
+                </button>
+              </div>
+
+              <div
+                style={{
+                  overflow: "auto",
+                  padding: "0 12px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                {sideBets.length === 0 ? (
+                  <p style={{ color: "#444", fontSize: 11, fontFamily: "Courier New", textAlign: "center", padding: "12px 0" }}>
+                    No open side bets
+                  </p>
+                ) : (
+                  sideBets.map((bet) => (
+                    <div
+                      key={bet.id}
+                      style={{
+                        background: "rgba(124,58,237,0.08)",
+                        border: "1px solid rgba(124,58,237,0.2)",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, color: "#A855F7", fontFamily: "Courier New", marginBottom: 2 }}>{bet.creator_name}</div>
+                        <div style={{ fontSize: 11, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {bet.bet_type.replace(/_/g, " ").toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#F5C842", fontFamily: "Courier New" }}>
+                          {(bet.amount_sc / 100).toFixed(0)} SC · {bet.odds_multiplier}x
+                        </div>
+                      </div>
+                      {bet.creator_id !== currentUser?.id && (
+                        <button
+                          type="button"
+                          onClick={() => void acceptSideBet(bet.id)}
+                          style={{
+                            background: "linear-gradient(135deg, #10B981, #059669)",
+                            border: "none",
+                            borderRadius: 6,
+                            color: "#fff",
+                            padding: "6px 10px",
+                            fontSize: 10,
+                            cursor: "pointer",
+                            fontFamily: "Courier New",
+                            fontWeight: "bold",
+                            flexShrink: 0,
+                          }}
+                        >
+                          TAKE IT
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
-            <button
-              type="button"
-              disabled={
-                joinLoading ||
-                joinEntryCents < minBet ||
-                sweepsCoins < joinEntryCents ||
-                joinEntryCents > joinEntryCap
-              }
-              onClick={() => handleJoin(false)}
-              className="w-full rounded-xl bg-gradient-to-r from-[#eab308] via-[#F5C842] to-[#eab308] py-3.5 font-bold text-[#0e0118] shadow-lg shadow-amber-900/30 disabled:opacity-50 transition-all mb-3"
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 6px", borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
+                <span style={{ color: "#F5C842", fontFamily: "Courier New", fontSize: 11, fontWeight: "bold", letterSpacing: 2 }}>
+                  TABLE TALK
+                </span>
+              </div>
+
+              <div style={{ flex: 1, overflow: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                {messages.map((msg) => (
+                  <div key={msg.id}>
+                    {msg.is_system ? (
+                      <div
+                        style={{
+                          background: "rgba(245,200,66,0.1)",
+                          border: "1px solid rgba(245,200,66,0.2)",
+                          borderRadius: 99,
+                          padding: "4px 12px",
+                          fontSize: 11,
+                          color: "#F5C842",
+                          textAlign: "center",
+                          fontFamily: "Courier New",
+                        }}
+                      >
+                        {msg.message}
+                      </div>
+                    ) : (
+                      <div>
+                        <span style={{ fontSize: 10, color: "#7C3AED", fontFamily: "Courier New", marginRight: 6 }}>
+                          {msg.user_name || "Player"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{msg.message}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(124,58,237,0.15)", display: "flex", gap: 8 }}>
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void sendChat()}
+                  placeholder="Say something..."
+                  style={{
+                    flex: 1,
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(124,58,237,0.25)",
+                    borderRadius: 8,
+                    color: "#fff",
+                    padding: "8px 12px",
+                    fontSize: 12,
+                    outline: "none",
+                    fontFamily: "DM Sans",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void sendChat()}
+                  style={{
+                    background: "linear-gradient(135deg, #7C3AED, #A855F7)",
+                    border: "none",
+                    borderRadius: 8,
+                    color: "#fff",
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: "bold",
+                  }}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(13,5,32,0.98)",
+            borderTop: "1px solid rgba(124,58,237,0.25)",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 20px",
+            gap: 16,
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <div style={{ minWidth: 100 }}>
+            <div style={{ fontSize: 10, color: "#555", fontFamily: "Courier New", letterSpacing: 1 }}>YOUR SC</div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                fontFamily: "Courier New",
+                color: balanceFlash === "up" ? "#10B981" : balanceFlash === "down" ? "#EF4444" : "#F5C842",
+                transition: "color 0.3s ease",
+              }}
             >
-              {joinLoading ? "Joining…" : `JOIN FOR ${formatScLine(joinEntryCents)}`}
-            </button>
-            <button
-              type="button"
-              disabled={joinLoading}
-              onClick={() => handleJoin(true)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-violet-300 hover:bg-white/10 transition-all disabled:opacity-50"
-            >
-              Watch as Spectator (free)
-            </button>
+              {myBalance.toLocaleString()}
+            </div>
+          </div>
+
+          {myPlayer && myPlayer.entry_sc > 0 && (
+            <div style={{ minWidth: 80 }}>
+              <div style={{ fontSize: 10, color: "#555", fontFamily: "Courier New", letterSpacing: 1 }}>ENTRY</div>
+              <div style={{ fontSize: 16, color: "#10B981", fontFamily: "Courier New", fontWeight: "bold" }}>{myPlayer.entry_sc} SC</div>
+            </div>
+          )}
+
+          <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+            {canStartRound ? (
+              <button
+                type="button"
+                onClick={() => void handleStartRound()}
+                style={{
+                  background: "linear-gradient(135deg, #7C3AED, #A855F7)",
+                  border: "none",
+                  borderRadius: 12,
+                  color: "#fff",
+                  padding: "14px 40px",
+                  fontSize: 16,
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
+                  letterSpacing: 2,
+                  boxShadow: "0 0 20px rgba(124,58,237,0.4)",
+                }}
+              >
+                🎲 START ROUND
+              </button>
+            ) : isMyRoll ? (
+              <button
+                type="button"
+                onClick={() => void handleRoll()}
+                disabled={rolling}
+                style={{
+                  background: rolling ? "rgba(245,200,66,0.3)" : "linear-gradient(135deg, #F5C842, #D4A017)",
+                  border: "none",
+                  borderRadius: 12,
+                  color: rolling ? "#888" : "#000",
+                  padding: "14px 48px",
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  cursor: rolling ? "not-allowed" : "pointer",
+                  fontFamily: "Courier New",
+                  letterSpacing: 2,
+                  animation: rolling ? "none" : "pulse 2s ease infinite",
+                  boxShadow: rolling ? "none" : "0 0 30px rgba(245,200,66,0.5)",
+                  transition: "all 0.3s",
+                }}
+              >
+                {rolling
+                  ? "🎲 ROLLING..."
+                  : rollResult === "win"
+                    ? "🔥 ROLL AGAIN"
+                    : rollResult === "loss"
+                      ? "💀 RUN IT BACK"
+                      : "🎲 ROLL DICE"}
+              </button>
+            ) : (
+              <div style={{ color: "#444", fontFamily: "Courier New", fontSize: 14, letterSpacing: 1 }}>
+                {currentRound ? `${banker?.name || "BANKER"}'S TURN...` : "WAITING FOR ROUND..."}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, minWidth: 120, justifyContent: "flex-end" }}>
+            {canLowerBank && (
+              <button
+                type="button"
+                onClick={() => setShowLowerBank(true)}
+                style={{
+                  background: "rgba(16,185,129,0.15)",
+                  border: "1px solid #10B981",
+                  borderRadius: 8,
+                  color: "#10B981",
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
+                }}
+              >
+                📉 LOWER BANK
+                <div style={{ fontSize: 9 }}>{lowerBankTimer}s</div>
+              </button>
+            )}
+            {canBecomeBanker && (
+              <button
+                type="button"
+                onClick={() => setShowBecomeBanker(true)}
+                style={{
+                  background: "rgba(245,200,66,0.15)",
+                  border: "1px solid #F5C842",
+                  borderRadius: 8,
+                  color: "#F5C842",
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
+                }}
+              >
+                👑 TAKE BANK
+                <div style={{ fontSize: 9 }}>{becomeBankerTimer}s</div>
+              </button>
+            )}
           </div>
         </div>
       </div>
-    );
-  }
 
-  // ── Render: game view ─────────────────────────────────────────────────────
-
-  const roundStatus = currentRound?.status ?? null;
-  const isBankerRolling = roundStatus === "banker_rolling";
-  const isPlayerRolling = roundStatus === "player_rolling";
-  const roundActive = isBankerRolling || isPlayerRolling;
-  const noActiveRound = !currentRound;
-
-  const seatedPlayers = players.filter((p) => p.role === "player");
-  /** Players with money on the table (`entry_sc` / `bet_cents`, cents). */
-  const playersWithEntries = seatedPlayers.filter((p) => getEntryAmount(p) > 0);
-  const playersWithBets = playersWithEntries;
-
-  /** Banker can start when at least one player has a stake and no round is in progress (`POST /api/celo/round/start` also allows `waiting`). */
-  const roomOpenForStart = room.status === "active" || room.status === "waiting";
-  const canStartRound =
-    amIBanker &&
-    roomOpenForStart &&
-    noActiveRound &&
-    playersWithEntries.length > 0 &&
-    !isBankerRolling &&
-    !isPlayerRolling;
-
-  const canCoverBank =
-    amIPlayer &&
-    isBankerRolling &&
-    currentRound &&
-    !currentRound.bank_covered &&
-    !sameCeloUserId(room.banker_id, userId);
-
-  const canRollBanker = amIBanker && isBankerRolling && playersWithBets.length > 0;
-  const canRollPlayer = amIPlayer && isPlayerRolling && isMyTurn;
-  const showPlayerRollButton = amIPlayer && isPlayerRolling;
-
-  const isHeadToHead = Boolean(currentRound?.bank_covered);
-  const isCoveringPlayer = Boolean(
-    currentRound?.covered_by && sameCeloUserId(String(currentRound.covered_by), userId)
-  );
-  const canShortStopBanker =
-    isRolling && isHeadToHead && isCoveringPlayer && isBankerRolling;
-  const canShortStopPlayer = isRolling && isHeadToHead && amIBanker && isPlayerRolling;
-
-  const lastResult = lastRollResult?.result;
-
-  /**
-   * Values on dice when not tumbling; null = tumbling / hidden faces in AnimatedDice.
-   * `currentDice` holds faces during player local sequence before `lastRollResult` is set.
-   * While in player_rolling, never fall back to `banker_dice` — that would show the wrong faces.
-   */
-  const hasThreeDiceFaces =
-    lastRollResult?.dice?.length === 3 || currentDice?.length === 3;
-
-  const hideFinalDiceFaces =
-    isRolling ||
-    diceUiPhase === "rolling" ||
-    (diceUiPhase === "revealing" && !hasThreeDiceFaces);
-
-  const simpleDiceValues: number[] | null = hideFinalDiceFaces
-    ? null
-    : lastRollResult?.dice?.length === 3
-      ? lastRollResult.dice
-      : currentDice?.length === 3
-        ? currentDice
-        : rollInteractionBusy && diceUiPhase === "idle"
-          ? null
-          : !isPlayerRolling && currentRound?.banker_dice?.length === 3
-            ? [...currentRound.banker_dice]
-            : null;
-
-  const bankerPlayer = players.find((p) => sameCeloUserId(p.user_id, room.banker_id)) ?? null;
-  const statusLine = getCeloRoomStatusLine({
-    noActiveRound,
-    round: currentRound,
-    roomStatus: room.status,
-    isBanker: amIBanker,
-    amIPlayer,
-    currentTurnPlayer,
-    isMyTurn,
-    activePlayers: seatedPlayers,
-    playersWithBets,
-  });
-
-  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    console.debug("[celo/ui] bankerControls", {
-      roomStatus: room.status,
-      roundStatus: currentRound?.status ?? null,
-      noActiveRound,
-      canStartRound,
-      canRollBanker,
-      amIBanker,
-      playersWithBets: playersWithBets.length,
-    });
-  }
-
-  const roundLabelShort = currentRound?.id ? currentRound.id.slice(0, 6).toUpperCase() : "—";
-
-  const diceValues: [number, number, number] | null =
-    simpleDiceValues && simpleDiceValues.length === 3
-      ? [simpleDiceValues[0]!, simpleDiceValues[1]!, simpleDiceValues[2]!]
-      : null;
-  const rollAnimKey = rollAnimEpoch;
-
-  const watchingCount = Math.max(
-    onlineCount,
-    players.filter((p) => p.role === "spectator").length
-  );
-
-  return (
-    <div
-      className="text-white relative"
-      style={{
-        minHeight: "100vh",
-        background: "#05010F",
-        position: "relative",
-        overflow: "hidden",
-        color: "#fff",
-        fontFamily: "DM Sans, sans-serif",
-      }}
-    >
-      {roundSummary && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
-          <div className="max-w-md w-full rounded-2xl border border-[#F5C842]/35 bg-[#12081f] p-6 shadow-2xl shadow-black/50">
-            <p className="text-center text-sm font-bold text-[#F5C842] tracking-wide mb-4">Round complete</p>
-            <ul className="space-y-2 text-sm">
-              {roundSummary.playerResults.map((r, i) => {
-                const rp = players.find((p) => p.user_id === r.userId);
-                return (
-                  <li
-                    key={`${r.userId}-${i}`}
-                    className={`font-mono ${r.outcome === "win" ? "text-emerald-400" : "text-red-400"}`}
-                  >
-                    {getDisplayName(rp ?? { user_id: r.userId })} — {r.label}
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="text-center text-xs text-violet-300/80 mt-5 border-t border-white/10 pt-4">
-              {roundSummary.bankerLabel}
-            </p>
-          </div>
-        </div>
-      )}
-      {/* ── C-Lo Banker Offer Modal (BUG 2) ── */}
-      {showBecomeBankerModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-          <div className="max-w-sm w-full rounded-2xl border-2 border-[#F5C842]/50 bg-[#12081f] p-6 shadow-2xl shadow-[#F5C842]/20 text-center space-y-4">
-            <p className="text-2xl font-black text-[#F5C842]" style={{ textShadow: "0 0 20px #F5C842aa" }}>
-              🎲 C-Lo!
-            </p>
-            <p className="text-base font-semibold text-white">
-              {currentRound?.bank_covered
-                ? "You covered the bank and won!"
-                : "You rolled 4-5-6!"}
-            </p>
-            <p className="text-sm text-violet-200/80">Want to become the banker?</p>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
-              <p className="text-xs text-violet-300/60">Bank coverage required</p>
-              <p className="text-xl font-bold text-[#F5C842] font-mono">{formatScLine(becomeBankerCostCents)}</p>
-              <p className="text-xs text-violet-300/50">Your balance: {formatGpayAmount(sweepsCoins)}</p>
-            </div>
-            <p className="text-xs text-violet-400/60">
-              {becomeBankerSecondsLeft}s remaining
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={actionLoading === "become_banker" || sweepsCoins < becomeBankerCostCents}
-                onClick={handleBecomeBanker}
-                className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-3 font-bold text-black disabled:opacity-50 transition-all text-sm"
-              >
-                {actionLoading === "become_banker" ? "Claiming…" : "Become Banker"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBecomeBankerModal(false);
-                  setBecomeBankerDeadline(null);
-                }}
-                className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 font-medium text-violet-300 text-sm hover:bg-white/10 transition-all"
-              >
-                No Thanks
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCeloBankModal && room && sameCeloUserId(room.banker_id, userId) && (
+      {showDiceShop && (
         <div
           style={{
             position: "fixed",
@@ -2506,1182 +1969,346 @@ export default function CeloRoomPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 120,
+            zIndex: 100,
           }}
         >
           <div
             style={{
               background: "#0D0520",
-              border: "2px solid #F5C842",
-              borderRadius: 20,
-              padding: 32,
-              maxWidth: 400,
-              width: "90%",
-              textAlign: "center",
-              boxShadow: "0 0 40px rgba(245,200,66,0.3)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              borderRadius: 16,
+              padding: 28,
+              width: 480,
+              maxWidth: "95vw",
             }}
           >
-            <div style={{ fontSize: 48 }}>🎲</div>
-            <h2
-              style={{
-                color: "#F5C842",
-                fontFamily: "Cinzel Decorative, Georgia, serif",
-                fontSize: 24,
-                margin: "16px 0",
-              }}
-            >
-              C-LO! You Win!
-            </h2>
-
-            <p style={{ color: "#aaa", marginBottom: 24 }}>Adjust your bank and minimum bet</p>
-
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ color: "#F5C842", fontSize: 12 }}>NEW BANK AMOUNT</label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 8,
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                {[0.25, 0.5, 0.75, 1].map((fraction) => {
-                  const amount = Math.round(celoModalBankSC * fraction);
-                  return (
-                    <button
-                      key={fraction}
-                      type="button"
-                      onClick={() => setAdjustedBank(amount)}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: 8,
-                        border:
-                          adjustedBank === amount ? "2px solid #F5C842" : "1px solid #333",
-                        background:
-                          adjustedBank === amount ? "rgba(245,200,66,0.2)" : "transparent",
-                        color: "#fff",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {formatScLine(amount)}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <input
-                type="number"
-                value={adjustedBank / 100}
-                onChange={(e) => setAdjustedBank(Number(e.target.value) * 100)}
-                style={{
-                  width: "100%",
-                  marginTop: 12,
-                  padding: 12,
-                  background: "#1a0535",
-                  border: "1px solid #7C3AED",
-                  borderRadius: 8,
-                  color: "#fff",
-                  fontSize: 18,
-                  textAlign: "center",
-                }}
-                placeholder="Custom amount"
-              />
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+              <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", fontSize: 18 }}>UPGRADE YOUR DICE</h2>
+              <button type="button" onClick={() => setShowDiceShop(false)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 20 }}>
+                ×
+              </button>
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ color: "#F5C842", fontSize: 12 }}>NEW MINIMUM BET</label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 8,
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                {[500, 1000, 2000, 5000, 10000].map((min) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              {(Object.keys(DICE_COLORS) as DiceType[]).map((type) => {
+                const colors = DICE_COLORS[type];
+                return (
                   <button
-                    key={min}
                     type="button"
-                    onClick={() => setAdjustedMinBet(min)}
+                    key={type}
+                    onClick={() => {
+                      setMyDiceType(type);
+                      setShowDiceShop(false);
+                    }}
                     style={{
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border:
-                        adjustedMinBet === min ? "2px solid #F5C842" : "1px solid #333",
-                      background:
-                        adjustedMinBet === min ? "rgba(245,200,66,0.2)" : "transparent",
-                      color: "#fff",
+                      background: myDiceType === type ? "rgba(245,200,66,0.15)" : "rgba(255,255,255,0.03)",
+                      border: myDiceType === type ? "2px solid #F5C842" : "1px solid rgba(124,58,237,0.2)",
+                      borderRadius: 10,
+                      padding: "14px 10px",
                       cursor: "pointer",
-                      fontSize: 12,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 8,
                     }}
                   >
-                    {formatScLine(min)}
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        background: colors.bg,
+                        borderRadius: 8,
+                        border: "2px solid rgba(255,255,255,0.2)",
+                      }}
+                    />
+                    <span style={{ color: "#fff", fontSize: 11, fontFamily: "Courier New", textTransform: "uppercase" }}>{type}</span>
+                    <span style={{ color: "#F5C842", fontSize: 10, fontFamily: "Courier New" }}>{type === "standard" ? "FREE" : "100 SC/die"}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-
-            <div style={{ display: "flex", gap: 12 }}>
-              <button
-                type="button"
-                onClick={() => void handleAdjustBank(adjustedBank, adjustedMinBet)}
-                disabled={bankAdjustLoading}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                  color: "#0e0118",
-                  border: "none",
-                  borderRadius: 10,
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  cursor: bankAdjustLoading ? "wait" : "pointer",
-                  opacity: bankAdjustLoading ? 0.7 : 1,
-                }}
-              >
-                {bankAdjustLoading ? "…" : "LOCK IT IN"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCeloBankModal(false)}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  background: "transparent",
-                  color: "#aaa",
-                  border: "1px solid #333",
-                  borderRadius: 10,
-                  cursor: "pointer",
-                }}
-              >
-                KEEP {formatScLine(celoModalBankSC)}
-              </button>
-            </div>
-
-            <p style={{ color: "#666", fontSize: 11, marginTop: 12 }}>
-              This option expires in 60 seconds
-            </p>
           </div>
         </div>
       )}
 
-      {/* Street scene: brick / concrete + neon */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-0"
-        style={{
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(255,255,255,0.04) 28px, rgba(255,255,255,0.04) 29px), repeating-linear-gradient(90deg, transparent, transparent 72px, rgba(255,255,255,0.025) 72px, rgba(255,255,255,0.025) 73px), linear-gradient(180deg, #05010F 0%, #0a0618 45%, #05010F 100%)`,
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed top-0 left-0 right-0 z-0 h-40"
-        style={{
-          background:
-            "radial-gradient(ellipse 90% 120% at 50% -20%, rgba(124,58,237,0.45), transparent 55%)",
-          boxShadow: "inset 0 -30px 60px rgba(124,58,237,0.08)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed left-0 top-0 bottom-0 z-0 w-28 sm:w-36"
-        style={{
-          background: "linear-gradient(90deg, rgba(245,200,66,0.18), rgba(245,200,66,0.04), transparent)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed right-0 top-0 bottom-0 z-0 w-28 sm:w-36"
-        style={{
-          background: "linear-gradient(270deg, rgba(245,200,66,0.18), rgba(245,200,66,0.04), transparent)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed bottom-0 left-0 right-0 z-0 h-24"
-        style={{
-          background: "linear-gradient(to top, rgba(16,185,129,0.22), rgba(16,185,129,0.06), transparent)",
-        }}
-      />
-
-      {/* TOP BAR — 56px fixed */}
-      <header
-        className="fixed top-0 left-0 right-0 z-[60] flex h-14 items-stretch border-b border-violet-500/25 px-2 sm:px-4"
-        style={{
-          background: "rgba(5,1,15,0.94)",
-          backdropFilter: "blur(16px)",
-        }}
-      >
-        <div className="flex min-w-0 flex-1 flex-col justify-center pr-2">
-          <Link
-            href={celoBasePath}
-            className="text-[10px] text-violet-400 hover:text-[#F5C842] sm:text-xs"
-          >
-            ← Lobby
-          </Link>
-          <button
-            type="button"
-            onClick={() => void handleShare()}
-            className="text-left text-[9px] text-violet-500 hover:text-violet-300"
-          >
-            {copied ? "✓ Link" : "Share"}
-          </button>
-        </div>
-        <h1
-          className={`${cinzelRoom.className} flex min-w-0 flex-[1.2] items-center justify-center px-1 text-center text-base font-bold leading-tight text-[#F5C842] sm:text-lg`}
-          style={{ textShadow: "0 0 20px rgba(245,200,66,0.35)" }}
+      {showCoverBank && room && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
         >
-          <span className="truncate">{room.name}</span>
-        </h1>
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center border-x border-violet-500/20 px-1">
-          <span className="text-[9px] uppercase tracking-wider text-violet-400">Bank</span>
-          <span className="font-mono text-sm font-bold tabular-nums text-[#F5C842] sm:text-base">
-            {formatScLine(room.current_bank_cents)}
-          </span>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col items-end justify-center pl-2 text-right">
-          <p className="text-[10px] text-violet-400">
-            Round{" "}
-            <span className="font-mono font-semibold text-violet-300">#{roundLabelShort}</span>
-          </p>
-          <p className="text-[10px] text-violet-500">
-            <span style={{ color: realtimeConnected ? "#10B981" : "#EF4444" }} className="mr-1">
-              {realtimeConnected ? "●" : "○"}
-            </span>
-            {watchingCount} watching
-          </p>
-        </div>
-      </header>
-
-      <div
-        className="relative z-10 mx-auto max-w-[min(1400px,100%)] space-y-3 px-3 pb-[calc(200px+env(safe-area-inset-bottom,0px))] pt-[56px] sm:px-4"
-      >
-        {showPayoutFlash && (
           <div
             style={{
-              position: "fixed",
-              top: "30%",
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "rgba(16,185,129,0.95)",
-              border: "2px solid #10B981",
+              background: "#0D0520",
+              border: "1px solid rgba(16,185,129,0.4)",
               borderRadius: 16,
-              padding: "20px 40px",
+              padding: 28,
+              width: 400,
+              maxWidth: "95vw",
               textAlign: "center",
-              zIndex: 200,
-              animation: "fadeInUp 0.5s ease-out",
             }}
           >
+            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#10B981", fontSize: 20, marginBottom: 16 }}>COVER THE BANK</h2>
+            <p style={{ color: "#ccc", fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>
+              Go head to head with the banker alone. Other players cannot enter this round but can still watch and side bet.
+            </p>
             <div
               style={{
-                fontSize: 36,
-                fontWeight: "bold",
-                color: "#fff",
+                background: "rgba(16,185,129,0.1)",
+                border: "1px solid rgba(16,185,129,0.3)",
+                borderRadius: 10,
+                padding: "16px",
+                marginBottom: 20,
               }}
             >
-              +{formatScLine(lastPayoutAmount)}
+              <div style={{ fontSize: 32, color: "#F5C842", fontFamily: "Courier New", fontWeight: "bold" }}>{room.current_bank_sc} SC</div>
+              <div style={{ fontSize: 12, color: "#888" }}>Required to cover bank</div>
             </div>
-            <div style={{ color: "#D1FAE5", fontSize: 14 }}>Added to your balance</div>
-          </div>
-        )}
-
-        {showRoundSummaryBanner && (
-          <div
-            className="fixed left-1/2 top-1/3 z-[199] -translate-x-1/2 rounded-xl border border-[#F5C842]/40 bg-[#0e0118]/95 px-6 py-4 text-center shadow-xl"
-            role="status"
-          >
-            <p className="text-sm font-bold text-[#F5C842]">Round complete</p>
-            <p className="mt-1 text-xs text-violet-300/80">Table updating…</p>
-          </div>
-        )}
-
-        {showCreatedShareBanner && isInRoom && room && (
-          <div
-            style={{
-              background: "rgba(124,58,237,0.1)",
-              border: "1px solid rgba(124,58,237,0.3)",
-              borderRadius: 12,
-              padding: 20,
-              marginTop: 8,
-              textAlign: "center",
-            }}
-          >
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 8 }}>
-              Share this link to invite players:
-            </p>
-            <p style={{ color: "#888", fontSize: 12, marginBottom: 12 }}>
-              Lobby room code:{" "}
-              <span style={{ color: "#F5C842", fontFamily: "ui-monospace, monospace", fontWeight: 600 }}>
-                {room.id.slice(0, 8).toUpperCase()}
-              </span>
-            </p>
-            <div
-              style={{
-                background: "#0D0520",
-                borderRadius: 8,
-                padding: "10px 16px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 12,
-              }}
-            >
-              <span
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setShowCoverBank(false)}
                 style={{
-                  color: "#F5C842",
-                  fontSize: 12,
                   flex: 1,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  background: "none",
+                  border: "1px solid #444",
+                  borderRadius: 10,
+                  color: "#888",
+                  padding: "12px",
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
                 }}
               >
-                {typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : ""}
-              </span>
+                CANCEL
+              </button>
               <button
                 type="button"
-                onClick={() => void handleShare()}
+                onClick={async () => {
+                  setShowCoverBank(false);
+                  const token = await getAccessToken();
+                  await fetch("/api/celo/room/cover-bank", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ room_id: roomId, round_id: currentRound?.id }),
+                  });
+                  void fetchRoomData();
+                }}
+                disabled={myBalance < room.current_bank_sc}
                 style={{
-                  padding: "6px 12px",
-                  background: "#7C3AED",
+                  flex: 1,
+                  background: myBalance >= room.current_bank_sc ? "linear-gradient(135deg, #10B981, #059669)" : "#333",
                   border: "none",
-                  borderRadius: 6,
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {copied ? "✓ Copied" : "Copy Link"}
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const u = typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : "";
-                  const text = `Join my C-Lo game on GarmonPay! Min ${(room.min_bet_cents || 500).toLocaleString()} $GPAY entry. ${u}`;
-                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
-                }}
-                style={{
-                  padding: "8px 16px",
-                  background: "#1DA1F2",
-                  border: "none",
-                  borderRadius: 8,
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                }}
-              >
-                Share on Twitter
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const u = typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : "";
-                  const text = `Join my C-Lo game on GarmonPay! ${u}`;
-                  window.open("https://www.tiktok.com/", "_blank");
-                  void navigator.clipboard.writeText(text).catch(() => {});
-                }}
-                style={{
-                  padding: "8px 16px",
-                  background: "#000",
-                  border: "1px solid #fff",
-                  borderRadius: 8,
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                }}
-              >
-                Share on TikTok
-              </button>
-            </div>
-          </div>
-        )}
-
-        {amIBanker && noActiveRound && (
-          <div className="flex justify-end mt-3">
-            <button
-              type="button"
-              disabled={closeRoomLoading}
-              onClick={() => void handleCloseRoom()}
-              style={{
-                padding: "10px 20px",
-                background: "transparent",
-                border: "1px solid #EF4444",
-                borderRadius: 8,
-                color: "#EF4444",
-                cursor: closeRoomLoading ? "wait" : "pointer",
-                fontSize: 13,
-                fontWeight: "bold",
-              }}
-              className="disabled:opacity-50 hover:bg-red-500/10 transition-colors"
-            >
-              {closeRoomLoading ? "Closing…" : "🗑️ Close Room"}
-            </button>
-          </div>
-        )}
-
-        <p className="text-[10px] text-center text-violet-400/70">
-          Min {formatScLine(room.min_bet_cents)} · Fee {room.platform_fee_pct}% · Players{" "}
-          {players.filter((p) => p.role !== "spectator").length}/{room.max_players} · Banker{" "}
-          {getDisplayName(bankerPlayer ?? { user_id: room.banker_id })}
-        </p>
-
-        {statusLine ? (
-          <p
-            className={`text-center text-xs sm:text-sm px-2 ${
-              isPlayerRolling && amIPlayer && isMyTurn
-                ? "text-[#F5C842] font-semibold"
-                : isBankerRolling && amIBanker
-                  ? "text-amber-300/95 font-medium"
-                  : "text-violet-200/85"
-            }`}
-          >
-            {statusLine}
-          </p>
-        ) : null}
-
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
-          {/* LEFT ~65% — dice street table */}
-          <div className="min-w-0 flex-1 space-y-4 lg:max-w-[65%]">
-        {/* Underground table — neon + felt + 3D dice */}
-        <div className="flex flex-col items-center relative" style={{ zIndex: 1 }}>
-          <div className="mb-3 flex w-full max-w-xl flex-wrap justify-center gap-2">
-            {players
-              .filter((p) => p.role === "banker")
-              .map((p) => (
-                <SeatCard
-                  key={p.id}
-                  player={p}
-                  isMe={sameCeloUserId(p.user_id, userId)}
-                  isBanker={true}
-                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
-                  resolvedRoll={null}
-                />
-              ))}
-          </div>
-          <p
-            className={`${cinzelRoom.className} mb-2 text-center select-none`}
-            style={{
-              fontSize: 48,
-              color: "#7C3AED",
-              textShadow:
-                "0 0 5px #7C3AED, 0 0 10px #7C3AED, 0 0 20px #7C3AED, 0 0 40px #7C3AED, 0 0 80px #7C3AED",
-              letterSpacing: 8,
-              lineHeight: 1,
-            }}
-          >
-            C-LO
-          </p>
-          {(dicePhaseStatusText ||
-            (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")) && (
-            <p className="text-center text-xs font-semibold text-[#F5C842]/95 mb-2 px-2" role="status">
-              {dicePhaseStatusText ||
-                (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")}
-            </p>
-          )}
-          <div
-            className="flex w-full justify-center items-center px-2"
-            style={{ padding: 20, position: "relative", zIndex: 1 }}
-          >
-            <div
-              className="flex flex-col items-center justify-center rounded-3xl w-full max-w-[min(100%,360px)] aspect-[4/3] sm:min-h-[280px]"
-              style={{
-                background:
-                  "radial-gradient(ellipse at center, #12101f 0%, #0a0814 55%, #05030c 100%)",
-                border: "2px solid rgba(124,58,237,0.55)",
-                boxShadow:
-                  "0 0 32px rgba(124,58,237,0.35), inset 0 0 48px rgba(0,0,0,0.65)",
-              }}
-            >
-              <DiceDisplay
-                dice={diceValues}
-                rolling={hideFinalDiceFaces}
-                animKey={rollAnimKey}
-                diceColor={currentRollerDiceType || "standard"}
-                size={52}
-              />
-            </div>
-          </div>
-          {!isRolling && (feltTableRollName || lastRollResult?.rollName) ? (
-            (() => {
-              const rn = feltTableRollName ?? lastRollResult?.rollName ?? "";
-              const vis = celoRollNameVisual(rn);
-              return (
-                <div className={`mt-3 px-2 ${vis.className}`} style={vis.style}>
-                  {rn}
-                </div>
-              );
-            })()
-          ) : null}
-          {!isRolling &&
-          lastRollResult &&
-          (lastRollResult.bankerPoint != null ||
-            (lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0) ||
-            lastRollResult.banker_can_adjust_bank) ? (
-            <div className="text-center space-y-1 mt-2 w-full max-w-md">
-              {lastRollResult.bankerPoint != null && (
-                <p className="text-sm text-violet-300/80">
-                  Banker&apos;s point:{" "}
-                  <span className="text-violet-200 font-bold">{lastRollResult.bankerPoint}</span>
-                </p>
-              )}
-              {lastRollResult.payoutCents !== undefined && lastRollResult.payoutCents > 0 && (
-                <p className="text-sm text-emerald-400 font-semibold">
-                  +{formatScLine(lastRollResult.payoutCents)} payout
-                </p>
-              )}
-              {lastRollResult.banker_can_adjust_bank && showCeloBankModal && (
-                <p className="text-xs text-[#F5C842] animate-pulse">
-                  C-Lo! Use the bank adjustment modal — offer expires in 60s
-                </p>
-              )}
-            </div>
-          ) : null}
-
-          {isPlayerRolling && currentRound && currentRound.banker_point != null && (
-            <div className="mt-5 w-full max-w-md text-center space-y-2 border-t border-white/10 pt-4">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[#F5C842]/75 font-semibold">
-                Banker point
-              </p>
-              <p
-                className="font-black font-mono text-[#F5C842] leading-none"
-                style={{ fontSize: "clamp(2.5rem, 10vw, 3.5rem)", textShadow: "0 0 24px #F5C842, 0 0 48px #F5C842aa" }}
-              >
-                {currentRound.banker_point}
-              </p>
-              {currentRound.banker_dice_name && (
-                <p className="text-sm font-medium text-violet-200/90">{currentRound.banker_dice_name}</p>
-              )}
-              {amIBanker ? (
-                <p className="text-sm text-violet-200/90">
-                  Waiting for{" "}
-                  <span className="text-white font-medium">
-                    {currentTurnPlayer ? getDisplayName(currentTurnPlayer) : "the next player"}
-                  </span>{" "}
-                  to roll…
-                </p>
-              ) : amIPlayer && isMyTurn ? (
-                <p className="text-base font-bold text-[#F5C842]" style={{ textShadow: "0 0 12px rgba(245,200,66,0.4)" }}>
-                  YOUR TURN — Beat {currentRound.banker_point}!
-                </p>
-              ) : (
-                <p className="text-sm text-violet-200/85">
-                  {currentTurnPlayer
-                    ? `${getDisplayName(currentTurnPlayer)} is rolling…`
-                    : "Waiting for next player…"}
-                </p>
-              )}
-            </div>
-          )}
-
-          {isPlayerRolling &&
-            playerPointCompare != null &&
-            bankerPointCompare != null &&
-            lastRollResult?.result === "point" && (
-              <div
-                style={{
-                  textAlign: "center",
-                  marginTop: 16,
-                  padding: 16,
-                  background: "rgba(0,0,0,0.4)",
-                  borderRadius: 12,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: 24,
-                  }}
-                >
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#888", fontSize: 11 }}>YOUR POINT</div>
-                    <div
-                      style={{
-                        fontSize: 48,
-                        fontWeight: "bold",
-                        color:
-                          playerPointCompare > bankerPointCompare
-                            ? "#10B981"
-                            : "#EF4444",
-                      }}
-                    >
-                      {playerPointCompare ?? "?"}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 24,
-                      color: "#F5C842",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    VS
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#888", fontSize: 11 }}>BANKER POINT</div>
-                    <div
-                      style={{
-                        fontSize: 48,
-                        fontWeight: "bold",
-                        color: "#F5C842",
-                      }}
-                    >
-                      {bankerPointCompare ?? "?"}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    marginTop: 12,
-                    fontSize: 20,
-                    fontWeight: "bold",
-                    color:
-                      playerPointCompare > bankerPointCompare
-                        ? "#10B981"
-                        : "#EF4444",
-                  }}
-                >
-                  {playerPointCompare > bankerPointCompare
-                    ? "🏆 YOU WIN!"
-                    : playerPointCompare < bankerPointCompare
-                      ? "❌ BANKER WINS"
-                      : "🤝 TIE — BANKER WINS"}
-                </div>
-              </div>
-            )}
-
-          {!isRolling &&
-            lastRollResult &&
-            (lastRollResult.outcome === "win" || lastRollResult.outcome === "loss") &&
-            lastRollResult.result !== "point" && (
-              <p
-                className={`mt-3 text-center text-lg font-bold ${
-                  lastRollResult.outcome === "win" ? "text-emerald-400" : "text-red-400"
-                }`}
-              >
-                {lastRollResult.outcome === "win"
-                  ? "✓ You win this bet"
-                  : "✗ Banker wins this bet"}
-              </p>
-            )}
-        </div>
-
-        {/* Player seats — below felt */}
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-2">
-            Players ({players.filter((p) => p.role !== "spectator").length})
-          </p>
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 [transform:perspective(400px)_rotateX(4deg)]">
-            {players
-              .filter((p) => p.role === "player")
-              .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0))
-              .map((p) => {
-                const roll =
-                  playerRolls
-                    .filter((r) => r.user_id === p.user_id && (r.outcome === "win" || r.outcome === "loss"))
-                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ??
-                  null;
-                return (
-                  <SeatCard
-                    key={p.id}
-                    player={p}
-                    isMe={sameCeloUserId(p.user_id, userId)}
-                    isBanker={false}
-                    isCurrentTurn={sameCeloUserId(currentTurnPlayer?.user_id, p.user_id)}
-                    resolvedRoll={roll}
-                    phasePlayerRolling={isPlayerRolling}
-                  />
-                );
-              })}
-            {players.filter((p) => p.role === "spectator").length > 0 && (
-              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                <p className="text-[10px] text-violet-400/40">
-                  {players.filter((p) => p.role === "spectator").length} watching
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {systemFeed.length > 0 && (
-          <div className="rounded-xl border border-violet-500/20 bg-violet-950/40 px-3 py-2.5 max-h-24 overflow-y-auto text-[11px] text-violet-100/90 space-y-1.5 leading-snug">
-            {systemFeed.slice(-5).map((line, i) => (
-              <p key={`${line}-${i}`}>{line}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Error banner */}
-        {error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex justify-between gap-2">
-            <span>{error}</span>
-            <button type="button" onClick={() => setError(null)} className="shrink-0 text-red-400/70 hover:text-red-300">✕</button>
-          </div>
-        )}
-
-        {currentRound?.bank_covered ? (
-          <div className="flex justify-center">
-            <span className="text-[10px] text-violet-200/80 bg-violet-500/15 px-2.5 py-1 rounded-full border border-violet-500/20">
-              1v1
-            </span>
-          </div>
-        ) : null}
-
-        {amIBanker && noActiveRound && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "12px 16px",
-              background: "rgba(124,58,237,0.1)",
-              border: "1px solid rgba(124,58,237,0.3)",
-              borderRadius: 10,
-              marginBottom: 12,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  color: "#fff",
+                  borderRadius: 10,
+                  color: myBalance >= room.current_bank_sc ? "#fff" : "#666",
+                  padding: "12px",
+                  cursor: myBalance >= room.current_bank_sc ? "pointer" : "not-allowed",
+                  fontFamily: "Courier New",
                   fontWeight: "bold",
                   fontSize: 14,
                 }}
               >
-                🚫 No Short Stop Rule
-              </div>
-              <div style={{ color: "#888", fontSize: 11, marginTop: 2 }}>
-                Player short stops your roll = auto loss
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleToggleNoShortStop()}
-              style={{
-                width: 54,
-                height: 28,
-                borderRadius: 14,
-                background: noShortStop ? "#7C3AED" : "#374151",
-                border: "none",
-                cursor: "pointer",
-                position: "relative",
-                transition: "background 0.2s",
-              }}
-              aria-pressed={noShortStop}
-              aria-label="Toggle no short stop rule"
-            >
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  background: "#fff",
-                  position: "absolute",
-                  top: 3,
-                  left: noShortStop ? 29 : 3,
-                  transition: "left 0.2s",
-                }}
-              />
-            </button>
-          </div>
-        )}
-          </div>
-
-          <aside className="flex w-full min-w-0 shrink-0 flex-col gap-4 lg:w-[35%] lg:max-w-[35%]">
-        {/* Side bets panel */}
-        {roundActive && (
-          <div className="rounded-2xl border border-violet-500/20 bg-[#12081f]/60">
-            <button
-              type="button"
-              onClick={() => setShowSideBets((v) => !v)}
-              className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-violet-300/80 hover:text-white transition-colors"
-            >
-              <span>🎯 Side Bets {openSideBets.length > 0 && `(${openSideBets.length} open)`}</span>
-              <span className="text-violet-400/50">{showSideBets ? "▲" : "▼"}</span>
-            </button>
-
-            {showSideBets && (
-              <div className="px-5 pb-5 space-y-4 border-t border-white/[0.05]">
-
-                {/* Open bets to accept */}
-                {openSideBets.filter((b) => !sameCeloUserId(b.creator_id, userId)).length > 0 && (
-                  <div className="space-y-2 pt-4">
-                    <p className="text-[10px] uppercase tracking-widest text-violet-400/50">Open Bets</p>
-                    {openSideBets
-                      .filter((b) => !sameCeloUserId(b.creator_id, userId))
-                      .map((b) => (
-                        <div
-                          key={b.id}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-white capitalize">
-                              {b.bet_type.replace(/_/g, " ")}
-                              {b.specific_point ? ` (${b.specific_point})` : ""}
-                            </p>
-                            <p className="text-[10px] text-violet-400/60">{b.odds_multiplier}× odds</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs font-bold text-[#F5C842] font-mono">{formatScLine(b.amount_cents)}</p>
-                            <button
-                              type="button"
-                              disabled={sweepsCoins < b.amount_cents}
-                              onClick={() => handleAcceptSideBet(b.id)}
-                              className="mt-1 text-[10px] rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-400 disabled:opacity-40 hover:bg-emerald-500/20 transition-all"
-                            >
-                              Accept
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                {/* My open bets */}
-                {openSideBets.filter((b) => sameCeloUserId(b.creator_id, userId)).length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-widest text-violet-400/50">My Open Bets</p>
-                    {openSideBets
-                      .filter((b) => sameCeloUserId(b.creator_id, userId))
-                      .map((b) => (
-                        <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.01] px-4 py-3">
-                          <p className="text-xs text-violet-300/70 capitalize">{b.bet_type.replace(/_/g, " ")}</p>
-                          <p className="text-xs font-mono text-[#F5C842]">
-                            {formatScLine(b.amount_cents)} · {b.odds_multiplier}×
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                {/* Create side bet */}
-                <form onSubmit={handleCreateSideBet} className="space-y-3 pt-2 border-t border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-widest text-violet-400/50 pt-1">Place Side Bet</p>
-
-                  <div>
-                    <select
-                      value={sbType}
-                      onChange={(e) => setSbType(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a0a2e] px-3 py-2.5 text-white text-sm outline-none focus:border-[#F5C842]/50"
-                    >
-                      {SIDE_BET_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label} ({o.odds}×)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {sbType === "specific_point" && (
-                    <div className="flex gap-2">
-                      {[2, 3, 4, 5].map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setSbPoint(p)}
-                          className={`flex-1 rounded-xl border py-2 text-sm font-bold transition-all ${sbPoint === p ? "border-[#F5C842]/60 bg-[#F5C842]/15 text-[#F5C842]" : "border-white/10 text-violet-300/60"}`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex gap-3 items-center">
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min={100}
-                        step={100}
-                        max={sweepsCoins}
-                        value={sbAmount}
-                        onChange={(e) => setSbAmount(Number(e.target.value))}
-                        className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-white text-sm outline-none focus:border-[#F5C842]/50 font-mono"
-                        placeholder="Amount (cents)"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={sbLoading || sbAmount < 100 || sweepsCoins < sbAmount}
-                      className="rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 px-4 py-2.5 text-[#F5C842] text-sm font-semibold disabled:opacity-40 hover:bg-[#F5C842]/20 transition-all"
-                    >
-                      {sbLoading ? "…" : "Bet"}
-                    </button>
-                  </div>
-
-                  {sbError && <p className="text-xs text-red-400">{sbError}</p>}
-                  <p className="text-[10px] text-violet-400/40">
-                    Win:{" "}
-                    {formatScLine(
-                      sbAmount * (SIDE_BET_OPTIONS.find((o) => o.value === sbType)?.odds ?? 2)
-                    )}{" "}
-                    · Min 100 $GPAY ($1.00)
-                  </p>
-                </form>
-              </div>
-            )}
-          </div>
-        )}
-
-        <VoiceChat roomId={roomId} />
-
-        {/* Live chat */}
-        <div className="rounded-2xl border border-white/[0.07] bg-[#12081f]/80 overflow-hidden">
-          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 px-4 pt-3">Room chat</p>
-          <div className="max-h-40 overflow-y-auto px-4 py-2 space-y-1.5 text-xs">
-            {chatMessages.length === 0 ? (
-              <p className="text-violet-500/40 text-center py-2">No messages yet</p>
-            ) : (
-              chatMessages.map((m) => (
-                <div key={m.id} className="text-violet-200/90">
-                  <span className="text-violet-500/60 font-mono text-[10px]">
-                    {sameCeloUserId(m.user_id, userId)
-                      ? "You"
-                      : getDisplayName(players.find((pl) => pl.user_id === m.user_id) ?? { user_id: m.user_id })}
-                    :
-                  </span>{" "}
-                  <span className="break-words">{m.message}</span>
-                </div>
-              ))
-            )}
-            <div ref={chatEndRef} />
-          </div>
-          <form onSubmit={handleSendChat} className="flex gap-2 border-t border-white/[0.06] p-3">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Message…"
-              maxLength={500}
-              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-violet-500/40 outline-none focus:border-[#F5C842]/40"
-            />
-            <button
-              type="submit"
-              disabled={chatSending || !chatInput.trim()}
-              className="rounded-xl bg-[#F5C842]/20 border border-[#F5C842]/40 px-4 py-2 text-xs font-semibold text-[#F5C842] disabled:opacity-40"
-            >
-              Send
-            </button>
-          </form>
-        </div>
-      </aside>
-        </div>
-      </div>
-
-      {/* Fixed bottom action bar — lifted above mobile tab nav */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 50,
-          minHeight: 80,
-          marginBottom: 60,
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "rgba(5,1,15,0.96)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderTop: "1px solid rgba(124,58,237,0.35)",
-        }}
-      >
-        <div className="mx-auto flex min-h-[80px] max-w-[min(1400px,100%)] flex-col justify-center gap-2 px-4 py-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-violet-300/90">
-            <span className="font-mono text-emerald-400/95">
-              Balance {formatGpayAmount(sweepsCoins)}
-              {balanceFlash === "up" ? " ↑" : balanceFlash === "down" ? " ↓" : ""}
-            </span>
-            {myPlayer && myPlayer.role === "player" ? (
-              <span>
-                Entry{" "}
-                <span className="font-mono font-semibold text-[#F5C842]">{getPlayerEntry(myPlayer)}</span>
-              </span>
-            ) : (
-              <span className="text-violet-500/80">Spectator / banker view</span>
-            )}
-          </div>
-          {canRollPlayer && currentRound?.banker_point != null && (
-            <p
-              className="text-center text-sm font-bold"
-              style={{
-                color: "#F5C842",
-                animation: "celoYourTurnFlash 1.2s ease-in-out infinite",
-              }}
-            >
-              YOUR TURN — Beat {currentRound.banker_point}!
-            </p>
-          )}
-
-          {amIBanker && room.status === "rolling" && !currentRound && (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 py-3.5 px-3 flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-amber-100/90">
-              <span>Syncing round…</span>
-              <button
-                type="button"
-                onClick={() => void loadRound()}
-                className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
-              >
-                Retry sync
+                {myBalance >= room.current_bank_sc ? "💰 COVER IT" : "INSUFFICIENT SC"}
               </button>
             </div>
-          )}
-
-          <div className="flex flex-col gap-3 w-full">
-            {canStartRound && (
-              <button
-                type="button"
-                disabled={actionLoading === "start"}
-                onClick={handleStartRound}
-                style={{
-                  width: "100%",
-                  padding: "16px 32px",
-                  background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 12,
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  cursor: actionLoading === "start" ? "not-allowed" : "pointer",
-                  letterSpacing: 1,
-                  opacity: actionLoading === "start" ? 0.6 : 1,
-                  boxShadow: "0 0 24px rgba(124,58,237,0.45)",
-                }}
-              >
-                {actionLoading === "start" ? "Starting…" : "START ROUND"}
-              </button>
-            )}
-
-            {canRollBanker && (
-              <button
-                type="button"
-                disabled={!currentRound || !!actionLoading || rollInteractionBusy}
-                onClick={handleRoll}
-                className="mx-auto w-full max-md:max-w-[280px] max-md:min-h-[56px] max-md:text-lg"
-                style={{
-                  width: "100%",
-                  padding: "16px 32px",
-                  background: "#F5C842",
-                  color: "#000",
-                  border: "none",
-                  borderRadius: 12,
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  cursor:
-                    !currentRound || !!actionLoading || rollInteractionBusy ? "not-allowed" : "pointer",
-                  opacity: !currentRound || !!actionLoading || rollInteractionBusy ? 0.6 : 1,
-                  boxShadow: "0 0 20px rgba(245,200,66,0.35)",
-                }}
-              >
-                {actionLoading === "roll" || rollInteractionBusy ? "Rolling…" : "ROLL DICE"}
-              </button>
-            )}
-
-            {amIBanker && isPlayerRolling && (
-              <div className="rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 py-4 text-center text-sm font-medium text-[#F5C842]/90">
-                Players are rolling…
-              </div>
-            )}
-
-            {showPlayerRollButton && (
-              <button
-                type="button"
-                disabled={!currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy}
-                onClick={handleRoll}
-                className="mx-auto w-full max-md:max-w-[280px] max-md:min-h-[56px] max-md:text-lg"
-                style={{
-                  width: "100%",
-                  padding: "16px 32px",
-                  borderRadius: 12,
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  border: canRollPlayer ? "none" : "1px solid rgba(255,255,255,0.1)",
-                  background: canRollPlayer ? "#F5C842" : "rgba(255,255,255,0.05)",
-                  color: canRollPlayer ? "#000" : "rgba(156,163,175,0.95)",
-                  cursor:
-                    !currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy
-                      ? "not-allowed"
-                      : "pointer",
-                  opacity:
-                    !currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy ? 0.7 : 1,
-                  boxShadow: canRollPlayer ? "0 0 20px rgba(245,200,66,0.35)" : "none",
-                }}
-              >
-                {actionLoading === "roll" || rollInteractionBusy
-                  ? "Rolling…"
-                  : canRollPlayer
-                    ? "ROLL DICE"
-                    : currentTurnPlayer
-                      ? `${getDisplayName(currentTurnPlayer)} is rolling…`
-                      : "Waiting…"}
-              </button>
-            )}
-
-            {canCoverBank && (
-              <button
-                type="button"
-                disabled={!!actionLoading || sweepsCoins < room.current_bank_cents}
-                onClick={handleCoverBank}
-                className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 py-4 font-semibold text-emerald-400 disabled:opacity-50 transition-all text-sm hover:bg-emerald-500/20"
-              >
-                {actionLoading === "cover"
-                  ? "Covering…"
-                  : `Cover Bank ${formatScLine(room.current_bank_cents)}`}
-              </button>
-            )}
-
-            {!canStartRound &&
-              !canRollBanker &&
-              !(amIBanker && isPlayerRolling) &&
-              !showPlayerRollButton &&
-              !canCoverBank &&
-              noActiveRound &&
-              amIBanker &&
-              room.status !== "rolling" && (
-                <div className="rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
-                  {seatedPlayers.length === 0
-                    ? "Waiting for players to join…"
-                    : playersWithBets.length === 0
-                      ? "Waiting for players to place entries…"
-                      : "Ready — press Start Round"}
-                </div>
-              )}
           </div>
         </div>
-      </div>
+      )}
 
-      {(canShortStopBanker || canShortStopPlayer) && (
-        <button
-          type="button"
-          onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
+      {showLowerBank && (
+        <div
           style={{
             position: "fixed",
-            bottom: "calc(156px + env(safe-area-inset-bottom, 0px))",
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: "18px 48px",
-            background: "linear-gradient(135deg, #EF4444, #DC2626)",
-            border: "3px solid #FCA5A5",
-            borderRadius: 99,
-            color: "#fff",
-            fontSize: 22,
-            fontWeight: "bold",
-            cursor: "pointer",
-            zIndex: 200,
-            boxShadow: "0 0 40px rgba(239,68,68,0.7)",
-            letterSpacing: 3,
-            animation: "shortStopPulse 0.4s ease-in-out infinite alternate",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
           }}
         >
-          ✋ SHORT STOP
-        </button>
+          <div style={{ background: "#0D0520", border: "1px solid #10B981", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw" }}>
+            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#10B981", marginBottom: 12 }}>LOWER BANK</h2>
+            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>Set new bank and minimum (cents).</p>
+            <label style={{ color: "#ccc", fontSize: 12 }}>New bank (cents)</label>
+            <input
+              type="number"
+              value={lowerBankAmount}
+              onChange={(e) => setLowerBankAmount(Number(e.target.value))}
+              style={{ width: "100%", marginBottom: 8, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
+            />
+            <label style={{ color: "#ccc", fontSize: 12 }}>New minimum (cents, ≥500)</label>
+            <input
+              type="number"
+              value={lowerMinAmount}
+              onChange={(e) => setLowerMinAmount(Number(e.target.value))}
+              style={{ width: "100%", marginBottom: 12, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setShowLowerBank(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const token = await getAccessToken();
+                  await fetch("/api/celo/room/lower-bank", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                      room_id: roomId,
+                      new_bank_sc: lowerBankAmount,
+                      new_minimum_sc: lowerMinAmount,
+                    }),
+                  });
+                  setShowLowerBank(false);
+                  setCanLowerBank(false);
+                  void fetchRoomData();
+                }}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#10B981,#059669)", color: "#fff", fontWeight: "bold" }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+
+      {showBecomeBanker && currentRound && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div style={{ background: "#0D0520", border: "1px solid #F5C842", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw", textAlign: "center" }}>
+            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 12 }}>TAKE THE BANK</h2>
+            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 16 }}>Accept banker position for this room (charges per server rules).</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setShowBecomeBanker(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const token = await getAccessToken();
+                  await fetch("/api/celo/banker/accept", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ room_id: roomId, round_id: currentRound.id }),
+                  });
+                  setShowBecomeBanker(false);
+                  setCanBecomeBanker(false);
+                  void fetchRoomData();
+                }}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#F5C842,#D4A017)", color: "#000", fontWeight: "bold" }}
+              >
+                Take bank
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSideBetModal && currentRound && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div style={{ background: "#0D0520", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw" }}>
+            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 12 }}>CREATE SIDE BET</h2>
+            <select
+              value={sideBetType}
+              onChange={(e) => setSideBetType(e.target.value)}
+              style={{ width: "100%", marginBottom: 8, padding: 8, borderRadius: 8, background: "#111", color: "#fff", border: "1px solid #444" }}
+            >
+              {["celo", "shit", "hand_crack", "trips", "banker_wins", "player_wins", "specific_point"].map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <label style={{ color: "#ccc", fontSize: 12 }}>Amount (cents)</label>
+            <input
+              type="number"
+              value={sideBetAmount}
+              onChange={(e) => setSideBetAmount(Number(e.target.value))}
+              style={{ width: "100%", marginBottom: 12, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setShowSideBetModal(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void createSideBet()}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#7C3AED,#A855F7)", color: "#fff", fontWeight: "bold" }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showJoinSeat && room && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div style={{ background: "#0D0520", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 16, padding: 24, width: 380, maxWidth: "95vw" }}>
+            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 8 }}>JOIN TABLE</h2>
+            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
+              Seat {joinSeatNumber} · Minimum entry {room.minimum_entry_sc} (cents)
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setShowJoinSeat(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void joinSeat()}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#7C3AED,#A855F7)", color: "#fff", fontWeight: "bold" }}
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
