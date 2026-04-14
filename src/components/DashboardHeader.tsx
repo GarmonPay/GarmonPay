@@ -1,73 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { logout } from "@/lib/api";
-import { clearSession } from "@/lib/session";
-import { createBrowserClient } from "@/lib/supabase";
 import { DashboardCoinBalances } from "@/components/DashboardCoinBalances";
 
-const nav = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/rewards", label: "Rewards" },
-  { href: "/dashboard/earnings", label: "Earnings" },
-  { href: "/dashboard/ads", label: "Ads" },
-  { href: "/dashboard/banners", label: "Banners" },
-  { href: "/dashboard/withdraw", label: "Withdraw" },
-  { href: "/dashboard/transactions", label: "Transactions" },
-  { href: "/dashboard/leaderboard", label: "Leaderboard" },
-  { href: "/dashboard/referrals", label: "Referrals" },
-  { href: "/dashboard/finance", label: "Finance" },
-  { href: "/dashboard/settings", label: "Settings" },
-];
-
 export function DashboardHeader() {
-  const router = useRouter();
-
-  async function handleLogout() {
-    const supabase = createBrowserClient();
-    if (supabase) {
-      await supabase.auth.signOut();
-    } else {
-      try {
-        await logout();
-      } finally {
-        clearSession();
-      }
-    }
-    router.push("/");
-  }
-
   return (
     <header className="glass-bar border-b border-white/[0.06] shadow-soft">
-      <div className="max-w-7xl mx-auto px-4 py-4" style={{ maxWidth: "80rem", marginLeft: "auto", marginRight: "auto", padding: "1rem 1.5rem" }}>
-        <div className="flex flex-wrap items-center justify-between gap-4" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          <div className="flex flex-wrap items-center gap-3 min-w-0">
-            <Link href="/dashboard" className="text-xl font-bold text-white shrink-0" style={{ color: "#fff", fontSize: "1.25rem", fontWeight: 700, textDecoration: "none" }}>
-              GarmonPay
-            </Link>
-            <DashboardCoinBalances />
-          </div>
-          <nav className="flex flex-wrap items-center gap-1 sm:gap-2" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.25rem" }}>
-            {nav.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-fintech-muted hover:text-white hover:bg-white/5"
-                style={{ color: "#6b7280", padding: "0.5rem 0.75rem", borderRadius: "0.5rem", fontSize: "0.875rem", textDecoration: "none" }}
-              >
-                {label}
-              </Link>
-            ))}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10"
-              style={{ color: "#f87171", padding: "0.5rem 0.75rem", borderRadius: "0.5rem", fontSize: "0.875rem", background: "transparent", border: "none", cursor: "pointer" }}
-            >
-              Logout
-            </button>
-          </nav>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <Link
+          href="/dashboard"
+          className="shrink-0 text-xl font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90"
+        >
+          GarmonPay
+        </Link>
+
+        <div className="min-w-0 flex-1" aria-hidden />
+
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <DashboardCoinBalances />
+          <Link
+            href="/dashboard/notifications"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Notifications"
+          >
+            🔔
+          </Link>
+          <Link
+            href="/dashboard/profile"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Profile"
+          >
+            👤
+          </Link>
         </div>
       </div>
     </header>
