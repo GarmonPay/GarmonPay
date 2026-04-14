@@ -2,7 +2,7 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { getSessionAsync } from "@/lib/session";
@@ -572,8 +572,10 @@ function SeatCard({
 
 export default function CeloRoomPage() {
   const params = useParams();
+  const pathname = usePathname();
   const roomId = params.roomId as string;
   const router = useRouter();
+  const celoBasePath = pathname?.startsWith("/dashboard/games/celo") ? "/dashboard/games/celo" : "/games/celo";
   const { sweepsCoins, refresh: refreshCoins } = useCoins();
 
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
@@ -680,11 +682,11 @@ export default function CeloRoomPage() {
     const q = new URLSearchParams(window.location.search);
     if (q.get("created") !== "1") return;
     setShowCreatedShareBanner(true);
-    router.replace(`/games/celo/${roomId}`, { scroll: false });
-  }, [roomId, router]);
+    router.replace(`${celoBasePath}/${roomId}`, { scroll: false });
+  }, [roomId, router, celoBasePath]);
 
   const handleShare = useCallback(async () => {
-    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/games/celo/${roomId}`;
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}${celoBasePath}/${roomId}`;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
@@ -711,7 +713,7 @@ export default function CeloRoomPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     }
-  }, [roomId, room?.name, room?.min_bet_cents]);
+  }, [roomId, room?.name, room?.min_bet_cents, celoBasePath]);
 
   // ── Data loaders ───────────────────────────────────────────────────────────
   const loadRoom = useCallback(async () => {
@@ -1737,7 +1739,7 @@ export default function CeloRoomPage() {
       }
       await loadBalanceRef.current();
       markCeloPublicLobbyStale();
-      router.push("/games/celo");
+      router.push(celoBasePath);
     } catch {
       setError("Not authenticated");
       window.alert("Not authenticated");
@@ -2057,7 +2059,7 @@ export default function CeloRoomPage() {
     const previewMin = room ? formatScLine(room.min_bet_cents) : "—";
     const previewPlayers = players.filter((p) => p.role !== "spectator").length;
     const previewMax = room?.max_players ?? "?";
-    const redirectParam = encodeURIComponent(`/games/celo/${roomId}`);
+    const redirectParam = encodeURIComponent(`${celoBasePath}/${roomId}`);
 
     return (
       <div className="min-h-screen bg-[#050208] text-white flex flex-col items-center justify-center px-4 py-12"
@@ -2121,7 +2123,7 @@ export default function CeloRoomPage() {
           </p>
         </div>
 
-        <Link href="/games/celo" className="mt-6 text-xs text-violet-400/50 hover:text-violet-300 transition-colors">
+        <Link href={celoBasePath} className="mt-6 text-xs text-violet-400/50 hover:text-violet-300 transition-colors">
           ← View all C-Lo rooms
         </Link>
       </div>
@@ -2143,7 +2145,7 @@ export default function CeloRoomPage() {
     return (
       <div className="min-h-screen bg-[#0e0118] flex flex-col items-center justify-center gap-4">
         <p className="text-violet-200/70">Room not found.</p>
-        <Link href="/games/celo" className="text-sm text-violet-300 underline">← Back to lobby</Link>
+        <Link href={celoBasePath} className="text-sm text-violet-300 underline">← Back to lobby</Link>
       </div>
     );
   }
@@ -2168,7 +2170,7 @@ export default function CeloRoomPage() {
         </div>
         <div className="relative z-10 mx-auto max-w-md px-4 py-12">
           <div className="flex items-start justify-between gap-3 mb-6">
-            <Link href="/games/celo" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
+            <Link href={celoBasePath} className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
               ← C-Lo Lobby
             </Link>
             <button
@@ -2714,7 +2716,7 @@ export default function CeloRoomPage() {
       >
         <div className="flex min-w-0 flex-1 flex-col justify-center pr-2">
           <Link
-            href="/games/celo"
+            href={celoBasePath}
             className="text-[10px] text-violet-400 hover:text-[#F5C842] sm:text-xs"
           >
             ← Lobby
@@ -2836,7 +2838,7 @@ export default function CeloRoomPage() {
                   whiteSpace: "nowrap",
                 }}
               >
-                {typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : ""}
+                {typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : ""}
               </span>
               <button
                 type="button"
@@ -2859,7 +2861,7 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
+                  const u = typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : "";
                   const text = `Join my C-Lo game on GarmonPay! Min ${(room.min_bet_cents || 500).toLocaleString()} $GPAY entry. ${u}`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }}
@@ -2879,7 +2881,7 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const u = typeof window !== "undefined" ? `${window.location.origin}/games/celo/${roomId}` : "";
+                  const u = typeof window !== "undefined" ? `${window.location.origin}${celoBasePath}/${roomId}` : "";
                   const text = `Join my C-Lo game on GarmonPay! ${u}`;
                   window.open("https://www.tiktok.com/", "_blank");
                   void navigator.clipboard.writeText(text).catch(() => {});

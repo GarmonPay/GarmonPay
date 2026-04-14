@@ -5,7 +5,7 @@
 export const APP_SHELL_LINKS = {
   home: "/dashboard",
   gamesLobby: "/games",
-  celo: "/games/celo",
+  celo: "/dashboard/games/celo",
   coinFlip: "/dashboard/coinflip",
   arena: "/dashboard/arena",
   earnRoot: "/dashboard/earn",
