@@ -17,12 +17,11 @@ type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
 import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
-import { scToUsdDisplay } from "@/lib/coins";
-import { formatGpayWithUsd } from "@/lib/gpay-coins-branding";
+import { formatGpayAmount } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
-  return formatGpayWithUsd(Math.max(0, Math.floor(Number(sc))));
+  return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
 }
 
 async function authFetch(url: string, body: Record<string, unknown>) {
@@ -1989,7 +1988,7 @@ export default function CeloRoomPage() {
     const redirectParam = encodeURIComponent(`/games/celo/${roomId}`);
 
     return (
-      <main className="min-h-screen bg-[#050208] text-white flex flex-col items-center justify-center px-4 py-12"
+      <div className="min-h-screen bg-[#050208] text-white flex flex-col items-center justify-center px-4 py-12"
         style={{ background: "radial-gradient(ellipse at top, rgba(124,58,237,0.18) 0%, transparent 60%), #050208" }}
       >
         <div className="mb-8 text-center">
@@ -2053,7 +2052,7 @@ export default function CeloRoomPage() {
         <Link href="/games/celo" className="mt-6 text-xs text-violet-400/50 hover:text-violet-300 transition-colors">
           ← View all C-Lo rooms
         </Link>
-      </main>
+      </div>
     );
   }
 
@@ -2091,7 +2090,7 @@ export default function CeloRoomPage() {
     const entryChipMults = [1, 2, 5, 10];
 
     return (
-      <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
+      <div className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
         <div className="pointer-events-none fixed inset-0">
           <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/20 blur-[130px]" />
         </div>
@@ -2206,7 +2205,7 @@ export default function CeloRoomPage() {
               />
               <div className="flex justify-between text-[10px] text-violet-400/50 mt-1 gap-2">
                 <span>Min: {formatScLine(minBet)}</span>
-                <span className="text-right">Your balance: {formatGpayWithUsd(sweepsCoins)}</span>
+                <span className="text-right">Your balance: {formatGpayAmount(sweepsCoins)}</span>
               </div>
             </div>
 
@@ -2233,7 +2232,7 @@ export default function CeloRoomPage() {
             </button>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -2332,7 +2331,7 @@ export default function CeloRoomPage() {
   }
 
   return (
-    <main
+    <div
       className="text-white relative overflow-x-hidden"
       style={{
         minHeight: "100vh",
@@ -2385,7 +2384,7 @@ export default function CeloRoomPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1">
               <p className="text-xs text-violet-300/60">Bank coverage required</p>
               <p className="text-xl font-bold text-[#F5C842] font-mono">{formatScLine(becomeBankerCostCents)}</p>
-              <p className="text-xs text-violet-300/50">Your balance: {formatGpayWithUsd(sweepsCoins)}</p>
+              <p className="text-xs text-violet-300/50">Your balance: {formatGpayAmount(sweepsCoins)}</p>
             </div>
             <p className="text-xs text-violet-400/60">
               {becomeBankerSecondsLeft}s remaining
@@ -2644,7 +2643,7 @@ export default function CeloRoomPage() {
                     : "text-emerald-400"
               }`}
             >
-              {formatGpayWithUsd(sweepsCoins)}
+              {formatGpayAmount(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -3559,6 +3558,6 @@ export default function CeloRoomPage() {
           </button>
         )}
       </div>
-    </main>
+    </div>
   );
 }

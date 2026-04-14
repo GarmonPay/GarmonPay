@@ -8,12 +8,11 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
-import { scToUsdDisplay } from "@/lib/coins";
-import { formatGpayWithUsd } from "@/lib/gpay-coins-branding";
+import { formatGpayAmount } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
-  return formatGpayWithUsd(Math.max(0, Math.floor(Number(sc))));
+  return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
 }
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
@@ -393,7 +392,7 @@ export default function CeloLobbyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/20 blur-[130px]" />
         <div className="absolute right-0 bottom-10 h-80 w-80 rounded-full bg-[#F5C842]/6 blur-[120px]" />
@@ -409,7 +408,7 @@ export default function CeloLobbyPage() {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              Your balance: {formatGpayWithUsd(sweepsCoins)}
+              Your balance: {formatGpayAmount(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -645,8 +644,8 @@ export default function CeloLobbyPage() {
                   className="mt-2 w-full accent-[#F5C842]"
                 />
                 <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
-                  <span>500 $GPAY ($5.00)</span>
-                  <span>10,000 $GPAY ($100.00)</span>
+                  <span>500 $GPAY</span>
+                  <span>10,000 $GPAY</span>
                 </div>
               </div>
 
@@ -680,11 +679,11 @@ export default function CeloLobbyPage() {
                   {coinsLoading ? (
                     <>Loading your $GPAY balance…</>
                   ) : canAfford ? (
-                    <>Your $GPAY: {formatGpayWithUsd(sweepsCoins)} — enough to reserve this bank.</>
+                    <>Your $GPAY: {formatGpayAmount(sweepsCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      You need {shortfallSc.toLocaleString()} more $GPAY to reserve {startingBank.toLocaleString()} (
-                      {scToUsdDisplay(startingBank)}).
+                      You need {shortfallSc.toLocaleString()} more $GPAY to reserve {startingBank.toLocaleString()}{" "}
+                      $GPAY.
                     </>
                   )}
                 </p>
@@ -703,7 +702,7 @@ export default function CeloLobbyPage() {
                       coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
-                    {formatGpayWithUsd(sweepsCoins)}
+                    {formatGpayAmount(sweepsCoins)}
                   </span>
                 </div>
               </div>
@@ -747,6 +746,6 @@ export default function CeloLobbyPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

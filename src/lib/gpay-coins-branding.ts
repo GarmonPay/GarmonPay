@@ -32,3 +32,9 @@ export function formatGpayWithUsd(amount: number): string {
   const n = Math.max(0, Math.floor(Number(amount)));
   return `${n.toLocaleString()} $GPAY (${scToUsdDisplay(n)})`;
 }
+
+/** Balance lines: amount + `$GPAY` only (no USD). */
+export function formatGpayAmount(amount: number): string {
+  const n = Math.max(0, Math.floor(Number(amount)));
+  return `${n.toLocaleString()} $GPAY`;
+}

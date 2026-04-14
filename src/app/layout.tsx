@@ -1,7 +1,7 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
 import { PublicNavbarWrapper } from "@/components/PublicNavbarWrapper";
-import Footer from "@/components/Footer";
+import { PublicFooterWrapper } from "@/components/PublicFooterWrapper";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { KeepAlive } from "@/components/KeepAlive";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
@@ -85,7 +85,7 @@ export default function RootLayout({
           }}
         />
         <PwaInstallPrompt />
-        <Footer />
+        <PublicFooterWrapper />
       </body>
     </html>
   );

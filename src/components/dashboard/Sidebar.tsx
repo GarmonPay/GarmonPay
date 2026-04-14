@@ -6,6 +6,7 @@ import { Cinzel_Decorative } from "next/font/google";
 import { logout } from "@/lib/api";
 import { clearSession } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
+import { APP_SHELL_LINKS } from "@/config/app-shell-nav";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -21,15 +22,17 @@ type NavItem = {
   isActive: (pathname: string) => boolean;
 };
 
+const L = APP_SHELL_LINKS;
+
 const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
   {
     heading: null,
     items: [
       {
-        href: "/dashboard",
+        href: L.home,
         label: "Dashboard",
         icon: "🏠",
-        isActive: (p) => p === "/dashboard",
+        isActive: (p) => p === L.home,
       },
     ],
   },
@@ -37,24 +40,24 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "GAMES",
     items: [
       {
-        href: "/games/celo",
+        href: L.celo,
         label: "C-Lo",
         icon: "🎲",
-        isActive: (p) => p.startsWith("/games/celo"),
+        isActive: (p) => p.startsWith(L.celo),
       },
       {
-        href: "/dashboard/coinflip",
+        href: L.coinFlip,
         label: "Coin Flip",
         icon: "🪙",
         isActive: (p) =>
-          p.startsWith("/dashboard/coinflip") || p.startsWith("/dashboard/coin-flip"),
+          p.startsWith(L.coinFlip) || p.startsWith("/dashboard/coin-flip"),
       },
       {
-        href: "/dashboard/arena",
+        href: L.arena,
         label: "Arena",
         icon: "⚔️",
         soon: true,
-        isActive: (p) => p.startsWith("/dashboard/arena"),
+        isActive: (p) => p.startsWith(L.arena),
       },
     ],
   },
@@ -62,28 +65,28 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "EARN",
     items: [
       {
-        href: "/dashboard/earn/ads",
+        href: L.earnAds,
         label: "Watch Ads",
         icon: "📺",
         isActive: (p) =>
-          p === "/dashboard/earn" ||
-          p.startsWith("/dashboard/earn/ads") ||
+          p === L.earnRoot ||
+          p.startsWith(L.earnAds) ||
           (p.startsWith("/dashboard/earn") &&
-            !p.startsWith("/dashboard/earn/social") &&
+            !p.startsWith(L.earnSocial) &&
             !p.startsWith("/dashboard/earn/calculator")),
       },
       {
-        href: "/dashboard/earn/social",
+        href: L.earnSocial,
         label: "Social Tasks",
         icon: "✅",
-        isActive: (p) => p.startsWith("/dashboard/earn/social"),
+        isActive: (p) => p.startsWith(L.earnSocial),
       },
       {
-        href: "/dashboard/referral",
+        href: L.referral,
         label: "Refer Friends",
         icon: "👥",
         isActive: (p) =>
-          p.startsWith("/dashboard/referral") || p.startsWith("/dashboard/referrals"),
+          p.startsWith(L.referral) || p.startsWith(L.referrals),
       },
     ],
   },
@@ -91,17 +94,17 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "COINS",
     items: [
       {
-        href: "/dashboard/coins/buy",
+        href: L.buyGc,
         label: "Buy GC",
         icon: "🛒",
         isActive: (p) =>
-          p.startsWith("/dashboard/coins/buy") || p.startsWith("/dashboard/buy-coins"),
+          p.startsWith(L.buyGc) || p.startsWith("/dashboard/buy-coins"),
       },
       {
-        href: "/dashboard/convert",
+        href: L.convert,
         label: "Convert GC → $GPAY",
         icon: "⚡",
-        isActive: (p) => p.startsWith("/dashboard/convert"),
+        isActive: (p) => p.startsWith(L.convert),
       },
     ],
   },
@@ -109,11 +112,11 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "ACCOUNT",
     items: [
       {
-        href: "/dashboard/profile",
+        href: L.profile,
         label: "Profile",
         icon: "👤",
         isActive: (p) =>
-          p.startsWith("/dashboard/profile") || p.startsWith("/dashboard/settings"),
+          p.startsWith(L.profile) || p.startsWith(L.settings),
       },
     ],
   },
@@ -154,7 +157,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-full min-h-0 w-[220px] shrink-0 flex-col border-r border-[rgba(124,58,237,0.3)] bg-[#0a0118]">
       <Link
-        href="/dashboard"
+        href={L.home}
         onClick={onNavigate}
         className={`block border-b border-[rgba(124,58,237,0.3)] px-4 py-5 text-xl font-bold text-[#F5C842] ${cinzel.className}`}
       >

@@ -1,10 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
-/** Renders the marketing Navbar only on public routes (hidden in app shell routes). */
-export function PublicNavbarWrapper() {
+/** Hides the marketing footer when the dashboard app shell is active. */
+export function PublicFooterWrapper() {
   const pathname = usePathname() ?? "";
   if (
     pathname.startsWith("/dashboard") ||
@@ -13,5 +13,5 @@ export function PublicNavbarWrapper() {
   ) {
     return null;
   }
-  return <Navbar />;
+  return <Footer />;
 }

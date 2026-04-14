@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { APP_SHELL_LINKS } from "@/config/app-shell-nav";
 
 const tabs: {
   href: string;
@@ -10,13 +11,13 @@ const tabs: {
   isActive: (p: string) => boolean;
 }[] = [
   {
-    href: "/dashboard",
+    href: APP_SHELL_LINKS.home,
     label: "Dashboard",
     icon: "🏠",
-    isActive: (p) => p === "/dashboard",
+    isActive: (p) => p === APP_SHELL_LINKS.home,
   },
   {
-    href: "/games",
+    href: APP_SHELL_LINKS.gamesLobby,
     label: "Games",
     icon: "🎮",
     isActive: (p) =>
@@ -26,29 +27,29 @@ const tabs: {
       p.startsWith("/dashboard/arena"),
   },
   {
-    href: "/dashboard/earn",
+    href: APP_SHELL_LINKS.earnRoot,
     label: "Earn",
     icon: "📺",
     isActive: (p) =>
       p.startsWith("/dashboard/earn") ||
-      p.startsWith("/dashboard/referral") ||
-      p.startsWith("/dashboard/referrals"),
+      p.startsWith(APP_SHELL_LINKS.referral) ||
+      p.startsWith(APP_SHELL_LINKS.referrals),
   },
   {
-    href: "/dashboard/coins/buy",
+    href: APP_SHELL_LINKS.buyGc,
     label: "Coins",
     icon: "🛒",
     isActive: (p) =>
       p.startsWith("/dashboard/coins/buy") ||
       p.startsWith("/dashboard/buy-coins") ||
-      p.startsWith("/dashboard/convert"),
+      p.startsWith(APP_SHELL_LINKS.convert),
   },
   {
-    href: "/dashboard/profile",
+    href: APP_SHELL_LINKS.profile,
     label: "Profile",
     icon: "👤",
     isActive: (p) =>
-      p.startsWith("/dashboard/profile") || p.startsWith("/dashboard/settings"),
+      p.startsWith(APP_SHELL_LINKS.profile) || p.startsWith(APP_SHELL_LINKS.settings),
   },
 ];
 

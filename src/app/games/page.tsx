@@ -9,14 +9,7 @@ const cinzel = Cinzel_Decorative({
 
 export default function GamesPage() {
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#0e0118",
-        padding: "16px",
-        paddingBottom: "90px",
-      }}
-    >
+    <div className="w-full max-w-full pb-2" style={{ background: "#0e0118" }}>
       <h1
         className={cinzel.className}
         style={{
