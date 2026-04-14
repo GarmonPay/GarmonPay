@@ -634,8 +634,6 @@ export default function CeloRoomPage() {
   const cancelRollAnimRef = useRef<(() => void) | null>(null);
   const lastRollPayloadRef = useRef<CeloRollStartedPayload | null>(null);
   const reconnectAnimAttemptedRef = useRef<string>("");
-  const isRollingRef = useRef(false);
-  const diceUiPhaseRef = useRef<DiceUiPhase>("idle");
   const playersRef = useRef<Player[]>([]);
   const celoBankModalCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Postgres INSERT row — merged into UI when realtime player animation reveals */
@@ -1076,14 +1074,6 @@ export default function CeloRoomPage() {
     },
     []
   );
-
-  useEffect(() => {
-    isRollingRef.current = isRolling;
-  }, [isRolling]);
-
-  useEffect(() => {
-    diceUiPhaseRef.current = diceUiPhase;
-  }, [diceUiPhase]);
 
   // Polling fallback when realtime is delayed or unavailable (desktop, etc.)
   useEffect(() => {
