@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { creditCoins, debitSweepsCoins, getUserCoins } from "@/lib/coins";
+import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGPay, deductGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
@@ -158,18 +159,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const { sweepsCoins } = await getUserCoins(userId);
+    const sweepsCoins = await getGPayBalance(userId);
     console.error("[celo/room/create] step: sweepsCoins=", sweepsCoins, "starting_bank_cents=", starting_bank_cents);
 
     if (sweepsCoins < starting_bank_cents) {
       celoQaLog("room_create_failure", {
-        kind: "insufficient_starting_bank_sc",
+        kind: "insufficient_starting_bank_gpay",
         httpStatus: 400,
         sweepsCoins,
         startingBankSc: starting_bank_cents,
       });
       return NextResponse.json(
-        { error: "Insufficient GPay Coins to cover the starting bank" },
+        { error: "Insufficient $GPAY balance to cover the starting bank" },
         { status: 400 }
       );
     }
@@ -298,18 +299,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Single SC debit for the table bank; banker_reserve_sc mirrors the liability cap (not a second debit).
-    console.error("[celo/room/create] step: debitSweepsCoins (after room persisted)");
-    let deductResult: Awaited<ReturnType<typeof debitSweepsCoins>>;
+    // Single $GPAY debit for the table bank; banker_reserve mirrors the liability cap (not a second debit).
+    console.error("[celo/room/create] step: deductGPay (after room persisted)");
+    let deductResult: Awaited<ReturnType<typeof deductGPay>>;
     try {
-      deductResult = await debitSweepsCoins(
-        userId,
-        starting_bank_cents,
-        "C-Lo bank reserve",
-        `celo_bank_deposit_${room.id}`
-      );
+      deductResult = await deductGPay(userId, starting_bank_cents, sweepsCoins, {
+        description: "C-Lo bank reserve",
+        reference: `celo_bank_deposit_${room.id}`,
+      });
     } catch (err: unknown) {
-      console.error("[celo/room/create] debitSweepsCoins threw:", err);
+      console.error("[celo/room/create] deductGPay threw:", err);
       try {
         await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
@@ -323,14 +322,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!deductResult.success) {
+    if (!deductResult.ok) {
       celoQaLog("room_create_failure", {
-        kind: "ledger_deduct_sc",
+        kind: "gpay_deduct_bank",
         httpStatus: 400,
         roomId: room.id,
         message: deductResult.message ?? null,
       });
-      console.error("[celo/room/create] debitSweepsCoins failed:", deductResult.message);
+      console.error("[celo/room/create] deductGPay failed:", deductResult.message);
       try {
         await supabase.from("celo_audit_log").delete().eq("room_id", room.id);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
@@ -363,20 +362,20 @@ export async function POST(req: Request) {
       refundIssued = true;
       try {
         const ref = `celo_bank_refund_creation_failed_${Date.now()}`;
-        await creditCoins(
+        const cr = await creditSweepsIdempotent(
           authedUserId,
-          0,
           startingBankCentsForRefund,
           "C-Lo bank refund (room creation failed)",
           ref,
           "celo_refund"
         );
+        if (!cr.success) throw new Error(cr.message ?? "credit failed");
         celoQaLog("room_create_bank_refund_after_throw", {
           userId: authedUserId,
-          sc: startingBankCentsForRefund,
+          gpay: startingBankCentsForRefund,
         });
       } catch (refundErr: unknown) {
-        console.error("[celo/room/create] emergency SC refund after error failed:", refundErr);
+        console.error("[celo/room/create] emergency $GPAY refund after error failed:", refundErr);
       }
     }
     celoQaLog("room_create_failure", { kind: "unhandled", message: err instanceof Error ? err.message : String(err) });

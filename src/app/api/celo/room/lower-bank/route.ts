@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import {
-  walletLedgerEntry,
-  getCanonicalBalanceCents,
-  ensureWalletBalancesRow,
-} from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate, CELO_ROOMS_COL } from "@/lib/celo-room-schema";
 import { sumPlayerTableStakesCents } from "@/lib/celo-banker-reserve";
 import { celoQaLog } from "@/lib/celo-qa-log";
@@ -138,39 +134,30 @@ export async function POST(req: Request) {
     );
   }
 
-  const ensured = await ensureWalletBalancesRow(userId);
-  if (!ensured.ok) {
-    return NextResponse.json({ error: ensured.message }, { status: 500 });
-  }
-
   if (delta > 0) {
-    const balance = await getCanonicalBalanceCents(userId);
+    const balance = await getGPayBalance(userId);
     if (balance < delta) {
       return NextResponse.json(
-        { error: "Insufficient balance to raise the bank by this amount" },
+        { error: "Insufficient $GPAY to raise the bank by this amount" },
         { status: 400 }
       );
     }
-    const debit = await walletLedgerEntry(
-      userId,
-      "game_play",
-      -delta,
-      `celo_bank_raise_${room_id}_${Date.now()}`
-    );
-    if (!debit.success) {
+    const debit = await deductGPay(userId, delta, balance, {
+      description: "C-Lo bank raise",
+      reference: `celo_bank_raise_${room_id}_${Date.now()}`,
+    });
+    if (!debit.ok) {
       return NextResponse.json(
         { error: debit.message ?? "Failed to reserve additional bank funds" },
         { status: 400 }
       );
     }
   } else if (delta < 0) {
-    const credit = await walletLedgerEntry(
-      userId,
-      "game_win",
-      -delta,
-      `celo_bank_lower_${room_id}_${Date.now()}`
-    );
-    if (!credit.success) {
+    const credit = await creditGPay(userId, -delta, {
+      description: "C-Lo bank lower",
+      reference: `celo_bank_lower_${room_id}_${Date.now()}`,
+    });
+    if (!credit.ok) {
       return NextResponse.json(
         { error: credit.message ?? "Failed to return bank funds" },
         { status: 500 }

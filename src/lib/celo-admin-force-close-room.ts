@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { creditSweepsIdempotent } from "@/lib/coins";
 import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
@@ -82,7 +81,13 @@ export async function adminForceCloseCeloRoom(
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
+    const result = await creditSweepsIdempotent(
+      p.user_id,
+      cents,
+      "C-Lo stake refund (admin force close)",
+      ref,
+      "celo_refund"
+    );
     if (!result.success) {
       return {
         ok: false,
@@ -90,7 +95,7 @@ export async function adminForceCloseCeloRoom(
         details: p.user_id,
       };
     }
-    if (!("skipped" in result && result.skipped)) refundsIssued += 1;
+    refundsIssued += 1;
   }
 
   const bankCents = Math.max(

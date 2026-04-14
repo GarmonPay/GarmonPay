@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -66,12 +66,10 @@ export async function POST(req: Request) {
       .from("celo_side_bets")
       .update({ status: "expired", settled_at: new Date().toISOString() })
       .eq("id", bet_id);
-    await walletLedgerEntry(
-      b.creator_id,
-      "game_win",
-      b.amount_cents,
-      `celo_sidebet_expired_${bet_id}`
-    );
+    await creditGPay(b.creator_id, b.amount_cents, {
+      description: "C-Lo side bet refund (expired)",
+      reference: `celo_sidebet_expired_${bet_id}`,
+    });
     return NextResponse.json({ error: "Side bet has expired" }, { status: 400 });
   }
 
@@ -87,21 +85,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not in this room" }, { status: 403 });
   }
 
-  // Check acceptor balance
-  const balanceCents = await getCanonicalBalanceCents(userId);
-  if (balanceCents < b.amount_cents) {
-    return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
+  const balanceGpay = await getGPayBalance(userId);
+  if (balanceGpay < b.amount_cents) {
+    return NextResponse.json({ error: "Insufficient $GPAY balance" }, { status: 400 });
   }
 
-  // Deduct from acceptor
-  const deductResult = await walletLedgerEntry(
-    userId,
-    "game_play",
-    -b.amount_cents,
-    `celo_sidebet_accept_${bet_id}_${Date.now()}`
-  );
+  const deductResult = await deductGPay(userId, b.amount_cents, balanceGpay, {
+    description: "C-Lo side bet accept",
+    reference: `celo_sidebet_accept_${bet_id}_${Date.now()}`,
+  });
 
-  if (!deductResult.success) {
+  if (!deductResult.ok) {
     return NextResponse.json(
       { error: deductResult.message ?? "Failed to deduct bet amount" },
       { status: 400 }
@@ -122,13 +116,10 @@ export async function POST(req: Request) {
 
   const updatedBet = celoFirstRow(updatedBetRows);
   if (updateErr || !updatedBet) {
-    // Someone else got there first — refund acceptor
-    await walletLedgerEntry(
-      userId,
-      "game_win",
-      b.amount_cents,
-      `celo_sidebet_accept_refund_${bet_id}_${Date.now()}`
-    );
+    await creditGPay(userId, b.amount_cents, {
+      description: "C-Lo side bet accept refund",
+      reference: `celo_sidebet_accept_refund_${bet_id}_${Date.now()}`,
+    });
     return NextResponse.json(
       { error: "Side bet was already accepted or is no longer available" },
       { status: 409 }

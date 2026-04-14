@@ -9,11 +9,11 @@ import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { scToUsdDisplay } from "@/lib/coins";
-import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
+import { formatGpayWithUsd } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
 function formatScLine(sc: number): string {
-  return formatGpcWithUsd(Math.max(0, Math.floor(Number(sc))));
+  return formatGpayWithUsd(Math.max(0, Math.floor(Number(sc))));
 }
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CeloLobbyPage() {
   const router = useRouter();
-  const { sweepsCoins, formatGPC, refresh: refreshCoins, loading: coinsLoading } = useCoins();
+  const { sweepsCoins, refresh: refreshCoins, loading: coinsLoading } = useCoins();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +189,7 @@ export default function CeloLobbyPage() {
     });
   }, [refreshCoins]);
 
-  /** Keep starting bank ≤ SC balance. */
+  /** Keep starting bank ≤ $GPAY balance. */
   useEffect(() => {
     if (!showCreate || sweepsCoins <= 0) return;
     setForm((f) => {
@@ -371,7 +371,7 @@ export default function CeloLobbyPage() {
     }));
   }
 
-  /** Form fields are SC amounts (legacy `_cents` names); compare to `users.sweeps_coins` only. */
+  /** Form fields use legacy `_cents` names; amounts are `users.sweeps_coins` ($GPAY). */
   const minimumEntryCents = form.minimum_entry_cents;
   const startingBank = form.starting_bank_cents;
   const hasEnoughForBank = sweepsCoins >= startingBank;
@@ -409,7 +409,7 @@ export default function CeloLobbyPage() {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              Your balance: {formatGPC(sweepsCoins)}
+              Your balance: {formatGpayWithUsd(sweepsCoins)}
             </p>
           </div>
         </div>
@@ -645,8 +645,8 @@ export default function CeloLobbyPage() {
                   className="mt-2 w-full accent-[#F5C842]"
                 />
                 <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
-                  <span>500 GPC ($5.00)</span>
-                  <span>10,000 GPC ($100.00)</span>
+                  <span>500 $GPAY ($5.00)</span>
+                  <span>10,000 $GPAY ($100.00)</span>
                 </div>
               </div>
 
@@ -678,12 +678,12 @@ export default function CeloLobbyPage() {
                   }`}
                 >
                   {coinsLoading ? (
-                    <>Loading your GPay Coins balance…</>
+                    <>Loading your $GPAY balance…</>
                   ) : canAfford ? (
-                    <>Your GPay Coins: {formatGPC(sweepsCoins)} — enough to reserve this bank.</>
+                    <>Your $GPAY: {formatGpayWithUsd(sweepsCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      You need {shortfallSc.toLocaleString()} more GPC to reserve {startingBank.toLocaleString()} GPC (
+                      You need {shortfallSc.toLocaleString()} more $GPAY to reserve {startingBank.toLocaleString()} (
                       {scToUsdDisplay(startingBank)}).
                     </>
                   )}
@@ -703,7 +703,7 @@ export default function CeloLobbyPage() {
                       coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
-                    {formatGPC(sweepsCoins)}
+                    {formatGpayWithUsd(sweepsCoins)}
                   </span>
                 </div>
               </div>
@@ -731,14 +731,14 @@ export default function CeloLobbyPage() {
                   : coinsLoading
                   ? "Loading balance…"
                   : !canAfford
-                  ? "Insufficient GPay Coins"
+                  ? "Insufficient $GPAY"
                   : `CREATE ROOM — ${formatScLine(form.starting_bank_cents)}`}
               </button>
 
               {!coinsLoading && !canAfford && (
                 <p className="text-center text-[10px] text-violet-400/50">
                   <Link href="/dashboard/wallet" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
-                    Get more GPay Coins →
+                    Get more $GPAY →
                   </Link>
                 </p>
               )}

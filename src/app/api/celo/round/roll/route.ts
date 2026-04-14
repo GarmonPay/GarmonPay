@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, comparePoints, calculatePayout } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
@@ -152,15 +152,13 @@ export async function POST(req: Request) {
       const bankerWins = totalPot - feeSC;
 
       if (bankerWins > 0) {
-        const led = await walletLedgerEntry(
-          bankerId,
-          "game_win",
-          bankerWins,
-          `celo_banker_win_${round_id}`
-        );
-        if (!("success" in led) || !led.success) {
+        const led = await creditGPay(bankerId, bankerWins, {
+          description: "C-Lo banker win",
+          reference: `celo_banker_win_${round_id}`,
+        });
+        if (!led.ok) {
           return NextResponse.json(
-            { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+            { error: "payout", message: led.message ?? "Payout failed" },
             { status: 500 }
           );
         }
@@ -206,15 +204,13 @@ export async function POST(req: Request) {
 
         const { payoutSC, feeSC: playerFeeSC } = calculatePayout(entry, "win", feePct);
 
-        const led = await walletLedgerEntry(
-          player.user_id,
-          "game_win",
-          payoutSC,
-          `celo_player_win_${round_id}_${player.user_id}`
-        );
-        if (!("success" in led) || !led.success) {
+        const led = await creditGPay(player.user_id, payoutSC, {
+          description: "C-Lo player win",
+          reference: `celo_player_win_${round_id}_${player.user_id}`,
+        });
+        if (!led.ok) {
           return NextResponse.json(
-            { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+            { error: "payout", message: led.message ?? "Payout failed" },
             { status: 500 }
           );
         }
@@ -243,7 +239,7 @@ export async function POST(req: Request) {
 
         for (const p of allPlayers ?? []) {
           const row = p as { user_id: string };
-          const bal = await getCanonicalBalanceCents(row.user_id);
+          const bal = await getGPayBalance(row.user_id);
           if (bal >= newBank) {
             newBankerId = row.user_id;
             await supabase
@@ -377,15 +373,13 @@ export async function POST(req: Request) {
       payoutSC = calc.payoutSC;
       feeSC = calc.feeSC;
 
-      const led = await walletLedgerEntry(
-        userId,
-        "game_win",
-        payoutSC,
-        `celo_player_win_${round_id}_${userId}`
-      );
-      if (!("success" in led) || !led.success) {
+      const led = await creditGPay(userId, payoutSC, {
+        description: "C-Lo player win",
+        reference: `celo_player_win_${round_id}_${userId}`,
+      });
+      if (!led.ok) {
         return NextResponse.json(
-          { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+          { error: "payout", message: led.message ?? "Payout failed" },
           { status: 500 }
         );
       }
@@ -406,15 +400,13 @@ export async function POST(req: Request) {
       const bankerNet = Math.floor((playerEntry * (100 - feePct)) / 100);
       feeSC = playerEntry - bankerNet;
 
-      const led = await walletLedgerEntry(
-        bankerId,
-        "game_win",
-        bankerNet,
-        `celo_banker_win_point_${round_id}_${userId}`
-      );
-      if (!("success" in led) || !led.success) {
+      const led = await creditGPay(bankerId, bankerNet, {
+        description: "C-Lo banker win",
+        reference: `celo_banker_win_point_${round_id}_${userId}`,
+      });
+      if (!led.ok) {
         return NextResponse.json(
-          { error: "ledger", message: "message" in led ? led.message : "Payout failed" },
+          { error: "payout", message: led.message ?? "Payout failed" },
           { status: 500 }
         );
       }

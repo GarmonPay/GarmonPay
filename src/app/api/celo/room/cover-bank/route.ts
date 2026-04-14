@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import {
@@ -146,24 +146,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: cap.message }, { status: 400 });
   }
 
-  // Check balance
-  const balanceCents = await getCanonicalBalanceCents(userId);
-  if (balanceCents < coverAmount) {
+  const balanceGpay = await getGPayBalance(userId);
+  if (balanceGpay < coverAmount) {
     return NextResponse.json(
-      { error: `Insufficient balance to cover bank of ${coverAmount} cents` },
+      { error: `Insufficient $GPAY to cover bank of ${coverAmount}` },
       { status: 400 }
     );
   }
 
-  // Deduct the cover amount (additional to their join bet)
-  const deductResult = await walletLedgerEntry(
-    userId,
-    "game_play",
-    -coverAmount,
-    `celo_cover_bank_${round_id}_${Date.now()}`
-  );
+  const deductResult = await deductGPay(userId, coverAmount, balanceGpay, {
+    description: "C-Lo cover bank",
+    reference: `celo_cover_bank_${round_id}_${Date.now()}`,
+  });
 
-  if (!deductResult.success) {
+  if (!deductResult.ok) {
     return NextResponse.json(
       { error: deductResult.message ?? "Failed to deduct cover amount" },
       { status: 400 }
@@ -191,12 +187,10 @@ export async function POST(req: Request) {
 
   const updatedRound = celoFirstRow(updatedRoundRows);
   if (updateErr) {
-    await walletLedgerEntry(
-      userId,
-      "game_win",
-      coverAmount,
-      `celo_cover_refund_${round_id}_${Date.now()}`
-    );
+    await creditGPay(userId, coverAmount, {
+      description: "C-Lo cover bank refund",
+      reference: `celo_cover_refund_${round_id}_${Date.now()}`,
+    });
     return NextResponse.json({ error: "Failed to cover bank" }, { status: 500 });
   }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 // Player has 30 seconds after rolling C-Lo to become the banker
@@ -95,46 +95,36 @@ export async function POST(req: Request) {
 
   // Player stakes unchanged — banker_reserve_sc (liability cap) unchanged; this only moves bank float between users.
 
-  // Check player has enough to cover the current bank
-  const balanceCents = await getCanonicalBalanceCents(userId);
-  if (balanceCents < currentBankCents) {
+  const balanceGpay = await getGPayBalance(userId);
+  if (balanceGpay < currentBankCents) {
     return NextResponse.json(
-      { error: `Insufficient balance to cover the current bank (${currentBankCents} cents)` },
+      { error: `Insufficient $GPAY to cover the current bank (${currentBankCents})` },
       { status: 400 }
     );
   }
 
-  // Deduct bank coverage from new banker
-  const deductResult = await walletLedgerEntry(
-    userId,
-    "game_play",
-    -currentBankCents,
-    `celo_become_banker_${room_id}_${Date.now()}`
-  );
+  const deductResult = await deductGPay(userId, currentBankCents, balanceGpay, {
+    description: "C-Lo become banker",
+    reference: `celo_become_banker_${room_id}_${Date.now()}`,
+  });
 
-  if (!deductResult.success) {
+  if (!deductResult.ok) {
     return NextResponse.json(
       { error: deductResult.message ?? "Failed to deduct bank coverage" },
       { status: 400 }
     );
   }
 
-  // Return current bank funds to old banker
-  const refundResult = await walletLedgerEntry(
-    rm.banker_id,
-    "game_win",
-    currentBankCents,
-    `celo_banker_exit_${room_id}_${Date.now()}`
-  );
+  const refundResult = await creditGPay(rm.banker_id, currentBankCents, {
+    description: "C-Lo banker exit",
+    reference: `celo_banker_exit_${room_id}_${Date.now()}`,
+  });
 
-  if (!refundResult.success) {
-    // Roll back new banker deduction
-    await walletLedgerEntry(
-      userId,
-      "game_win",
-      currentBankCents,
-      `celo_become_banker_refund_${room_id}_${Date.now()}`
-    );
+  if (!refundResult.ok) {
+    await creditGPay(userId, currentBankCents, {
+      description: "C-Lo become banker rollback",
+      reference: `celo_become_banker_refund_${room_id}_${Date.now()}`,
+    });
     return NextResponse.json({ error: "Failed to transfer bank funds" }, { status: 500 });
   }
 

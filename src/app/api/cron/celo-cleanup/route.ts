@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
 import { creditSweepsIdempotent } from "@/lib/coins";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { celoQaLog } from "@/lib/celo-qa-log";
@@ -103,13 +102,19 @@ async function runCeloCleanup(request: Request) {
         const cents = celoPlayerStakeCents(p);
         if (cents <= 0) continue;
         const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-        const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
+        const result = await creditSweepsIdempotent(
+          p.user_id,
+          cents,
+          "C-Lo stake refund (stale room cleanup)",
+          ref,
+          "celo_refund"
+        );
         if (!result.success) {
           errors.push(`${roomId}: player refund ${p.user_id} — ${result.message ?? "failed"}`);
           playerRefundFailed = true;
           break;
         }
-        if (!("skipped" in result && result.skipped)) playerRefunds += 1;
+        playerRefunds += 1;
       }
       if (playerRefundFailed) continue;
 

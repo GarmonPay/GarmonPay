@@ -26,3 +26,9 @@ export function formatGpcAmount(amount: number): string {
   const n = Math.max(0, Math.floor(Number(amount)));
   return `${n.toLocaleString()} ${GPAY_COINS_TICKER}`;
 }
+
+/** C-Lo UI: amount + `$GPAY` + USD face (no “SC” / “GPC” / “Sweeps”). */
+export function formatGpayWithUsd(amount: number): string {
+  const n = Math.max(0, Math.floor(Number(amount)));
+  return `${n.toLocaleString()} $GPAY (${scToUsdDisplay(n)})`;
+}

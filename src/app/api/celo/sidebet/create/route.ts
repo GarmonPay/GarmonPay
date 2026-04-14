@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 
 // Side bet payout odds (multiplier on wager)
 const SIDE_BET_ODDS: Record<string, number> = {
@@ -124,21 +124,17 @@ export async function POST(req: Request) {
     );
   }
 
-  // Check balance
-  const balanceCents = await getCanonicalBalanceCents(userId);
-  if (balanceCents < amount_cents) {
-    return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
+  const balanceGpay = await getGPayBalance(userId);
+  if (balanceGpay < amount_cents) {
+    return NextResponse.json({ error: "Insufficient $GPAY balance" }, { status: 400 });
   }
 
-  // Deduct wager from creator
-  const deductResult = await walletLedgerEntry(
-    userId,
-    "game_play",
-    -amount_cents,
-    `celo_sidebet_create_${round_id}_${Date.now()}`
-  );
+  const deductResult = await deductGPay(userId, amount_cents, balanceGpay, {
+    description: "C-Lo side bet create",
+    reference: `celo_sidebet_create_${round_id}_${Date.now()}`,
+  });
 
-  if (!deductResult.success) {
+  if (!deductResult.ok) {
     return NextResponse.json(
       { error: deductResult.message ?? "Failed to deduct bet amount" },
       { status: 400 }
@@ -165,13 +161,10 @@ export async function POST(req: Request) {
 
   const newBet = celoFirstRow(newBetRows);
   if (insertErr || !newBet) {
-    // Refund on failure
-    await walletLedgerEntry(
-      userId,
-      "game_win",
-      amount_cents,
-      `celo_sidebet_refund_create_${round_id}_${Date.now()}`
-    );
+    await creditGPay(userId, amount_cents, {
+      description: "C-Lo side bet create refund",
+      reference: `celo_sidebet_refund_create_${round_id}_${Date.now()}`,
+    });
     return NextResponse.json({ error: "Failed to create side bet" }, { status: 500 });
   }
 

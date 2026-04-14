@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { getGPayBalance, deductGPay, creditGPay } from "@/lib/gpay-balance";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { isCeloRoomJoinableStatus } from "@/lib/celo-room-constants";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
@@ -173,28 +173,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: cap.message }, { status: 400 });
     }
 
-    // Check balance (canonical USD — wallet_ledger)
-    const balanceCents = await getCanonicalBalanceCents(userId);
-    if (balanceCents < entry_cents) {
-      celoQaLog("join_wallet_rejected", {
+    const balanceGpay = await getGPayBalance(userId);
+    if (balanceGpay < entry_cents) {
+      celoQaLog("join_gpay_rejected", {
         roomId: room_id,
-        balanceCents,
+        balanceGpay,
         entryCents: entry_cents,
         httpStatus: 400,
       });
-      console.error("[celo/room/join] insufficient balance", { userId, balanceCents, entry_cents });
-      return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
+      console.error("[celo/room/join] insufficient $GPAY", { userId, balanceGpay, entry_cents });
+      return NextResponse.json({ error: "Insufficient $GPAY balance" }, { status: 400 });
     }
 
-    // Deduct entry — funds committed to this table (ledger)
-    const deductResult = await walletLedgerEntry(
-      userId,
-      "game_play",
-      -entry_cents,
-      `celo_entry_${room_id}_${Date.now()}`
-    );
+    const deductResult = await deductGPay(userId, entry_cents, balanceGpay, {
+      description: "C-Lo table entry",
+      reference: `celo_entry_${room_id}_${Date.now()}`,
+    });
 
-    if (!deductResult.success) {
+    if (!deductResult.ok) {
       return NextResponse.json(
         { error: deductResult.message ?? "Failed to deduct entry" },
         { status: 400 }
@@ -238,12 +234,10 @@ export async function POST(req: Request) {
   const playerRow = celoFirstRow(insertedRows);
   if (insertErr || !playerRow) {
     if (playerRole === "player" && betCents > 0) {
-      await walletLedgerEntry(
-        userId,
-        "game_win",
-        betCents,
-        `celo_entry_refund_${room_id}_${Date.now()}`
-      );
+      await creditGPay(userId, betCents, {
+        description: "C-Lo entry refund",
+        reference: `celo_entry_refund_${room_id}_${Date.now()}`,
+      });
     }
     return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
   }

@@ -2,14 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { walletLedgerGameWinIdempotent } from "@/lib/celo-wallet-idempotent";
+import { creditSweepsIdempotent } from "@/lib/coins";
+import { getGPayBalance } from "@/lib/gpay-balance";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { getEligibleStakedPlayers } from "@/lib/celo-eligible-players";
 import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
 import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
 import { finalizeCeloPlayerRollingRound } from "@/lib/celo-round-advance";
 import { celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
-import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 import { broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
@@ -56,7 +56,7 @@ async function rotateBankerToNextEligible(
   for (const row of allPlayers ?? []) {
     const p = row as { user_id: string };
     if (p.user_id === oldBankerId) continue;
-    const balance = await getCanonicalBalanceCents(p.user_id);
+    const balance = await getGPayBalance(p.user_id);
     if (balance >= minBetCents) {
       await admin
         .from("celo_room_players")
@@ -110,7 +110,13 @@ async function handleBankerTurnTimeout(
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await walletLedgerGameWinIdempotent(p.user_id, cents, ref);
+    const result = await creditSweepsIdempotent(
+      p.user_id,
+      cents,
+      "C-Lo stake refund (banker turn timeout)",
+      ref,
+      "celo_refund"
+    );
     if (!result.success) {
       throw new Error(`player refund ${p.user_id}: ${result.message}`);
     }

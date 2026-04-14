@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
+import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { DICE_TYPES, type DiceType } from "@/lib/celo-engine";
 
 const DICE_EXPIRY_HOURS = 24;
@@ -72,24 +72,20 @@ export async function POST(req: Request) {
 
   const totalCost = diceConfig.costCents * qty;
 
-  // Check balance
-  const balanceCents = await getCanonicalBalanceCents(userId);
-  if (balanceCents < totalCost) {
+  const balanceGpay = await getGPayBalance(userId);
+  if (balanceGpay < totalCost) {
     return NextResponse.json(
-      { error: `Insufficient balance. Need ${totalCost} cents for ${qty}x ${diceConfig.name} dice` },
+      { error: `Insufficient $GPAY. Need ${totalCost} for ${qty}x ${diceConfig.name} dice` },
       { status: 400 }
     );
   }
 
-  // Deduct cost
-  const deductResult = await walletLedgerEntry(
-    userId,
-    "game_play",
-    -totalCost,
-    `celo_dice_buy_${dice_type}_${room_id}_${Date.now()}`
-  );
+  const deductResult = await deductGPay(userId, totalCost, balanceGpay, {
+    description: "C-Lo dice purchase",
+    reference: `celo_dice_buy_${dice_type}_${room_id}_${Date.now()}`,
+  });
 
-  if (!deductResult.success) {
+  if (!deductResult.ok) {
     return NextResponse.json(
       { error: deductResult.message ?? "Failed to deduct dice cost" },
       { status: 400 }
@@ -110,13 +106,10 @@ export async function POST(req: Request) {
     .eq("user_id", userId);
 
   if (updateErr) {
-    // Refund on failure
-    await walletLedgerEntry(
-      userId,
-      "game_win",
-      totalCost,
-      `celo_dice_buy_refund_${dice_type}_${room_id}_${Date.now()}`
-    );
+    await creditGPay(userId, totalCost, {
+      description: "C-Lo dice purchase refund",
+      reference: `celo_dice_buy_refund_${dice_type}_${room_id}_${Date.now()}`,
+    });
     return NextResponse.json({ error: "Failed to equip dice" }, { status: 500 });
   }
 

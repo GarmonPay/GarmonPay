@@ -1,36 +1,29 @@
 /**
- * C-Lo payout helpers: structured logging + wallet_balances verification + platform_earnings fee lines.
+ * C-Lo payout helpers: credit `users.sweeps_coins` ($GPAY) + platform_earnings fee lines.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { celoFirstRow } from "@/lib/celo-first-row";
-import {
-  walletLedgerEntry,
-  type LedgerEntryError,
-  type LedgerEntryResult,
-} from "@/lib/wallet-ledger";
+import { creditGPay } from "@/lib/gpay-balance";
 
 export async function celoWalletCredit(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   userId: string,
   amountCents: number,
   reference: string,
-): Promise<LedgerEntryResult | LedgerEntryError> {
-  console.error("[celo/payout] crediting:", { userId, amount: amountCents, reference });
-  const result = await walletLedgerEntry(userId, "game_win", amountCents, reference);
-  console.error("[celo/payout] result:", result);
-  if (!result.success) {
-    console.error("[celo/payout] ledger error:", result.message);
-  } else {
-    const { data: wbRows } = await supabase
-      .from("wallet_balances")
-      .select("balance")
-      .eq("user_id", userId)
-      .limit(1);
-    const updatedWallet = celoFirstRow(wbRows);
-    console.error("[celo/payout] new balance:", (updatedWallet as { balance?: number } | null)?.balance);
+): Promise<{ success: boolean; message?: string }> {
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { success: true };
   }
-  return result;
+  console.error("[celo/payout] crediting sweeps:", { userId, amount: amountCents, reference });
+  const r = await creditGPay(userId, amountCents, {
+    description: "C-Lo payout",
+    reference,
+  });
+  console.error("[celo/payout] result:", r);
+  if (!r.ok) {
+    console.error("[celo/payout] credit error:", r.message);
+  }
+  return { success: r.ok, message: r.message };
 }
 
 export async function insertCeloPlatformFee(

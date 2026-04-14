@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditGPay } from "@/lib/gpay-balance";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -89,12 +89,10 @@ export async function POST(req: Request) {
       });
 
       const bankerNet = Math.floor(entry * 0.9);
-      await walletLedgerEntry(
-        bankerId,
-        "game_win",
-        bankerNet,
-        `celo_short_stop_penalty_${round_id}_${userId}`
-      );
+      await creditGPay(bankerId, bankerNet, {
+        description: "C-Lo short stop penalty",
+        reference: `celo_short_stop_penalty_${round_id}_${userId}`,
+      });
 
       return NextResponse.json({
         result: "auto_loss",

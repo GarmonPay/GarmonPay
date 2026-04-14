@@ -115,7 +115,7 @@ export async function debitSweepsCoins(
   if (sweepsCoins < amt) {
     return {
       success: false,
-      message: `Insufficient GPay Coins. You have ${sweepsCoins} GPC but need ${amt} GPC`,
+      message: `Insufficient $GPAY balance. You have ${sweepsCoins} $GPAY but need ${amt} $GPAY`,
     };
   }
 
@@ -135,7 +135,7 @@ export async function debitSweepsCoins(
     const msg = error.message ?? "";
     const friendly =
       /insufficient.*sweeps/i.test(msg) || /sweeps coins/i.test(msg)
-        ? "Insufficient GPay Coins"
+        ? "Insufficient $GPAY balance"
         : msg;
     return { success: false, message: friendly };
   }
