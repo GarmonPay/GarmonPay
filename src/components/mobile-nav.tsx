@@ -57,9 +57,9 @@ export default function MobileNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-[rgba(124,58,237,0.25)] bg-[#0a0118]/95 backdrop-blur-sm tablet:hidden"
+      className="fixed bottom-0 left-0 right-0 z-[100] border-t border-[rgba(124,58,237,0.3)] bg-[#0a0118]/95 backdrop-blur-sm tablet:hidden"
       style={{
-        minHeight: "56px",
+        minHeight: "70px",
         paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
         paddingTop: "8px",
       }}

@@ -174,20 +174,29 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={`min-h-full space-y-8 bg-[#0e0118] pb-16 pt-2 ${dmSans.className}`}>
+    <div className={`min-h-full space-y-8 bg-[#0e0118] pb-4 pt-2 tablet:pb-8 ${dmSans.className}`}>
       <header>
         <h1
-          className={`${cinzel.className} text-2xl font-bold tracking-tight sm:text-3xl`}
-          style={{ color: "#F5C842" }}
+          className={`${cinzel.className} font-bold tracking-tight`}
+          style={{
+            color: "#F5C842",
+            fontSize: "clamp(20px, 4vw, 32px)",
+            lineHeight: 1.2,
+          }}
         >
           Welcome back, {firstName}! 👑
         </h1>
       </header>
 
       {/* Coin balances */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div
+        className="grid gap-4"
+        style={{
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+        }}
+      >
         <div
-          className="rounded-2xl p-5 shadow-lg"
+          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
           style={{
             background: "linear-gradient(135deg, #1a0a00, #3d1a00)",
             border: "1px solid #F5C842",
@@ -213,7 +222,7 @@ export default function DashboardPage() {
         </div>
 
         <div
-          className="rounded-2xl p-5 shadow-lg"
+          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
           style={{
             background: "linear-gradient(135deg, #0e0118, #1a0530)",
             border: "1px solid #7C3AED",
@@ -236,7 +245,7 @@ export default function DashboardPage() {
 
       <Link
         href="/dashboard/convert"
-        className="flex w-full items-center justify-center rounded-2xl py-4 text-center text-base font-bold transition-opacity hover:opacity-95"
+        className="flex min-h-[48px] w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-base font-bold transition-opacity hover:opacity-95"
         style={{ background: "#F5C842", color: "#000" }}
       >
         Convert GC → $GPAY
@@ -244,7 +253,7 @@ export default function DashboardPage() {
 
       {/* Membership */}
       <div
-        className="rounded-2xl border border-white/10 bg-white/[0.03] p-6"
+        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 tablet:p-6"
         style={{ borderColor: "rgba(124, 58, 237, 0.35)" }}
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -269,31 +278,31 @@ export default function DashboardPage() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-violet-400/70">
           Quick actions
         </p>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 tablet:grid-cols-4">
           <Link
             href="/games/celo"
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07]"
+            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
           >
             <span className="mb-1 block text-xl">🎲</span>
             Play C-Lo
           </Link>
           <Link
             href="/dashboard/earn"
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07]"
+            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
           >
             <span className="mb-1 block text-xl">📱</span>
             Watch Ads
           </Link>
           <Link
             href="/dashboard/referral"
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07]"
+            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
           >
             <span className="mb-1 block text-xl">👥</span>
             Refer Friends
           </Link>
           <Link
             href="/dashboard/merch"
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07]"
+            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
           >
             <span className="mb-1 block text-xl">🛍️</span>
             Merch Store
@@ -303,7 +312,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Referrals */}
-      <div className="rounded-2xl border border-[#F5C842]/25 bg-black/30 p-6">
+      <div className="rounded-2xl border border-[#F5C842]/25 bg-black/30 p-4 tablet:p-6">
         <p className="text-base text-white">
           You have <span className="font-bold text-[#F5C842]">{referrals}</span>{" "}
           {referrals === 1 ? "referral" : "referrals"}
@@ -319,7 +328,7 @@ export default function DashboardPage() {
             type="button"
             disabled={!referralCode}
             onClick={() => void copyReferralCode()}
-            className="rounded-xl px-5 py-3 text-sm font-semibold transition-colors disabled:opacity-40"
+            className="min-h-[48px] rounded-xl px-5 py-3 text-sm font-semibold transition-colors disabled:opacity-40"
             style={{ background: "#7C3AED", color: "#fff" }}
           >
             {copied ? "Copied!" : "Copy code"}

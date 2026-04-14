@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#7C3AED"/>
+  <path fill="#5B21B6" opacity="0.4" d="M256 96 L384 152 V288 C384 368 320 432 256 456 C192 432 128 368 128 288 V152 Z"/>
+  <text x="256" y="318" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="160" font-weight="800" fill="#F5C842">GP</text>
+</svg>

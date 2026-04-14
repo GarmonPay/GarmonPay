@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { MobileLayout } from "@/components/mobile-layout";
-import { DesktopLayout } from "@/components/desktop-layout";
+import { DashboardHeader } from "@/components/DashboardHeader";
+import { Sidebar } from "@/components/dashboard/Sidebar";
 import MobileNav from "@/components/mobile-nav";
+import { BannerRotator } from "@/components/banners/BannerRotator";
 import { getSessionAsync } from "@/lib/session";
 import { attachReferralByReferrerIdSession } from "@/lib/api";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -53,7 +54,7 @@ export default function DashboardLayout({
     <AppErrorBoundary>
       <Suspense
         fallback={
-          <div className="min-h-screen flex items-center justify-center bg-[#0a0e17] text-[#9ca3af]">
+          <div className="flex min-h-screen items-center justify-center bg-[#0a0e17] text-[#9ca3af]">
             Loading…
           </div>
         }
@@ -78,14 +79,31 @@ export default function DashboardLayout({
             </button>
           </div>
         ) : null}
-        {/* Mobile: default under 768px; bottom nav, no sidebar */}
-        <div className="block tablet:hidden">
-          <MobileLayout>{children}</MobileLayout>
+
+        <div
+          className="flex max-h-none min-h-[100dvh] max-w-[100vw] overflow-hidden bg-[#0e0118]"
+          style={{ minHeight: "100vh" }}
+        >
+          <aside
+            className="hidden h-full min-h-0 shrink-0 tablet:flex tablet:flex-col"
+            aria-label="Dashboard navigation"
+          >
+            <Sidebar onNavigate={() => {}} />
+          </aside>
+
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden pb-[calc(5rem+env(safe-area-inset-bottom,0px))] tablet:pb-0">
+            <DashboardHeader />
+            <main className="min-w-0 flex-1 px-4 py-4 text-[14px] max-w-full leading-normal tablet:px-6 tablet:py-6 tablet:text-base">
+              <div className="mx-auto mb-4 max-w-2xl tablet:mb-6">
+                <BannerRotator placement="dashboard-top" />
+              </div>
+              <div className="dashboard-main animate-fade-in flex min-w-0 flex-col gap-4">
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-        {/* Desktop: 768px and up — sidebar + main */}
-        <div className="hidden tablet:block">
-          <DesktopLayout>{children}</DesktopLayout>
-        </div>
+
         <MobileNav />
       </Suspense>
     </AppErrorBoundary>

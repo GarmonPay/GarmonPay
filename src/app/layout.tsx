@@ -4,7 +4,6 @@ import { PublicNavbarWrapper } from "@/components/PublicNavbarWrapper";
 import Footer from "@/components/Footer";
 import { AuthStateProvider } from "@/components/AuthStateProvider";
 import { KeepAlive } from "@/components/KeepAlive";
-import { PwaRegistration } from "@/components/PwaRegistration";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
 import { ClientErrorBoundary } from "@/components/ClientErrorBoundary";
 
@@ -20,13 +19,12 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#6d28d9",
+  themeColor: "#7C3AED",
 };
 
 export const metadata = {
   title: "GarmonPay",
-  description: "Earn with ads, rewards, and referrals",
-  manifest: "/manifest.json",
+  description: "Get Seen. Get Known. Get Rewarded.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -54,6 +52,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#7C3AED" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="GarmonPay" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body className="font-sans antialiased flex min-h-screen flex-col">
         <ClientErrorBoundary>
           <AuthStateProvider>
@@ -62,7 +69,21 @@ export default function RootLayout({
           </AuthStateProvider>
         </ClientErrorBoundary>
         <KeepAlive />
-        <PwaRegistration />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then(function(reg) {
+            console.log('SW registered');
+          });
+      });
+    }
+  `,
+          }}
+        />
         <PwaInstallPrompt />
         <Footer />
       </body>
