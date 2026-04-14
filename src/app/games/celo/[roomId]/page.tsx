@@ -1,7 +1,7 @@
 "use client";
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { celoFirstRow } from "@/lib/celo-first-row";
@@ -11,7 +11,8 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoSeatsEqual } from "@/lib/celo-room-rules";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
-import { AnimatedDice } from "@/components/games/AnimatedDice";
+import { Dice3D } from "@/components/celo/Dice3D";
+import { Cinzel_Decorative } from "next/font/google";
 
 type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
 import { buildCeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
@@ -20,8 +21,108 @@ import { markCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { formatGpayAmount } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
+const cinzelRoom = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
 function formatScLine(sc: number): string {
   return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
+}
+
+function celoRollNameVisual(name: string): { className: string; style: CSSProperties } {
+  const raw = name.trim();
+  const n = raw.toUpperCase();
+  const scaleIn: CSSProperties = { animation: "celoRollNameScaleIn 0.4s ease-out" };
+  if (/\bC-?\s*LO\b/i.test(raw) || n.includes("C-LO") || n === "CLO") {
+    return {
+      className: cinzelRoom.className,
+      style: {
+        ...scaleIn,
+        fontSize: 56,
+        color: "#F5C842",
+        textShadow: "0 0 10px #F5C842, 0 0 20px #F5C842, 0 0 40px #F5C842",
+        lineHeight: 1.05,
+        textAlign: "center",
+      },
+    };
+  }
+  if (n.includes("SHIT") || n.includes("DICK")) {
+    return {
+      className: "",
+      style: {
+        fontSize: 44,
+        fontWeight: 800,
+        color: "#EF4444",
+        textShadow: "0 0 20px #EF4444",
+        animation: "celoRollNameShake 0.4s ease-out",
+        textAlign: "center",
+      },
+    };
+  }
+  if (n.includes("HAND") || n.includes("CRACK") || raw.includes("💥")) {
+    return {
+      className: "",
+      style: {
+        ...scaleIn,
+        fontSize: 48,
+        fontWeight: 800,
+        color: "#F5C842",
+        textShadow: "0 0 30px #F5C842",
+        textAlign: "center",
+      },
+    };
+  }
+  if (n.includes("POLICE") || n.includes("POUND")) {
+    return {
+      className: "",
+      style: {
+        ...scaleIn,
+        fontSize: 44,
+        fontWeight: 800,
+        color: "#3B82F6",
+        textShadow: "0 0 20px #3B82F6",
+        textAlign: "center",
+      },
+    };
+  }
+  if (n.includes("ZOE") || n.includes("HAITIAN")) {
+    return {
+      className: "",
+      style: {
+        ...scaleIn,
+        fontSize: 44,
+        fontWeight: 800,
+        color: "#10B981",
+        textShadow: "0 0 20px #10B981",
+        textAlign: "center",
+      },
+    };
+  }
+  if (n.includes("TRIP")) {
+    return {
+      className: "",
+      style: {
+        ...scaleIn,
+        fontSize: 44,
+        fontWeight: 800,
+        color: "#A855F7",
+        textShadow: "0 0 20px #A855F7",
+        textAlign: "center",
+      },
+    };
+  }
+  return {
+    className: cinzelRoom.className,
+    style: {
+      ...scaleIn,
+      fontSize: 44,
+      color: "#F5C842",
+      textShadow: "0 0 16px rgba(245,200,66,0.5)",
+      textAlign: "center",
+    },
+  };
 }
 
 async function authFetch(url: string, body: Record<string, unknown>) {
@@ -352,6 +453,13 @@ function getCeloRoomStatusLine(opts: {
 
 // ── Seat display ──────────────────────────────────────────────────────────────
 
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0]![0] + parts[1]![0]).toUpperCase();
+  const s = parts[0] ?? "?";
+  return s.length >= 2 ? s.slice(0, 2).toUpperCase() : s.toUpperCase().padEnd(2, "•");
+}
+
 function SeatCard({
   player,
   isMe,
@@ -368,44 +476,63 @@ function SeatCard({
   phasePlayerRolling?: boolean;
 }) {
   const displayName = getDisplayName(player);
-  const label = player.role === "banker" ? "🏦 Banker" : `Seat ${player.seat_number || 1}`;
+  const label = player.role === "banker" ? "Banker" : `Seat ${player.seat_number || 1}`;
   const outcome = resolvedRoll?.outcome;
   const hasResolved = outcome === "win" || outcome === "loss";
   const showBankerRollingPulse = !phasePlayerRolling && isCurrentTurn && !hasResolved;
+  const ini = initialsFromName(isMe ? "You" : displayName);
+
+  const baseCard: CSSProperties = {
+    background: "rgba(13,5,32,0.85)",
+    borderRadius: 12,
+    padding: 12,
+    backdropFilter: "blur(10px)",
+    minWidth: 120,
+    border: "1px solid rgba(124,58,237,0.4)",
+  };
+
+  if (isBanker) {
+    baseCard.border = "1px solid #F5C842";
+    baseCard.boxShadow = "0 0 15px rgba(245,200,66,0.2)";
+  }
+  if (isCurrentTurn && !isBanker) {
+    baseCard.border = "1px solid #10B981";
+    baseCard.boxShadow = "0 0 15px rgba(16,185,129,0.3)";
+    baseCard.animation = "celoSeatPulse 2s ease-in-out infinite";
+  }
 
   return (
-    <div
-      className={`rounded-xl border p-3 transition-all ${
-        isCurrentTurn
-          ? "border-[#F5C842] bg-[#F5C842]/5 shadow-[0_0_16px_rgba(245,200,66,0.15)]"
-          : isMe
-          ? "border-violet-500/50 bg-violet-500/5"
-          : "border-white/[0.07] bg-white/[0.02]"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs text-violet-300/60">{label}</p>
-          <p className="text-sm font-medium text-white truncate">
+    <div style={baseCard}>
+      <div className="flex flex-col items-center text-center gap-2">
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white shrink-0"
+          style={{
+            background: isBanker ? "linear-gradient(135deg,#F5C842,#b45309)" : "linear-gradient(135deg,#7C3AED,#4c1d95)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+          }}
+        >
+          {ini}
+        </div>
+        <div className="min-w-0 w-full">
+          <p className="text-[10px] uppercase tracking-wider text-violet-400/80">{label}</p>
+          <p className="text-sm font-semibold text-white truncate">
             {isMe ? "You" : displayName}
-            {isBanker && <span className="ml-1 text-[#F5C842]">👑</span>}
+            {isBanker ? <span className="ml-1">👑</span> : null}
           </p>
         </div>
-        <div className="text-right shrink-0">
+        <div className="w-full text-center">
           {player.role !== "banker" && (
-            <p className="text-sm font-bold text-[#F5C842] font-mono">{getPlayerEntry(player)}</p>
+            <p className="text-xs font-bold text-[#F5C842] font-mono">{getPlayerEntry(player)}</p>
           )}
           {outcome === "win" && (
-            <span className="text-xs text-emerald-400 font-semibold">
-              +{formatScLine(resolvedRoll!.payout_sc)} ✓
+            <span className="text-[11px] text-emerald-400 font-bold">
+              WIN +{formatScLine(resolvedRoll!.payout_sc)}
             </span>
           )}
-          {outcome === "loss" && (
-            <span className="text-xs text-red-400 font-semibold">Loss ✗</span>
-          )}
+          {outcome === "loss" && <span className="text-[11px] text-red-400 font-bold">LOSS</span>}
           {player.role === "player" && phasePlayerRolling && !hasResolved && (
             <span
-              className={`text-[10px] flex items-center justify-end gap-1 mt-0.5 ${
+              className={`text-[10px] flex items-center justify-center gap-1 mt-1 ${
                 isCurrentTurn ? "text-[#F5C842] font-medium" : "text-violet-400/70"
               }`}
             >
@@ -420,12 +547,12 @@ function SeatCard({
             </span>
           )}
           {showBankerRollingPulse && (
-            <span className="text-[10px] text-[#F5C842] animate-pulse block mt-0.5">Rolling…</span>
+            <span className="text-[10px] text-[#F5C842] animate-pulse block mt-1">Rolling…</span>
           )}
         </div>
       </div>
       {resolvedRoll?.roll_name && (
-        <p className="text-[10px] text-violet-300/50 mt-1 truncate">{resolvedRoll.roll_name}</p>
+        <p className="text-[9px] text-violet-300/50 mt-2 truncate text-center">{resolvedRoll.roll_name}</p>
       )}
     </div>
   );
@@ -2330,17 +2457,16 @@ export default function CeloRoomPage() {
     });
   }
 
+  const roundLabelShort = currentRound?.id ? currentRound.id.slice(0, 6).toUpperCase() : "—";
+
   return (
     <div
-      className="text-white relative overflow-x-hidden"
+      className="text-white relative"
       style={{
         minHeight: "100vh",
-        background: `
-          radial-gradient(ellipse at top, rgba(124,58,237,0.15) 0%, transparent 50%),
-          radial-gradient(ellipse at bottom, rgba(245,200,66,0.08) 0%, transparent 50%),
-          repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px),
-          #050208
-        `,
+        background: "#050208",
+        position: "relative",
+        overflow: "hidden",
         color: "#fff",
         fontFamily: "DM Sans, sans-serif",
       }}
@@ -2583,63 +2709,123 @@ export default function CeloRoomPage() {
         </div>
       )}
 
-      {/* ── Underground neon walls + spotlight ── */}
-      <div style={{ position: "fixed", left: 0, top: 0, width: 60, height: "100vh", background: "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))", filter: "blur(30px)", pointerEvents: "none", zIndex: 0 }} />
-      <div style={{ position: "fixed", right: 0, top: 0, width: 60, height: "100vh", background: "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))", filter: "blur(30px)", pointerEvents: "none", zIndex: 0 }} />
-      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: 500, height: 500, background: "radial-gradient(ellipse at top, rgba(245,200,66,0.12) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          left: 0,
+          top: 0,
+          width: 80,
+          height: "100vh",
+          background:
+            "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))",
+          filter: "blur(20px)",
+          zIndex: 0,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          right: 0,
+          top: 0,
+          width: 80,
+          height: "100vh",
+          background:
+            "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))",
+          filter: "blur(20px)",
+          zIndex: 0,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 500,
+          height: 700,
+          background: "radial-gradient(ellipse at top, rgba(245,200,66,0.12) 0%, transparent 70%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 200,
+          background: "linear-gradient(to top, rgba(124,58,237,0.08), transparent)",
+          pointerEvents: "none",
+          zIndex: 0,
+          animation: "celoSmokeRise 4s ease-in-out infinite alternate",
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,255,255,0.015) 30px, rgba(255,255,255,0.015) 31px), repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px)`,
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
 
-      <div className="relative z-10 mx-auto max-w-2xl px-4 py-4 pb-24 space-y-3">
-
-        {/* Header — lobby + share | title | balance */}
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 sm:gap-3">
-          <div className="flex flex-col gap-2 shrink-0">
+      <div
+        className="relative z-10 mx-auto max-w-2xl space-y-3 px-4 pb-4"
+        style={{ paddingBottom: "calc(200px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        {/* Sticky top bar */}
+        <div
+          className="sticky top-0 -mx-4 px-4 py-3 flex items-center justify-between gap-2 border-b border-[rgba(124,58,237,0.3)]"
+          style={{
+            zIndex: 50,
+            background: "rgba(5,2,8,0.95)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          <div className="flex flex-col gap-1 shrink-0 min-w-0">
             <Link
               href="/games/celo"
-              className="text-violet-300/80 text-sm hover:text-[#F5C842] transition-colors pt-0.5"
+              className="text-violet-200/90 text-xs sm:text-sm hover:text-[#F5C842] transition-colors whitespace-nowrap"
             >
-              ← Lobby
+              ← Back to Lobby
             </Link>
             <button
               type="button"
               onClick={() => void handleShare()}
-              style={{
-                padding: "6px 14px",
-                background: copied ? "rgba(16,185,129,0.2)" : "rgba(124,58,237,0.2)",
-                border: `1px solid ${copied ? "#10B981" : "#7C3AED"}`,
-                borderRadius: 8,
-                color: copied ? "#10B981" : "#A855F7",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: "bold",
-                fontFamily: "Courier New, monospace",
-              }}
+              className="text-left text-[10px] text-violet-400 hover:text-violet-200"
             >
-              {copied ? "✓ COPIED!" : "🔗 SHARE ROOM"}
+              {copied ? "✓ Copied link" : "Share room"}
             </button>
           </div>
-          <div className="text-center min-w-0 max-w-full mx-auto pt-0.5">
-            <h1 className="font-bold text-[#F5C842] truncate text-base sm:text-lg leading-tight">{room.name}</h1>
-            <p className="text-[10px] text-violet-400/70 uppercase tracking-widest mt-0.5">{room.speed}</p>
-            <p className="text-[10px] text-[#F5C842]/90 font-mono mt-1 tracking-wide" title="Use in C-Lo lobby">
-              {room.id.slice(0, 8).toUpperCase()}
+          <div className="flex-1 min-w-0 text-center px-1">
+            <h1 className="font-bold text-[#F5C842] truncate text-sm sm:text-base leading-tight">{room.name}</h1>
+            <p className="text-[10px] text-violet-300/80 truncate">
+              Round #{roundLabelShort} · {room.speed}
             </p>
           </div>
-          <div className="justify-self-end text-right shrink-0 flex flex-col items-end gap-0 leading-tight">
-            <span
-              className={`text-[10px] font-semibold ${realtimeConnected ? "text-emerald-400" : "text-red-400"}`}
-            >
-              {realtimeConnected ? "● LIVE" : "● RECONNECTING…"}
+          <div className="text-right shrink-0 text-[10px] sm:text-xs leading-tight space-y-0.5">
+            <p className="text-white/90 font-mono">
+              Bank: <span className="text-[#F5C842] font-bold">{formatScLine(room.current_bank_cents)}</span>
+            </p>
+            <span style={{ color: realtimeConnected ? "#10B981" : "#EF4444" }}>
+              {realtimeConnected ? "● LIVE" : "● RECONNECTING"}
             </span>
-            {onlineCount > 0 && (
-              <span className="text-[10px] text-violet-300/75">{onlineCount} online</span>
-            )}
-            <p className="text-[10px] text-violet-400/60 mt-1">Balance</p>
+            {onlineCount > 0 && <span className="block text-violet-400/80">{onlineCount} online</span>}
             <p
-              className={`text-sm font-bold font-mono tabular-nums transition-colors duration-300 ${
+              className={`font-mono font-semibold tabular-nums ${
                 balanceFlash === "up"
-                  ? "text-emerald-300 ring-2 ring-emerald-400/60 rounded px-1 -mx-0.5"
+                  ? "text-emerald-300"
                   : balanceFlash === "down"
-                    ? "text-amber-200 ring-2 ring-amber-500/50 rounded px-1 -mx-0.5"
+                    ? "text-amber-200"
                     : "text-emerald-400"
               }`}
             >
@@ -2816,50 +3002,11 @@ export default function CeloRoomPage() {
           </div>
         )}
 
-        {/* Bank bar */}
-        <div
-          style={{
-            background: "linear-gradient(145deg, rgba(18,8,35,0.92) 0%, rgba(13,5,32,0.88) 100%)",
-            border: "1px solid rgba(124,58,237,0.35)",
-            borderRadius: 16,
-            backdropFilter: "blur(12px)",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-          className="flex items-center justify-between gap-4 min-w-0 px-4 py-4 sm:px-5 sm:py-5"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-widest text-violet-300/70 font-medium">Current Bank</p>
-            <p className="text-[10px] text-violet-300/65 mt-0.5 truncate">
-              Banker {getDisplayName(bankerPlayer ?? { user_id: room.banker_id })}
-            </p>
-            <p
-              className="font-bold font-mono mt-1 tabular-nums tracking-tight text-[#F5C842]"
-              style={{
-                fontSize: "clamp(2rem, 8vw, 2.75rem)",
-                lineHeight: 1.05,
-                textShadow:
-                  "0 2px 8px rgba(0,0,0,0.45), 0 0 24px rgba(245,200,66,0.25)",
-              }}
-            >
-              {formatScLine(room.current_bank_cents)}
-            </p>
-          </div>
-          <div className="text-right text-xs text-violet-200/75 space-y-1 shrink-0 pl-3 border-l border-white/[0.08] min-w-[7.5rem]">
-            <p>
-              Min entry{" "}
-              <span className="text-white/95 font-mono tabular-nums">{formatScLine(room.min_bet_cents)}</span>
-            </p>
-            <p>
-              Fee <span className="text-white/95 font-medium">{room.platform_fee_pct}%</span>
-            </p>
-            <p>
-              Players{" "}
-              <span className="text-white/95 font-medium tabular-nums">
-                {players.filter((p) => p.role !== "spectator").length}/{room.max_players}
-              </span>
-            </p>
-          </div>
-        </div>
+        <p className="text-[10px] text-center text-violet-400/70">
+          Min {formatScLine(room.min_bet_cents)} · Fee {room.platform_fee_pct}% · Players{" "}
+          {players.filter((p) => p.role !== "spectator").length}/{room.max_players} · Banker{" "}
+          {getDisplayName(bankerPlayer ?? { user_id: room.banker_id })}
+        </p>
 
         {statusLine ? (
           <p
@@ -2875,12 +3022,21 @@ export default function CeloRoomPage() {
           </p>
         ) : null}
 
-        {/* CENTERPIECE — dice always visible (blank / tumbling / final faces) */}
-        <div
-          className="rounded-2xl border-2 border-[#F5C842]/35 bg-[#0a0612]/95 py-6 px-3 sm:px-6 shadow-[0_0_40px_rgba(124,58,237,0.2)] min-h-[200px] flex flex-col items-center justify-center relative overflow-hidden"
-          style={{ zIndex: 1 }}
-        >
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#F5C842]/60 mb-1">Dice</p>
+        {/* Underground table — neon + felt + 3D dice */}
+        <div className="flex flex-col items-center relative" style={{ zIndex: 1 }}>
+          <p
+            className={`${cinzelRoom.className} mb-2 text-center select-none`}
+            style={{
+              fontSize: 48,
+              color: "#7C3AED",
+              textShadow:
+                "0 0 5px #7C3AED, 0 0 10px #7C3AED, 0 0 20px #7C3AED, 0 0 40px #7C3AED, 0 0 80px #7C3AED",
+              letterSpacing: 8,
+              lineHeight: 1,
+            }}
+          >
+            C-LO
+          </p>
           {(dicePhaseStatusText ||
             (isRolling && currentRollerName ? `🎲 ${currentRollerName} is rolling…` : "")) && (
             <p className="text-center text-xs font-semibold text-[#F5C842]/95 mb-2 px-2" role="status">
@@ -2889,72 +3045,51 @@ export default function CeloRoomPage() {
             </p>
           )}
           <div
-            style={{
-              background:
-                "radial-gradient(ellipse at center, #1a4a2e 0%, #0d2b1a 70%, #061508 100%)",
-              borderRadius: 20,
-              border: "2px solid #2d7a4a",
-              boxShadow: "0 0 40px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.5)",
-              padding: 8,
-              margin: "16px 0",
-              position: "relative",
-              overflow: "hidden",
-            }}
+            className="flex w-full justify-center items-center px-2"
+            style={{ padding: 20, position: "relative", zIndex: 1 }}
           >
             <div
+              className="flex flex-col items-center justify-center rounded-full w-[260px] h-[260px] sm:w-[320px] sm:h-[320px]"
               style={{
-                position: "absolute",
-                top: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "100%",
-                height: "100%",
-                background:
-                  "radial-gradient(ellipse at top, rgba(245,200,66,0.08) 0%, transparent 60%)",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                display: "flex",
-                gap: 14,
-                justifyContent: "center",
-                alignItems: "center",
-                padding: "20px 12px",
-                position: "relative",
-                zIndex: 1,
+                borderRadius: "50%",
+                background: "radial-gradient(ellipse, #1a4a2e 0%, #0d2b1a 60%, #061508 100%)",
+                border: "4px solid #2d7a4a",
+                boxShadow:
+                  "0 0 40px rgba(0,0,0,0.9), inset 0 0 60px rgba(0,0,0,0.5), 0 0 80px rgba(13,43,26,0.3)",
               }}
             >
-              {[0, 1, 2].map((i) => (
-                <AnimatedDice
-                  key={`${rollAnimEpoch}-${i}`}
-                  isRolling={hideFinalDiceFaces}
-                  result={
+              <div className="flex flex-1 w-full items-center justify-center gap-1.5 px-1.5 sm:gap-3 sm:px-2">
+                {[0, 1, 2].map((i) => {
+                  const spinDurs = [2.1, 2.5, 2.3];
+                  const faceVal =
                     simpleDiceValues && simpleDiceValues.length === 3
-                      ? simpleDiceValues[i] ?? null
-                      : null
-                  }
-                  size={72}
-                />
-              ))}
-            </div>
-            {!isRolling && (feltTableRollName || lastRollResult?.rollName) ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "8px 0 16px",
-                  fontSize: 36,
-                  fontWeight: "bold",
-                  fontFamily: "Cinzel Decorative, serif",
-                  color: "#F5C842",
-                  textShadow: "0 0 20px rgba(245,200,66,0.8)",
-                  animation: "celo-felt-roll-name-in 0.5s ease-out",
-                }}
-              >
-                {feltTableRollName ?? lastRollResult?.rollName}
+                      ? simpleDiceValues[i] ?? 1
+                      : 1;
+                  return (
+                    <Dice3D
+                      key={`${rollAnimEpoch}-${i}`}
+                      value={faceVal}
+                      rolling={hideFinalDiceFaces}
+                      diceType="street"
+                      size={52}
+                      spinDurationSec={spinDurs[i] ?? 2.2}
+                    />
+                  );
+                })}
               </div>
-            ) : null}
+            </div>
           </div>
+          {!isRolling && (feltTableRollName || lastRollResult?.rollName) ? (
+            (() => {
+              const rn = feltTableRollName ?? lastRollResult?.rollName ?? "";
+              const vis = celoRollNameVisual(rn);
+              return (
+                <div className={`mt-3 px-2 ${vis.className}`} style={vis.style}>
+                  {rn}
+                </div>
+              );
+            })()
+          ) : null}
           {!isRolling &&
           lastRollResult &&
           (lastRollResult.bankerPoint != null ||
@@ -3110,6 +3245,55 @@ export default function CeloRoomPage() {
             )}
         </div>
 
+        {/* Player seats — below felt */}
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-2">
+            Players ({players.filter((p) => p.role !== "spectator").length})
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {players
+              .filter((p) => p.role === "banker")
+              .map((p) => (
+                <SeatCard
+                  key={p.id}
+                  player={p}
+                  isMe={sameCeloUserId(p.user_id, userId)}
+                  isBanker={true}
+                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
+                  resolvedRoll={null}
+                />
+              ))}
+            {players
+              .filter((p) => p.role === "player")
+              .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0))
+              .map((p) => {
+                const roll =
+                  playerRolls
+                    .filter((r) => r.user_id === p.user_id && (r.outcome === "win" || r.outcome === "loss"))
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ??
+                  null;
+                return (
+                  <SeatCard
+                    key={p.id}
+                    player={p}
+                    isMe={sameCeloUserId(p.user_id, userId)}
+                    isBanker={false}
+                    isCurrentTurn={sameCeloUserId(currentTurnPlayer?.user_id, p.user_id)}
+                    resolvedRoll={roll}
+                    phasePlayerRolling={isPlayerRolling}
+                  />
+                );
+              })}
+            {players.filter((p) => p.role === "spectator").length > 0 && (
+              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                <p className="text-[10px] text-violet-400/40">
+                  {players.filter((p) => p.role === "spectator").length} watching
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {systemFeed.length > 0 && (
           <div className="rounded-xl border border-violet-500/20 bg-violet-950/40 px-3 py-2.5 max-h-24 overflow-y-auto text-[11px] text-violet-100/90 space-y-1.5 leading-snug">
             {systemFeed.slice(-5).map((line, i) => (
@@ -3192,169 +3376,6 @@ export default function CeloRoomPage() {
             </button>
           </div>
         )}
-
-        {/* Action buttons */}
-        <div className="flex flex-wrap gap-3">
-          {amIBanker && room.status === "rolling" && !currentRound && (
-            <div className="flex-1 min-w-[200px] rounded-xl border border-amber-500/25 bg-amber-950/20 py-3.5 px-3 flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-amber-100/90">
-              <span>Syncing round…</span>
-              <button
-                type="button"
-                onClick={() => void loadRound()}
-                className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
-              >
-                Retry sync
-              </button>
-            </div>
-          )}
-          {/* Start round */}
-          {canStartRound && (
-            <button
-              type="button"
-              disabled={actionLoading === "start"}
-              onClick={handleStartRound}
-              style={{
-                flex: 1,
-                padding: "16px",
-                background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                color: "#0e0118",
-                border: "none",
-                borderRadius: 12,
-                fontSize: 18,
-                fontWeight: "bold",
-                cursor: actionLoading === "start" ? "not-allowed" : "pointer",
-                fontFamily: "Courier New, monospace",
-                letterSpacing: 2,
-                opacity: actionLoading === "start" ? 0.6 : 1,
-                boxShadow: "0 0 24px rgba(245,200,66,0.4)",
-              }}
-            >
-              {actionLoading === "start" ? "Starting…" : "🎲 START ROUND"}
-            </button>
-          )}
-
-          {/* Banker roll */}
-          {canRollBanker && (
-            <button
-              type="button"
-              disabled={!currentRound || !!actionLoading || rollInteractionBusy}
-              onClick={handleRoll}
-              className="flex-1 rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] py-4 font-bold text-black shadow-lg shadow-amber-900/30 disabled:opacity-60 transition-all text-sm"
-            >
-              {actionLoading === "roll" || rollInteractionBusy ? "Rolling…" : "🎲 Roll Dice"}
-            </button>
-          )}
-
-          {amIBanker && isPlayerRolling && (
-            <div className="flex-1 rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 py-4 text-center text-sm font-medium text-[#F5C842]/90">
-              Players are rolling…
-            </div>
-          )}
-
-          {/* Player roll — always visible to players in rolling phase; gold only on your turn */}
-          {showPlayerRollButton && (
-            <button
-              type="button"
-              disabled={!currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy}
-              onClick={handleRoll}
-              className={`flex-1 rounded-xl py-4 font-bold shadow-lg transition-all text-sm ${
-                canRollPlayer
-                  ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30"
-                  : "border border-white/10 bg-white/5 text-violet-400/80 shadow-none cursor-not-allowed opacity-70"
-              } disabled:opacity-50`}
-            >
-              {actionLoading === "roll" || rollInteractionBusy
-                ? "Rolling…"
-                : canRollPlayer
-                  ? "🎲 ROLL DICE"
-                  : currentTurnPlayer
-                    ? `${getDisplayName(currentTurnPlayer)} is rolling…`
-                    : "Waiting…"}
-            </button>
-          )}
-
-          {/* Cover bank */}
-          {canCoverBank && (
-            <button
-              type="button"
-              disabled={!!actionLoading || sweepsCoins < room.current_bank_cents}
-              onClick={handleCoverBank}
-              className="flex-1 rounded-xl border border-emerald-500/50 bg-emerald-500/10 py-4 font-semibold text-emerald-400 disabled:opacity-50 transition-all text-sm hover:bg-emerald-500/20"
-            >
-              {actionLoading === "cover"
-                ? "Covering…"
-                : `Cover Bank ${formatScLine(room.current_bank_cents)}`}
-            </button>
-          )}
-
-          {/* Banker-only waiting hints (non-bankers see status in round bar above — no duplicate) */}
-          {!canStartRound &&
-            !canRollBanker &&
-            !(amIBanker && isPlayerRolling) &&
-            !showPlayerRollButton &&
-            !canCoverBank &&
-            noActiveRound &&
-            amIBanker &&
-            room.status !== "rolling" && (
-            <div className="flex-1 min-w-[140px] rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
-              {seatedPlayers.length === 0
-                ? "Waiting for players to join…"
-                : playersWithBets.length === 0
-                  ? "Waiting for players to place entries…"
-                  : "Ready — press Start Round"}
-            </div>
-          )}
-        </div>
-
-        {/* Players grid */}
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-2">
-            Players ({players.filter((p) => p.role !== "spectator").length})
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {/* Banker seat */}
-            {players
-              .filter((p) => p.role === "banker")
-              .map((p) => (
-                <SeatCard
-                  key={p.id}
-                  player={p}
-                  isMe={sameCeloUserId(p.user_id, userId)}
-                  isBanker={true}
-                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
-                  resolvedRoll={null}
-                />
-              ))}
-            {/* Player seats */}
-            {players
-              .filter((p) => p.role === "player")
-              .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0))
-              .map((p) => {
-                const roll = playerRolls
-                  .filter((r) => r.user_id === p.user_id && (r.outcome === "win" || r.outcome === "loss"))
-                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
-                return (
-                  <SeatCard
-                    key={p.id}
-                    player={p}
-                    isMe={sameCeloUserId(p.user_id, userId)}
-                    isBanker={false}
-                    isCurrentTurn={sameCeloUserId(currentTurnPlayer?.user_id, p.user_id)}
-                    resolvedRoll={roll}
-                    phasePlayerRolling={isPlayerRolling}
-                  />
-                );
-              })}
-            {/* Spectators */}
-            {players.filter((p) => p.role === "spectator").length > 0 && (
-              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                <p className="text-[10px] text-violet-400/40">
-                  {players.filter((p) => p.role === "spectator").length} watching
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Side bets panel */}
         {roundActive && (
@@ -3530,34 +3551,195 @@ export default function CeloRoomPage() {
             </button>
           </form>
         </div>
-
-        {(canShortStopBanker || canShortStopPlayer) && (
-          <button
-            type="button"
-            onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
-            style={{
-              position: "fixed",
-              bottom: 120,
-              left: "50%",
-              transform: "translateX(-50%)",
-              padding: "18px 48px",
-              background: "linear-gradient(135deg, #EF4444, #DC2626)",
-              border: "3px solid #FCA5A5",
-              borderRadius: 99,
-              color: "#fff",
-              fontSize: 22,
-              fontWeight: "bold",
-              cursor: "pointer",
-              zIndex: 200,
-              boxShadow: "0 0 40px rgba(239,68,68,0.7)",
-              letterSpacing: 3,
-              animation: "shortStopPulse 0.4s ease-in-out infinite alternate",
-            }}
-          >
-            ✋ SHORT STOP
-          </button>
-        )}
       </div>
+
+      {/* Fixed bottom action bar */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          background: "rgba(5,2,8,0.95)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderTop: "1px solid rgba(124,58,237,0.3)",
+        }}
+      >
+        <div className="mx-auto max-w-2xl px-4 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] space-y-3">
+          {canRollPlayer && currentRound?.banker_point != null && (
+            <p
+              className="text-center text-sm font-bold"
+              style={{
+                color: "#F5C842",
+                animation: "celoYourTurnFlash 1.2s ease-in-out infinite",
+              }}
+            >
+              YOUR TURN — Beat {currentRound.banker_point}!
+            </p>
+          )}
+
+          {amIBanker && room.status === "rolling" && !currentRound && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 py-3.5 px-3 flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-amber-100/90">
+              <span>Syncing round…</span>
+              <button
+                type="button"
+                onClick={() => void loadRound()}
+                className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
+              >
+                Retry sync
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 w-full">
+            {canStartRound && (
+              <button
+                type="button"
+                disabled={actionLoading === "start"}
+                onClick={handleStartRound}
+                style={{
+                  width: "100%",
+                  padding: "16px 32px",
+                  background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  cursor: actionLoading === "start" ? "not-allowed" : "pointer",
+                  letterSpacing: 1,
+                  opacity: actionLoading === "start" ? 0.6 : 1,
+                  boxShadow: "0 0 24px rgba(124,58,237,0.45)",
+                }}
+              >
+                {actionLoading === "start" ? "Starting…" : "START ROUND"}
+              </button>
+            )}
+
+            {canRollBanker && (
+              <button
+                type="button"
+                disabled={!currentRound || !!actionLoading || rollInteractionBusy}
+                onClick={handleRoll}
+                style={{
+                  width: "100%",
+                  padding: "16px 32px",
+                  background: "#F5C842",
+                  color: "#000",
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  cursor:
+                    !currentRound || !!actionLoading || rollInteractionBusy ? "not-allowed" : "pointer",
+                  opacity: !currentRound || !!actionLoading || rollInteractionBusy ? 0.6 : 1,
+                  boxShadow: "0 0 20px rgba(245,200,66,0.35)",
+                }}
+              >
+                {actionLoading === "roll" || rollInteractionBusy ? "Rolling…" : "ROLL DICE"}
+              </button>
+            )}
+
+            {amIBanker && isPlayerRolling && (
+              <div className="rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 py-4 text-center text-sm font-medium text-[#F5C842]/90">
+                Players are rolling…
+              </div>
+            )}
+
+            {showPlayerRollButton && (
+              <button
+                type="button"
+                disabled={!currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy}
+                onClick={handleRoll}
+                style={{
+                  width: "100%",
+                  padding: "16px 32px",
+                  borderRadius: 12,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  border: canRollPlayer ? "none" : "1px solid rgba(255,255,255,0.1)",
+                  background: canRollPlayer ? "#F5C842" : "rgba(255,255,255,0.05)",
+                  color: canRollPlayer ? "#000" : "rgba(156,163,175,0.95)",
+                  cursor:
+                    !currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    !currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy ? 0.7 : 1,
+                  boxShadow: canRollPlayer ? "0 0 20px rgba(245,200,66,0.35)" : "none",
+                }}
+              >
+                {actionLoading === "roll" || rollInteractionBusy
+                  ? "Rolling…"
+                  : canRollPlayer
+                    ? "ROLL DICE"
+                    : currentTurnPlayer
+                      ? `${getDisplayName(currentTurnPlayer)} is rolling…`
+                      : "Waiting…"}
+              </button>
+            )}
+
+            {canCoverBank && (
+              <button
+                type="button"
+                disabled={!!actionLoading || sweepsCoins < room.current_bank_cents}
+                onClick={handleCoverBank}
+                className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 py-4 font-semibold text-emerald-400 disabled:opacity-50 transition-all text-sm hover:bg-emerald-500/20"
+              >
+                {actionLoading === "cover"
+                  ? "Covering…"
+                  : `Cover Bank ${formatScLine(room.current_bank_cents)}`}
+              </button>
+            )}
+
+            {!canStartRound &&
+              !canRollBanker &&
+              !(amIBanker && isPlayerRolling) &&
+              !showPlayerRollButton &&
+              !canCoverBank &&
+              noActiveRound &&
+              amIBanker &&
+              room.status !== "rolling" && (
+                <div className="rounded-xl border border-violet-500/15 bg-violet-950/30 py-3.5 px-3 text-center text-sm text-violet-200/85">
+                  {seatedPlayers.length === 0
+                    ? "Waiting for players to join…"
+                    : playersWithBets.length === 0
+                      ? "Waiting for players to place entries…"
+                      : "Ready — press Start Round"}
+                </div>
+              )}
+          </div>
+        </div>
+      </div>
+
+      {(canShortStopBanker || canShortStopPlayer) && (
+        <button
+          type="button"
+          onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
+          style={{
+            position: "fixed",
+            bottom: "calc(200px + env(safe-area-inset-bottom, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "18px 48px",
+            background: "linear-gradient(135deg, #EF4444, #DC2626)",
+            border: "3px solid #FCA5A5",
+            borderRadius: 99,
+            color: "#fff",
+            fontSize: 22,
+            fontWeight: "bold",
+            cursor: "pointer",
+            zIndex: 200,
+            boxShadow: "0 0 40px rgba(239,68,68,0.7)",
+            letterSpacing: 3,
+            animation: "shortStopPulse 0.4s ease-in-out infinite alternate",
+          }}
+        >
+          ✋ SHORT STOP
+        </button>
+      )}
     </div>
   );
 }
