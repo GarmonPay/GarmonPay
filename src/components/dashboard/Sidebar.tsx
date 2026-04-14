@@ -1,45 +1,139 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Cinzel_Decorative } from "next/font/google";
 import { logout } from "@/lib/api";
 import { clearSession } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 
-const nav: { href: string; label: string; soon?: boolean }[] = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/buy-coins", label: "🪙 Buy Coins" },
-  { href: "/dashboard/arena", label: "GarmonPay Arena", soon: true },
-  { href: "/dashboard/transactions", label: "Transactions" },
-  { href: "/dashboard/leaderboard", label: "Leaderboard" },
-  { href: "/dashboard/games", label: "Games" },
-  { href: "/dashboard/games/spin", label: "Spin Wheel", soon: true },
-  { href: "/dashboard/games/scratch", label: "Scratch Card", soon: true },
-  { href: "/dashboard/games/mystery-box", label: "Mystery Box", soon: true },
-  { href: "/dashboard/games/pinball", label: "Pinball", soon: true },
-  { href: "/dashboard/coin-flip", label: "Coin Flip" },
-  { href: "/dashboard/rewards", label: "Rewards" },
-  { href: "/dashboard/earn", label: "Earn" },
-  { href: "/dashboard/earn/social", label: "📱 Social Tasks" },
-  { href: "/dashboard/earn/calculator", label: "Calculator" },
-  { href: "/dashboard/earnings", label: "Earnings" },
-  { href: "/dashboard/advertise", label: "Advertise" },
-  { href: "/dashboard/ads", label: "Watch ads" },
-  { href: "/dashboard/banners", label: "Banners" },
-  { href: "/dashboard/withdraw", label: "Withdraw" },
-  { href: "/dashboard/tournaments", label: "Tournaments" },
-  { href: "/dashboard/teams", label: "Teams" },
-  { href: "/dashboard/referrals", label: "Referrals" },
-  { href: "/dashboard/finance", label: "Finance" },
-  { href: "/dashboard/security", label: "Security" },
-  { href: "/dashboard/settings", label: "Settings" },
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  soon?: boolean;
+  isActive: (pathname: string) => boolean;
+};
+
+const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
+  {
+    heading: null,
+    items: [
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        icon: "🏠",
+        isActive: (p) => p === "/dashboard",
+      },
+    ],
+  },
+  {
+    heading: "GAMES",
+    items: [
+      {
+        href: "/games/celo",
+        label: "C-Lo",
+        icon: "🎲",
+        isActive: (p) => p.startsWith("/games/celo"),
+      },
+      {
+        href: "/dashboard/coinflip",
+        label: "Coin Flip",
+        icon: "🪙",
+        soon: true,
+        isActive: (p) => p.startsWith("/dashboard/coinflip"),
+      },
+      {
+        href: "/dashboard/arena",
+        label: "Arena",
+        icon: "⚔️",
+        soon: true,
+        isActive: (p) => p.startsWith("/dashboard/arena"),
+      },
+    ],
+  },
+  {
+    heading: "EARN",
+    items: [
+      {
+        href: "/dashboard/earn/ads",
+        label: "Watch Ads",
+        icon: "📺",
+        isActive: (p) =>
+          p === "/dashboard/earn" ||
+          p.startsWith("/dashboard/earn/ads") ||
+          (p.startsWith("/dashboard/earn") &&
+            !p.startsWith("/dashboard/earn/social") &&
+            !p.startsWith("/dashboard/earn/calculator")),
+      },
+      {
+        href: "/dashboard/earn/social",
+        label: "Social Tasks",
+        icon: "✅",
+        isActive: (p) => p.startsWith("/dashboard/earn/social"),
+      },
+      {
+        href: "/dashboard/referral",
+        label: "Refer Friends",
+        icon: "👥",
+        isActive: (p) =>
+          p.startsWith("/dashboard/referral") || p.startsWith("/dashboard/referrals"),
+      },
+    ],
+  },
+  {
+    heading: "COINS",
+    items: [
+      {
+        href: "/dashboard/coins/buy",
+        label: "Buy GC",
+        icon: "🛒",
+        isActive: (p) =>
+          p.startsWith("/dashboard/coins/buy") || p.startsWith("/dashboard/buy-coins"),
+      },
+      {
+        href: "/dashboard/convert",
+        label: "Convert GC → $GPAY",
+        icon: "⚡",
+        isActive: (p) => p.startsWith("/dashboard/convert"),
+      },
+    ],
+  },
+  {
+    heading: "ACCOUNT",
+    items: [
+      {
+        href: "/dashboard/profile",
+        label: "Profile",
+        icon: "👤",
+        isActive: (p) =>
+          p.startsWith("/dashboard/profile") || p.startsWith("/dashboard/settings"),
+      },
+    ],
+  },
 ];
+
+function navItemClass(active: boolean): string {
+  const base =
+    "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-4 py-2.5 text-sm transition-colors";
+  if (active) {
+    return `${base} bg-[rgba(124,58,237,0.3)] text-[#F5C842]`;
+  }
+  return `${base} text-white/70 hover:bg-[rgba(124,58,237,0.2)] hover:text-white`;
+}
 
 interface SidebarProps {
   onNavigate?: () => void;
 }
 
 export function Sidebar({ onNavigate }: SidebarProps) {
+  const pathname = usePathname();
   const router = useRouter();
 
   async function handleLogout() {
@@ -58,30 +152,72 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   }
 
   return (
-    <aside className="w-56 shrink-0 border-r border-white/[0.06] bg-fintech-bg-card/50 py-4 px-3">
-      <nav className="flex flex-col gap-0.5">
-        {nav.map(({ href, label, soon }) => (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className="px-3 py-2 rounded-lg text-sm font-medium text-fintech-muted hover:text-white hover:bg-white/5 inline-flex items-center flex-wrap gap-y-1"
-          >
-            <span>{label}</span>
-            {soon ? (
-              <span className="text-xs bg-fintech-accent/20 text-fintech-accent border border-fintech-accent/30 rounded-full px-2 py-0.5 ml-2">
-                Soon
-              </span>
+    <aside className="flex h-full min-h-0 w-[220px] shrink-0 flex-col border-r border-[rgba(124,58,237,0.3)] bg-[#0a0118]">
+      <Link
+        href="/dashboard"
+        onClick={onNavigate}
+        className={`block border-b border-[rgba(124,58,237,0.3)] px-4 py-5 text-xl font-bold text-[#F5C842] ${cinzel.className}`}
+      >
+        GarmonPay
+      </Link>
+
+      <nav className="flex flex-1 flex-col overflow-y-auto pb-4">
+        {SECTIONS.map((section, sectionIdx) => (
+          <div key={section.heading ?? `nav-section-${sectionIdx}`}>
+            {section.heading ? (
+              <p
+                className="px-4 pb-1 pt-4 text-[10px] uppercase tracking-[2px] text-white/30"
+                style={{ padding: "16px 16px 4px" }}
+              >
+                {section.heading}
+              </p>
             ) : null}
-          </Link>
+            <ul className="space-y-0.5 px-2">
+              {section.items.map((item) => {
+                const active = item.isActive(pathname);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={navItemClass(active)}
+                    >
+                      <span className="shrink-0 text-base leading-none" aria-hidden>
+                        {item.icon}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.soon ? (
+                        <span
+                          className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+                          style={{
+                            background: "rgba(124, 58, 237, 0.3)",
+                            color: "#7C3AED",
+                          }}
+                        >
+                          Soon
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            {section.heading === "ACCOUNT" ? (
+              <div className="px-2 pb-2">
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className={`${navItemClass(false)} w-full text-left`}
+                >
+                  <span className="text-base" aria-hidden>
+                    🚪
+                  </span>
+                  Log Out
+                </button>
+              </div>
+            ) : null}
+          </div>
         ))}
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="mt-2 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 text-left w-full"
-        >
-          Log out
-        </button>
       </nav>
     </aside>
   );
