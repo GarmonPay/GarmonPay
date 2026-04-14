@@ -12,6 +12,7 @@ import { celoSeatsEqual } from "@/lib/celo-room-rules";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import type { CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 import { DiceDisplay } from "@/components/celo/DiceDisplay";
+import VoiceChat from "@/components/celo/VoiceChat";
 import { Cinzel_Decorative } from "next/font/google";
 
 type DiceUiPhase = "idle" | "rolling" | "revealing" | "completed";
@@ -2521,12 +2522,24 @@ export default function CeloRoomPage() {
 
   const roundLabelShort = currentRound?.id ? currentRound.id.slice(0, 6).toUpperCase() : "—";
 
+  const diceValues: [number, number, number] | null =
+    simpleDiceValues && simpleDiceValues.length === 3
+      ? [simpleDiceValues[0]!, simpleDiceValues[1]!, simpleDiceValues[2]!]
+      : null;
+  const rollAnimKey = rollAnimEpoch;
+  const playerDiceColor = myPlayer?.dice_type ? String(myPlayer.dice_type) : "green";
+
+  const watchingCount = Math.max(
+    onlineCount,
+    players.filter((p) => p.role === "spectator").length
+  );
+
   return (
     <div
       className="text-white relative"
       style={{
         minHeight: "100vh",
-        background: "#050208",
+        background: "#05010F",
         position: "relative",
         overflow: "hidden",
         color: "#fff",
@@ -2771,131 +2784,97 @@ export default function CeloRoomPage() {
         </div>
       )}
 
+      {/* Street scene: brick / concrete + neon */}
       <div
         aria-hidden
+        className="pointer-events-none fixed inset-0 z-0"
         style={{
-          position: "fixed",
-          left: 0,
-          top: 0,
-          width: 80,
-          height: "100vh",
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(255,255,255,0.04) 28px, rgba(255,255,255,0.04) 29px), repeating-linear-gradient(90deg, transparent, transparent 72px, rgba(255,255,255,0.025) 72px, rgba(255,255,255,0.025) 73px), linear-gradient(180deg, #05010F 0%, #0a0618 45%, #05010F 100%)`,
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none fixed top-0 left-0 right-0 z-0 h-40"
+        style={{
           background:
-            "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))",
-          filter: "blur(20px)",
-          zIndex: 0,
-          pointerEvents: "none",
+            "radial-gradient(ellipse 90% 120% at 50% -20%, rgba(124,58,237,0.45), transparent 55%)",
+          boxShadow: "inset 0 -30px 60px rgba(124,58,237,0.08)",
         }}
       />
       <div
         aria-hidden
+        className="pointer-events-none fixed left-0 top-0 bottom-0 z-0 w-28 sm:w-36"
         style={{
-          position: "fixed",
-          right: 0,
-          top: 0,
-          width: 80,
-          height: "100vh",
-          background:
-            "linear-gradient(180deg, rgba(124,58,237,0.4), rgba(245,200,66,0.2), rgba(16,185,129,0.2), rgba(124,58,237,0.4))",
-          filter: "blur(20px)",
-          zIndex: 0,
-          pointerEvents: "none",
+          background: "linear-gradient(90deg, rgba(245,200,66,0.18), rgba(245,200,66,0.04), transparent)",
         }}
       />
       <div
         aria-hidden
+        className="pointer-events-none fixed right-0 top-0 bottom-0 z-0 w-28 sm:w-36"
         style={{
-          position: "fixed",
-          top: 0,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 500,
-          height: 700,
-          background: "radial-gradient(ellipse at top, rgba(245,200,66,0.12) 0%, transparent 70%)",
-          pointerEvents: "none",
-          zIndex: 0,
+          background: "linear-gradient(270deg, rgba(245,200,66,0.18), rgba(245,200,66,0.04), transparent)",
         }}
       />
       <div
         aria-hidden
+        className="pointer-events-none fixed bottom-0 left-0 right-0 z-0 h-24"
         style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 200,
-          background: "linear-gradient(to top, rgba(124,58,237,0.08), transparent)",
-          pointerEvents: "none",
-          zIndex: 0,
-          animation: "celoSmokeRise 4s ease-in-out infinite alternate",
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: "fixed",
-          inset: 0,
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,255,255,0.015) 30px, rgba(255,255,255,0.015) 31px), repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px)`,
-          pointerEvents: "none",
-          zIndex: 0,
+          background: "linear-gradient(to top, rgba(16,185,129,0.22), rgba(16,185,129,0.06), transparent)",
         }}
       />
 
-      <div
-        className="relative z-10 mx-auto max-w-2xl space-y-3 px-4 pb-4"
-        style={{ paddingBottom: "calc(200px + env(safe-area-inset-bottom, 0px))" }}
+      {/* TOP BAR — 56px fixed */}
+      <header
+        className="fixed top-0 left-0 right-0 z-[60] flex h-14 items-stretch border-b border-violet-500/25 px-2 sm:px-4"
+        style={{
+          background: "rgba(5,1,15,0.94)",
+          backdropFilter: "blur(16px)",
+        }}
       >
-        {/* Sticky top bar */}
-        <div
-          className="sticky top-0 -mx-4 px-4 py-3 flex items-center justify-between gap-2 border-b border-[rgba(124,58,237,0.3)]"
-          style={{
-            zIndex: 50,
-            background: "rgba(5,2,8,0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <div className="flex flex-col gap-1 shrink-0 min-w-0">
-            <Link
-              href="/games/celo"
-              className="text-violet-200/90 text-xs sm:text-sm hover:text-[#F5C842] transition-colors whitespace-nowrap"
-            >
-              ← Back to Lobby
-            </Link>
-            <button
-              type="button"
-              onClick={() => void handleShare()}
-              className="text-left text-[10px] text-violet-400 hover:text-violet-200"
-            >
-              {copied ? "✓ Copied link" : "Share room"}
-            </button>
-          </div>
-          <div className="flex-1 min-w-0 text-center px-1">
-            <h1 className="font-bold text-[#F5C842] truncate text-sm sm:text-base leading-tight">{room.name}</h1>
-            <p className="text-[10px] text-violet-300/80 truncate">
-              Round #{roundLabelShort} · {room.speed}
-            </p>
-          </div>
-          <div className="text-right shrink-0 text-[10px] sm:text-xs leading-tight space-y-0.5">
-            <p className="text-white/90 font-mono">
-              Bank: <span className="text-[#F5C842] font-bold">{formatScLine(room.current_bank_cents)}</span>
-            </p>
-            <span style={{ color: realtimeConnected ? "#10B981" : "#EF4444" }}>
-              {realtimeConnected ? "● LIVE" : "● RECONNECTING"}
-            </span>
-            {onlineCount > 0 && <span className="block text-violet-400/80">{onlineCount} online</span>}
-            <p
-              className={`font-mono font-semibold tabular-nums ${
-                balanceFlash === "up"
-                  ? "text-emerald-300"
-                  : balanceFlash === "down"
-                    ? "text-amber-200"
-                    : "text-emerald-400"
-              }`}
-            >
-              {formatGpayAmount(sweepsCoins)}
-            </p>
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center pr-2">
+          <Link
+            href="/games/celo"
+            className="text-[10px] text-violet-400 hover:text-[#F5C842] sm:text-xs"
+          >
+            ← Lobby
+          </Link>
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            className="text-left text-[9px] text-violet-500 hover:text-violet-300"
+          >
+            {copied ? "✓ Link" : "Share"}
+          </button>
         </div>
+        <h1
+          className={`${cinzelRoom.className} flex min-w-0 flex-[1.2] items-center justify-center px-1 text-center text-base font-bold leading-tight text-[#F5C842] sm:text-lg`}
+          style={{ textShadow: "0 0 20px rgba(245,200,66,0.35)" }}
+        >
+          <span className="truncate">{room.name}</span>
+        </h1>
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center border-x border-violet-500/20 px-1">
+          <span className="text-[9px] uppercase tracking-wider text-violet-400">Bank</span>
+          <span className="font-mono text-sm font-bold tabular-nums text-[#F5C842] sm:text-base">
+            {formatScLine(room.current_bank_cents)}
+          </span>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col items-end justify-center pl-2 text-right">
+          <p className="text-[10px] text-violet-400">
+            Round{" "}
+            <span className="font-mono font-semibold text-violet-300">#{roundLabelShort}</span>
+          </p>
+          <p className="text-[10px] text-violet-500">
+            <span style={{ color: realtimeConnected ? "#10B981" : "#EF4444" }} className="mr-1">
+              {realtimeConnected ? "●" : "○"}
+            </span>
+            {watchingCount} watching
+          </p>
+        </div>
+      </header>
 
+      <div
+        className="relative z-10 mx-auto max-w-[min(1400px,100%)] space-y-3 px-3 pb-[calc(80px+env(safe-area-inset-bottom,0px))] pt-[56px] sm:px-4"
+      >
         {showPayoutFlash && (
           <div
             style={{
@@ -3084,8 +3063,25 @@ export default function CeloRoomPage() {
           </p>
         ) : null}
 
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+          {/* LEFT ~65% — dice street table */}
+          <div className="min-w-0 flex-1 space-y-4 lg:max-w-[65%]">
         {/* Underground table — neon + felt + 3D dice */}
         <div className="flex flex-col items-center relative" style={{ zIndex: 1 }}>
+          <div className="mb-3 flex w-full max-w-xl flex-wrap justify-center gap-2">
+            {players
+              .filter((p) => p.role === "banker")
+              .map((p) => (
+                <SeatCard
+                  key={p.id}
+                  player={p}
+                  isMe={sameCeloUserId(p.user_id, userId)}
+                  isBanker={true}
+                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
+                  resolvedRoll={null}
+                />
+              ))}
+          </div>
           <p
             className={`${cinzelRoom.className} mb-2 text-center select-none`}
             style={{
@@ -3111,24 +3107,20 @@ export default function CeloRoomPage() {
             style={{ padding: 20, position: "relative", zIndex: 1 }}
           >
             <div
-              className="flex flex-col items-center justify-center rounded-full w-[260px] h-[260px] sm:w-[320px] sm:h-[320px]"
+              className="flex flex-col items-center justify-center rounded-3xl w-full max-w-[min(100%,360px)] aspect-[4/3] sm:min-h-[280px]"
               style={{
-                borderRadius: "50%",
-                background: "radial-gradient(ellipse, #1a4a2e 0%, #0d2b1a 60%, #061508 100%)",
-                border: "4px solid #2d7a4a",
+                background:
+                  "radial-gradient(ellipse at center, #12101f 0%, #0a0814 55%, #05030c 100%)",
+                border: "2px solid rgba(124,58,237,0.55)",
                 boxShadow:
-                  "0 0 40px rgba(0,0,0,0.9), inset 0 0 60px rgba(0,0,0,0.5), 0 0 80px rgba(13,43,26,0.3)",
+                  "0 0 32px rgba(124,58,237,0.35), inset 0 0 48px rgba(0,0,0,0.65)",
               }}
             >
               <DiceDisplay
-                dice={
-                  simpleDiceValues && simpleDiceValues.length === 3
-                    ? [simpleDiceValues[0]!, simpleDiceValues[1]!, simpleDiceValues[2]!]
-                    : null
-                }
+                dice={diceValues}
                 rolling={hideFinalDiceFaces}
-                animKey={rollAnimEpoch}
-                diceColor="green"
+                animKey={rollAnimKey}
+                diceColor={playerDiceColor}
                 size={52}
               />
             </div>
@@ -3304,19 +3296,7 @@ export default function CeloRoomPage() {
           <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-2">
             Players ({players.filter((p) => p.role !== "spectator").length})
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {players
-              .filter((p) => p.role === "banker")
-              .map((p) => (
-                <SeatCard
-                  key={p.id}
-                  player={p}
-                  isMe={sameCeloUserId(p.user_id, userId)}
-                  isBanker={true}
-                  isCurrentTurn={isBankerRolling && sameCeloUserId(p.user_id, userId)}
-                  resolvedRoll={null}
-                />
-              ))}
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 [transform:perspective(400px)_rotateX(4deg)]">
             {players
               .filter((p) => p.role === "player")
               .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0))
@@ -3430,7 +3410,9 @@ export default function CeloRoomPage() {
             </button>
           </div>
         )}
+          </div>
 
+          <aside className="flex w-full min-w-0 shrink-0 flex-col gap-4 lg:w-[35%] lg:max-w-[35%]">
         {/* Side bets panel */}
         {roundActive && (
           <div className="rounded-2xl border border-violet-500/20 bg-[#12081f]/60">
@@ -3566,6 +3548,8 @@ export default function CeloRoomPage() {
           </div>
         )}
 
+        <VoiceChat roomId={roomId} />
+
         {/* Live chat */}
         <div className="rounded-2xl border border-white/[0.07] bg-[#12081f]/80 overflow-hidden">
           <p className="text-[10px] uppercase tracking-widest text-violet-400/50 px-4 pt-3">Room chat</p>
@@ -3605,9 +3589,11 @@ export default function CeloRoomPage() {
             </button>
           </form>
         </div>
+      </aside>
+        </div>
       </div>
 
-      {/* Fixed bottom action bar */}
+      {/* Fixed bottom action bar — 80px */}
       <div
         style={{
           position: "fixed",
@@ -3615,13 +3601,28 @@ export default function CeloRoomPage() {
           left: 0,
           right: 0,
           zIndex: 50,
-          background: "rgba(5,2,8,0.95)",
+          minHeight: 80,
+          background: "rgba(5,1,15,0.96)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          borderTop: "1px solid rgba(124,58,237,0.3)",
+          borderTop: "1px solid rgba(124,58,237,0.35)",
         }}
       >
-        <div className="mx-auto max-w-2xl px-4 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] space-y-3">
+        <div className="mx-auto flex min-h-[80px] max-w-[min(1400px,100%)] flex-col justify-center gap-2 px-4 py-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-violet-300/90">
+            <span className="font-mono text-emerald-400/95">
+              Balance {formatGpayAmount(sweepsCoins)}
+              {balanceFlash === "up" ? " ↑" : balanceFlash === "down" ? " ↓" : ""}
+            </span>
+            {myPlayer && myPlayer.role === "player" ? (
+              <span>
+                Entry{" "}
+                <span className="font-mono font-semibold text-[#F5C842]">{getPlayerEntry(myPlayer)}</span>
+              </span>
+            ) : (
+              <span className="text-violet-500/80">Spectator / banker view</span>
+            )}
+          </div>
           {canRollPlayer && currentRound?.banker_point != null && (
             <p
               className="text-center text-sm font-bold"
@@ -3774,7 +3775,7 @@ export default function CeloRoomPage() {
           onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
           style={{
             position: "fixed",
-            bottom: "calc(200px + env(safe-area-inset-bottom, 0px))",
+            bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
             left: "50%",
             transform: "translateX(-50%)",
             padding: "18px 48px",
