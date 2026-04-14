@@ -36,13 +36,6 @@ function waitNextPaint(): Promise<void> {
   });
 }
 
-/** True when `next` is a 3-dice triple and differs from `prev` (including null → triple). */
-function celoBankerDiceChanged(prev: unknown, next: unknown): boolean {
-  if (!Array.isArray(next) || next.length !== 3) return false;
-  if (!Array.isArray(prev) || prev.length !== 3) return true;
-  return next[0] !== prev[0] || next[1] !== prev[1] || next[2] !== prev[2];
-}
-
 function formatScLine(sc: number): string {
   return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
 }
@@ -617,6 +610,8 @@ export default function CeloRoomPage() {
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
   /** Shown above dice during shared realtime animation */
   const [currentRollerName, setCurrentRollerName] = useState("");
+  /** Dice skin on felt follows whoever is rolling (not the local viewer). */
+  const [currentRollerDiceType, setCurrentRollerDiceType] = useState<string>("standard");
   const [noShortStop, setNoShortStop] = useState(false);
   /** True after Roll API succeeds until realtime dice animation sequence finishes */
   const [rollInteractionBusy, setRollInteractionBusy] = useState(false);
@@ -934,6 +929,14 @@ export default function CeloRoomPage() {
             }
           ) || "Player";
 
+    if (payload.rollerUserId) {
+      const rollerPl =
+        playersRef.current.find((p) => sameCeloUserId(p.user_id, payload.rollerUserId)) ?? null;
+      setCurrentRollerDiceType(rollerPl?.dice_type ? String(rollerPl.dice_type) : "standard");
+    } else {
+      setCurrentRollerDiceType("standard");
+    }
+
     setRollAnimEpoch((e) => e + 1);
     setCurrentDice(null);
     setFeltTableRollName(null);
@@ -1014,6 +1017,14 @@ export default function CeloRoomPage() {
       },
       rollerLabel: string
     ) => {
+      if (rollData.userId) {
+        const rollerPl =
+          playersRef.current.find((p) => sameCeloUserId(p.user_id, rollData.userId)) ?? null;
+        setCurrentRollerDiceType(rollerPl?.dice_type ? String(rollerPl.dice_type) : "standard");
+      } else {
+        setCurrentRollerDiceType("standard");
+      }
+
       cancelRollAnimRef.current?.();
       cancelRollAnimRef.current = null;
       setRollAnimEpoch((e) => e + 1);
@@ -1242,7 +1253,7 @@ export default function CeloRoomPage() {
     let isMounted = true;
     processedSyncKeysRef.current.clear();
 
-    const fetchInitialRoomData = async () => {
+    const fetchRoomData = async () => {
       await loadAllRef.current();
       if (isMounted) setInitialSyncDone(true);
     };
@@ -1302,7 +1313,7 @@ export default function CeloRoomPage() {
             }).syncKey;
             if (processedSyncKeysRef.current.has(syncKey)) {
               pendingPlayerRollMetaRef.current = null;
-              void loadRoundRef.current();
+              await fetchRoomData();
               return;
             }
             processedSyncKeysRef.current.add(syncKey);
@@ -1330,7 +1341,23 @@ export default function CeloRoomPage() {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
+          schema: "public",
+          table: "celo_rounds",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          if (!isMounted) return;
+          const newRound = payload.new as Round | null;
+          if (!newRound || String(newRound.room_id) !== roomId) return;
+          setCurrentRound(newRound);
+          await fetchRoomData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
           schema: "public",
           table: "celo_rounds",
           filter: `room_id=eq.${roomId}`,
@@ -1341,65 +1368,60 @@ export default function CeloRoomPage() {
           if (!newRound || String(newRound.room_id) !== roomId) return;
           const oldRound = (payload.old ?? {}) as Partial<Round>;
 
-          if (payload.eventType === "INSERT") {
-            setCurrentRound(newRound);
-            void loadRoundRef.current();
-            return;
-          }
+          setCurrentRound((prev) => {
+            if (prev && prev.id === newRound.id) return { ...prev, ...newRound };
+            return newRound;
+          });
 
-          if (payload.eventType === "UPDATE") {
-            setCurrentRound((prev) => {
-              if (prev && prev.id === newRound.id) return { ...prev, ...newRound };
-              return newRound;
-            });
+          const br = newRound.banker_dice;
+          const prevDice = oldRound.banker_dice;
+          const diceChanged =
+            Array.isArray(br) &&
+            br.length === 3 &&
+            JSON.stringify(br) !== JSON.stringify(prevDice ?? null);
 
-            const br = newRound.banker_dice;
-            const prevDice = oldRound.banker_dice;
-            if (celoBankerDiceChanged(prevDice, br) && Array.isArray(br) && br.length === 3) {
-              const syncKey = buildCeloRollStartedPayload({
-                roomId,
-                roundId: newRound.id,
-                dice: br as [number, number, number],
-                kind: "banker",
-                rollerUserId: newRound.banker_id,
-                ...(newRound.roll_animation_start_at
-                  ? { serverStartTime: newRound.roll_animation_start_at }
-                  : {}),
-              }).syncKey;
-              if (processedSyncKeysRef.current.has(syncKey)) {
-                void loadRoundRef.current();
-                return;
-              }
-              processedSyncKeysRef.current.add(syncKey);
-              const bankerUid = newRound.banker_id;
-              const rollerLabel =
-                getDisplayName(
-                  playersRef.current.find((p) => sameCeloUserId(p.user_id, bankerUid)) ?? {
-                    user_id: bankerUid,
-                  }
-                ) || "Banker";
-              await triggerDiceAnimation(
-                {
-                  dice: br as [number, number, number],
-                  rollName: newRound.banker_dice_name ?? null,
-                  result: newRound.banker_dice_result ?? undefined,
-                  userId: bankerUid,
-                },
-                rollerLabel
-              );
+          if (diceChanged) {
+            const syncKey = buildCeloRollStartedPayload({
+              roomId,
+              roundId: newRound.id,
+              dice: br as [number, number, number],
+              kind: "banker",
+              rollerUserId: newRound.banker_id,
+              ...(newRound.roll_animation_start_at
+                ? { serverStartTime: newRound.roll_animation_start_at }
+                : {}),
+            }).syncKey;
+            if (processedSyncKeysRef.current.has(syncKey)) {
+              await fetchRoomData();
               return;
             }
-
-            if (newRound.status === "completed") {
-              setRollInteractionBusy(false);
-              void loadBalanceRef.current();
-              setTimeout(() => {
-                if (isMounted) void loadRoundRef.current();
-              }, 1000);
-            } else {
-              void loadRoundRef.current();
-            }
+            processedSyncKeysRef.current.add(syncKey);
+            const bankerUid = newRound.banker_id;
+            const rollerLabel =
+              getDisplayName(
+                playersRef.current.find((p) => sameCeloUserId(p.user_id, bankerUid)) ?? {
+                  user_id: bankerUid,
+                }
+              ) || "Banker";
+            await triggerDiceAnimation(
+              {
+                dice: br as [number, number, number],
+                rollName: newRound.banker_dice_name ?? null,
+                result: newRound.banker_dice_result ?? undefined,
+                userId: bankerUid,
+              },
+              rollerLabel
+            );
+          } else if (newRound.status === "completed") {
+            setRollInteractionBusy(false);
+            void loadBalanceRef.current();
+            setTimeout(() => {
+              if (isMounted) void loadRoundRef.current();
+            }, 1000);
+          } else {
+            void loadRoundRef.current();
           }
+          await fetchRoomData();
         }
       )
       .on(
@@ -1412,24 +1434,19 @@ export default function CeloRoomPage() {
         },
         async () => {
           if (!isMounted) return;
-          await loadAllRef.current();
+          await fetchRoomData();
         }
       )
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "celo_rooms",
           filter: `id=eq.${roomId}`,
         },
         async (payload) => {
           if (!isMounted) return;
-          if (payload.eventType === "DELETE") {
-            void loadRoomRef.current();
-            await loadAllRef.current();
-            return;
-          }
           const row = payload.new as Record<string, unknown> | undefined;
           if (!row || String(row.id) !== roomId) return;
           const n = normalizeCeloRoomRow(row);
@@ -1444,7 +1461,7 @@ export default function CeloRoomPage() {
           } else {
             void loadRoomRef.current();
           }
-          await loadAllRef.current();
+          await fetchRoomData();
         }
       )
       .on(
@@ -1488,9 +1505,8 @@ export default function CeloRoomPage() {
         if (status === "SUBSCRIBED") {
           console.log("[celo/client] room channel subscribed", { roomId });
           void (async () => {
-            await fetchInitialRoomData();
             if (!isMounted) return;
-            await loadPlayersRef.current();
+            await fetchRoomData();
           })();
         }
       });
@@ -2393,7 +2409,6 @@ export default function CeloRoomPage() {
       ? [simpleDiceValues[0]!, simpleDiceValues[1]!, simpleDiceValues[2]!]
       : null;
   const rollAnimKey = rollAnimEpoch;
-  const playerDiceColor = myPlayer?.dice_type ? String(myPlayer.dice_type) : "green";
 
   const watchingCount = Math.max(
     onlineCount,
@@ -2739,7 +2754,7 @@ export default function CeloRoomPage() {
       </header>
 
       <div
-        className="relative z-10 mx-auto max-w-[min(1400px,100%)] space-y-3 px-3 pb-[calc(80px+env(safe-area-inset-bottom,0px))] pt-[56px] sm:px-4"
+        className="relative z-10 mx-auto max-w-[min(1400px,100%)] space-y-3 px-3 pb-[calc(200px+env(safe-area-inset-bottom,0px))] pt-[56px] sm:px-4"
       >
         {showPayoutFlash && (
           <div
@@ -2986,7 +3001,7 @@ export default function CeloRoomPage() {
                 dice={diceValues}
                 rolling={hideFinalDiceFaces}
                 animKey={rollAnimKey}
-                diceColor={playerDiceColor}
+                diceColor={currentRollerDiceType || "standard"}
                 size={52}
               />
             </div>
@@ -3459,7 +3474,7 @@ export default function CeloRoomPage() {
         </div>
       </div>
 
-      {/* Fixed bottom action bar — 80px */}
+      {/* Fixed bottom action bar — lifted above mobile tab nav */}
       <div
         style={{
           position: "fixed",
@@ -3468,13 +3483,15 @@ export default function CeloRoomPage() {
           right: 0,
           zIndex: 50,
           minHeight: 80,
+          marginBottom: 60,
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
           background: "rgba(5,1,15,0.96)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           borderTop: "1px solid rgba(124,58,237,0.35)",
         }}
       >
-        <div className="mx-auto flex min-h-[80px] max-w-[min(1400px,100%)] flex-col justify-center gap-2 px-4 py-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex min-h-[80px] max-w-[min(1400px,100%)] flex-col justify-center gap-2 px-4 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-violet-300/90">
             <span className="font-mono text-emerald-400/95">
               Balance {formatGpayAmount(sweepsCoins)}
@@ -3544,6 +3561,7 @@ export default function CeloRoomPage() {
                 type="button"
                 disabled={!currentRound || !!actionLoading || rollInteractionBusy}
                 onClick={handleRoll}
+                className="mx-auto w-full max-md:max-w-[280px] max-md:min-h-[56px] max-md:text-lg"
                 style={{
                   width: "100%",
                   padding: "16px 32px",
@@ -3574,6 +3592,7 @@ export default function CeloRoomPage() {
                 type="button"
                 disabled={!currentRound || !canRollPlayer || !!actionLoading || rollInteractionBusy}
                 onClick={handleRoll}
+                className="mx-auto w-full max-md:max-w-[280px] max-md:min-h-[56px] max-md:text-lg"
                 style={{
                   width: "100%",
                   padding: "16px 32px",
@@ -3641,7 +3660,7 @@ export default function CeloRoomPage() {
           onClick={() => void handleShortStop(canShortStopBanker ? "banker" : "player")}
           style={{
             position: "fixed",
-            bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
+            bottom: "calc(156px + env(safe-area-inset-bottom, 0px))",
             left: "50%",
             transform: "translateX(-50%)",
             padding: "18px 48px",
