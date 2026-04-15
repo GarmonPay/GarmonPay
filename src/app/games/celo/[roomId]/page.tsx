@@ -1,10 +1,9 @@
 "use client";
 
-/** Supabase client: `createClientComponentClient` via `@/lib/createClientComponentClient` (package exports `createBrowserClient` only). */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClientComponentClient } from "@/lib/createClientComponentClient";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { createBrowserClient } from "@/lib/supabase";
 
 const VoiceChat = dynamic(() => import("@/components/celo/VoiceChat"), { ssr: false });
 
@@ -595,7 +594,8 @@ export default function CeloRoomPage() {
   const params = useParams();
   const roomId = params.roomId as string;
   const router = useRouter();
-  const supabase = useMemo(() => createClientComponentClient(), []);
+  /** Same client as login + C-Lo lobby (`@/core/supabase` → localStorage session). Auth-helpers cookie client would not see this session. */
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -662,11 +662,22 @@ export default function CeloRoomPage() {
   }, []);
 
   const fetchRoomData = useCallback(async () => {
+    if (!supabase) {
+      setError("Not configured");
+      setLoading(false);
+      return;
+    }
     try {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       if (!user) {
+        router.push("/login");
+        return;
+      }
+      const u = user as { email_confirmed_at?: string | null };
+      if (u.email_confirmed_at == null || u.email_confirmed_at === "") {
         router.push("/login");
         return;
       }
@@ -809,6 +820,7 @@ export default function CeloRoomPage() {
   );
 
   useEffect(() => {
+    if (!supabase) return;
     void fetchRoomData();
 
     const channel = supabase.channel(`celo-room-${roomId}`, {
@@ -932,7 +944,7 @@ export default function CeloRoomPage() {
       supabase.removeChannel(presenceChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
+  }, [roomId, supabase]);
 
   useEffect(() => {
     if (!canLowerBank) return;
@@ -955,7 +967,7 @@ export default function CeloRoomPage() {
   }, [canBecomeBanker, becomeBankerTimer]);
 
   const handleRoll = async () => {
-    if (rollingRef.current || !currentRound) return;
+    if (!supabase || rollingRef.current || !currentRound) return;
     rollingRef.current = true;
     setRolling(true);
     setRollName(null);
@@ -1023,6 +1035,7 @@ export default function CeloRoomPage() {
   };
 
   const handleStartRound = async () => {
+    if (!supabase) return;
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     await fetch("/api/celo/round/start", {
       method: "POST",
@@ -1035,7 +1048,7 @@ export default function CeloRoomPage() {
   };
 
   const sendChat = async () => {
-    if (!chatInput.trim() || !currentUser) return;
+    if (!supabase || !chatInput.trim() || !currentUser) return;
     const msg = chatInput.trim();
     setChatInput("");
     await supabase.from("celo_chat").insert({
@@ -1992,6 +2005,7 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={async () => {
+                  if (!supabase) return;
                   setShowCoverBank(false);
                   const token = (await supabase.auth.getSession()).data.session?.access_token;
                   await fetch("/api/celo/room/cover-bank", {
