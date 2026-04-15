@@ -5,7 +5,14 @@ import { useMemo } from "react";
 export interface Dice3DProps {
   value: number;
   rolling: boolean;
-  diceType?: "standard" | "gold" | "street" | "midnight";
+  diceType?:
+    | "standard"
+    | "gold"
+    | "street"
+    | "midnight"
+    | "diamond"
+    | "blood"
+    | "fire";
   size?: number;
   spinDurationSec?: number;
 }
@@ -15,6 +22,9 @@ const faceColors = {
   gold: { bg: "#D97706", dot: "#000" },
   street: { bg: "#166534", dot: "#fff" },
   midnight: { bg: "#1E1B4B", dot: "#fff" },
+  diamond: { bg: "#E8F4FD", dot: "#1a3a5c" },
+  blood: { bg: "#8B0000", dot: "#F5C842" },
+  fire: { bg: "#FF4500", dot: "#FFD700" },
 } as const;
 
 const FACE_TRANSFORM: Record<number, string> = {

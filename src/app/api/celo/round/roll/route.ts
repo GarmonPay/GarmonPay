@@ -135,6 +135,8 @@ export async function POST(req: Request) {
       kind: "banker",
       rollerUserId: bankerId,
       serverStartTime: now,
+      rollName: roll.rollName,
+      outcome: roll.result,
     });
     await broadcastCeloRoomEvent(supabase, room_id, "roll_started", bankerRollPayload);
 
@@ -143,6 +145,7 @@ export async function POST(req: Request) {
         dice,
         rollName: roll.rollName,
         result: "no_count",
+        animation: bankerRollPayload,
       });
     }
 
@@ -154,6 +157,7 @@ export async function POST(req: Request) {
         bankerPoint: roll.point,
         status: "player_rolling",
         currentPlayerSeat: firstSeat,
+        animation: bankerRollPayload,
       });
     }
 
@@ -206,6 +210,7 @@ export async function POST(req: Request) {
         bankerWinSC: bankerWins,
         newBankSC: newBank,
         banker_can_adjust_bank: roll.isCelo,
+        animation: bankerRollPayload,
       });
     }
 
@@ -297,6 +302,7 @@ export async function POST(req: Request) {
         bankerStays: true,
         bankerBroke,
         newBankerId,
+        animation: bankerRollPayload,
       });
     }
   }
@@ -367,8 +373,9 @@ export async function POST(req: Request) {
         })
         .select("id")
         .single();
+      let noCountAnimation: ReturnType<typeof buildCeloRollStartedPayload> | undefined;
       if (!prInsErr && prInsert?.id) {
-        const pPayload = buildCeloRollStartedPayload({
+        noCountAnimation = buildCeloRollStartedPayload({
           roomId: room_id,
           roundId: round_id,
           dice: dice as [number, number, number],
@@ -376,14 +383,17 @@ export async function POST(req: Request) {
           playerRollId: prInsert.id,
           rollerUserId: userId,
           serverStartTime: now,
+          rollName: roll.rollName,
+          outcome: "reroll",
         });
-        await broadcastCeloRoomEvent(supabase, room_id, "roll_started", pPayload);
+        await broadcastCeloRoomEvent(supabase, room_id, "roll_started", noCountAnimation);
       }
 
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
         result: "no_count",
+        animation: noCountAnimation,
       });
     }
 
@@ -477,8 +487,9 @@ export async function POST(req: Request) {
       })
       .select("id")
       .single();
+    let resolvingAnimation: ReturnType<typeof buildCeloRollStartedPayload> | undefined;
     if (!prResErr && prResolving?.id) {
-      const pPayload = buildCeloRollStartedPayload({
+      resolvingAnimation = buildCeloRollStartedPayload({
         roomId: room_id,
         roundId: round_id,
         dice: dice as [number, number, number],
@@ -486,8 +497,10 @@ export async function POST(req: Request) {
         playerRollId: prResolving.id,
         rollerUserId: userId,
         serverStartTime: now,
+        rollName: roll.rollName,
+        outcome: playerWins ? "win" : "loss",
       });
-      await broadcastCeloRoomEvent(supabase, room_id, "roll_started", pPayload);
+      await broadcastCeloRoomEvent(supabase, room_id, "roll_started", resolvingAnimation);
     }
 
     const currentIdx = players.findIndex((p) => Number(p.seat_number ?? 0) === currentSeat);
@@ -509,6 +522,7 @@ export async function POST(req: Request) {
         feeSC,
         nextPlayerSeat: nextPlayer.seat_number,
         roundComplete: false,
+        animation: resolvingAnimation,
       });
     }
 
@@ -531,6 +545,7 @@ export async function POST(req: Request) {
       payoutSC,
       feeSC,
       roundComplete: true,
+      animation: resolvingAnimation,
     });
   }
 

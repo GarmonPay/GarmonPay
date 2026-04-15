@@ -10,13 +10,19 @@ export interface DiceDisplayProps {
   size?: number;
 }
 
-const COLOR_TO_TYPE: Record<string, "standard" | "gold" | "street" | "midnight"> = {
+const COLOR_TO_TYPE: Record<
+  string,
+  "standard" | "gold" | "street" | "midnight" | "diamond" | "blood" | "fire"
+> = {
   red: "standard",
   gold: "gold",
   green: "street",
   black: "midnight",
   street: "street",
   standard: "standard",
+  diamond: "diamond",
+  blood: "blood",
+  fire: "fire",
 };
 
 const SPIN_DURS = [2.1, 2.5, 2.3];

@@ -19,6 +19,10 @@ export type CeloRollStartedPayload = {
   playerRollId?: string;
   rollerUserId?: string;
   syncKey: string;
+  /** Shown after reveal (e.g. roll name from engine). */
+  rollName: string;
+  /** UI outcome: win / loss / reroll / or banker result hints. */
+  outcome?: string | null;
 };
 
 export type CeloRollFinishedPayload = {
@@ -46,6 +50,8 @@ export function buildCeloRollStartedPayload(opts: {
   rollerUserId?: string;
   /** Defaults to now — use only in tests */
   serverStartTime?: string;
+  rollName: string;
+  outcome?: string | null;
 }): CeloRollStartedPayload {
   // Normalize to JS ISO format (.000Z) so syncKeys match regardless of whether
   // the timestamp came from new Date().toISOString() or from Postgres ("+00:00" suffix).
@@ -74,6 +80,8 @@ export function buildCeloRollStartedPayload(opts: {
     playerRollId: opts.playerRollId,
     rollerUserId: opts.rollerUserId,
     syncKey,
+    rollName: opts.rollName,
+    outcome: opts.outcome ?? null,
   };
 }
 

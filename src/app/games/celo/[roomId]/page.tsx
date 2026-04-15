@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createBrowserClient } from "@/lib/supabase";
+import { DiceDisplay } from "@/components/celo/DiceDisplay";
+import { scheduleCeloRollSequence } from "@/lib/celo-roll-animation-client";
+import { buildCeloRollStartedPayload, type CeloRollStartedPayload } from "@/lib/celo-roll-broadcast";
 
 const VoiceChat = dynamic(() => import("@/components/celo/VoiceChat"), { ssr: false });
 
@@ -133,51 +136,6 @@ const DICE_COLORS: Record<
   },
 };
 
-const DOT_GRID: Record<number, number[][]> = {
-  1: [[1, 1]],
-  2: [
-    [0, 0],
-    [2, 2],
-  ],
-  3: [
-    [0, 0],
-    [1, 1],
-    [2, 2],
-  ],
-  4: [
-    [0, 0],
-    [0, 2],
-    [2, 0],
-    [2, 2],
-  ],
-  5: [
-    [0, 0],
-    [0, 2],
-    [1, 1],
-    [2, 0],
-    [2, 2],
-  ],
-  6: [
-    [0, 0],
-    [0, 2],
-    [1, 0],
-    [1, 2],
-    [2, 0],
-    [2, 2],
-  ],
-};
-
-const FACE_ROTATIONS: Record<number, string> = {
-  1: "rotateX(0deg) rotateY(0deg)",
-  2: "rotateX(-90deg) rotateY(0deg)",
-  3: "rotateX(0deg) rotateY(90deg)",
-  4: "rotateX(0deg) rotateY(-90deg)",
-  5: "rotateX(90deg) rotateY(0deg)",
-  6: "rotateX(180deg) rotateY(0deg)",
-};
-
-void FACE_ROTATIONS;
-
 const ROLL_STYLES: Record<
   string,
   {
@@ -293,140 +251,22 @@ function mapPlayerRow(p: DbPlayerRow): Player {
   };
 }
 
-// =============================================================================
-// DIE / DICE / SEAT
-// =============================================================================
-
-function DieFace({
-  value,
-  diceType = "standard",
-  rolling = false,
-  rollEpoch = 0,
-  size = 72,
-}: {
-  value: number;
-  diceType?: DiceType;
-  rolling?: boolean;
-  rollEpoch?: number;
-  size?: number;
-}) {
-  const colors = DICE_COLORS[diceType];
-  const dots = DOT_GRID[value] || DOT_GRID[1];
-
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        perspective: 400,
-        flexShrink: 0,
-      }}
-    >
-      <div
-        key={`die-${rollEpoch}`}
-        style={{
-          width: "100%",
-          height: "100%",
-          background: colors.bg,
-          borderRadius: 12,
-          border: "2px solid rgba(255,255,255,0.2)",
-          boxShadow: rolling
-            ? `0 0 30px ${colors.glow}, 
-               inset 0 1px 0 rgba(255,255,255,0.3)`
-            : `0 4px 20px rgba(0,0,0,0.6),
-               inset 0 1px 0 rgba(255,255,255,0.2)`,
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gridTemplateRows: "repeat(3, 1fr)",
-          padding: size * 0.12,
-          gap: size * 0.04,
-          animation: rolling ? `rollDie${rollEpoch % 3} 2.5s ease-out forwards` : "none",
-          position: "relative",
-          transformStyle: "preserve-3d",
-        }}
-      >
-        {[0, 1, 2].map((row) =>
-          [0, 1, 2].map((col) => {
-            const hasDot = dots.some(([r, c]) => r === row && c === col);
-            return (
-              <div
-                key={`${row}-${col}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {hasDot && (
-                  <div
-                    style={{
-                      width: size * 0.14,
-                      height: size * 0.14,
-                      borderRadius: "50%",
-                      background: colors.dot,
-                      boxShadow: "inset 0 1px 3px rgba(0,0,0,0.4)",
-                    }}
-                  />
-                )}
-              </div>
-            );
-          }),
-        )}
-      </div>
-    </div>
-  );
+function diceTypeToDisplayColor(t: DiceType): string {
+  const m: Record<DiceType, string> = {
+    standard: "red",
+    gold: "gold",
+    diamond: "diamond",
+    blood: "blood",
+    street: "green",
+    midnight: "midnight",
+    fire: "fire",
+  };
+  return m[t] ?? "red";
 }
 
-function DiceDisplay({
-  dice,
-  rolling,
-  rollEpoch,
-  diceType = "standard",
-}: {
-  dice: [number, number, number];
-  rolling: boolean;
-  rollEpoch: number;
-  diceType?: DiceType;
-}) {
-  const [displayDice, setDisplayDice] = useState<[number, number, number]>([1, 1, 1]);
-
-  useEffect(() => {
-    if (!rolling) {
-      setDisplayDice(dice);
-      return;
-    }
-    const interval = setInterval(() => {
-      setDisplayDice([
-        Math.ceil(Math.random() * 6),
-        Math.ceil(Math.random() * 6),
-        Math.ceil(Math.random() * 6),
-      ] as [number, number, number]);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [rolling, dice]);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 20,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {displayDice.map((val, i) => (
-        <DieFace
-          key={i}
-          value={val}
-          diceType={diceType}
-          rolling={rolling}
-          rollEpoch={rollEpoch}
-          size={72}
-        />
-      ))}
-    </div>
-  );
-}
+// =============================================================================
+// SEAT
+// =============================================================================
 
 function PlayerSeat({
   player,
@@ -631,6 +471,8 @@ export default function CeloRoomPage() {
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const rollingRef = useRef(false);
+  const rollSequenceCancelRef = useRef<(() => void) | null>(null);
+  const processedRollSyncKeysRef = useRef<Set<string>>(new Set());
 
   const myPlayer = players.find((p) => p.user_id === currentUser?.id);
   const banker = players.find((p) => p.role === "banker");
@@ -672,6 +514,40 @@ export default function CeloRoomPage() {
       },
     ]);
   }, []);
+
+  const applyRollSequence = useCallback(
+    (payload: CeloRollStartedPayload) => {
+      if (processedRollSyncKeysRef.current.has(payload.syncKey)) return;
+      processedRollSyncKeysRef.current.add(payload.syncKey);
+      if (processedRollSyncKeysRef.current.size > 48) {
+        const oldest = processedRollSyncKeysRef.current.values().next().value as string | undefined;
+        if (oldest) processedRollSyncKeysRef.current.delete(oldest);
+      }
+
+      rollSequenceCancelRef.current?.();
+      rollSequenceCancelRef.current = scheduleCeloRollSequence(payload, {
+        onRollingStart: () => {
+          rollingRef.current = true;
+          setRolling(true);
+          setRollName(null);
+          setRollResult(null);
+          setRollEpoch((e) => e + 1);
+        },
+        onRevealStart: (finalDice) => {
+          setDice(finalDice);
+          setRolling(false);
+          rollingRef.current = false;
+          setRollName(payload.rollName);
+          setRollResult(payload.outcome ?? null);
+        },
+        onRollFinished: () => {
+          rollingRef.current = false;
+          if (payload.rollName) addSystemMessage(`🎲 ${payload.rollName}`);
+        },
+      });
+    },
+    [addSystemMessage],
+  );
 
   const fetchRoomData = useCallback(async () => {
     if (!roomId) {
@@ -868,31 +744,26 @@ export default function CeloRoomPage() {
   }, [roomId, router, supabase]);
 
   const triggerRollAnimation = useCallback(
-    async (rollData: Record<string, unknown>) => {
-      if (rollingRef.current) return;
-      rollingRef.current = true;
-      setRolling(true);
-      setRollName(null);
-      setRollResult(null);
-      setRollEpoch((e) => e + 1);
+    (rollData: Record<string, unknown>) => {
+      const id = String(rollData.id ?? "");
+      const roundIdRow = String(rollData.round_id ?? "");
+      const diceRaw = rollData.dice as number[] | undefined;
+      if (!id || !roundIdRow || !Array.isArray(diceRaw) || diceRaw.length !== 3) return;
 
-      await new Promise((r) => setTimeout(r, 2500));
-
-      setRolling(false);
-      const d = rollData.dice as number[] | undefined;
-      setDice((d?.length === 3 ? d : [1, 1, 1]) as [number, number, number]);
-      rollingRef.current = false;
-
-      await new Promise((r) => setTimeout(r, 400));
-      setRollName((rollData.roll_name as string) ?? null);
-
-      await new Promise((r) => setTimeout(r, 1500));
-      setRollResult((rollData.outcome as string) ?? null);
-
-      const rn = rollData.roll_name as string | undefined;
-      if (rn) addSystemMessage(`🎲 ${rn}`);
+      const payload = buildCeloRollStartedPayload({
+        roomId,
+        roundId: roundIdRow,
+        dice: diceRaw as [number, number, number],
+        kind: "player",
+        playerRollId: id,
+        rollerUserId: String(rollData.user_id ?? ""),
+        rollName: String(rollData.roll_name ?? "Roll"),
+        outcome: String(rollData.outcome ?? "") || null,
+        serverStartTime: new Date().toISOString(),
+      });
+      applyRollSequence(payload);
     },
-    [addSystemMessage],
+    [roomId, applyRollSequence],
   );
 
   useEffect(() => {
@@ -931,9 +802,13 @@ export default function CeloRoomPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
         (payload) => {
-          void triggerRollAnimation(payload.new as Record<string, unknown>);
+          triggerRollAnimation(payload.new as Record<string, unknown>);
         },
       )
+      .on("broadcast", { event: "roll_started" }, ({ payload }) => {
+        const p = payload as CeloRollStartedPayload;
+        if (p?.syncKey && p.finalDice?.length === 3) applyRollSequence(p);
+      })
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
@@ -1008,6 +883,8 @@ export default function CeloRoomPage() {
       });
 
     return () => {
+      rollSequenceCancelRef.current?.();
+      rollSequenceCancelRef.current = null;
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
     };
@@ -1036,42 +913,32 @@ export default function CeloRoomPage() {
 
   const handleRoll = async () => {
     if (!supabase || rollingRef.current || !currentRound) return;
-    rollingRef.current = true;
-    setRolling(true);
-    setRollName(null);
-    setRollResult(null);
-    setRollEpoch((e) => e + 1);
 
     const token = (await supabase.auth.getSession()).data.session?.access_token;
 
-    const [, res] = await Promise.all([
-      new Promise((r) => setTimeout(r, 2500)),
-      fetch("/api/celo/round/roll", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ room_id: roomId, round_id: currentRound.id }),
-      }).then((r) => r.json() as Promise<Record<string, unknown>>),
-    ]);
-
-    setRolling(false);
-    rollingRef.current = false;
+    const res = (await fetch("/api/celo/round/roll", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ room_id: roomId, round_id: currentRound.id }),
+    }).then((r) => r.json())) as Record<string, unknown>;
 
     if (res.error) {
       setRollName("Error — try again");
       return;
     }
 
-    const d = res.dice as number[] | undefined;
-    setDice((d?.length === 3 ? d : [1, 1, 1]) as [number, number, number]);
-
-    await new Promise((r) => setTimeout(r, 400));
-    setRollName((res.rollName as string) ?? null);
-
-    await new Promise((r) => setTimeout(r, 1500));
-    setRollResult((res.outcome as string) ?? null);
+    const anim = res.animation as CeloRollStartedPayload | undefined;
+    if (anim) {
+      applyRollSequence(anim);
+    } else {
+      const d = res.dice as number[] | undefined;
+      setDice((d?.length === 3 ? d : [1, 1, 1]) as [number, number, number]);
+      setRollName((res.rollName as string) ?? null);
+      setRollResult((res.outcome as string) ?? null);
+    }
 
     if (res.banker_can_lower_bank || res.banker_can_adjust_bank) {
       setCanLowerBank(true);
@@ -1257,24 +1124,6 @@ export default function CeloRoomPage() {
           50% { color: #A855F7 }
           75% { color: #3B82F6 }
           100% { color: #F5C842 }
-        }
-        @keyframes rollDie0 {
-          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
-          30%  { transform: rotateX(540deg) rotateY(270deg) rotateZ(180deg) }
-          70%  { transform: rotateX(900deg) rotateY(450deg) rotateZ(270deg) }
-          100% { transform: rotateX(1080deg) rotateY(540deg) rotateZ(360deg) }
-        }
-        @keyframes rollDie1 {
-          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
-          30%  { transform: rotateX(270deg) rotateY(540deg) rotateZ(90deg) }
-          70%  { transform: rotateX(450deg) rotateY(720deg) rotateZ(180deg) }
-          100% { transform: rotateX(720deg) rotateY(900deg) rotateZ(360deg) }
-        }
-        @keyframes rollDie2 {
-          0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) }
-          30%  { transform: rotateX(360deg) rotateY(180deg) rotateZ(270deg) }
-          70%  { transform: rotateX(540deg) rotateY(360deg) rotateZ(450deg) }
-          100% { transform: rotateX(900deg) rotateY(720deg) rotateZ(360deg) }
         }
         ::-webkit-scrollbar { width: 4px }
         ::-webkit-scrollbar-track { background: transparent }
@@ -1554,7 +1403,13 @@ export default function CeloRoomPage() {
                 }}
               />
 
-              <DiceDisplay dice={dice} rolling={rolling} rollEpoch={rollEpoch} diceType={myDiceType} />
+              <DiceDisplay
+                dice={dice}
+                rolling={rolling}
+                animKey={rollEpoch}
+                diceColor={diceTypeToDisplayColor(myDiceType)}
+                size={compactLayout ? 44 : 54}
+              />
 
               {rollName && !rolling && (
                 <div
