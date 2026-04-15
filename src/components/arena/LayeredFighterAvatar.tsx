@@ -9,7 +9,6 @@ function useReplacedSvgUrl(src: string | undefined, tokens: Record<string, strin
   const tokenKey = JSON.stringify(tokens);
   const [url, setUrl] = useState<string | null>(null);
 
-  /* eslint-disable-next-line react-hooks/exhaustive-deps -- tokenKey serializes `tokens` (stable when values match) */
   useEffect(() => {
     if (!src) {
       setUrl(null);
@@ -37,7 +36,7 @@ function useReplacedSvgUrl(src: string | undefined, tokens: Record<string, strin
       alive = false;
       if (created) URL.revokeObjectURL(created);
     };
-  }, [src, tokenKey]);
+  }, [src, tokenKey]); // eslint-disable-line react-hooks/exhaustive-deps -- tokenKey is JSON.stringify(tokens)
 
   return url;
 }

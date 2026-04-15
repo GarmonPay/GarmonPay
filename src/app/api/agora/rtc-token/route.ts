@@ -8,7 +8,7 @@ import { celoAgoraChannelName } from "@/lib/celo-agora";
 const TOKEN_TTL_SEC = 3600;
 
 /** Stable 32-bit uid for Agora (1 … 2^32-1). */
-export function agoraUidFromUserId(userId: string): number {
+function agoraUidFromUserId(userId: string): number {
   const hex = userId.replace(/-/g, "").slice(0, 8);
   const n = parseInt(hex, 16);
   if (!Number.isFinite(n)) return 1;
