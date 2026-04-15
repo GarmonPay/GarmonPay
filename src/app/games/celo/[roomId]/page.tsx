@@ -592,7 +592,8 @@ function PlayerSeat({
 
 export default function CeloRoomPage() {
   const params = useParams();
-  const roomId = params.roomId as string;
+  const rid = params.roomId;
+  const roomId = (Array.isArray(rid) ? rid[0] : rid) as string;
   const router = useRouter();
   /** Same client as login + C-Lo lobby (`@/core/supabase` → localStorage session). Auth-helpers cookie client would not see this session. */
   const supabase = useMemo(() => createBrowserClient(), []);
@@ -662,6 +663,11 @@ export default function CeloRoomPage() {
   }, []);
 
   const fetchRoomData = useCallback(async () => {
+    if (!roomId) {
+      setError("Room not found");
+      setLoading(false);
+      return;
+    }
     if (!supabase) {
       setError("Not configured");
       setLoading(false);
@@ -683,57 +689,101 @@ export default function CeloRoomPage() {
       }
       setCurrentUser(user);
 
-      const { data: roomData, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+      const accessToken = session?.access_token;
+      const snapshotRes = await fetch(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
 
-      if (roomErr || !roomData) {
+      if (snapshotRes.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      if (snapshotRes.status === 403 || snapshotRes.status === 404) {
         setError("Room not found");
         setLoading(false);
         return;
       }
-      setRoom(normalizeRoomRow(roomData as Record<string, unknown>));
+
+      if (snapshotRes.ok) {
+        const snap = (await snapshotRes.json()) as {
+          room?: Record<string, unknown>;
+          players?: DbPlayerRow[];
+          round?: Record<string, unknown> | null;
+        };
+        if (!snap.room) {
+          setError("Room not found");
+          setLoading(false);
+          return;
+        }
+        setRoom(normalizeRoomRow(snap.room));
+        const mapped = (snap.players ?? []).map((p) => mapPlayerRow(p));
+        setPlayers(mapped);
+        const mine = mapped.find((p) => p.user_id === user.id);
+        if (mine?.dice_type) setMyDiceType(mine.dice_type);
+        if (snap.round) {
+          const nr = normalizeRoundRow(snap.round);
+          setCurrentRound(nr);
+          if (nr.banker_dice?.length === 3) {
+            setDice(nr.banker_dice as [number, number, number]);
+          }
+        } else {
+          setCurrentRound(null);
+        }
+      } else {
+        const { data: roomData, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+        if (roomErr || !roomData) {
+          setError("Room not found");
+          setLoading(false);
+          return;
+        }
+        setRoom(normalizeRoomRow(roomData as Record<string, unknown>));
+
+        const { data: playersData } = await supabase
+          .from("celo_room_players")
+          .select(
+            `*,
+        users (
+          full_name,
+          email
+        )`,
+          )
+          .eq("room_id", roomId)
+          .order("seat_number", { ascending: true });
+
+        if (playersData) {
+          const mapped = (playersData as DbPlayerRow[]).map(mapPlayerRow);
+          setPlayers(mapped);
+          const mine = mapped.find((p) => p.user_id === user.id);
+          if (mine?.dice_type) setMyDiceType(mine.dice_type);
+        }
+
+        const { data: roundData } = await supabase
+          .from("celo_rounds")
+          .select("*")
+          .eq("room_id", roomId)
+          .neq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (roundData) {
+          const nr = normalizeRoundRow(roundData as Record<string, unknown>);
+          setCurrentRound(nr);
+          if (nr.banker_dice?.length === 3) {
+            setDice(nr.banker_dice as [number, number, number]);
+          }
+        } else {
+          setCurrentRound(null);
+        }
+      }
 
       const { data: userData } = await supabase.from("users").select("sweeps_coins, balance_cents").eq("id", user.id).maybeSingle();
 
       const balRow = userData as { sweeps_coins?: number; balance_cents?: number } | null;
       setMyBalance(Number(balRow?.sweeps_coins ?? balRow?.balance_cents ?? 0));
-
-      const { data: playersData } = await supabase
-        .from("celo_room_players")
-        .select(
-          `*,
-        users (
-          full_name,
-          email
-        )`,
-        )
-        .eq("room_id", roomId)
-        .order("seat_number", { ascending: true });
-
-      if (playersData) {
-        const mapped = (playersData as DbPlayerRow[]).map(mapPlayerRow);
-        setPlayers(mapped);
-        const mine = mapped.find((p) => p.user_id === user.id);
-        if (mine?.dice_type) setMyDiceType(mine.dice_type);
-      }
-
-      const { data: roundData } = await supabase
-        .from("celo_rounds")
-        .select("*")
-        .eq("room_id", roomId)
-        .neq("status", "completed")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (roundData) {
-        const nr = normalizeRoundRow(roundData as Record<string, unknown>);
-        setCurrentRound(nr);
-        if (nr.banker_dice?.length === 3) {
-          setDice(nr.banker_dice as [number, number, number]);
-        }
-      } else {
-        setCurrentRound(null);
-      }
 
       const { data: chatData } = await supabase
         .from("celo_chat")
@@ -838,16 +888,8 @@ export default function CeloRoomPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_room_players", filter: `room_id=eq.${roomId}` },
-        async () => {
-          const { data } = await supabase
-            .from("celo_room_players")
-            .select(
-              `*,
-            users (full_name, email)`,
-            )
-            .eq("room_id", roomId)
-            .order("seat_number", { ascending: true });
-          if (data) setPlayers((data as DbPlayerRow[]).map(mapPlayerRow));
+        () => {
+          void fetchRoomData();
         },
       )
       .on(
