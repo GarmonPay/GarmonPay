@@ -1,7 +1,8 @@
 "use client";
 
+/** Supabase client: `createClientComponentClient` via `@/lib/createClientComponentClient` (package exports `createBrowserClient` only). */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
+import { createClientComponentClient } from "@/lib/createClientComponentClient";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -51,7 +52,6 @@ type Round = {
   prize_pool_sc: number;
   bank_covered: boolean;
   covered_by: string;
-  current_player_seat?: number | null;
 };
 
 type ChatMessage = {
@@ -273,7 +273,6 @@ function normalizeRoundRow(r: Record<string, unknown>): Round {
     prize_pool_sc: Number(r.prize_pool_sc ?? r.total_pot_cents ?? 0),
     bank_covered: Boolean(r.bank_covered),
     covered_by: String(r.covered_by ?? ""),
-    current_player_seat: r.current_player_seat as number | null | undefined,
   };
 }
 
@@ -447,7 +446,6 @@ function PlayerSeat({
   isEmpty?: boolean;
   seatNumber: number;
 }) {
-  void seatNumber;
   if (isEmpty || !player) {
     return (
       <div
@@ -597,18 +595,12 @@ export default function CeloRoomPage() {
   const params = useParams();
   const roomId = params.roomId as string;
   const router = useRouter();
-
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) return null;
-    return createBrowserClient(url, key);
-  }, []);
+  const supabase = useMemo(() => createClientComponentClient(), []);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [myBalance, setMyBalance] = useState(0);
   const [dice, setDice] = useState<[number, number, number]>([1, 1, 1]);
   const [rolling, setRolling] = useState(false);
@@ -628,35 +620,24 @@ export default function CeloRoomPage() {
   const [showBecomeBanker, setShowBecomeBanker] = useState(false);
   const [showCoverBank, setShowCoverBank] = useState(false);
   const [showSideBetModal, setShowSideBetModal] = useState(false);
-  const [showJoinSeat, setShowJoinSeat] = useState(false);
-  const [joinSeatNumber, setJoinSeatNumber] = useState(1);
   const [canLowerBank, setCanLowerBank] = useState(false);
   const [canBecomeBanker, setCanBecomeBanker] = useState(false);
   const [lowerBankTimer, setLowerBankTimer] = useState(60);
   const [becomeBankerTimer, setBecomeBankerTimer] = useState(30);
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
-  const [sideBetType, setSideBetType] = useState("celo");
-  const [sideBetAmount, setSideBetAmount] = useState(100);
-  const [lowerBankAmount, setLowerBankAmount] = useState(500);
-  const [lowerMinAmount, setLowerMinAmount] = useState(500);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const rollingRef = useRef(false);
-  const currentUserIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    currentUserIdRef.current = currentUser?.id ?? null;
-  }, [currentUser?.id]);
 
   const myPlayer = players.find((p) => p.user_id === currentUser?.id);
   const banker = players.find((p) => p.role === "banker");
-  const activePlayers = players.filter((p) => p.role === "player").sort((a, b) => a.seat_number - b.seat_number);
-  const isMyTurn =
-    currentRound?.status === "player_rolling" && myPlayer?.role === "player";
+  const activePlayers = players.filter((p) => p.role === "player");
+  const isMyTurn = currentRound?.status === "player_rolling" && myPlayer?.role === "player";
   const isBankerTurn = currentRound?.status === "banker_rolling" && myPlayer?.role === "banker";
   const isMyRoll = isMyTurn || isBankerTurn;
-  const canStartRound =
-    Boolean(myPlayer?.role === "banker" && !currentRound && activePlayers.some((p) => p.entry_sc > 0));
+  const canStartRound = Boolean(
+    myPlayer?.role === "banker" && !currentRound && activePlayers.some((p) => p.entry_sc > 0),
+  );
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -681,7 +662,6 @@ export default function CeloRoomPage() {
   }, []);
 
   const fetchRoomData = useCallback(async () => {
-    if (!supabase) return;
     try {
       const {
         data: { user },
@@ -829,7 +809,6 @@ export default function CeloRoomPage() {
   );
 
   useEffect(() => {
-    if (!supabase) return;
     void fetchRoomData();
 
     const channel = supabase.channel(`celo-room-${roomId}`, {
@@ -872,9 +851,7 @@ export default function CeloRoomPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
         (payload) => {
-          const row = payload.new as Record<string, unknown>;
-          if (row.user_id === currentUserIdRef.current) return;
-          void triggerRollAnimation(row);
+          void triggerRollAnimation(payload.new as Record<string, unknown>);
         },
       )
       .on(
@@ -935,13 +912,6 @@ export default function CeloRoomPage() {
         if (status === "SUBSCRIBED") void fetchRoomData();
       });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomId, supabase, fetchRoomData, triggerRollAnimation]);
-
-  useEffect(() => {
-    if (!supabase || !currentUser?.id) return;
     const presenceChannel = supabase.channel(`presence-${roomId}`);
     presenceChannel
       .on("presence", { event: "sync" }, () => {
@@ -951,15 +921,18 @@ export default function CeloRoomPage() {
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await presenceChannel.track({
-            user_id: currentUser.id,
+            user_id: currentUser?.id,
             online_at: new Date().toISOString(),
           });
         }
       });
+
     return () => {
+      supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
     };
-  }, [roomId, supabase, currentUser?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
 
   useEffect(() => {
     if (!canLowerBank) return;
@@ -981,17 +954,15 @@ export default function CeloRoomPage() {
     return () => clearInterval(t);
   }, [canBecomeBanker, becomeBankerTimer]);
 
-  const getAccessToken = async () => (await supabase?.auth.getSession())?.data.session?.access_token;
-
   const handleRoll = async () => {
-    if (!supabase || rollingRef.current || !currentRound) return;
+    if (rollingRef.current || !currentRound) return;
     rollingRef.current = true;
     setRolling(true);
     setRollName(null);
     setRollResult(null);
     setRollEpoch((e) => e + 1);
 
-    const token = await getAccessToken();
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
 
     const [, res] = await Promise.all([
       new Promise((r) => setTimeout(r, 2500)),
@@ -1022,13 +993,12 @@ export default function CeloRoomPage() {
     await new Promise((r) => setTimeout(r, 1500));
     setRollResult((res.outcome as string) ?? null);
 
-    if (res.banker_can_adjust_bank) {
+    if (res.banker_can_lower_bank || res.banker_can_adjust_bank) {
       setCanLowerBank(true);
       setLowerBankTimer(60);
       setShowLowerBank(true);
     }
-    const rollNm = String(res.rollName ?? "");
-    if (/\bC-?\s*LO\b/i.test(rollNm) || rollNm.includes("C-LO")) {
+    if (res.player_can_become_banker) {
       setCanBecomeBanker(true);
       setBecomeBankerTimer(30);
       setShowBecomeBanker(true);
@@ -1053,7 +1023,7 @@ export default function CeloRoomPage() {
   };
 
   const handleStartRound = async () => {
-    const token = await getAccessToken();
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
     await fetch("/api/celo/round/start", {
       method: "POST",
       headers: {
@@ -1065,7 +1035,7 @@ export default function CeloRoomPage() {
   };
 
   const sendChat = async () => {
-    if (!chatInput.trim() || !currentUser || !supabase) return;
+    if (!chatInput.trim() || !currentUser) return;
     const msg = chatInput.trim();
     setChatInput("");
     await supabase.from("celo_chat").insert({
@@ -1074,66 +1044,6 @@ export default function CeloRoomPage() {
       message: msg,
     });
   };
-
-  const acceptSideBet = async (betId: string) => {
-    const token = await getAccessToken();
-    await fetch("/api/celo/sidebet/accept", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ bet_id: betId }),
-    });
-    void fetchRoomData();
-  };
-
-  const createSideBet = async () => {
-    if (!currentRound || !currentUser) return;
-    const token = await getAccessToken();
-    await fetch("/api/celo/sidebet/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        room_id: roomId,
-        round_id: currentRound.id,
-        bet_type: sideBetType,
-        amount_cents: sideBetAmount,
-      }),
-    });
-    setShowSideBetModal(false);
-    void fetchRoomData();
-  };
-
-  const joinSeat = async () => {
-    if (!room) return;
-    const token = await getAccessToken();
-    await fetch("/api/celo/room/join", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        room_id: roomId,
-        role: "player",
-        entry_cents: Math.max(room.minimum_entry_sc, 100),
-      }),
-    });
-    setShowJoinSeat(false);
-    void fetchRoomData();
-  };
-
-  if (!supabase) {
-    return (
-      <div style={{ height: "100vh", background: "#0A0A0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
-        Missing Supabase configuration
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -1198,7 +1108,6 @@ export default function CeloRoomPage() {
   }
 
   const rollStyle = rollName ? getRollStyle(rollName) : null;
-  const currentSeat = currentRound?.current_player_seat;
 
   return (
     <>
@@ -1229,6 +1138,11 @@ export default function CeloRoomPage() {
         @keyframes seatJoin {
           from { opacity: 0; transform: scale(0.8) translateY(10px) }
           to { opacity: 1; transform: scale(1) translateY(0) }
+        }
+        @keyframes bankGrow {
+          0% { transform: scale(1); color: #F5C842 }
+          50% { transform: scale(1.3); color: #10B981 }
+          100% { transform: scale(1); color: #F5C842 }
         }
         @keyframes pulse {
           0%,100% { opacity: 1 }
@@ -1556,11 +1470,7 @@ export default function CeloRoomPage() {
               {Array.from({ length: room.max_players }).map((_, i) => {
                 const player = activePlayers[i];
                 const isCurrentUser = player?.user_id === currentUser?.id;
-                const isActive =
-                  currentRound?.status === "player_rolling" &&
-                  player &&
-                  currentSeat != null &&
-                  Number(player.seat_number) === Number(currentSeat);
+                const isActive = currentRound?.status === "player_rolling" && i === 0;
                 const isCovered = currentRound?.bank_covered && currentRound?.covered_by === player?.user_id;
 
                 return (
@@ -1572,14 +1482,7 @@ export default function CeloRoomPage() {
                     isCurrentUser={isCurrentUser}
                     isActive={isActive}
                     isBankCovered={isCovered}
-                    onJoin={
-                      !player
-                        ? () => {
-                            setJoinSeatNumber(i + 1);
-                            setShowJoinSeat(true);
-                          }
-                        : undefined
-                    }
+                    onJoin={!player ? () => {} : undefined}
                   />
                 );
               })}
@@ -1721,13 +1624,12 @@ export default function CeloRoomPage() {
                           {bet.bet_type.replace(/_/g, " ").toUpperCase()}
                         </div>
                         <div style={{ fontSize: 10, color: "#F5C842", fontFamily: "Courier New" }}>
-                          {(bet.amount_sc / 100).toFixed(0)} SC · {bet.odds_multiplier}x
+                          {bet.amount_sc} SC · {bet.odds_multiplier}x
                         </div>
                       </div>
                       {bet.creator_id !== currentUser?.id && (
                         <button
                           type="button"
-                          onClick={() => void acceptSideBet(bet.id)}
                           style={{
                             background: "linear-gradient(135deg, #10B981, #059669)",
                             border: "none",
@@ -2091,7 +1993,7 @@ export default function CeloRoomPage() {
                 type="button"
                 onClick={async () => {
                   setShowCoverBank(false);
-                  const token = await getAccessToken();
+                  const token = (await supabase.auth.getSession()).data.session?.access_token;
                   await fetch("/api/celo/room/cover-bank", {
                     method: "POST",
                     headers: {
@@ -2117,193 +2019,6 @@ export default function CeloRoomPage() {
                 }}
               >
                 {myBalance >= room.current_bank_sc ? "💰 COVER IT" : "INSUFFICIENT SC"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showLowerBank && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-        >
-          <div style={{ background: "#0D0520", border: "1px solid #10B981", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw" }}>
-            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#10B981", marginBottom: 12 }}>LOWER BANK</h2>
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>Set new bank and minimum (cents).</p>
-            <label style={{ color: "#ccc", fontSize: 12 }}>New bank (cents)</label>
-            <input
-              type="number"
-              value={lowerBankAmount}
-              onChange={(e) => setLowerBankAmount(Number(e.target.value))}
-              style={{ width: "100%", marginBottom: 8, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
-            />
-            <label style={{ color: "#ccc", fontSize: 12 }}>New minimum (cents, ≥500)</label>
-            <input
-              type="number"
-              value={lowerMinAmount}
-              onChange={(e) => setLowerMinAmount(Number(e.target.value))}
-              style={{ width: "100%", marginBottom: 12, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowLowerBank(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const token = await getAccessToken();
-                  await fetch("/api/celo/room/lower-bank", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({
-                      room_id: roomId,
-                      new_bank_sc: lowerBankAmount,
-                      new_minimum_sc: lowerMinAmount,
-                    }),
-                  });
-                  setShowLowerBank(false);
-                  setCanLowerBank(false);
-                  void fetchRoomData();
-                }}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#10B981,#059669)", color: "#fff", fontWeight: "bold" }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showBecomeBanker && currentRound && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-        >
-          <div style={{ background: "#0D0520", border: "1px solid #F5C842", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw", textAlign: "center" }}>
-            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 12 }}>TAKE THE BANK</h2>
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 16 }}>Accept banker position for this room (charges per server rules).</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowBecomeBanker(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
-                Not now
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const token = await getAccessToken();
-                  await fetch("/api/celo/banker/accept", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ room_id: roomId, round_id: currentRound.id }),
-                  });
-                  setShowBecomeBanker(false);
-                  setCanBecomeBanker(false);
-                  void fetchRoomData();
-                }}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#F5C842,#D4A017)", color: "#000", fontWeight: "bold" }}
-              >
-                Take bank
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSideBetModal && currentRound && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-        >
-          <div style={{ background: "#0D0520", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 16, padding: 24, width: 400, maxWidth: "95vw" }}>
-            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 12 }}>CREATE SIDE BET</h2>
-            <select
-              value={sideBetType}
-              onChange={(e) => setSideBetType(e.target.value)}
-              style={{ width: "100%", marginBottom: 8, padding: 8, borderRadius: 8, background: "#111", color: "#fff", border: "1px solid #444" }}
-            >
-              {["celo", "shit", "hand_crack", "trips", "banker_wins", "player_wins", "specific_point"].map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <label style={{ color: "#ccc", fontSize: 12 }}>Amount (cents)</label>
-            <input
-              type="number"
-              value={sideBetAmount}
-              onChange={(e) => setSideBetAmount(Number(e.target.value))}
-              style={{ width: "100%", marginBottom: 12, padding: 8, borderRadius: 8, border: "1px solid #444", background: "#111", color: "#fff" }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowSideBetModal(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void createSideBet()}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#7C3AED,#A855F7)", color: "#fff", fontWeight: "bold" }}
-              >
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showJoinSeat && room && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-        >
-          <div style={{ background: "#0D0520", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 16, padding: 24, width: 380, maxWidth: "95vw" }}>
-            <h2 style={{ fontFamily: "Cinzel Decorative", color: "#F5C842", marginBottom: 8 }}>JOIN TABLE</h2>
-            <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
-              Seat {joinSeatNumber} · Minimum entry {room.minimum_entry_sc} (cents)
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowJoinSeat(false)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #444", background: "none", color: "#888" }}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void joinSeat()}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#7C3AED,#A855F7)", color: "#fff", fontWeight: "bold" }}
-              >
-                Join
               </button>
             </div>
           </div>
