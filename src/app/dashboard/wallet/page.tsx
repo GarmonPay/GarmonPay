@@ -177,11 +177,9 @@ function WalletDashboardContent() {
         {!coinsLoading ? (
           <>
             <p className="text-white text-lg">
-              💵 USD Balance:{" "}
+              🪙 Gold Coins:{" "}
               <span className="font-semibold tabular-nums">{formatUSD(usdBalance)}</span>
-            </p>
-            <p className="text-white text-lg">
-              🪙 Gold Coins: <span className="font-semibold tabular-nums">{goldCoins.toLocaleString()} GC</span>
+              <span className="text-fintech-muted text-sm ml-2">(USD wallet)</span>
             </p>
             <p className="text-white text-lg">
               ⭐ GPay Coins: <span className="font-semibold tabular-nums">{sweepsCoins.toLocaleString()} GPC</span>
@@ -348,7 +346,7 @@ function WalletDashboardContent() {
               textAlign: "center",
             }}
           >
-            Insufficient USD balance
+            Insufficient Gold Coins (USD) balance
           </p>
         )}
 
@@ -364,16 +362,12 @@ function WalletDashboardContent() {
         </p>
       </div>
 
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-4">
-        <h2 className="text-lg font-bold text-white">USD wallet</h2>
-        {coinsLoading && user?.accessToken && (
+      <div className="rounded-xl bg-fintech-bg-card border border-amber-500/20 p-6 space-y-4">
+        <h2 className="text-lg font-bold text-white">Gold Coins (USD wallet)</h2>
+        {coinsLoading && user?.accessToken ? (
           <p className="text-fintech-muted text-sm">Loading…</p>
-        )}
-        {!coinsLoading && (
-          <p className="text-fintech-muted">
-            Available:{" "}
-            <span className="text-white font-semibold text-xl">{formatUSD(usdBalance)}</span>
-          </p>
+        ) : (
+          <p className="text-2xl font-bold text-amber-200 tabular-nums">🪙 {formatUSD(usdBalance)}</p>
         )}
         <div className="flex flex-wrap gap-2">
           <a
@@ -388,18 +382,13 @@ function WalletDashboardContent() {
           >
             Withdraw
           </Link>
+          <Link
+            href="/dashboard/buy-coins"
+            className="inline-flex items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
+          >
+            Buy Gold Coins (GC)
+          </Link>
         </div>
-      </div>
-
-      <div className="rounded-xl bg-fintech-bg-card border border-amber-500/20 p-6">
-        <h2 className="text-lg font-bold text-white mb-2">Gold Coins</h2>
-        <p className="text-2xl font-bold text-amber-200">🪙 {goldCoins.toLocaleString()} GC</p>
-        <Link
-          href="/dashboard/buy-coins"
-          className="mt-4 inline-block rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
-        >
-          Buy More
-        </Link>
       </div>
 
       <div className="rounded-xl bg-fintech-bg-card border border-violet-500/25 p-6">

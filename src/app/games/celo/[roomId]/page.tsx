@@ -473,6 +473,9 @@ export default function CeloRoomPage() {
   const rollingRef = useRef(false);
   const rollSequenceCancelRef = useRef<(() => void) | null>(null);
   const processedRollSyncKeysRef = useRef<Set<string>>(new Set());
+  /** Baseline banker dice for the active round — used to detect banker rolls via postgres when broadcast misses mobile. */
+  const lastBankerDiceSigRef = useRef<string | null>(null);
+  const roomRef = useRef<Room | null>(null);
 
   const myPlayer = players.find((p) => p.user_id === currentUser?.id);
   const banker = players.find((p) => p.role === "banker");
@@ -483,6 +486,20 @@ export default function CeloRoomPage() {
   const canStartRound = Boolean(
     myPlayer?.role === "banker" && !currentRound && activePlayers.some((p) => p.entry_sc > 0),
   );
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  useEffect(() => {
+    if (!currentRound?.id) {
+      lastBankerDiceSigRef.current = null;
+      return;
+    }
+    if (currentRound.banker_dice?.length === 3) {
+      lastBankerDiceSigRef.current = JSON.stringify(currentRound.banker_dice);
+    }
+  }, [currentRound?.id, currentRound?.banker_dice]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -793,8 +810,33 @@ export default function CeloRoomPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
         (payload) => {
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            if (payload.new) setCurrentRound(normalizeRoundRow(payload.new as Record<string, unknown>));
+          if (payload.eventType !== "INSERT" && payload.eventType !== "UPDATE") return;
+          if (!payload.new) return;
+          const raw = payload.new as Record<string, unknown>;
+          const nr = normalizeRoundRow(raw);
+          setCurrentRound(nr);
+
+          if (payload.eventType === "UPDATE" && nr.banker_dice?.length === 3) {
+            const sig = JSON.stringify(nr.banker_dice);
+            const prev = lastBankerDiceSigRef.current;
+            if (prev === null) {
+              lastBankerDiceSigRef.current = sig;
+              return;
+            }
+            if (sig === prev) return;
+            const startAt = String(raw.roll_animation_start_at ?? "") || new Date().toISOString();
+            const bankerPayload = buildCeloRollStartedPayload({
+              roomId,
+              roundId: nr.id,
+              dice: nr.banker_dice as [number, number, number],
+              kind: "banker",
+              rollerUserId: String(roomRef.current?.banker_id ?? ""),
+              serverStartTime: startAt,
+              rollName: nr.banker_roll_name || "Banker roll",
+              outcome: nr.banker_roll_result || null,
+            });
+            applyRollSequence(bankerPayload);
+            lastBankerDiceSigRef.current = sig;
           }
         },
       )

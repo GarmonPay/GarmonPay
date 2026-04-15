@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * Mic permission + level meter (no SFU yet). Confirms hardware works before in-table voice ships.
+ * Optional group voice: set NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL to a Daily.co room URL
+ * (create a room at https://dashboard.daily.co). Otherwise shows mic test only.
  */
 export default function VoiceChat({
   roomId,
@@ -16,6 +17,18 @@ export default function VoiceChat({
   userName?: string;
   role?: string;
 }) {
+  const dailyRoomUrl = useMemo(() => {
+    const base = process.env.NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL?.trim();
+    if (!base) return null;
+    try {
+      const u = new URL(base);
+      u.searchParams.set("t", roomId.slice(0, 12));
+      return u.toString();
+    } catch {
+      return null;
+    }
+  }, [roomId]);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [level, setLevel] = useState(0);
@@ -85,8 +98,23 @@ export default function VoiceChat({
     <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
       <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat</p>
       <p className="mb-2 text-[11px] leading-snug text-violet-200/75">
-        Room {roomId.slice(0, 8)}…{label}. In-table voice relay is coming soon — use the mic check so you know your device works.
+        Room {roomId.slice(0, 8)}…{label}.
+        {dailyRoomUrl
+          ? " Use the voice room below so everyone can hear each other (Daily.co)."
+          : " For live voice, your project admin can set NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL to a Daily.co room. Mic check below tests your device."}
       </p>
+
+      {dailyRoomUrl && (
+        <div className="mb-3 overflow-hidden rounded-lg border border-violet-500/30 bg-black/40">
+          <iframe
+            title="C-Lo voice"
+            src={dailyRoomUrl}
+            className="h-[200px] w-full"
+            allow="camera; microphone; fullscreen; display-capture; autoplay"
+          />
+        </div>
+      )}
+
       {error && <p className="mb-2 text-[11px] text-red-400/90">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {!stream ? (
