@@ -610,6 +610,8 @@ export default function CeloRoomPage() {
   const [rollResult, setRollResult] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatSendError, setChatSendError] = useState<string | null>(null);
+  const [compactLayout, setCompactLayout] = useState(false);
   const [sideBets, setSideBets] = useState<SideBet[]>([]);
   const [onlineCount, setOnlineCount] = useState(1);
   const [connected, setConnected] = useState(true);
@@ -643,6 +645,15 @@ export default function CeloRoomPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    const sync = () => setCompactLayout(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const flashBalance = (direction: "up" | "down") => {
     setBalanceFlash(direction);
@@ -689,6 +700,7 @@ export default function CeloRoomPage() {
       }
       setCurrentUser(user);
 
+      let chatLoadedFromSnapshot = false;
       const accessToken = session?.access_token;
       const snapshotRes = await fetch(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`, {
         headers: {
@@ -712,6 +724,7 @@ export default function CeloRoomPage() {
           room?: Record<string, unknown>;
           players?: DbPlayerRow[];
           round?: Record<string, unknown> | null;
+          chat?: ChatMessage[];
         };
         if (!snap.room) {
           setError("Room not found");
@@ -731,6 +744,13 @@ export default function CeloRoomPage() {
           }
         } else {
           setCurrentRound(null);
+        }
+        if (Array.isArray(snap.chat)) {
+          setMessages((prev) => {
+            const sys = prev.filter((m) => m.is_system);
+            return [...sys.slice(-20), ...snap.chat!].slice(-80);
+          });
+          chatLoadedFromSnapshot = true;
         }
       } else {
         const { data: roomData, error: roomErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
@@ -785,27 +805,33 @@ export default function CeloRoomPage() {
       const balRow = userData as { sweeps_coins?: number; balance_cents?: number } | null;
       setMyBalance(Number(balRow?.sweeps_coins ?? balRow?.balance_cents ?? 0));
 
-      const { data: chatData } = await supabase
-        .from("celo_chat")
-        .select(
-          `*,
+      if (!chatLoadedFromSnapshot) {
+        const { data: chatData } = await supabase
+          .from("celo_chat")
+          .select(
+            `*,
         users (full_name, email)`,
-        )
-        .eq("room_id", roomId)
-        .order("created_at", { ascending: true })
-        .limit(50);
+          )
+          .eq("room_id", roomId)
+          .order("created_at", { ascending: true })
+          .limit(50);
 
-      if (chatData) {
-        setMessages(
-          (chatData as Array<Record<string, unknown> & { users?: { full_name?: string | null; email?: string | null } }>).map((m) => ({
-            id: String(m.id),
-            user_id: String(m.user_id),
-            message: String(m.message ?? ""),
-            is_system: false,
-            created_at: String(m.created_at ?? ""),
-            user_name: m.users?.full_name?.trim() || m.users?.email?.split("@")[0] || "Player",
-          })),
-        );
+        if (chatData) {
+          setMessages((prev) => {
+            const sys = prev.filter((m) => m.is_system);
+            const rows = (
+              chatData as Array<Record<string, unknown> & { users?: { full_name?: string | null; email?: string | null } }>
+            ).map((m) => ({
+              id: String(m.id),
+              user_id: String(m.user_id),
+              message: String(m.message ?? ""),
+              is_system: false as const,
+              created_at: String(m.created_at ?? ""),
+              user_name: m.users?.full_name?.trim() || m.users?.email?.split("@")[0] || "Player",
+            }));
+            return [...sys.slice(-20), ...rows].slice(-80);
+          });
+        }
       }
 
       const { data: betsData } = await supabase
@@ -1092,12 +1118,30 @@ export default function CeloRoomPage() {
   const sendChat = async () => {
     if (!supabase || !chatInput.trim() || !currentUser) return;
     const msg = chatInput.trim();
+    setChatSendError(null);
     setChatInput("");
-    await supabase.from("celo_chat").insert({
-      room_id: roomId,
-      user_id: currentUser.id,
-      message: msg,
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const res = await fetch(`/api/celo/room/${encodeURIComponent(roomId)}/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message: msg }),
     });
+    if (!res.ok) {
+      const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+      setChatSendError(errBody.error ?? "Could not send message");
+      setChatInput(msg);
+      return;
+    }
+    const data = (await res.json()) as { message?: ChatMessage };
+    if (data.message) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.message!.id)) return prev;
+        return [...prev.slice(-49), data.message!];
+      });
+    }
   };
 
   if (loading) {
@@ -1242,7 +1286,8 @@ export default function CeloRoomPage() {
 
       <div
         style={{
-          height: "100vh",
+          height: "100dvh",
+          maxHeight: "100dvh",
           background: "#0A0A0F",
           backgroundImage: `
           radial-gradient(ellipse at 15% 50%,
@@ -1251,9 +1296,10 @@ export default function CeloRoomPage() {
             rgba(245,200,66,0.05) 0%, transparent 55%)
         `,
           display: "grid",
-          gridTemplateRows: "60px 1fr 80px",
+          gridTemplateRows: compactLayout ? "auto minmax(0, 1fr) auto" : "60px minmax(0, 1fr) 80px",
           overflow: "hidden",
           fontFamily: "DM Sans, sans-serif",
+          boxSizing: "border-box",
         }}
       >
         <div
@@ -1262,9 +1308,11 @@ export default function CeloRoomPage() {
             borderBottom: "1px solid rgba(124,58,237,0.25)",
             display: "flex",
             alignItems: "center",
-            padding: "0 20px",
-            gap: 16,
+            flexWrap: "wrap",
+            padding: compactLayout ? "8px 12px" : "0 20px",
+            gap: compactLayout ? 8 : 16,
             backdropFilter: "blur(10px)",
+            rowGap: 8,
           }}
         >
           <button
@@ -1287,9 +1335,10 @@ export default function CeloRoomPage() {
           <h1
             style={{
               fontFamily: "Cinzel Decorative, serif",
-              fontSize: 16,
+              fontSize: compactLayout ? 14 : 16,
               color: "#F5C842",
-              flex: 1,
+              flex: compactLayout ? "1 1 120px" : 1,
+              minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -1349,17 +1398,28 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", overflow: "hidden" }}>
+               <div
+          style={{
+            display: "flex",
+            flexDirection: compactLayout ? "column" : "row",
+            overflow: "hidden",
+            minHeight: 0,
+            flex: 1,
+          }}
+        >
           <div
             style={{
-              flex: 1,
+              flex: compactLayout ? "0 1 auto" : 1,
               position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "space-between",
-              padding: "20px 20px",
-              overflow: "hidden",
+              justifyContent: compactLayout ? "flex-start" : "space-between",
+              padding: compactLayout ? "12px 12px 8px" : "20px 20px",
+              overflowY: compactLayout ? "auto" : "hidden",
+              overflowX: "hidden",
+              minHeight: 0,
+              gap: compactLayout ? 10 : 0,
             }}
           >
             <div
@@ -1464,8 +1524,10 @@ export default function CeloRoomPage() {
             <div
               style={{
                 position: "relative",
-                width: 360,
-                height: 230,
+                width: compactLayout ? "min(92vw, 300px)" : 360,
+                height: compactLayout ? 190 : 230,
+                maxWidth: "100%",
+                flexShrink: 0,
                 borderRadius: "50%",
                 background: "radial-gradient(circle, #1a3a2a 0%, #0d2018 60%, #080f0c 100%)",
                 border: "4px solid #2a5a3a",
@@ -1588,9 +1650,13 @@ export default function CeloRoomPage() {
 
           <div
             style={{
-              width: 340,
+              width: compactLayout ? "100%" : 340,
+              flex: compactLayout ? "0 1 auto" : undefined,
+              maxHeight: compactLayout ? "min(48vh, 360px)" : undefined,
+              minHeight: compactLayout ? 0 : undefined,
               background: "rgba(8,5,20,0.95)",
-              borderLeft: "1px solid rgba(124,58,237,0.2)",
+              borderLeft: compactLayout ? "none" : "1px solid rgba(124,58,237,0.2)",
+              borderTop: compactLayout ? "1px solid rgba(124,58,237,0.2)" : undefined,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
@@ -1608,7 +1674,8 @@ export default function CeloRoomPage() {
             <div
               style={{
                 flex: "0 0 auto",
-                maxHeight: "35%",
+                maxHeight: compactLayout ? "min(22vh, 180px)" : "35%",
+                minHeight: 0,
                 overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
@@ -1707,14 +1774,32 @@ export default function CeloRoomPage() {
               </div>
             </div>
 
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px 6px", borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                minHeight: compactLayout ? 120 : 0,
+              }}
+            >
+              <div style={{ padding: "10px 14px 6px", borderBottom: "1px solid rgba(124,58,237,0.1)", flexShrink: 0 }}>
                 <span style={{ color: "#F5C842", fontFamily: "Courier New", fontSize: 11, fontWeight: "bold", letterSpacing: 2 }}>
                   TABLE TALK
                 </span>
               </div>
 
-              <div style={{ flex: 1, overflow: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "auto",
+                  padding: "8px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
                 {messages.map((msg) => (
                   <div key={msg.id}>
                     {msg.is_system ? (
@@ -1745,10 +1830,26 @@ export default function CeloRoomPage() {
                 <div ref={chatEndRef} />
               </div>
 
-              <div style={{ padding: "8px 12px", borderTop: "1px solid rgba(124,58,237,0.15)", display: "flex", gap: 8 }}>
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderTop: "1px solid rgba(124,58,237,0.15)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  flexShrink: 0,
+                }}
+              >
+                {chatSendError && (
+                  <div style={{ fontSize: 11, color: "#F87171", fontFamily: "DM Sans" }}>{chatSendError}</div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
                 <input
                   value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
+                  onChange={(e) => {
+                    setChatInput(e.target.value);
+                    if (chatSendError) setChatSendError(null);
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && void sendChat()}
                   placeholder="Say something..."
                   style={{
@@ -1779,6 +1880,7 @@ export default function CeloRoomPage() {
                 >
                   →
                 </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1790,9 +1892,11 @@ export default function CeloRoomPage() {
             borderTop: "1px solid rgba(124,58,237,0.25)",
             display: "flex",
             alignItems: "center",
-            padding: "0 20px",
-            gap: 16,
+            flexWrap: "wrap",
+            padding: compactLayout ? "8px 12px" : "0 20px",
+            gap: compactLayout ? 10 : 16,
             backdropFilter: "blur(10px)",
+            minHeight: compactLayout ? undefined : 80,
           }}
         >
           <div style={{ minWidth: 100 }}>

@@ -79,9 +79,44 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
 
   const openRound = celoFirstRow(openRoundRows);
 
+  const { data: chatRows, error: chatErr } = await supabase
+    .from("celo_chat")
+    .select(
+      `
+      id,
+      user_id,
+      message,
+      created_at,
+      users (
+        full_name,
+        email
+      )
+    `,
+    )
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  if (chatErr) {
+    console.error("[celo/snapshot] chat load", chatErr.message);
+  }
+
+  const chatMessages = (chatRows ?? []).map((row: Record<string, unknown>) => {
+    const users = row.users as { full_name?: string | null; email?: string | null } | null | undefined;
+    return {
+      id: String(row.id),
+      user_id: String(row.user_id),
+      message: String(row.message ?? ""),
+      is_system: false,
+      created_at: String(row.created_at ?? ""),
+      user_name: users?.full_name?.trim() || users?.email?.split("@")[0] || "Player",
+    };
+  });
+
   return NextResponse.json({
     room: rawRoom,
     players: players ?? [],
     round: openRound ?? null,
+    chat: chatMessages,
   });
 }
