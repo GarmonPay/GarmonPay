@@ -760,12 +760,23 @@ export default function CeloRoomPage() {
     }
   }, [roomId, router, supabase]);
 
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible" && supabase) void fetchRoomData();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [fetchRoomData, supabase]);
+
   const triggerRollAnimation = useCallback(
     (rollData: Record<string, unknown>) => {
       const id = String(rollData.id ?? "");
       const roundIdRow = String(rollData.round_id ?? "");
       const diceRaw = rollData.dice as number[] | undefined;
       if (!id || !roundIdRow || !Array.isArray(diceRaw) || diceRaw.length !== 3) return;
+
+      const serverStart =
+        String(rollData.roll_animation_start_at ?? "").trim() || new Date().toISOString();
 
       const payload = buildCeloRollStartedPayload({
         roomId,
@@ -776,7 +787,7 @@ export default function CeloRoomPage() {
         rollerUserId: String(rollData.user_id ?? ""),
         rollName: String(rollData.roll_name ?? "Roll"),
         outcome: String(rollData.outcome ?? "") || null,
-        serverStartTime: new Date().toISOString(),
+        serverStartTime: serverStart,
       });
       applyRollSequence(payload);
     },

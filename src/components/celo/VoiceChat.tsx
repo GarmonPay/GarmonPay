@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AgoraRTC, { type IAgoraRTCClient, type IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
+import { createBrowserClient } from "@/lib/supabase";
+
+type VoiceStatus = "idle" | "connecting" | "connected" | "error";
 
 /**
- * Optional group voice: set NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL to a Daily.co room URL
- * (create a room at https://dashboard.daily.co). Otherwise shows mic test only.
+ * Agora RTC voice for C-Lo rooms (audio only).
+ *
+ * - NEXT_PUBLIC_AGORA_APP_ID — required
+ * - AGORA_APP_CERTIFICATE — server; set if your Agora project uses primary certificate (recommended)
  */
 export default function VoiceChat({
   roomId,
@@ -17,132 +23,214 @@ export default function VoiceChat({
   userName?: string;
   role?: string;
 }) {
-  const dailyRoomUrl = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL?.trim();
-    if (!base) return null;
-    try {
-      const u = new URL(base);
-      u.searchParams.set("t", roomId.slice(0, 12));
-      return u.toString();
-    } catch {
-      return null;
-    }
-  }, [roomId]);
-
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [level, setLevel] = useState(0);
-  const rafRef = useRef<number | null>(null);
-  const ctxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const stopStream = useCallback(() => {
-    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setStream(null);
-    setLevel(0);
-    void ctxRef.current?.close();
-    ctxRef.current = null;
-    analyserRef.current = null;
-  }, []);
-
-  const tickMeter = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return;
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) sum += data[i] ?? 0;
-    const avg = data.length ? sum / data.length / 255 : 0;
-    setLevel(avg);
-    rafRef.current = requestAnimationFrame(tickMeter);
-  }, []);
-
-  const startMic = useCallback(async () => {
-    setError(null);
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video: false,
-      });
-      streamRef.current = s;
-      setStream(s);
-
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new Ctx();
-      ctxRef.current = ctx;
-      const src = ctx.createMediaStreamSource(s);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.65;
-      src.connect(analyser);
-      analyserRef.current = analyser;
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(tickMeter);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Microphone unavailable";
-      setError(msg);
-      stopStream();
-    }
-  }, [stopStream, tickMeter]);
-
-  useEffect(() => () => stopStream(), [stopStream]);
-
+  const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID?.trim() ?? "";
   const label =
     userName || userId || role ? ` · ${[userName, role].filter(Boolean).join(" · ")}` : "";
 
+  const clientRef = useRef<IAgoraRTCClient | null>(null);
+  const localTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
+  const remoteAudioUidsRef = useRef<Set<string | number>>(new Set());
+
+  const [status, setStatus] = useState<VoiceStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [micOn, setMicOn] = useState(true);
+  const [remoteCount, setRemoteCount] = useState(0);
+
+  const supabase = useMemo(() => createBrowserClient(), []);
+
+  const leave = useCallback(async () => {
+    const client = clientRef.current;
+    clientRef.current = null;
+    remoteAudioUidsRef.current.clear();
+    localTrackRef.current?.close();
+    localTrackRef.current = null;
+    if (client) {
+      client.removeAllListeners();
+      try {
+        await client.unpublish();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await client.leave();
+      } catch {
+        /* ignore */
+      }
+    }
+    setRemoteCount(0);
+    setStatus("idle");
+  }, []);
+
+  const join = useCallback(async () => {
+    if (!appId || !userId) {
+      setError("Sign in and set NEXT_PUBLIC_AGORA_APP_ID.");
+      setStatus("error");
+      return;
+    }
+    setError(null);
+    setStatus("connecting");
+    remoteAudioUidsRef.current.clear();
+
+    const sb = supabase;
+    if (!sb) {
+      setError("Client not configured.");
+      setStatus("error");
+      return;
+    }
+
+    const accessToken = (await sb.auth.getSession()).data.session?.access_token;
+    if (!accessToken) {
+      setError("Not signed in.");
+      setStatus("error");
+      return;
+    }
+
+    const res = await fetch("/api/agora/rtc-token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ roomId }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      channelName?: string;
+      uid?: number;
+      token?: string | null;
+    };
+
+    if (!res.ok) {
+      console.error("[celo/voice] rtc-token failed", res.status, data);
+      setError(data.error ?? `Token error (${res.status})`);
+      setStatus("error");
+      return;
+    }
+
+    const channelName = data.channelName;
+    const uid = data.uid;
+    const token = data.token ?? null;
+    if (!channelName || uid == null) {
+      setError("Invalid token response.");
+      setStatus("error");
+      return;
+    }
+
+    AgoraRTC.setLogLevel(2);
+
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    clientRef.current = client;
+
+    client.on("user-published", async (user, mediaType) => {
+      if (mediaType !== "audio") return;
+      try {
+        await client.subscribe(user, mediaType);
+        const track = user.audioTrack;
+        if (track) {
+          track.play();
+          console.info("[celo/voice] subscribed + playing audio uid=", user.uid);
+        }
+        remoteAudioUidsRef.current.add(user.uid);
+        setRemoteCount(remoteAudioUidsRef.current.size);
+      } catch (e) {
+        console.error("[celo/voice] subscribe failed", e);
+      }
+    });
+
+    client.on("user-unpublished", (user, mediaType) => {
+      if (mediaType !== "audio") return;
+      remoteAudioUidsRef.current.delete(user.uid);
+      setRemoteCount(remoteAudioUidsRef.current.size);
+    });
+
+    try {
+      await client.join(appId, channelName, token, uid);
+      console.info("[celo/voice] join ok channel=", channelName, "uid=", uid, "token?", Boolean(token));
+    } catch (e) {
+      console.error("[celo/voice] join failed", e);
+      setError(e instanceof Error ? e.message : "Join failed");
+      setStatus("error");
+      await leave();
+      return;
+    }
+
+    try {
+      const mic = await AgoraRTC.createMicrophoneAudioTrack();
+      localTrackRef.current = mic;
+      await client.publish([mic]);
+      console.info("[celo/voice] publish mic ok");
+    } catch (e) {
+      console.error("[celo/voice] microphone failed", e);
+      setError(e instanceof Error ? e.message : "Microphone failed");
+      setStatus("error");
+      await leave();
+      return;
+    }
+
+    setStatus("connected");
+  }, [appId, userId, roomId, leave, supabase]);
+
+  useEffect(() => {
+    return () => {
+      void leave();
+    };
+  }, [leave]);
+
+  const toggleMic = useCallback(async () => {
+    const t = localTrackRef.current;
+    if (!t) return;
+    const next = !micOn;
+    await t.setEnabled(next);
+    setMicOn(next);
+  }, [micOn]);
+
+  if (!appId) {
+    return (
+      <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
+        <p className="mb-1 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat</p>
+        <p className="text-[11px] text-violet-200/75">
+          Set <code className="text-violet-300">NEXT_PUBLIC_AGORA_APP_ID</code> and server{" "}
+          <code className="text-violet-300">AGORA_APP_CERTIFICATE</code> for Agora voice.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
-      <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat</p>
+      <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat (Agora)</p>
       <p className="mb-2 text-[11px] leading-snug text-violet-200/75">
-        Room {roomId.slice(0, 8)}…{label}.
-        {dailyRoomUrl
-          ? " Use the voice room below so everyone can hear each other (Daily.co)."
-          : " For live voice, your project admin can set NEXT_PUBLIC_CELO_VOICE_DAILY_ROOM_URL to a Daily.co room. Mic check below tests your device."}
+        Room {roomId.slice(0, 8)}…{label}. Channel is scoped per table. Remote audio streams: {remoteCount}
       </p>
 
-      {dailyRoomUrl && (
-        <div className="mb-3 overflow-hidden rounded-lg border border-violet-500/30 bg-black/40">
-          <iframe
-            title="C-Lo voice"
-            src={dailyRoomUrl}
-            className="h-[200px] w-full"
-            allow="camera; microphone; fullscreen; display-capture; autoplay"
-          />
-        </div>
-      )}
-
       {error && <p className="mb-2 text-[11px] text-red-400/90">{error}</p>}
+
       <div className="flex flex-wrap items-center gap-2">
-        {!stream ? (
+        {status === "idle" || status === "error" ? (
           <button
             type="button"
-            onClick={() => void startMic()}
+            onClick={() => void join()}
             className="rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-md"
           >
-            Test microphone
+            Connect voice
           </button>
+        ) : status === "connecting" ? (
+          <span className="text-[11px] text-violet-300">Connecting…</span>
         ) : (
           <>
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              Mic on
-            </span>
-            <div className="h-2 min-w-[72px] flex-1 overflow-hidden rounded-full bg-violet-950/80">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-lime-400 transition-[width] duration-75"
-                style={{ width: `${Math.min(100, level * 140)}%` }}
-              />
-            </div>
             <button
               type="button"
-              onClick={stopStream}
-              className="rounded-lg border border-violet-500/40 px-2.5 py-1 text-[11px] text-violet-200"
+              onClick={() => void toggleMic()}
+              className="rounded-lg border border-violet-500/50 px-3 py-1.5 text-[11px] font-semibold text-violet-100"
             >
-              Stop
+              {micOn ? "Mute mic" : "Unmute mic"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void leave()}
+              className="rounded-lg border border-red-500/40 px-2.5 py-1 text-[11px] text-red-300"
+            >
+              Leave
             </button>
           </>
         )}

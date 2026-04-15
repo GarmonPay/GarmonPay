@@ -95,13 +95,13 @@ export async function broadcastCeloRoomEvent(
   roomId: string,
   event: "roll_started" | "roll_finished" | "turn_timeout",
   payload: CeloRollStartedPayload | CeloRollFinishedPayload | CeloTurnTimeoutPayload
-): Promise<void> {
+): Promise<boolean> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
     console.warn("[celo/broadcast] env not configured, skipping broadcast");
-    return;
+    return false;
   }
 
   const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
@@ -131,5 +131,7 @@ export async function broadcastCeloRoomEvent(
       status: res.status,
       text,
     });
+    return false;
   }
+  return true;
 }

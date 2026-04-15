@@ -138,7 +138,8 @@ export async function POST(req: Request) {
       rollName: roll.rollName,
       outcome: roll.result,
     });
-    await broadcastCeloRoomEvent(supabase, room_id, "roll_started", bankerRollPayload);
+    const b1 = await broadcastCeloRoomEvent(supabase, room_id, "roll_started", bankerRollPayload);
+    if (!b1) console.warn("[celo/roll] roll_started broadcast failed (banker); clients rely on postgres_changes)");
 
     if (roll.result === "no_count") {
       return NextResponse.json({
@@ -386,7 +387,8 @@ export async function POST(req: Request) {
           rollName: roll.rollName,
           outcome: "reroll",
         });
-        await broadcastCeloRoomEvent(supabase, room_id, "roll_started", noCountAnimation);
+        const b2 = await broadcastCeloRoomEvent(supabase, room_id, "roll_started", noCountAnimation);
+        if (!b2) console.warn("[celo/roll] roll_started broadcast failed (player reroll)");
       }
 
       return NextResponse.json({
@@ -500,7 +502,8 @@ export async function POST(req: Request) {
         rollName: roll.rollName,
         outcome: playerWins ? "win" : "loss",
       });
-      await broadcastCeloRoomEvent(supabase, room_id, "roll_started", resolvingAnimation);
+      const b3 = await broadcastCeloRoomEvent(supabase, room_id, "roll_started", resolvingAnimation);
+      if (!b3) console.warn("[celo/roll] roll_started broadcast failed (player resolving)");
     }
 
     const currentIdx = players.findIndex((p) => Number(p.seat_number ?? 0) === currentSeat);
