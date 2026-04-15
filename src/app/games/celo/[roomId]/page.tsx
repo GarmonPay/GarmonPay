@@ -136,65 +136,33 @@ const DICE_COLORS: Record<
   },
 };
 
-const ROLL_STYLES: Record<
-  string,
-  {
-    color: string;
-    size: number;
-    glow: string;
-    animation: string;
-  }
-> = {
-  "C-LO! 🎲": {
-    color: "#F5C842",
-    size: 56,
-    glow: "0 0 40px #F5C842, 0 0 80px rgba(245,200,66,0.4)",
-    animation: "cloFlash 0.4s ease infinite alternate",
-  },
-  "HAND CRACK! 💥": {
-    color: "#F5C842",
-    size: 44,
-    glow: "0 0 30px #F5C842",
-    animation: "explode 0.4s ease",
-  },
-  "SHIT! 💩": {
-    color: "#EF4444",
-    size: 44,
-    glow: "0 0 30px #EF4444",
-    animation: "shake 0.5s ease",
-  },
-  "DICK! 😂": {
-    color: "#EF4444",
-    size: 44,
-    glow: "0 0 20px #EF4444",
-    animation: "explode 0.3s ease",
-  },
-  "TRIP SIXES - THE BOSS! 👑": {
-    color: "#F5C842",
-    size: 36,
-    glow: "0 0 40px #F5C842",
-    animation: "rainbow 1s linear infinite",
-  },
-  "ACE OUT! 🎲": {
-    color: "#F5C842",
-    size: 44,
-    glow: "0 0 30px #F5C842",
-    animation: "explode 0.4s ease",
-  },
-};
-
 function getRollStyle(rollName: string) {
-  if (ROLL_STYLES[rollName]) return ROLL_STYLES[rollName];
-  if (rollName.includes("ZOE") || rollName.includes("HAITIAN"))
-    return { color: "#10B981", size: 44, glow: "0 0 20px #10B981", animation: "explode 0.3s ease" };
-  if (rollName.includes("POLICE") || rollName.includes("POUND"))
-    return { color: "#3B82F6", size: 44, glow: "0 0 20px #3B82F6", animation: "explode 0.3s ease" };
-  if (rollName.includes("GIRL") || rollName.includes("HOE"))
-    return { color: "#EC4899", size: 44, glow: "0 0 20px #EC4899", animation: "explode 0.3s ease" };
-  if (rollName.includes("SHORTLY") || rollName.includes("JIT"))
-    return { color: "#A855F7", size: 44, glow: "0 0 20px #A855F7", animation: "explode 0.3s ease" };
-  if (rollName.includes("TRIP"))
+  const n = rollName.toUpperCase();
+  if (n.includes("C-LO") || n.includes("4-5-6"))
+    return {
+      color: "#F5C842",
+      size: 56,
+      glow: "0 0 40px #F5C842, 0 0 80px rgba(245,200,66,0.4)",
+      animation: "cloFlash 0.4s ease infinite alternate",
+    };
+  if (n.includes("PAIR + 6") || n.includes("HAND CRACK"))
+    return { color: "#F5C842", size: 44, glow: "0 0 30px #F5C842", animation: "explode 0.4s ease" };
+  if (n.includes("ACE-DEUCE") || n.includes("1-2-3"))
+    return { color: "#EF4444", size: 44, glow: "0 0 30px #EF4444", animation: "shake 0.5s ease" };
+  if (n.includes("PAIR + 1"))
+    return { color: "#EF4444", size: 44, glow: "0 0 20px #EF4444", animation: "explode 0.3s ease" };
+  if (n.includes("TRIPS") || n.includes("TRIP "))
     return { color: "#F5C842", size: 40, glow: "0 0 30px #F5C842", animation: "explode 0.4s ease" };
+  if (n.includes("POINT 4") || n.includes("ZOE") || n.includes("HAITIAN"))
+    return { color: "#10B981", size: 44, glow: "0 0 20px #10B981", animation: "explode 0.3s ease" };
+  if (n.includes("POINT 5") || n.includes("POLICE") || n.includes("POUND"))
+    return { color: "#3B82F6", size: 44, glow: "0 0 20px #3B82F6", animation: "explode 0.3s ease" };
+  if (n.includes("POINT 3") || n.includes("GIRL") || n.includes("HOE"))
+    return { color: "#EC4899", size: 44, glow: "0 0 20px #EC4899", animation: "explode 0.3s ease" };
+  if (n.includes("POINT 2") || n.includes("SHORTLY") || n.includes("JIT"))
+    return { color: "#A855F7", size: 44, glow: "0 0 20px #A855F7", animation: "explode 0.4s ease" };
+  if (n.includes("NO POINT") || n.includes("RE-ROLL"))
+    return { color: "#94a3b8", size: 22, glow: "none", animation: "pulse 1s ease infinite" };
   return { color: "#666", size: 24, glow: "none", animation: "none" };
 }
 
@@ -458,6 +426,7 @@ export default function CeloRoomPage() {
   const [myStreak, setMyStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeEpoch, setRealtimeEpoch] = useState(0);
   const [showDiceShop, setShowDiceShop] = useState(false);
   const [showLowerBank, setShowLowerBank] = useState(false);
   const [showBecomeBanker, setShowBecomeBanker] = useState(false);
@@ -583,11 +552,13 @@ export default function CeloRoomPage() {
       } = await supabase.auth.getSession();
       const user = session?.user ?? null;
       if (!user) {
+        setLoading(false);
         router.push("/login");
         return;
       }
       const u = user as { email_confirmed_at?: string | null };
       if (u.email_confirmed_at == null || u.email_confirmed_at === "") {
+        setLoading(false);
         router.push("/login");
         return;
       }
@@ -602,6 +573,7 @@ export default function CeloRoomPage() {
       });
 
       if (snapshotRes.status === 401) {
+        setLoading(false);
         router.push("/login");
         return;
       }
@@ -762,11 +734,31 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible" && supabase) void fetchRoomData();
+      if (document.visibilityState === "visible" && supabase) {
+        void fetchRoomData();
+        setRealtimeEpoch((e) => e + 1);
+      }
+    };
+    const onOnline = () => {
+      setRealtimeEpoch((e) => e + 1);
+      if (supabase) void fetchRoomData();
     };
     document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
   }, [fetchRoomData, supabase]);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = window.setTimeout(() => {
+      setLoading(false);
+      setError((prev) => prev ?? "Room took too long to load. Check your connection and try again.");
+    }, 45000);
+    return () => window.clearTimeout(t);
+  }, [loading]);
 
   const triggerRollAnimation = useCallback(
     (rollData: Record<string, unknown>) => {
@@ -830,10 +822,6 @@ export default function CeloRoomPage() {
           if (payload.eventType === "UPDATE" && nr.banker_dice?.length === 3) {
             const sig = JSON.stringify(nr.banker_dice);
             const prev = lastBankerDiceSigRef.current;
-            if (prev === null) {
-              lastBankerDiceSigRef.current = sig;
-              return;
-            }
             if (sig === prev) return;
             const startAt = String(raw.roll_animation_start_at ?? "") || new Date().toISOString();
             const bankerPayload = buildCeloRollStartedPayload({
@@ -916,8 +904,12 @@ export default function CeloRoomPage() {
         },
       )
       .subscribe((status) => {
+        console.info("[celo/realtime] channel celo-room status:", status);
         setConnected(status === "SUBSCRIBED");
         if (status === "SUBSCRIBED") void fetchRoomData();
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setRealtimeEpoch((e) => e + 1);
+        }
       });
 
     const presenceChannel = supabase.channel(`presence-${roomId}`);
@@ -942,7 +934,7 @@ export default function CeloRoomPage() {
       supabase.removeChannel(presenceChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, supabase]);
+  }, [roomId, supabase, realtimeEpoch]);
 
   useEffect(() => {
     if (!canLowerBank) return;

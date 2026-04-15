@@ -6,11 +6,13 @@ import { createBrowserClient } from "@/lib/supabase";
 
 type VoiceStatus = "idle" | "connecting" | "connected" | "error";
 
+const CONNECT_TIMEOUT_MS = 8000;
+
 /**
  * Agora RTC voice for C-Lo rooms (audio only).
  *
- * - NEXT_PUBLIC_AGORA_APP_ID — required
- * - AGORA_APP_CERTIFICATE — server; set if your Agora project uses primary certificate (recommended)
+ * - NEXT_PUBLIC_AGORA_APP_ID — required on client
+ * - AGORA_APP_CERTIFICATE — server; omit for dev / testing (token null)
  */
 export default function VoiceChat({
   roomId,
@@ -38,6 +40,10 @@ export default function VoiceChat({
 
   const supabase = useMemo(() => createBrowserClient(), []);
 
+  useEffect(() => {
+    console.info("[celo/voice] NEXT_PUBLIC_AGORA_APP_ID configured:", Boolean(appId), "length:", appId.length);
+  }, [appId]);
+
   const leave = useCallback(async () => {
     const client = clientRef.current;
     clientRef.current = null;
@@ -59,6 +65,7 @@ export default function VoiceChat({
     }
     setRemoteCount(0);
     setStatus("idle");
+    console.info("[celo/voice] leave complete");
   }, []);
 
   const join = useCallback(async () => {
@@ -85,14 +92,29 @@ export default function VoiceChat({
       return;
     }
 
-    const res = await fetch("/api/agora/rtc-token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ roomId }),
-    });
+    let res: Response;
+    try {
+      const fetchPromise = fetch("/api/agora/rtc-token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ roomId }),
+      });
+      res = await Promise.race([
+        fetchPromise,
+        new Promise<Response>((_, rej) =>
+          setTimeout(() => rej(new Error("rtc-token request timed out")), CONNECT_TIMEOUT_MS)
+        ),
+      ]);
+    } catch (e) {
+      console.error("[celo/voice] rtc-token fetch error", e);
+      setError(e instanceof Error ? e.message : "Token request failed");
+      setStatus("error");
+      return;
+    }
+
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
       channelName?: string;
@@ -110,6 +132,12 @@ export default function VoiceChat({
     const channelName = data.channelName;
     const uid = data.uid;
     const token = data.token ?? null;
+    console.info("[celo/voice] rtc-token ok", {
+      channelName,
+      uid,
+      tokenMode: token ? "token" : "null (dev / no AGORA_APP_CERTIFICATE)",
+    });
+
     if (!channelName || uid == null) {
       setError("Invalid token response.");
       setStatus("error");
@@ -121,14 +149,30 @@ export default function VoiceChat({
     const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
     clientRef.current = client;
 
+    client.on("connection-state-change", (cur, prev, reason) => {
+      console.info("[celo/voice] connection-state-change", { cur, prev, reason });
+    });
+    client.on("exception", (ex) => {
+      console.error("[celo/voice] Agora exception", ex);
+    });
+    client.on("user-joined", (user) => {
+      console.info("[celo/voice] user-joined", user.uid);
+    });
+    client.on("user-left", (user) => {
+      console.info("[celo/voice] user-left", user.uid);
+    });
+
     client.on("user-published", async (user, mediaType) => {
       if (mediaType !== "audio") return;
       try {
+        console.info("[celo/voice] user-published", user.uid, mediaType);
         await client.subscribe(user, mediaType);
         const track = user.audioTrack;
         if (track) {
           track.play();
-          console.info("[celo/voice] subscribed + playing audio uid=", user.uid);
+          console.info("[celo/voice] subscribed + audioTrack.play() uid=", user.uid);
+        } else {
+          console.warn("[celo/voice] subscribed but no audioTrack uid=", user.uid);
         }
         remoteAudioUidsRef.current.add(user.uid);
         setRemoteCount(remoteAudioUidsRef.current.size);
@@ -139,13 +183,19 @@ export default function VoiceChat({
 
     client.on("user-unpublished", (user, mediaType) => {
       if (mediaType !== "audio") return;
+      console.info("[celo/voice] user-unpublished", user.uid);
       remoteAudioUidsRef.current.delete(user.uid);
       setRemoteCount(remoteAudioUidsRef.current.size);
     });
 
     try {
-      await client.join(appId, channelName, token, uid);
-      console.info("[celo/voice] join ok channel=", channelName, "uid=", uid, "token?", Boolean(token));
+      await Promise.race([
+        client.join(appId, channelName, token, uid),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error(`Agora join timed out after ${CONNECT_TIMEOUT_MS / 1000}s`)), CONNECT_TIMEOUT_MS)
+        ),
+      ]);
+      console.info("[celo/voice] join ok channel=", channelName, "uid=", uid);
     } catch (e) {
       console.error("[celo/voice] join failed", e);
       setError(e instanceof Error ? e.message : "Join failed");
@@ -160,7 +210,7 @@ export default function VoiceChat({
       await client.publish([mic]);
       console.info("[celo/voice] publish mic ok");
     } catch (e) {
-      console.error("[celo/voice] microphone failed", e);
+      console.error("[celo/voice] microphone / publish failed", e);
       setError(e instanceof Error ? e.message : "Microphone failed");
       setStatus("error");
       await leave();
@@ -182,6 +232,7 @@ export default function VoiceChat({
     const next = !micOn;
     await t.setEnabled(next);
     setMicOn(next);
+    console.info("[celo/voice] mic", next ? "on" : "off");
   }, [micOn]);
 
   if (!appId) {
@@ -189,8 +240,8 @@ export default function VoiceChat({
       <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
         <p className="mb-1 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat</p>
         <p className="text-[11px] text-violet-200/75">
-          Set <code className="text-violet-300">NEXT_PUBLIC_AGORA_APP_ID</code> and server{" "}
-          <code className="text-violet-300">AGORA_APP_CERTIFICATE</code> for Agora voice.
+          Set <code className="text-violet-300">NEXT_PUBLIC_AGORA_APP_ID</code> in env. Optional:{" "}
+          <code className="text-violet-300">AGORA_APP_CERTIFICATE</code> on the server for token mode.
         </p>
       </div>
     );
@@ -200,7 +251,7 @@ export default function VoiceChat({
     <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
       <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/70">Voice chat (Agora)</p>
       <p className="mb-2 text-[11px] leading-snug text-violet-200/75">
-        Room {roomId.slice(0, 8)}…{label}. Channel is scoped per table. Remote audio streams: {remoteCount}
+        Room {roomId.slice(0, 8)}…{label}. Remote audio streams: {remoteCount}
       </p>
 
       {error && <p className="mb-2 text-[11px] text-red-400/90">{error}</p>}
@@ -215,7 +266,7 @@ export default function VoiceChat({
             Connect voice
           </button>
         ) : status === "connecting" ? (
-          <span className="text-[11px] text-violet-300">Connecting…</span>
+          <span className="text-[11px] text-violet-300">Connecting… (max {CONNECT_TIMEOUT_MS / 1000}s)</span>
         ) : (
           <>
             <button

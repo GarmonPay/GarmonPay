@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { creditGPay, getGPayBalance } from "@/lib/gpay-balance";
-import { insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
-import { rollThreeDice, evaluateRoll, comparePoints, calculatePayout } from "@/lib/celo-engine";
+import { getGPayBalance } from "@/lib/gpay-balance";
+import { celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
+import { rollThreeDice, evaluateRoll, calculatePayout, resolvePlayerVsBankerPoint } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 import { buildCeloRollStartedPayload, broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
@@ -171,11 +171,8 @@ export async function POST(req: Request) {
       const bankerWins = totalPot - feeSC;
 
       if (bankerWins > 0) {
-        const led = await creditGPay(bankerId, bankerWins, {
-          description: "C-Lo banker win",
-          reference: `celo_banker_win_${round_id}`,
-        });
-        if (!led.ok) {
+        const led = await celoWalletCredit(supabase, bankerId, bankerWins, `celo_banker_win_${round_id}`);
+        if (!led.success) {
           return NextResponse.json(
             { error: "payout", message: led.message ?? "Payout failed" },
             { status: 500 }
@@ -224,11 +221,13 @@ export async function POST(req: Request) {
 
         const { payoutSC, feeSC: playerFeeSC } = calculatePayout(entry, "win", feePct);
 
-        const led = await creditGPay(player.user_id, payoutSC, {
-          description: "C-Lo player win",
-          reference: `celo_player_win_${round_id}_${player.user_id}`,
-        });
-        if (!led.ok) {
+        const led = await celoWalletCredit(
+          supabase,
+          player.user_id,
+          payoutSC,
+          `celo_player_win_${round_id}_${player.user_id}`
+        );
+        if (!led.success) {
           return NextResponse.json(
             { error: "payout", message: led.message ?? "Payout failed" },
             { status: 500 }
@@ -399,29 +398,17 @@ export async function POST(req: Request) {
       });
     }
 
-    let playerWins = false;
+    let playerWins = resolvePlayerVsBankerPoint(Number(r.banker_point), roll) === "player_wins";
     let payoutSC = 0;
     let feeSC = 0;
-
-    if (roll.result === "instant_win") {
-      playerWins = true;
-    } else if (roll.result === "instant_loss") {
-      playerWins = false;
-    } else if (roll.result === "point" && roll.point !== undefined) {
-      playerWins =
-        comparePoints(Number(r.banker_point), roll.point) === "player_wins";
-    }
 
     if (playerWins) {
       const calc = calculatePayout(playerEntry, "win", feePct);
       payoutSC = calc.payoutSC;
       feeSC = calc.feeSC;
 
-      const led = await creditGPay(userId, payoutSC, {
-        description: "C-Lo player win",
-        reference: `celo_player_win_${round_id}_${userId}`,
-      });
-      if (!led.ok) {
+      const led = await celoWalletCredit(supabase, userId, payoutSC, `celo_player_win_${round_id}_${userId}`);
+      if (!led.success) {
         return NextResponse.json(
           { error: "payout", message: led.message ?? "Payout failed" },
           { status: 500 }
@@ -444,11 +431,13 @@ export async function POST(req: Request) {
       const bankerNet = Math.floor((playerEntry * (100 - feePct)) / 100);
       feeSC = playerEntry - bankerNet;
 
-      const led = await creditGPay(bankerId, bankerNet, {
-        description: "C-Lo banker win",
-        reference: `celo_banker_win_point_${round_id}_${userId}`,
-      });
-      if (!led.ok) {
+      const led = await celoWalletCredit(
+        supabase,
+        bankerId,
+        bankerNet,
+        `celo_banker_win_point_${round_id}_${userId}`
+      );
+      if (!led.success) {
         return NextResponse.json(
           { error: "payout", message: led.message ?? "Payout failed" },
           { status: 500 }

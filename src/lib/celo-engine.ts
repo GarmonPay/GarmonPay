@@ -19,44 +19,60 @@ export type RollResult = {
   isCraps: boolean;
 };
 
+/**
+ * Street C-Lo resolution vs banker point (short stop): higher point wins; ties go to banker.
+ * C-Lo (4-5-6), trips, and pair+6 are automatic wins vs any point; 1-2-3 and pair+1 lose vs any point.
+ */
+export function resolvePlayerVsBankerPoint(
+  bankerPoint: number,
+  roll: RollResult
+): "player_wins" | "banker_wins" {
+  if (roll.result === "instant_win") return "player_wins";
+  if (roll.result === "instant_loss") return "banker_wins";
+  if (roll.result === "point" && roll.point !== undefined) {
+    return comparePoints(bankerPoint, roll.point) === "player_wins" ? "player_wins" : "banker_wins";
+  }
+  return "banker_wins";
+}
+
 export function evaluateRoll(dice: [number, number, number]): RollResult {
   const [a, b, c] = dice;
   const sorted = [...dice].sort((x, y) => x - y);
   const [lo, mid, hi] = sorted;
 
-  // C-Lo: 4-5-6
+  // C-Lo: 4-5-6 — highest roll, automatic banker/player win
   if (lo === 4 && mid === 5 && hi === 6) {
     return {
       dice,
       result: "instant_win",
-      rollName: "C-LO! 🎲",
+      rollName: "C-Lo (4-5-6) — street crown",
       point: undefined,
       isCelo: true,
       isCraps: false,
     };
   }
 
-  // Trips: all same
+  // Trips — automatic win
   if (a === b && b === c) {
     const names: Record<number, string> = {
-      1: "ACE OUT! 🎯",
-      2: "TRIP DEUCES! ✌️",
-      3: "TRIP THREES! 🔥",
-      4: "TRIP FOURS! 💪",
-      5: "TRIP FIVES! ⭐",
-      6: "THE BOSS! 👑",
+      1: "Trips — Aces (trip 1s)",
+      2: "Trips — Deuces (trip 2s)",
+      3: "Trips — Treys (trip 3s)",
+      4: "Trips — Fours (trip 4s)",
+      5: "Trips — Fives (trip 5s)",
+      6: "Trips — Sixes (trip 6s) — head crack",
     };
     return {
       dice,
       result: "instant_win",
-      rollName: names[a] || "TRIPS!",
+      rollName: names[a] || "Trips — three of a kind",
       point: undefined,
       isCelo: false,
       isCraps: false,
     };
   }
 
-  // Pair + 6 = Hand Crack
+  // Pair + 6 — automatic win (hand crack)
   if (
     (a === b && c === 6) ||
     (a === c && b === 6) ||
@@ -65,26 +81,26 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_win",
-      rollName: "HAND CRACK! 💥",
+      rollName: "Pair + 6 — hand crack (auto win)",
       point: undefined,
       isCelo: false,
       isCraps: false,
     };
   }
 
-  // Shit: 1-2-3
+  // Ace-Deuce-Trey: 1-2-3 — automatic loss
   if (lo === 1 && mid === 2 && hi === 3) {
     return {
       dice,
       result: "instant_loss",
-      rollName: "SHIT! 💩",
+      rollName: "Ace-Deuce-Trey (1-2-3) — instant loss",
       point: undefined,
       isCelo: false,
       isCraps: true,
     };
   }
 
-  // Dick: pair + 1
+  // Pair + 1 — automatic loss
   if (
     (a === b && c === 1) ||
     (a === c && b === 1) ||
@@ -93,19 +109,19 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_loss",
-      rollName: "DICK! 😬",
+      rollName: "Pair + 1 — instant loss",
       point: undefined,
       isCelo: false,
       isCraps: true,
     };
   }
 
-  // Points: pair + 2, 3, 4, or 5
+  // Points: pair + 2–5 (re-roll if no pair / no scoring combo above)
   const pointNames: Record<number, string> = {
-    2: "SHORTLY! / JIT! 👶",
-    3: "GIRL! / HOE! 👩",
-    4: "ZOE! / HAITIAN! 🇭🇹",
-    5: "POLICE! / POUND! 🚔",
+    2: "Point 2 — Shortly / Jit (lowest point)",
+    3: "Point 3",
+    4: "Point 4",
+    5: "Point 5",
   };
 
   if ((a === b && c === 2) || (a === c && b === 2) || (b === c && a === 2)) {
@@ -152,7 +168,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
   return {
     dice,
     result: "no_count",
-    rollName: "NO COUNT 🔄",
+    rollName: "No point — re-roll",
     point: undefined,
     isCelo: false,
     isCraps: false,
