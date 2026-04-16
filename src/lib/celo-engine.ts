@@ -1,4 +1,6 @@
-import { randomInt as nodeRandomInt } from "node:crypto";
+function nodeRandomInt(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min));
+}
 import { CELO_ROLL } from "@/lib/celo-roll-names";
 
 function randomInt(min: number, max: number): number {
