@@ -25,8 +25,6 @@ interface CeloRoom {
 interface CreateRoomForm {
   name: string;
   max_players: number;
-  room_type: "public" | "private";
-  join_code: string;
   minimum_entry_sc: number;
   starting_bank_sc: number;
 }
@@ -45,15 +43,11 @@ export default function CeloLobbyPage() {
   const [myUserId, setMyUserId] = useState("");
   const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [showJoin, setShowJoin] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [form, setForm] = useState<CreateRoomForm>({
     name: "",
     max_players: 6,
-    room_type: "public",
-    join_code: "",
     minimum_entry_sc: 500,
     starting_bank_sc: 500,
   });
@@ -138,7 +132,14 @@ export default function CeloLobbyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name: form.name.trim(),
+          max_players: form.max_players,
+          minimum_entry_cents: form.minimum_entry_sc,
+          starting_bank_cents: form.starting_bank_sc,
+          room_type: "public",
+          join_code: null,
+        }),
       });
       const data = (await res.json()) as { error?: string; room?: { id: string } };
       if (!res.ok) {
@@ -152,28 +153,6 @@ export default function CeloLobbyPage() {
       setCreateError("Something went wrong");
     } finally {
       setCreating(false);
-    }
-  };
-
-  const handleJoinPrivate = async () => {
-    if (!joinCode.trim()) return;
-    try {
-      const res = await fetch("/api/celo/room/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          join_code: joinCode.trim().toUpperCase(),
-          role: "player",
-          entry_sc: form.minimum_entry_sc,
-        }),
-      });
-      const data = (await res.json()) as { room?: { id: string } };
-      if (data.room?.id) {
-        router.push(`/dashboard/games/celo/${data.room.id}`);
-      }
-    } catch {
-      /* ignore */
     }
   };
 
@@ -345,24 +324,6 @@ export default function CeloLobbyPage() {
             }}
           >
             🎲 CREATE ROOM
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowJoin(true)}
-            style={{
-              background: "transparent",
-              color: "#A855F7",
-              border: "1.5px solid #7C3AED",
-              borderRadius: 10,
-              padding: "14px 28px",
-              fontSize: 15,
-              fontWeight: 700,
-              fontFamily: '"Cinzel Decorative", serif',
-              cursor: "pointer",
-              letterSpacing: "0.05em",
-            }}
-          >
-            🔑 PRIVATE ROOM
           </button>
         </div>
 
@@ -757,81 +718,6 @@ export default function CeloLobbyPage() {
                   marginBottom: 8,
                 }}
               >
-                ROOM TYPE
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["public", "private"] as const).map((t) => (
-                  <button
-                    type="button"
-                    key={t}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        room_type: t,
-                      }))
-                    }
-                    style={{
-                      flex: 1,
-                      padding: "10px 0",
-                      borderRadius: 8,
-                      border:
-                        form.room_type === t
-                          ? "2px solid #F5C842"
-                          : "1px solid rgba(124,58,237,0.3)",
-                      background:
-                        form.room_type === t
-                          ? "rgba(245,200,66,0.1)"
-                          : "transparent",
-                      color: form.room_type === t ? "#F5C842" : "#6B7280",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontFamily: "Courier New",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-              {form.room_type === "private" && (
-                <input
-                  value={form.join_code}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      join_code: e.target.value.toUpperCase().slice(0, 6),
-                    }))
-                  }
-                  placeholder="6-CHAR CODE"
-                  style={{
-                    width: "100%",
-                    marginTop: 8,
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(124,58,237,0.3)",
-                    borderRadius: 8,
-                    color: "#fff",
-                    padding: "10px 14px",
-                    fontSize: 14,
-                    fontFamily: "Courier New",
-                    outline: "none",
-                    letterSpacing: "0.2em",
-                    boxSizing: "border-box",
-                  }}
-                />
-              )}
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#9CA3AF",
-                  fontFamily: "Courier New",
-                  letterSpacing: "0.08em",
-                  marginBottom: 8,
-                }}
-              >
                 MINIMUM ENTRY —{" "}
                 <span style={{ color: "#F5C842" }}>
                   {form.minimum_entry_sc.toLocaleString()} GPC ({gpcToUsd(form.minimum_entry_sc)})
@@ -986,106 +872,6 @@ export default function CeloLobbyPage() {
             >
               {creating ? "CREATING..." : "🎲 CREATE ROOM"}
             </button>
-          </div>
-        </div>
-      )}
-
-      {showJoin && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: "#0D0520",
-              border: "1px solid rgba(124,58,237,0.3)",
-              borderRadius: 16,
-              padding: 24,
-              width: "100%",
-              maxWidth: 360,
-            }}
-          >
-            <h3
-              style={{
-                fontFamily: '"Cinzel Decorative", serif',
-                color: "#F5C842",
-                fontSize: 18,
-                margin: "0 0 16px",
-              }}
-            >
-              Join Private Room
-            </h3>
-            <input
-              value={joinCode}
-              onChange={(e) =>
-                setJoinCode(e.target.value.toUpperCase().slice(0, 6))
-              }
-              placeholder="ENTER CODE"
-              style={{
-                width: "100%",
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(124,58,237,0.3)",
-                borderRadius: 8,
-                color: "#fff",
-                padding: "14px",
-                fontSize: 20,
-                fontFamily: "Courier New",
-                letterSpacing: "0.3em",
-                textAlign: "center",
-                outline: "none",
-                marginBottom: 16,
-                boxSizing: "border-box",
-              }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => setShowJoin(false)}
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "1px solid rgba(124,58,237,0.3)",
-                  borderRadius: 8,
-                  color: "#6B7280",
-                  padding: "12px",
-                  cursor: "pointer",
-                  fontFamily: "Courier New",
-                  fontSize: 13,
-                }}
-              >
-                CANCEL
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleJoinPrivate()}
-                disabled={joinCode.length < 6}
-                style={{
-                  flex: 2,
-                  background:
-                    joinCode.length < 6
-                      ? "rgba(255,255,255,0.1)"
-                      : "linear-gradient(135deg, #F5C842, #D4A017)",
-                  border: "none",
-                  borderRadius: 8,
-                  color: joinCode.length < 6 ? "#6B7280" : "#0A0A0F",
-                  padding: "12px",
-                  cursor: joinCode.length < 6 ? "not-allowed" : "pointer",
-                  fontFamily: '"Cinzel Decorative", serif',
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                JOIN ROOM
-              </button>
-            </div>
           </div>
         </div>
       )}
