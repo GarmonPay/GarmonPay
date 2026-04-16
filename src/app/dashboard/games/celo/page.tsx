@@ -43,18 +43,6 @@ interface CreateRoomForm {
   max_players: number;
   minimum_entry_sc: number;
   starting_bank_sc: number;
-  /** Required when hosting a private table; shared with invitees only */
-  join_code: string;
-}
-
-function randomJoinCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 6; i += 1) {
-    const c = chars[Math.floor(Math.random() * chars.length)];
-    if (c) s += c;
-  }
-  return s;
 }
 
 /** Supabase may return null; never call .toLocaleString on undefined */
@@ -74,8 +62,6 @@ export default function CeloLobbyPage() {
   const [roomsUnavailable, setRoomsUnavailable] = useState(false);
   const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
-  /** Public = listed in lobby; private = invite-only via join code */
-  const [createMode, setCreateMode] = useState<"public" | "private">("public");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [form, setForm] = useState<CreateRoomForm>({
@@ -83,7 +69,6 @@ export default function CeloLobbyPage() {
     max_players: 6,
     minimum_entry_sc: 500,
     starting_bank_sc: 500,
-    join_code: "",
   });
 
   const loadRooms = useCallback(async (sb: SupabaseClient) => {
@@ -273,14 +258,6 @@ export default function CeloLobbyPage() {
   }, [router, loadRooms, refreshCoins]);
 
   const openCreatePublic = () => {
-    setCreateMode("public");
-    setCreateError("");
-    setShowCreate(true);
-  };
-
-  const openCreatePrivate = () => {
-    setCreateMode("private");
-    setForm((f) => ({ ...f, join_code: f.join_code.trim() ? f.join_code : randomJoinCode() }));
     setCreateError("");
     setShowCreate(true);
   };
@@ -288,12 +265,6 @@ export default function CeloLobbyPage() {
   const handleCreate = async () => {
     if (!form.name.trim()) {
       setCreateError("Enter a room name");
-      return;
-    }
-    const isPrivate = createMode === "private";
-    const code = form.join_code.trim();
-    if (isPrivate && code.length < 4) {
-      setCreateError("Join code must be at least 4 characters");
       return;
     }
     if (form.starting_bank_sc > gpayCoins) {
@@ -312,8 +283,8 @@ export default function CeloLobbyPage() {
           max_players: form.max_players,
           minimum_entry_cents: form.minimum_entry_sc,
           starting_bank_cents: form.starting_bank_sc,
-          room_type: isPrivate ? "private" : "public",
-          join_code: isPrivate ? code : null,
+          room_type: "public",
+          join_code: null,
         }),
       });
       const data = (await res.json()) as { error?: string; room?: { id: string } };
@@ -595,30 +566,6 @@ export default function CeloLobbyPage() {
                 >
                   🎲 Start a Game
                 </button>
-                <button
-                  type="button"
-                  className="celo-hero-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
-                  onClick={openCreatePrivate}
-                  style={{
-                    width: "100%",
-                    textAlign: "center",
-                    borderRadius: 14,
-                    minHeight: 52,
-                    padding: "15px 18px",
-                    fontSize: 14,
-                    fontWeight: 800,
-                    fontFamily: cinzel.style.fontFamily,
-                    letterSpacing: "0.05em",
-                    color: "#E9D5FF",
-                    border: "1px solid rgba(167,139,250,0.5)",
-                    background: "linear-gradient(180deg, rgba(32,14,58,0.96), rgba(8,4,18,0.99))",
-                    boxShadow:
-                      "0 0 0 1px rgba(124,58,237,0.4), 0 0 24px rgba(124,58,237,0.22), inset 0 1px 0 rgba(255,255,255,0.08)",
-                    cursor: "pointer",
-                  }}
-                >
-                  🔐 Host Private Game
-                </button>
               </div>
 
               <CeloReadinessPanel
@@ -794,7 +741,7 @@ export default function CeloLobbyPage() {
                 className={cinzel.className}
                 style={{ color: "#F5C842", fontSize: 20, margin: 0 }}
               >
-                {createMode === "private" ? "Host a private game" : "Start a game"}
+                Start a game
               </h2>
               <button
                 type="button"
@@ -844,82 +791,6 @@ export default function CeloLobbyPage() {
                 }}
               />
             </label>
-
-            {createMode === "private" ? (
-              <div style={{ marginBottom: 16 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#9CA3AF",
-                    fontFamily: "Courier New, monospace",
-                    letterSpacing: "0.08em",
-                    marginBottom: 6,
-                  }}
-                >
-                  JOIN CODE — share only with players you invite (not listed in the lobby)
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-                  <input
-                    value={form.join_code}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        join_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12),
-                      }))
-                    }
-                    placeholder="e.g. GOLD42"
-                    autoComplete="off"
-                    spellCheck={false}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(167,139,250,0.45)",
-                      borderRadius: 8,
-                      color: "#E9D5FF",
-                      padding: "12px 14px",
-                      fontSize: 16,
-                      fontWeight: 800,
-                      letterSpacing: "0.12em",
-                      fontFamily: "Courier New, monospace",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, join_code: randomJoinCode() }))}
-                    style={{
-                      flexShrink: 0,
-                      padding: "0 14px",
-                      borderRadius: 8,
-                      border: "1px solid rgba(124,58,237,0.5)",
-                      background: "rgba(45,20,80,0.85)",
-                      color: "#C4B5FD",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      fontFamily: "Courier New, monospace",
-                      letterSpacing: "0.06em",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    NEW CODE
-                  </button>
-                </div>
-                <p
-                  style={{
-                    margin: "8px 0 0",
-                    fontSize: 11,
-                    color: "#6B7280",
-                    fontFamily: "system-ui, sans-serif",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Friends enter this code to join. Minimum 4 characters.
-                </p>
-              </div>
-            ) : null}
 
             <div style={{ marginBottom: 16 }}>
               <div
@@ -1095,46 +966,27 @@ export default function CeloLobbyPage() {
             <button
               type="button"
               onClick={() => void handleCreate()}
-              disabled={
-                creating ||
-                !form.name.trim() ||
-                form.starting_bank_sc > gpayCoins ||
-                (createMode === "private" && form.join_code.trim().length < 4)
-              }
+              disabled={creating || !form.name.trim() || form.starting_bank_sc > gpayCoins}
               style={{
                 width: "100%",
                 background:
-                  creating ||
-                  form.starting_bank_sc > gpayCoins ||
-                  (createMode === "private" && form.join_code.trim().length < 4)
+                  creating || form.starting_bank_sc > gpayCoins
                     ? "rgba(255,255,255,0.1)"
                     : "linear-gradient(135deg, #F5C842, #D4A017)",
                 border: "none",
                 borderRadius: 10,
                 color:
-                  creating ||
-                  form.starting_bank_sc > gpayCoins ||
-                  (createMode === "private" && form.join_code.trim().length < 4)
-                    ? "#6B7280"
-                    : "#0A0A0F",
+                  creating || form.starting_bank_sc > gpayCoins ? "#6B7280" : "#0A0A0F",
                 padding: "16px",
                 fontSize: 15,
                 fontWeight: 700,
                 cursor:
-                  creating ||
-                  form.starting_bank_sc > gpayCoins ||
-                  (createMode === "private" && form.join_code.trim().length < 4)
-                    ? "not-allowed"
-                    : "pointer",
+                  creating || form.starting_bank_sc > gpayCoins ? "not-allowed" : "pointer",
                 fontFamily: cinzel.style.fontFamily,
                 letterSpacing: "0.05em",
               }}
             >
-              {creating
-                ? "STARTING…"
-                : createMode === "private"
-                  ? "🔐 CREATE PRIVATE TABLE"
-                  : "🎲 START GAME"}
+              {creating ? "STARTING…" : "🎲 START GAME"}
             </button>
           </div>
         </div>
