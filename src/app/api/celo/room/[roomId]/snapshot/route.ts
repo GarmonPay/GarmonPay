@@ -78,6 +78,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
     .limit(1);
 
   const openRound = celoFirstRow(openRoundRows);
+  const openRoundId = openRound ? String((openRound as { id?: string }).id ?? "") : "";
+
+  let latestPlayerRoll: Record<string, unknown> | null = null;
+  if (openRoundId) {
+    const { data: prRows } = await supabase
+      .from("celo_player_rolls")
+      .select("*")
+      .eq("round_id", openRoundId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    latestPlayerRoll = (celoFirstRow(prRows) as Record<string, unknown> | null) ?? null;
+  }
 
   const { data: chatRows, error: chatErr } = await supabase
     .from("celo_chat")
@@ -117,6 +129,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ roomId:
     room: rawRoom,
     players: players ?? [],
     round: openRound ?? null,
+    latest_player_roll: latestPlayerRoll,
     chat: chatMessages,
   });
 }

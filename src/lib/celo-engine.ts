@@ -1,9 +1,7 @@
-import { webcrypto } from "crypto";
+import { randomInt as nodeRandomInt } from "node:crypto";
 
 function randomInt(min: number, max: number): number {
-  const range = max - min + 1;
-  const bytes = webcrypto.getRandomValues(new Uint32Array(1));
-  return min + (bytes[0]! % range);
+  return nodeRandomInt(min, max);
 }
 
 export function rollThreeDice(): [number, number, number] {

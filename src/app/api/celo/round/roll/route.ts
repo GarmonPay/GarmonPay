@@ -8,6 +8,7 @@ import { rollThreeDice, evaluateRoll, calculatePayout, resolvePlayerVsBankerPoin
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 import { buildCeloRollStartedPayload, broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
+import { celoAcquireRoundRollLock, celoReleaseRoundRollLock } from "@/lib/celo-round-roll-lock";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdStrict(req);
@@ -76,15 +77,30 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   const feePct = rm.platform_fee_pct || 10;
 
+  const { data: membershipRow } = await supabase
+    .from("celo_room_players")
+    .select("role")
+    .eq("room_id", room_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!membershipRow) {
+    console.warn("[celo/roll] forbidden — not in room", { room_id, userId });
+    return NextResponse.json({ error: "You are not seated in this room" }, { status: 403 });
+  }
+  const memberRole = String((membershipRow as { role?: string }).role ?? "");
+  if (memberRole === "spectator") {
+    return NextResponse.json({ error: "Spectators cannot roll" }, { status: 403 });
+  }
+
+  console.info("[celo/roll] request", { room_id, round_id, userId, status: r.status });
+
   // ── BANKER ROLL ──────────────────────────────────────────────
 
   if (r.status === "banker_rolling") {
     if (userId !== bankerId) {
       return NextResponse.json({ error: "Not your turn" }, { status: 403 });
     }
-
-    const dice = rollThreeDice();
-    const roll = evaluateRoll(dice);
 
     const { data: playersData } = await supabase
       .from("celo_room_players")
@@ -101,12 +117,32 @@ export async function POST(req: Request) {
       seat_number: number | null;
     }>;
 
+    if (players.length < 1) {
+      return NextResponse.json(
+        { error: "At least one player with an entry is required before the banker can roll" },
+        { status: 400 }
+      );
+    }
+
+    const lock = await celoAcquireRoundRollLock(supabase, round_id, userId, { bankerSharedSpin: true });
+    if (!lock.ok) {
+      console.warn("[celo/roll] duplicate roll blocked (banker)", { round_id, userId });
+      return NextResponse.json({ error: "Roll already in progress" }, { status: 409 });
+    }
+    const spinStart = lock.spinStartedAt;
+
+    try {
+    const dice = rollThreeDice();
+    const roll = evaluateRoll(dice);
+    console.info("[celo/roll] banker dice", { round_id, userId, dice, result: roll.result });
+
     let firstSeat = 1;
     if (roll.result === "point" && players.length > 0) {
       firstSeat = players[0]?.seat_number || 1;
     }
 
-    await supabase
+    const nowIso = new Date().toISOString();
+    const { error: bankerRoundErr } = await supabase
       .from("celo_rounds")
       .update({
         banker_dice: dice,
@@ -121,12 +157,23 @@ export async function POST(req: Request) {
               : "completed",
         current_player_seat: roll.result === "point" ? firstSeat : null,
         completed_at:
-          roll.result === "instant_win" || roll.result === "instant_loss" ? now : null,
+          roll.result === "instant_win" || roll.result === "instant_loss" ? nowIso : null,
         banker_rerolls: Number(r.banker_rerolls ?? 0) + (roll.result === "no_count" ? 1 : 0),
-        roll_animation_start_at: now,
+        roll_animation_start_at: spinStart,
         roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
+        roll_processing: false,
+        roller_user_id: null,
+        updated_at: nowIso,
       })
       .eq("id", round_id);
+
+    if (bankerRoundErr) {
+      console.error("[celo/roll] banker persist failed", bankerRoundErr);
+      await celoReleaseRoundRollLock(supabase, round_id);
+      return NextResponse.json({ error: bankerRoundErr.message }, { status: 500 });
+    }
+
+    console.info("[celo/roll] banker saved", { round_id, dice });
 
     const bankerRollPayload = buildCeloRollStartedPayload({
       roomId: room_id,
@@ -134,7 +181,7 @@ export async function POST(req: Request) {
       dice: dice as [number, number, number],
       kind: "banker",
       rollerUserId: bankerId,
-      serverStartTime: now,
+      serverStartTime: spinStart,
       rollName: roll.rollName,
       outcome: roll.result,
     });
@@ -305,6 +352,9 @@ export async function POST(req: Request) {
         animation: bankerRollPayload,
       });
     }
+    } finally {
+      await celoReleaseRoundRollLock(supabase, round_id);
+    }
   }
 
   // ── PLAYER ROLL ───────────────────────────────────────────────
@@ -350,8 +400,16 @@ export async function POST(req: Request) {
       .eq("user_id", userId)
       .eq("outcome", "reroll");
 
+    const lock = await celoAcquireRoundRollLock(supabase, round_id, userId, {});
+    if (!lock.ok) {
+      console.warn("[celo/roll] duplicate roll blocked (player)", { round_id, userId });
+      return NextResponse.json({ error: "Roll already in progress" }, { status: 409 });
+    }
+
+    try {
     const dice = rollThreeDice();
     const roll = evaluateRoll(dice);
+    console.info("[celo/roll] player dice", { round_id, userId, dice, result: roll.result });
 
     if (roll.result === "no_count") {
       const { data: prInsert, error: prInsErr } = await supabase
@@ -375,6 +433,7 @@ export async function POST(req: Request) {
         .single();
       let noCountAnimation: ReturnType<typeof buildCeloRollStartedPayload> | undefined;
       if (!prInsErr && prInsert?.id) {
+        console.info("[celo/roll] player reroll row saved", { player_roll_id: prInsert.id });
         noCountAnimation = buildCeloRollStartedPayload({
           roomId: room_id,
           roundId: round_id,
@@ -395,6 +454,7 @@ export async function POST(req: Request) {
         rollName: roll.rollName,
         result: "no_count",
         animation: noCountAnimation,
+        player_roll_id: prInsert?.id ?? null,
       });
     }
 
@@ -480,6 +540,7 @@ export async function POST(req: Request) {
       .single();
     let resolvingAnimation: ReturnType<typeof buildCeloRollStartedPayload> | undefined;
     if (!prResErr && prResolving?.id) {
+      console.info("[celo/roll] player resolving row saved", { player_roll_id: prResolving.id });
       resolvingAnimation = buildCeloRollStartedPayload({
         roomId: room_id,
         roundId: round_id,
@@ -515,6 +576,7 @@ export async function POST(req: Request) {
         nextPlayerSeat: nextPlayer.seat_number,
         roundComplete: false,
         animation: resolvingAnimation,
+        player_roll_id: prResolving?.id ?? null,
       });
     }
 
@@ -523,6 +585,7 @@ export async function POST(req: Request) {
       .update({
         status: "completed",
         completed_at: now,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", round_id);
 
@@ -538,7 +601,11 @@ export async function POST(req: Request) {
       feeSC,
       roundComplete: true,
       animation: resolvingAnimation,
+      player_roll_id: prResolving?.id ?? null,
     });
+    } finally {
+      await celoReleaseRoundRollLock(supabase, round_id);
+    }
   }
 
   return NextResponse.json({ error: "Round is not in a rollable state" }, { status: 400 });

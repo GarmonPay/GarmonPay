@@ -1,14 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DM_Sans, Cinzel_Decorative } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import CeloTable from "@/components/celo/CeloTable";
 import CeloChat from "@/components/celo/CeloChat";
 import SideBetPanel from "@/components/celo/SideBetPanel";
-import type { CeloMessage, CeloPlayer, CeloRoom, CeloRound, CeloSideBet } from "@/types/celo";
+import type { CeloLatestPlayerRoll, CeloMessage, CeloPlayer, CeloRoom, CeloRound, CeloSideBet } from "@/types/celo";
 import type { Dice3DType } from "@/components/celo/Dice3D";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 
@@ -86,6 +86,38 @@ function mapRound(raw: Record<string, unknown> | null): CeloRound | null {
     covered_by: raw.covered_by != null ? String(raw.covered_by) : null,
     created_at: String(raw.created_at ?? ""),
     completed_at: raw.completed_at != null ? String(raw.completed_at) : null,
+    roll_processing: Boolean(raw.roll_processing),
+    roller_user_id: raw.roller_user_id != null ? String(raw.roller_user_id) : null,
+    roll_animation_start_at:
+      raw.roll_animation_start_at != null ? String(raw.roll_animation_start_at) : null,
+    roll_animation_duration_ms:
+      raw.roll_animation_duration_ms != null ? Number(raw.roll_animation_duration_ms) : null,
+    updated_at: raw.updated_at != null ? String(raw.updated_at) : null,
+  };
+}
+
+function mapLatestPlayerRoll(
+  raw: Record<string, unknown> | null | undefined,
+  activeRoundId: string | null
+): CeloLatestPlayerRoll | null {
+  if (!raw || !activeRoundId) return null;
+  if (String(raw.round_id ?? "") !== activeRoundId) return null;
+  const dice = raw.dice as number[] | undefined;
+  if (!Array.isArray(dice) || dice.length !== 3) return null;
+  return {
+    id: String(raw.id ?? ""),
+    round_id: String(raw.round_id ?? ""),
+    room_id: String(raw.room_id ?? ""),
+    user_id: String(raw.user_id ?? ""),
+    dice: [Number(dice[0]), Number(dice[1]), Number(dice[2])],
+    roll_name: String(raw.roll_name ?? ""),
+    roll_result: String(raw.roll_result ?? ""),
+    outcome: String(raw.outcome ?? ""),
+    created_at: String(raw.created_at ?? ""),
+    roll_animation_start_at:
+      raw.roll_animation_start_at != null ? String(raw.roll_animation_start_at) : null,
+    roll_animation_duration_ms:
+      raw.roll_animation_duration_ms != null ? Number(raw.roll_animation_duration_ms) : null,
   };
 }
 
@@ -107,10 +139,14 @@ export default function CeloDashboardRoomPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [rolling, setRolling] = useState(false);
+  const [rollSubmitting, setRollSubmitting] = useState(false);
   const [dice, setDice] = useState<[number, number, number]>([1, 1, 1]);
   const [rollName, setRollName] = useState<string | null>(null);
   const [rollResult, setRollResult] = useState<string | null>(null);
+  const [latestPlayerRoll, setLatestPlayerRoll] = useState<CeloLatestPlayerRoll | null>(null);
+  const [animTick, setAnimTick] = useState(0);
+  const debounceFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAllRef = useRef(() => Promise.resolve());
 
   const [diceShopOpen, setDiceShopOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"bets" | "chat" | "voice">("bets");
@@ -179,6 +215,7 @@ export default function CeloDashboardRoomPage() {
         room?: Record<string, unknown>;
         players?: Record<string, unknown>[];
         round?: Record<string, unknown> | null;
+        latest_player_roll?: Record<string, unknown> | null;
         chat?: CeloMessage[];
       };
 
@@ -190,7 +227,14 @@ export default function CeloDashboardRoomPage() {
 
       setRoom(mapRoom(snap.room));
       setPlayers((snap.players ?? []).map((p) => mapPlayerRow(p)));
-      setRound(mapRound(snap.round ?? null));
+      const mappedRound = mapRound(snap.round ?? null);
+      setRound(mappedRound);
+      setLatestPlayerRoll(
+        mapLatestPlayerRoll(
+          snap.latest_player_roll ?? undefined,
+          mappedRound?.id ?? null
+        )
+      );
       if (snap.chat) setMessages(snap.chat as CeloMessage[]);
 
       const br = balRes.data as { sweeps_coins?: number; balance_cents?: number } | null;
@@ -232,8 +276,71 @@ export default function CeloDashboardRoomPage() {
   }, [roomId, router, supabase]);
 
   useEffect(() => {
+    fetchAllRef.current = fetchAll;
+  }, [fetchAll]);
+
+  const scheduleSnapshotRefetch = useCallback(() => {
+    if (debounceFetchTimerRef.current) clearTimeout(debounceFetchTimerRef.current);
+    debounceFetchTimerRef.current = setTimeout(() => {
+      debounceFetchTimerRef.current = null;
+      console.info("[celo/realtime] debounced snapshot refetch", { roomId });
+      void fetchAllRef.current();
+    }, 280);
+  }, [roomId]);
+
+  useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setAnimTick((t) => t + 1), 160);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!round) {
+      setDice([1, 1, 1]);
+      setRollName(null);
+      setRollResult(null);
+      return;
+    }
+    if (round.status === "player_rolling" && latestPlayerRoll?.dice?.length === 3) {
+      const d = latestPlayerRoll.dice;
+      setDice([d[0]!, d[1]!, d[2]!]);
+      setRollName(latestPlayerRoll.roll_name || null);
+      setRollResult(latestPlayerRoll.roll_result || latestPlayerRoll.outcome || null);
+      return;
+    }
+    if (round.banker_dice && round.banker_dice.length === 3) {
+      setDice([round.banker_dice[0]!, round.banker_dice[1]!, round.banker_dice[2]!]);
+      setRollName(round.banker_roll_name);
+      setRollResult(round.banker_roll_result);
+      return;
+    }
+    setDice([1, 1, 1]);
+    setRollName(null);
+    setRollResult(null);
+  }, [round, latestPlayerRoll]);
+
+  const diceAnimating = useMemo(() => {
+    if (!round) return false;
+    void animTick;
+    if (round.roll_processing) return true;
+    const st = round.roll_animation_start_at;
+    const dur = round.roll_animation_duration_ms ?? CELO_ROLL_ANIMATION_DURATION_MS;
+    if (st && (round.status === "banker_rolling" || round.status === "player_rolling" || round.status === "completed")) {
+      const t0 = new Date(st).getTime();
+      const elapsed = Date.now() - t0;
+      if (elapsed >= 0 && elapsed < dur) return true;
+    }
+    if (round.status === "player_rolling" && latestPlayerRoll?.roll_animation_start_at) {
+      const t0 = new Date(latestPlayerRoll.roll_animation_start_at).getTime();
+      const pdur = latestPlayerRoll.roll_animation_duration_ms ?? CELO_ROLL_ANIMATION_DURATION_MS;
+      const elapsed = Date.now() - t0;
+      if (elapsed >= 0 && elapsed < pdur) return true;
+    }
+    return false;
+  }, [round, latestPlayerRoll, animTick]);
 
   useEffect(() => {
     if (!supabase || !roomId) return;
@@ -242,21 +349,26 @@ export default function CeloDashboardRoomPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
         (p) => {
+          console.info("[celo/realtime] celo_rooms", { event: p.eventType });
           if (p.new) setRoom(mapRoom(p.new as Record<string, unknown>));
+          scheduleSnapshotRefetch();
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_room_players", filter: `room_id=eq.${roomId}` },
         () => {
-          void fetchAll();
+          console.info("[celo/realtime] celo_room_players");
+          scheduleSnapshotRefetch();
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
         (p) => {
+          console.info("[celo/realtime] celo_rounds", { event: p.eventType });
           if (p.new) setRound(mapRound(p.new as Record<string, unknown>));
+          scheduleSnapshotRefetch();
         }
       )
       .on(
@@ -283,28 +395,40 @@ export default function CeloDashboardRoomPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
         () => {
-          void fetchAll();
+          console.info("[celo/realtime] celo_side_bets");
+          scheduleSnapshotRefetch();
         }
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
-        async (p) => {
-          const row = p.new as Record<string, unknown>;
-          const roller = String(row.user_id ?? "");
-          if (roller === userId) return;
-          setRolling(true);
-          setRollName(null);
-          setRollResult(null);
-          await new Promise<void>((resolve) => setTimeout(resolve, CELO_ROLL_ANIMATION_DURATION_MS));
-          const diceRaw = row.dice as number[] | undefined;
-          if (Array.isArray(diceRaw) && diceRaw.length === 3) {
-            setDice([diceRaw[0]!, diceRaw[1]!, diceRaw[2]!]);
+        { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        (p) => {
+          if (p.eventType === "DELETE") {
+            scheduleSnapshotRefetch();
+            return;
           }
-          setRollName(String(row.roll_name ?? ""));
-          setRollResult(String(row.outcome ?? row.roll_result ?? ""));
-          setRolling(false);
-          void fetchAll();
+          const row = p.new as Record<string, unknown> | undefined;
+          console.info("[celo/realtime] celo_player_rolls", {
+            event: p.eventType,
+            roll_id: row?.id,
+            round_id: row?.round_id,
+          });
+          if (!row?.round_id) {
+            scheduleSnapshotRefetch();
+            return;
+          }
+          const rid = String(row.round_id);
+          setLatestPlayerRoll((prev) => {
+            const mapped = mapLatestPlayerRoll(row, rid);
+            if (!mapped) return prev;
+            if (prev && prev.round_id === mapped.round_id) {
+              const prevT = new Date(prev.created_at).getTime();
+              const nextT = new Date(mapped.created_at).getTime();
+              if (nextT < prevT) return prev;
+            }
+            return mapped;
+          });
+          scheduleSnapshotRefetch();
         }
       )
       .subscribe();
@@ -312,55 +436,45 @@ export default function CeloDashboardRoomPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [roomId, supabase, fetchAll, userId]);
+  }, [roomId, supabase, scheduleSnapshotRefetch]);
 
   const handleRoll = useCallback(async () => {
-    if (!accessToken) return;
-    setRolling(true);
-    setRollName(null);
-    setRollResult(null);
+    if (!accessToken || rollSubmitting) return;
+    setRollSubmitting(true);
+    console.info("[celo/client] roll POST start", { roomId, userId });
     try {
-      const [, data] = await Promise.all([
-        new Promise<void>((resolve) => setTimeout(resolve, CELO_ROLL_ANIMATION_DURATION_MS)),
-        fetch("/api/celo/round/roll", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ room_id: roomId }),
-        }).then((r) => r.json()),
-      ]);
-
-      const res = data as Record<string, unknown>;
-      if (res.error) {
-        setRollName("Could not roll — try again");
-        setRolling(false);
+      const res = await fetch("/api/celo/round/roll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ room_id: roomId }),
+      });
+      const data = (await res.json()) as Record<string, unknown>;
+      console.info("[celo/client] roll POST done", { status: res.status, ok: res.ok, keys: Object.keys(data) });
+      if (!res.ok) {
+        setRollName(typeof data.error === "string" ? data.error : "Could not complete roll");
         return;
       }
-      const d = res.dice as number[] | undefined;
-      if (Array.isArray(d) && d.length === 3) {
-        setDice([d[0]!, d[1]!, d[2]!]);
-      }
-      setRollName((res.rollName as string) ?? null);
-      setRollResult(String(res.outcome ?? res.result ?? ""));
 
-      if (res.banker_can_adjust_bank || res.banker_can_lower_bank) {
+      if (data.banker_can_adjust_bank || data.banker_can_lower_bank) {
         setCanLowerBank(true);
         setLowerTimer(60);
       }
-      if (res.player_can_become_banker) {
+      if (data.player_can_become_banker) {
         setShowBecomeBanker(true);
         setBecomeTimer(30);
       }
 
       await fetchAll();
-    } catch {
+    } catch (e) {
+      console.error("[celo/client] roll POST error", e);
       setRollName("Error — try again");
     } finally {
-      setRolling(false);
+      setRollSubmitting(false);
     }
-  }, [accessToken, roomId, fetchAll]);
+  }, [accessToken, roomId, fetchAll, rollSubmitting, userId]);
 
   const handleStartRound = useCallback(async () => {
     if (!accessToken) return;
@@ -473,7 +587,8 @@ export default function CeloDashboardRoomPage() {
           currentUserId={userId}
           onRoll={handleRoll}
           onStartRound={handleStartRound}
-          rolling={rolling}
+          rolling={diceAnimating}
+          rollSubmitting={rollSubmitting}
           dice={dice}
           rollName={rollName}
           rollResult={rollResult}
@@ -522,7 +637,8 @@ export default function CeloDashboardRoomPage() {
           currentUserId={userId}
           onRoll={handleRoll}
           onStartRound={handleStartRound}
-          rolling={rolling}
+          rolling={diceAnimating}
+          rollSubmitting={rollSubmitting}
           dice={dice}
           rollName={rollName}
           rollResult={rollResult}

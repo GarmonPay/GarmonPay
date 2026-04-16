@@ -64,6 +64,27 @@ export type CeloRound = {
   covered_by: string | null;
   created_at: string;
   completed_at: string | null;
+  /** Server roll lock — true while POST /roll is mutating this round */
+  roll_processing?: boolean;
+  roller_user_id?: string | null;
+  roll_animation_start_at?: string | null;
+  roll_animation_duration_ms?: number | null;
+  updated_at?: string | null;
+};
+
+/** Latest row from `celo_player_rolls` for the active round (server truth for player dice). */
+export type CeloLatestPlayerRoll = {
+  id: string;
+  round_id: string;
+  room_id: string;
+  user_id: string;
+  dice: number[];
+  roll_name: string;
+  roll_result: string;
+  outcome: string;
+  created_at: string;
+  roll_animation_start_at?: string | null;
+  roll_animation_duration_ms?: number | null;
 };
 
 export type CeloSideBet = {

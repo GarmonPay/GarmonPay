@@ -24,6 +24,8 @@ export type CeloTableProps = {
   onRoll: () => void | Promise<void>;
   onStartRound: () => void;
   rolling: boolean;
+  /** True while POST /roll is in flight (disables double-tap). */
+  rollSubmitting?: boolean;
   dice: [number, number, number] | null;
   rollName: string | null;
   rollResult: string | null;
@@ -53,6 +55,7 @@ export default function CeloTable({
   onRoll,
   onStartRound,
   rolling,
+  rollSubmitting = false,
   dice,
   rollName,
   rollResult,
@@ -96,6 +99,7 @@ export default function CeloTable({
 
   const myTurn = Boolean(turnUserId && turnUserId === currentUserId && !spectator);
   const canStart = isBanker && !currentRound && tablePlayers.some((p) => p.entry_sc > 0);
+  const rollBusy = rolling || rollSubmitting;
 
   const rollResultKind: RollResultKind = useMemo(() => {
     const r = rollResult ?? "";
@@ -498,6 +502,7 @@ export default function CeloTable({
           ) : myTurn ? (
             <button
               type="button"
+              disabled={rollSubmitting}
               onClick={() => void onRoll()}
               style={{
                 padding: "14px 28px",
@@ -505,11 +510,11 @@ export default function CeloTable({
                 border: "none",
                 fontWeight: 900,
                 fontSize: 15,
-                cursor: rolling ? "wait" : "pointer",
+                cursor: rollBusy ? "wait" : "pointer",
                 background: "linear-gradient(135deg,#f5c842,#d97706)",
                 color: "#0a0a0f",
                 animation: "pulseBtn 2s ease-in-out infinite",
-                opacity: rolling ? 0.7 : 1,
+                opacity: rollBusy ? 0.7 : 1,
               }}
             >
               🎲 ROLL DICE
