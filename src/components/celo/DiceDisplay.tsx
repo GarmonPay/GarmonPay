@@ -1,6 +1,6 @@
 "use client";
 
-import { Dice3D } from "@/components/celo/Dice3D";
+import Dice3D from "@/components/celo/Dice3D";
 
 export interface DiceDisplayProps {
   dice: [number, number, number] | null;
@@ -24,8 +24,6 @@ const COLOR_TO_TYPE: Record<
   blood: "blood",
   fire: "fire",
 };
-
-const SPIN_DURS = [2.1, 2.5, 2.3];
 
 /**
  * Three 3D dice; `animKey` bumps so spin keyframes restart when a new roll starts.
@@ -52,7 +50,7 @@ export function DiceDisplay({
           rolling={rolling}
           diceType={diceType}
           size={size}
-          spinDurationSec={SPIN_DURS[i] ?? 2.2}
+          dieIndex={i as 0 | 1 | 2}
         />
       ))}
     </div>

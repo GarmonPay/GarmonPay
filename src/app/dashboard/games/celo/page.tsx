@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Cinzel_Decorative } from "next/font/google";
+import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -12,13 +11,12 @@ import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
 import { formatGpayAmount } from "@/lib/gpay-coins-branding";
 import { useCoins } from "@/hooks/useCoins";
 
-const CLOGameDemo = dynamic(() => import("@/components/celo/CLOGame"), { ssr: false });
-
 function formatScLine(sc: number): string {
   return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
 }
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
+const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
 
 type Room = {
   id: string;
@@ -78,6 +76,7 @@ export default function CeloLobbyPage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [myOpenRoom, setMyOpenRoom] = useState<{ id: string; name: string; room_type: string } | null>(null);
+  const [lobbyFilter, setLobbyFilter] = useState<"all" | "micro" | "standard" | "high" | "vip">("all");
 
   const fetchMyOpenRoom = useCallback(async () => {
     const s = await getSessionAsync();
@@ -105,6 +104,28 @@ export default function CeloLobbyPage() {
       setMyOpenRoom(null);
     }
   }, []);
+
+  const filteredRooms = useMemo(() => {
+    const m = (r: Room) => r.min_bet_cents;
+    switch (lobbyFilter) {
+      case "micro":
+        return rooms.filter((r) => m(r) >= 500 && m(r) <= 1000);
+      case "standard":
+        return rooms.filter((r) => m(r) > 1000 && m(r) <= 5000);
+      case "high":
+        return rooms.filter((r) => m(r) > 5000 && m(r) <= 10000);
+      case "vip":
+        return rooms.filter((r) => m(r) > 10000);
+      default:
+        return rooms;
+    }
+  }, [rooms, lobbyFilter]);
+
+  const lobbyStats = useMemo(() => {
+    const scInPlay = rooms.reduce((s, r) => s + r.current_bank_cents, 0);
+    const biggestBank = rooms.reduce((m, r) => Math.max(m, r.current_bank_cents), 0);
+    return { liveRooms: rooms.length, scInPlay, biggestBank };
+  }, [rooms]);
 
   const mapRowToLobbyRoom = useCallback((raw: Record<string, unknown>, playerCount?: number): Room | null => {
     const n = normalizeCeloRoomRow(raw);
@@ -418,13 +439,13 @@ export default function CeloLobbyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0e0118] text-white relative overflow-x-hidden">
+    <div className={`${dmSans.className} min-h-screen bg-[#05010F] text-white relative overflow-x-hidden`}>
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/20 blur-[130px]" />
-        <div className="absolute right-0 bottom-10 h-80 w-80 rounded-full bg-[#F5C842]/6 blur-[120px]" />
+        <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/15 blur-[130px]" />
+        <div className="absolute right-0 bottom-10 h-80 w-80 rounded-full bg-[#F5C842]/8 blur-[120px]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-2xl px-4 py-8 pb-24">
+      <div className="relative z-10 mx-auto max-w-5xl px-4 py-8 pb-28">
 
         {/* Top bar */}
         <div className="flex items-center justify-between mb-8">
@@ -432,7 +453,7 @@ export default function CeloLobbyPage() {
             ← Dashboard
           </Link>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Balances</p>
+            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Sweeps Coins</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
               Your balance: {formatGpayAmount(sweepsCoins)}
             </p>
@@ -440,53 +461,79 @@ export default function CeloLobbyPage() {
         </div>
 
         {/* Hero */}
-        <div className="text-center mb-10">
-          <p className="text-6xl mb-4 drop-shadow-[0_0_30px_rgba(245,200,66,0.3)]">🎲</p>
-          <h1 className={`${cinzel.className} text-3xl font-bold bg-gradient-to-r from-[#F5C842] via-[#eab308] to-[#a16207] bg-clip-text text-transparent`}>
-            C-Lo Street Dice
+        <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-b from-violet-950/40 to-transparent px-6 py-10 text-center mb-10 shadow-[0_0_60px_rgba(124,58,237,0.12)]">
+          <h1
+            className={`${cinzel.className} text-6xl sm:text-7xl md:text-[96px] font-bold leading-none bg-gradient-to-br from-[#F5C842] via-[#fde047] to-[#a16207] bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(245,200,66,0.25)]`}
+          >
+            C-LO
           </h1>
-          <p className="mt-3 text-sm text-violet-200/60 max-w-xs mx-auto leading-relaxed">
-            Roll 4-5-6 for C-Lo — instant win. Banker sets the bank. Players bet entries.
+          <p className={`${cinzel.className} mt-4 text-sm sm:text-base text-violet-200/75 max-w-lg mx-auto`}>
+            The first legitimate digital street dice game
           </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-violet-300/80">
+            <span>
+              🎲 {lobbyStats.liveRooms} rooms live
+            </span>
+            <span>
+              💰 {Math.floor(lobbyStats.scInPlay / 100).toLocaleString()} SC in play
+            </span>
+            <span>
+              🏆 Biggest bank today: {Math.floor(lobbyStats.biggestBank / 100).toLocaleString()} SC
+            </span>
+          </div>
         </div>
 
         {/* Actions row */}
-        <div className="flex flex-wrap gap-3 justify-center mb-8">
+        <div className="flex flex-wrap gap-3 justify-center mb-6">
           {session ? (
             <button
               type="button"
-              onClick={() => { setShowCreate(true); setCreateError(null); setForm(DEFAULT_FORM); }}
-              className="rounded-xl bg-gradient-to-r from-[#7C3AED] to-violet-500 px-6 py-3 font-semibold text-white shadow-lg shadow-violet-900/40 hover:from-violet-500 hover:to-violet-400 transition-all text-sm"
+              onClick={() => {
+                setShowCreate(true);
+                setCreateError(null);
+                setForm(DEFAULT_FORM);
+              }}
+              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#ca8a04] px-8 py-3.5 font-bold text-black shadow-lg shadow-amber-900/30 text-sm"
             >
-              + Create Room
+              🎲 CREATE ROOM
             </button>
           ) : (
             <Link
               href="/login?redirect=/dashboard/games/celo"
-              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] px-6 py-3 font-semibold text-black shadow-lg shadow-amber-900/30 transition-all text-sm"
+              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] px-8 py-3.5 font-bold text-black shadow-lg text-sm"
             >
               Login to Play
             </Link>
           )}
-          <form onSubmit={handleJoinByCode} className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => document.getElementById("join-private-panel")?.scrollIntoView({ behavior: "smooth" })}
+            className="rounded-xl border-2 border-[#7C3AED] bg-transparent px-8 py-3.5 font-bold text-violet-200 text-sm hover:bg-violet-950/50"
+          >
+            🔑 JOIN PRIVATE ROOM
+          </button>
+        </div>
+
+        <div id="join-private-panel" className="max-w-md mx-auto mb-10">
+          <form onSubmit={handleJoinByCode} className="flex gap-2 justify-center">
             <input
               type="text"
-              placeholder="Room code"
+              placeholder="6-character code"
               value={lobbyCode}
               onChange={(e) => setLobbyCode(e.target.value.toUpperCase())}
               maxLength={12}
-              className="w-28 rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono text-sm"
+              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono text-sm"
             />
             <button
               type="submit"
               disabled={joining}
-              className="rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 px-4 py-3 text-[#F5C842] font-semibold text-sm hover:bg-[#F5C842]/20 transition-all disabled:opacity-50"
+              className="rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 px-5 py-3 text-[#F5C842] font-bold text-sm hover:bg-[#F5C842]/20 disabled:opacity-50"
             >
-              Join
+              JOIN
             </button>
           </form>
+          {joinError && <p className="text-center text-sm text-red-400 mt-3">{joinError}</p>}
         </div>
-        {joinError && <p className="text-center text-sm text-red-400 mb-4">{joinError}</p>}
 
         {myOpenRoom && (
           <div className="mb-4 rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-left">
@@ -504,46 +551,80 @@ export default function CeloLobbyPage() {
           </div>
         )}
 
-        {/* Room list */}
+        {/* Filters */}
+        <div className="flex flex-wrap justify-center gap-2 mb-6">
+          {(
+            [
+              ["all", "ALL"],
+              ["micro", "MICRO ($5–$10)"],
+              ["standard", "STANDARD ($10–$50)"],
+              ["high", "HIGH ROLLER ($50–$100)"],
+              ["vip", "VIP ($100+)"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setLobbyFilter(k)}
+              className={`rounded-full px-3 py-1.5 text-[10px] font-bold tracking-wide border transition-colors ${
+                lobbyFilter === k ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842]" : "border-white/10 text-violet-300/60 hover:border-white/20"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Room grid */}
         <div className="space-y-2">
           <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-3">
-            Public Rooms ({rooms.length})
+            Rooms ({filteredRooms.length})
           </p>
-          {rooms.length === 0 ? (
+          {filteredRooms.length === 0 ? (
             <div className="rounded-2xl border border-white/[0.05] bg-[#12081f]/50 p-10 text-center">
-              <p className="text-violet-200/50 text-sm">No open rooms yet.</p>
-              <p className="text-xs text-violet-300/40 mt-1">Be the first to create one.</p>
+              <p className="text-violet-200/50 text-sm">No rooms in this filter.</p>
             </div>
           ) : (
-            rooms.map((room) => (
-              <button
-                key={room.id}
-                type="button"
-                onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
-                className="w-full rounded-2xl border border-white/[0.07] bg-[#12081f]/70 p-4 text-left hover:border-violet-500/30 hover:bg-[#1a0a2e]/80 transition-all"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white truncate">{room.name}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[room.status] ?? "text-gray-400 bg-gray-400/10"}`}>
-                        {STATUS_LABEL[room.status] ?? room.status}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full text-violet-300/60 bg-white/5">
-                        {room.max_players}p max
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full text-violet-300/60 bg-white/5">
-                        {room.platform_fee_pct}% fee
-                      </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filteredRooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="rounded-2xl border border-white/[0.07] bg-[#12081f]/70 p-4 hover:border-violet-500/30 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white truncate flex items-center gap-2">
+                        {room.name}
+                        {room.room_type === "private" ? "🔒" : null}
+                      </p>
+                      <span className="text-[10px] text-red-400 font-bold">🔴 LIVE</span>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[#F5C842] font-bold font-mono text-sm leading-tight">{formatScLine(room.current_bank_cents)}</p>
-                    <p className="text-[10px] text-violet-300/50 mt-0.5">min {formatScLine(room.min_bet_cents)}</p>
+                  <p className="text-xs text-violet-300/70 mt-2">Banker: open table</p>
+                  <p className="text-[11px] text-violet-400/60 mt-1">
+                    Players: — / {room.max_players} · Min entry: {formatScLine(room.min_bet_cents)}
+                  </p>
+                  <p className="text-[#F5C842] font-mono text-sm mt-2">Bank: {formatScLine(room.current_bank_cents)}</p>
+                  <p className="text-[10px] text-violet-500/50 mt-3">Last roll: —</p>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
+                      className="flex-1 rounded-lg border border-violet-500/40 py-2 text-xs font-bold text-violet-200"
+                    >
+                      👁 WATCH
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
+                      className="flex-1 rounded-lg bg-gradient-to-r from-[#F5C842] to-[#ca8a04] py-2 text-xs font-bold text-black"
+                    >
+                      🎲 JOIN TABLE
+                    </button>
                   </div>
                 </div>
-              </button>
-            ))
+              ))}
+            </div>
           )}
         </div>
 
@@ -559,10 +640,33 @@ export default function CeloLobbyPage() {
         </div>
       </div>
 
-      <section className="relative z-10 mx-auto max-w-2xl px-4 mt-8">
-        <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-3 text-center">Table preview</p>
-        <div className="rounded-2xl border border-white/[0.06] bg-[#12081f]/30 p-3 overflow-hidden">
-          <CLOGameDemo />
+      <section className="relative z-10 mx-auto max-w-5xl px-4 mt-12 mb-8">
+        <p className={`${cinzel.className} text-center text-sm text-amber-200/80 mb-4`}>YOUR C-LO RECORD</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-2xl border border-white/[0.06] bg-[#12081f]/40 p-5 text-center text-xs text-violet-300/80">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Rounds</p>
+            <p className="text-lg font-bold text-white mt-1">—</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Earn rate</p>
+            <p className="text-lg font-bold text-white mt-1">—</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total earned</p>
+            <p className="text-lg font-bold text-emerald-400/90 mt-1">— SC</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total used</p>
+            <p className="text-lg font-bold text-rose-400/80 mt-1">— SC</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Best roll</p>
+            <p className="text-lg font-bold text-amber-200/90 mt-1">—</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Streak</p>
+            <p className="text-lg font-bold text-white mt-1">—</p>
+          </div>
         </div>
       </section>
 

@@ -1,198 +1,275 @@
 "use client";
 
-import { useMemo } from "react";
+import type { CSSProperties } from "react";
+import { useId, useMemo } from "react";
 
-export interface Dice3DProps {
+export type Dice3DType = "standard" | "gold" | "diamond" | "blood" | "street" | "midnight" | "fire";
+
+type Props = {
   value: number;
   rolling: boolean;
-  diceType?:
-    | "standard"
-    | "gold"
-    | "street"
-    | "midnight"
-    | "diamond"
-    | "blood"
-    | "fire";
+  diceType: Dice3DType;
   size?: number;
-  spinDurationSec?: number;
+  delay?: number;
+  dieIndex?: 0 | 1 | 2;
+};
+
+const TYPE_STYLES: Record<
+  Dice3DType,
+  { bg: string; dot: string; dotShadow: string }
+> = {
+  standard: { bg: "#DC2626", dot: "#FFFFFF", dotShadow: "0 1px 2px rgba(0,0,0,0.45)" },
+  gold: { bg: "#F5C842", dot: "#0a0a0a", dotShadow: "0 1px 1px rgba(255,255,255,0.35)" },
+  diamond: { bg: "#DBEAFE", dot: "#1E40AF", dotShadow: "0 1px 2px rgba(30,64,175,0.35)" },
+  blood: { bg: "#7F1D1D", dot: "#F5C842", dotShadow: "0 1px 2px rgba(0,0,0,0.5)" },
+  street: { bg: "#166534", dot: "#FFFFFF", dotShadow: "0 1px 2px rgba(0,0,0,0.4)" },
+  midnight: { bg: "#0F172A", dot: "#FFFFFF", dotShadow: "0 1px 2px rgba(0,0,0,0.55)" },
+  fire: { bg: "#EA580C", dot: "#FEF08A", dotShadow: "0 1px 2px rgba(0,0,0,0.4)" },
+};
+
+const ROLL_DURATIONS: [string, string, string] = ["2.3s", "2.5s", "2.1s"];
+
+function clampFace(v: number): number {
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(6, Math.max(1, Math.round(v)));
 }
 
-const faceColors = {
-  standard: { bg: "#DC2626", dot: "#fff" },
-  gold: { bg: "#D97706", dot: "#000" },
-  street: { bg: "#166534", dot: "#fff" },
-  midnight: { bg: "#1E1B4B", dot: "#fff" },
-  diamond: { bg: "#E8F4FD", dot: "#1a3a5c" },
-  blood: { bg: "#8B0000", dot: "#F5C842" },
-  fire: { bg: "#FF4500", dot: "#FFD700" },
-} as const;
+function faceRotation(value: number): string {
+  const v = clampFace(value);
+  switch (v) {
+    case 1:
+      return "rotateX(0deg) rotateY(0deg)";
+    case 2:
+      return "rotateX(0deg) rotateY(-90deg)";
+    case 3:
+      return "rotateX(-90deg) rotateY(0deg)";
+    case 4:
+      return "rotateX(90deg) rotateY(0deg)";
+    case 5:
+      return "rotateX(0deg) rotateY(90deg)";
+    case 6:
+      return "rotateX(0deg) rotateY(180deg)";
+    default:
+      return "rotateX(0deg) rotateY(0deg)";
+  }
+}
 
-const FACE_TRANSFORM: Record<number, string> = {
-  1: "rotateX(0deg) rotateY(0deg)",
-  2: "rotateX(-90deg) rotateY(0deg)",
-  3: "rotateX(0deg) rotateY(-90deg)",
-  4: "rotateX(0deg) rotateY(90deg)",
-  5: "rotateX(90deg) rotateY(0deg)",
-  6: "rotateX(0deg) rotateY(180deg)",
-};
-
-/** 3×3 row-major, true = pip */
-const FACE_PIPS: Record<1 | 2 | 3 | 4 | 5 | 6, boolean[]> = {
-  1: [false, false, false, false, true, false, false, false, false],
-  2: [false, false, true, false, false, false, true, false, false],
-  3: [false, false, true, false, true, false, true, false, false],
-  4: [true, false, true, false, false, false, true, false, true],
-  5: [true, false, true, false, true, false, true, false, true],
-  6: [true, false, true, true, false, true, true, false, true],
-};
-
-function FacePips({
-  face,
-  dot,
-  bg,
+function FaceDots({
+  n,
   size,
+  colors,
 }: {
-  face: 1 | 2 | 3 | 4 | 5 | 6;
-  dot: string;
-  bg: string;
+  n: 1 | 2 | 3 | 4 | 5 | 6;
   size: number;
+  colors: { bg: string; dot: string; dotShadow: string };
 }) {
-  const cells = FACE_PIPS[face];
-  const pad = size * 0.1;
-  const gap = size * 0.06;
+  const dotS = Math.max(6, Math.round(size * 0.14));
+  const gap = "4px";
+  const dot = (key: string) => (
+    <span
+      key={key}
+      style={{
+        width: dotS,
+        height: dotS,
+        borderRadius: "50%",
+        background: colors.dot,
+        boxShadow: colors.dotShadow,
+      }}
+    />
+  );
+
+  const gridStyle: CSSProperties = {
+    display: "grid",
+    width: "100%",
+    height: "100%",
+    placeItems: "center",
+    padding: gap,
+    boxSizing: "border-box",
+  };
+
+  if (n === 1) {
+    return (
+      <div style={gridStyle}>
+        <div style={{ gridColumn: "1 / -1", gridRow: "1 / -1" }}>{dot("c")}</div>
+      </div>
+    );
+  }
+  if (n === 2) {
+    return (
+      <div
+        style={{
+          ...gridStyle,
+          gridTemplateColumns: "1fr 1fr",
+          gridTemplateRows: "1fr 1fr",
+        }}
+      >
+        <span style={{ gridColumn: 2, gridRow: 1 }}>{dot("tr")}</span>
+        <span style={{ gridColumn: 1, gridRow: 2 }}>{dot("bl")}</span>
+      </div>
+    );
+  }
+  if (n === 3) {
+    return (
+      <div
+        style={{
+          ...gridStyle,
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateRows: "1fr 1fr 1fr",
+        }}
+      >
+        <span style={{ gridColumn: 3, gridRow: 1 }}>{dot("tr")}</span>
+        <span style={{ gridColumn: 2, gridRow: 2 }}>{dot("m")}</span>
+        <span style={{ gridColumn: 1, gridRow: 3 }}>{dot("bl")}</span>
+      </div>
+    );
+  }
+  if (n === 4) {
+    return (
+      <div
+        style={{
+          ...gridStyle,
+          gridTemplateColumns: "1fr 1fr",
+          gridTemplateRows: "1fr 1fr",
+          gap,
+        }}
+      >
+        {dot("a")}
+        {dot("b")}
+        {dot("c")}
+        {dot("d")}
+      </div>
+    );
+  }
+  if (n === 5) {
+    return (
+      <div
+        style={{
+          ...gridStyle,
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateRows: "1fr 1fr 1fr",
+        }}
+      >
+        <span style={{ gridColumn: 1, gridRow: 1 }}>{dot("a")}</span>
+        <span style={{ gridColumn: 3, gridRow: 1 }}>{dot("b")}</span>
+        <span style={{ gridColumn: 2, gridRow: 2 }}>{dot("c")}</span>
+        <span style={{ gridColumn: 1, gridRow: 3 }}>{dot("d")}</span>
+        <span style={{ gridColumn: 3, gridRow: 3 }}>{dot("e")}</span>
+      </div>
+    );
+  }
   return (
     <div
       style={{
-        width: size,
-        height: size,
-        background: bg,
-        borderRadius: Math.max(3, size * 0.08),
-        boxSizing: "border-box",
-        padding: pad,
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
+        ...gridStyle,
+        gridTemplateColumns: "1fr 1fr",
         gridTemplateRows: "repeat(3, 1fr)",
-        gap,
+        gap: "2px 8px",
       }}
     >
-      {cells.map((on, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {on ? (
-            <span
-              style={{
-                width: size * 0.18,
-                height: size * 0.18,
-                borderRadius: "50%",
-                background: dot,
-                boxShadow: "inset 0 -1px 2px rgba(0,0,0,0.25)",
-              }}
-            />
-          ) : null}
-        </div>
+      {[0, 1, 2].map((i) => (
+        <span key={`L${i}`} style={{ gridColumn: 1, gridRow: i + 1 }}>
+          {dot(`l${i}`)}
+        </span>
+      ))}
+      {[0, 1, 2].map((i) => (
+        <span key={`R${i}`} style={{ gridColumn: 2, gridRow: i + 1 }}>
+          {dot(`r${i}`)}
+        </span>
       ))}
     </div>
   );
 }
 
-export function Dice3D({
+export default function Dice3D({
   value,
   rolling,
-  diceType = "standard",
-  size = 65,
-  spinDurationSec = 2.2,
-}: Dice3DProps) {
-  const v = value >= 1 && value <= 6 ? (Math.floor(value) as 1 | 2 | 3 | 4 | 5 | 6) : 1;
-  const colors = faceColors[diceType] ?? faceColors.standard;
+  diceType,
+  size = 80,
+  delay = 0,
+  dieIndex = 0,
+}: Props) {
+  const colors = TYPE_STYLES[diceType] ?? TYPE_STYLES.standard;
   const half = size / 2;
-  const faceSize = size;
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const rollDuration = ROLL_DURATIONS[dieIndex % 3];
 
-  const tf = useMemo(() => FACE_TRANSFORM[v] ?? FACE_TRANSFORM[1], [v]);
+  const faceStyle = (transform: string): CSSProperties => ({
+    position: "absolute",
+    width: size,
+    height: size,
+    background: colors.bg,
+    borderRadius: 4,
+    boxShadow: "inset 0 -4px 12px rgba(0,0,0,0.2), inset 0 2px 4px rgba(255,255,255,0.12)",
+    transform,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backfaceVisibility: "hidden",
+    WebkitBackfaceVisibility: "hidden",
+  });
+
+  const restTransform = useMemo(() => faceRotation(value), [value]);
+
+  const keyStyle = useMemo(
+    () => `
+    @keyframes diceRoll_${uid} {
+      0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+      20% { transform: rotateX(144deg) rotateY(120deg) rotateZ(72deg); }
+      40% { transform: rotateX(288deg) rotateY(240deg) rotateZ(144deg); }
+      60% { transform: rotateX(432deg) rotateY(360deg) rotateZ(216deg); }
+      80% { transform: rotateX(576deg) rotateY(480deg) rotateZ(288deg); }
+      100% { transform: rotateX(720deg) rotateY(600deg) rotateZ(360deg); }
+    }
+    .cube_${uid} {
+      transform-style: preserve-3d;
+      width: ${size}px;
+      height: ${size}px;
+      position: relative;
+      margin: 0 auto;
+      transition: transform 0.45s ease-out;
+    }
+    .cube_${uid}.rolling {
+      animation: diceRoll_${uid} ${rollDuration} ease-out ${delay}ms forwards;
+    }
+  `,
+    [uid, size, rollDuration, delay],
+  );
 
   return (
     <div
       style={{
         width: size,
         height: size,
-        perspective: 300,
-        flexShrink: 0,
+        perspective: 900,
+        perspectiveOrigin: "50% 50%",
+        filter: "drop-shadow(0 8px 10px rgba(0,0,0,0.45))",
       }}
     >
+      <style dangerouslySetInnerHTML={{ __html: keyStyle }} />
       <div
+        className={`cube_${uid} ${rolling ? "rolling" : ""}`}
         style={{
-          width: "100%",
-          height: "100%",
-          position: "relative",
           transformStyle: "preserve-3d",
-          transition: rolling ? "none" : "transform 0.5s ease-out",
-          animation: rolling ? `celoDiceSpin ${spinDurationSec}s linear infinite` : "none",
-          transform: rolling ? undefined : tf,
+          transform: rolling ? undefined : restTransform,
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={1} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`translateZ(${half}px)`)}>
+          <FaceDots n={1} size={size} colors={colors} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `rotateY(180deg) translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={6} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`rotateY(180deg) translateZ(${half}px)`)}>
+          <FaceDots n={6} size={size} colors={colors} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `rotateY(90deg) translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={3} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`rotateY(90deg) translateZ(${half}px)`)}>
+          <FaceDots n={2} size={size} colors={colors} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `rotateY(-90deg) translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={4} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`rotateY(-90deg) translateZ(${half}px)`)}>
+          <FaceDots n={5} size={size} colors={colors} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `rotateX(90deg) translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={2} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`rotateX(90deg) translateZ(${half}px)`)}>
+          <FaceDots n={3} size={size} colors={colors} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            width: faceSize,
-            height: faceSize,
-            transform: `rotateX(-90deg) translateZ(${half}px)`,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <FacePips face={5} dot={colors.dot} bg={colors.bg} size={faceSize} />
+        <div style={faceStyle(`rotateX(-90deg) translateZ(${half}px)`)}>
+          <FaceDots n={4} size={size} colors={colors} />
         </div>
       </div>
     </div>
