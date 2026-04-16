@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     row.id,
     0,
     SC_FREE_ENTRY,
-    "Free Sweeps Coins entry (online, no purchase necessary)",
+    "Free GPay Coins entry (online, no purchase necessary)",
     reference,
     "free_entry"
   );
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
   if (insErr) {
     console.error("[free-entry] insert after credit:", insErr.message);
     return NextResponse.json(
-      { message: "Entry recorded partially. Contact support if Sweeps Coins are missing." },
+      { message: "Entry recorded partially. Contact support if GPay Coins are missing." },
       { status: 500 }
     );
   }

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGpayIdempotent } from "@/lib/coins";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { getEligibleStakedPlayers } from "@/lib/celo-eligible-players";
 import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
@@ -73,7 +73,7 @@ async function handleBankerTurnTimeout(
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await creditSweepsIdempotent(
+    const result = await creditGpayIdempotent(
       p.user_id,
       cents,
       "C-Lo stake refund (banker turn timeout)",

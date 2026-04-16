@@ -10,7 +10,7 @@ type PackageRow = {
   name: string;
   price_cents: number;
   gold_coins: number;
-  bonus_sweeps_coins: number;
+  bonus_gpay_coins: number;
   bonus_label: string | null;
   is_featured: boolean;
 };
@@ -136,7 +136,7 @@ export default function BuyCoinsPage() {
                     FREE GPay Coins
                   </p>
                   <p className="inline-block text-lg font-bold tabular-nums bg-gradient-to-r from-violet-300 to-emerald-300 bg-clip-text text-transparent">
-                    +{p.bonus_sweeps_coins.toLocaleString()} GPC
+                    +{p.bonus_gpay_coins.toLocaleString()} GPC
                   </p>
                   {p.bonus_label && (
                     <p className="text-[10px] text-emerald-400/90 mt-1">{p.bonus_label}</p>

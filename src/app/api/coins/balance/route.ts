@@ -5,7 +5,7 @@ import { getUserCoins } from "@/lib/coins";
 
 /**
  * GET /api/coins/balance
- * USD (wallet_balances) + GC + GPay Coins (sweeps_coins) for the authenticated user.
+ * USD (wallet_balances) + GC + GPC + $GPAY for the authenticated user.
  */
 export async function GET(request: Request) {
   const userId = await getAuthUserIdStrict(request);
@@ -29,6 +29,9 @@ export async function GET(request: Request) {
   return NextResponse.json({
     balance_cents: balanceCents,
     gold_coins: coins.goldCoins,
-    sweeps_coins: coins.sweepsCoins,
+    gpay_coins: coins.gpayCoins,
+    gpay_tokens: coins.gpayTokens,
+    /** @deprecated */
+    sweeps_coins: coins.gpayCoins,
   });
 }

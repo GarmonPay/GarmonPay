@@ -10,7 +10,7 @@ const MAX_SC_PER_REQUEST = 500_000; // $5,000 face at 100 SC / $1 — adjust if 
 /**
  * POST /api/admin/users/credit-sweeps
  * Body: { userId: string, amountSc: number, reason?: string }
- * Credits GPay Coins (DB: sweeps_coins) via credit_coins RPC + coin_transactions (support / reconciliation).
+ * Credits GPay Coins (DB: gpay_coins) via credit_coins RPC + coin_transactions (support / reconciliation).
  */
 export async function POST(request: Request) {
   if (!(await isAdmin(request))) {

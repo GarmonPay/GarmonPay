@@ -3,7 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { computePayoutAndHouseCut, flipCoin } from "@/lib/coin-flip";
 import { COIN_FLIP_MIN_BET_SC } from "@/lib/coin-flip";
-import { creditCoins, debitSweepsCoins, getUserCoins } from "@/lib/coins";
+import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
   const userId = await getAuthUserIdStrict(request);
@@ -60,13 +60,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid game stake" }, { status: 400 });
   }
 
-  const { sweepsCoins } = await getUserCoins(userId);
-  if (sweepsCoins < betAmountSc) {
+  const { gpayCoins } = await getUserCoins(userId);
+  if (gpayCoins < betAmountSc) {
     return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
   const debitRef = `coin_flip_join_${gameId}`;
-  const debit = await debitSweepsCoins(userId, betAmountSc, `Coin flip stake (join) ${gameId}`, debitRef);
+  const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (join) ${gameId}`, debitRef);
 
   if (!debit.success) {
     return NextResponse.json({ message: debit.message }, { status: 400 });
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     payoutWinnerMinor,
     houseCutMinor,
     netMinor,
-    sweepsCoins: after.sweepsCoins,
+    gpayCoins: after.gpayCoins,
     gpayBalanceMinor: 0,
   });
 }

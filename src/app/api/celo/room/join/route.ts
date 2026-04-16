@@ -105,28 +105,28 @@ export async function POST(req: Request) {
     const MIN_ENTRY_SC = 500;
     if (entry_cents < MIN_ENTRY_SC) {
       return NextResponse.json(
-        { error: `Entry must be at least ${MIN_ENTRY_SC} SC ($5.00 minimum)` },
+        { error: `Entry must be at least ${MIN_ENTRY_SC} GPC ($5.00 minimum)` },
         { status: 400 }
       );
     }
 
     if (entry_cents < roomRecord.min_bet_cents) {
       return NextResponse.json(
-        { error: `Entry must be at least ${roomRecord.min_bet_cents} SC (table minimum)` },
+        { error: `Entry must be at least ${roomRecord.min_bet_cents} GPC (table minimum)` },
         { status: 400 }
       );
     }
 
     if (entry_cents % roomRecord.min_bet_cents !== 0) {
       return NextResponse.json(
-        { error: `Entry must be a whole multiple of ${roomRecord.min_bet_cents} SC (minimum entry for this table)` },
+        { error: `Entry must be a whole multiple of ${roomRecord.min_bet_cents} GPC (minimum entry for this table)` },
         { status: 400 }
       );
     }
 
     if (entry_cents > roomRecord.max_bet_cents) {
       return NextResponse.json(
-        { error: `Entry cannot exceed ${roomRecord.max_bet_cents} SC` },
+        { error: `Entry cannot exceed ${roomRecord.max_bet_cents} GPC` },
         { status: 400 }
       );
     }

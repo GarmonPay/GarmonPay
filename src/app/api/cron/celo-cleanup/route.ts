@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
-import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGpayIdempotent } from "@/lib/coins";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { celoQaLog } from "@/lib/celo-qa-log";
 import { processCeloTurnTimeouts } from "@/lib/celo-turn-timeout";
@@ -102,7 +102,7 @@ async function runCeloCleanup(request: Request) {
         const cents = celoPlayerStakeCents(p);
         if (cents <= 0) continue;
         const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-        const result = await creditSweepsIdempotent(
+        const result = await creditGpayIdempotent(
           p.user_id,
           cents,
           "C-Lo stake refund (stale room cleanup)",
@@ -134,7 +134,7 @@ async function runCeloCleanup(request: Request) {
 
       if (bankCents > 0 && bankerId) {
         const bankRef = expireBankReference(roomId);
-        const bankResult = await creditSweepsIdempotent(
+        const bankResult = await creditGpayIdempotent(
           bankerId,
           bankCents,
           "C-Lo bank refund (cron stale room)",

@@ -109,7 +109,7 @@ export async function POST(req: Request) {
   if (new_bank_sc % rm.min_bet_cents !== 0) {
     return NextResponse.json(
       {
-        error: `Bank must be a whole multiple of minimum entry (${rm.min_bet_cents} SC)`,
+        error: `Bank must be a whole multiple of minimum entry (${rm.min_bet_cents} GPC)`,
       },
       { status: 400 }
     );

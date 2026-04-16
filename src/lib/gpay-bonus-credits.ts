@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase";
 import { creditCoins } from "@/lib/coins";
 
-/** New member welcome credit (GPC in `users.sweeps_coins`). */
+/** New member welcome credit (GPC in `users.gpay_coins`). */
 export const SIGNUP_BONUS_GPC = 100;
 
 /** One-time style bonus when upgrading to a paid tier (not on renewal). */

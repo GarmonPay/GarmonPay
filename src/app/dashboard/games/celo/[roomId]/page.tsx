@@ -196,7 +196,7 @@ export default function CeloDashboardRoomPage() {
         fetch(`/api/celo/room/${encodeURIComponent(roomId)}/snapshot`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }),
-        supabase.from("users").select("sweeps_coins, balance_cents").eq("id", session.user.id).maybeSingle(),
+        supabase.from("users").select("gpay_coins, balance_cents").eq("id", session.user.id).maybeSingle(),
       ]);
 
       if (snapRes.status === 401) {
@@ -240,8 +240,8 @@ export default function CeloDashboardRoomPage() {
       );
       if (snap.chat) setMessages(snap.chat as CeloMessage[]);
 
-      const br = balRes.data as { sweeps_coins?: number; balance_cents?: number } | null;
-      setBalance(Number(br?.sweeps_coins ?? br?.balance_cents ?? 0));
+      const br = balRes.data as { gpay_coins?: number; balance_cents?: number } | null;
+      setBalance(Number(br?.gpay_coins ?? br?.balance_cents ?? 0));
 
       const { data: bets } = await supabase.from("celo_side_bets").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(40);
 
@@ -710,7 +710,7 @@ export default function CeloDashboardRoomPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
           <div className="max-w-md rounded-2xl border-2 border-amber-400/50 bg-[#0f0a1a] p-6 text-center shadow-2xl">
             <p className={`${cinzel.className} text-xl text-amber-300`}>You rolled C-Lo! 🎲</p>
-            <p className="mt-2 text-sm text-slate-300">Become the banker? You need enough SC to cover the bank.</p>
+            <p className="mt-2 text-sm text-slate-300">Become the banker? You need enough GPC to cover the bank.</p>
             <p className="mt-2 text-xs text-slate-500">{becomeTimer}s</p>
             <div className="mt-4 flex gap-3">
               <button

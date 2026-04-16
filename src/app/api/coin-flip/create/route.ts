@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { COIN_FLIP_MIN_BET_SC, computePayoutAndHouseCut, flipCoin, type CoinSide } from "@/lib/coin-flip";
-import { creditCoins, debitSweepsCoins, getUserCoins } from "@/lib/coins";
+import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
   const userId = await getAuthUserIdStrict(request);
@@ -36,8 +36,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { sweepsCoins } = await getUserCoins(userId);
-  if (sweepsCoins < betAmountSc) {
+  const { gpayCoins } = await getUserCoins(userId);
+  if (gpayCoins < betAmountSc) {
     return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
     const gameId = (inserted as { id: string }).id;
     const debitRef = `coin_flip_create_${gameId}`;
-    const debit = await debitSweepsCoins(userId, betAmountSc, `Coin flip stake (create) ${gameId}`, debitRef);
+    const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (create) ${gameId}`, debitRef);
 
     if (!debit.success) {
       await supabase.from("coin_flip_games").update({ status: "cancelled" }).eq("id", gameId);
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       mode: "vs_player",
       betAmountMinor: betAmountSc,
       creatorSide: side,
-      sweepsCoins: after.sweepsCoins,
+      gpayCoins: after.gpayCoins,
       gpayBalanceMinor: 0,
     });
   }
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
 
   const gameId = (inserted as { id: string }).id;
   const debitRef = `coin_flip_create_${gameId}`;
-  const debit = await debitSweepsCoins(userId, betAmountSc, `Coin flip stake (vs house) ${gameId}`, debitRef);
+  const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (vs house) ${gameId}`, debitRef);
 
   if (!debit.success) {
     await supabase.from("coin_flip_games").update({ status: "cancelled" }).eq("id", gameId);
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   const winnerId = creatorWins ? userId : null;
   const resolvedAt = new Date().toISOString();
 
-  let sweepsAfter = (await getUserCoins(userId)).sweepsCoins;
+  let gpayAfter = (await getUserCoins(userId)).gpayCoins;
   if (creatorWins && payoutWinnerMinor > 0) {
     const winRef = `coin_flip_win_${gameId}`;
     const win = await creditCoins(
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
         .eq("id", gameId);
       return NextResponse.json({ message: win.message ?? "Payout failed" }, { status: 500 });
     }
-    sweepsAfter = (await getUserCoins(userId)).sweepsCoins;
+    gpayAfter = (await getUserCoins(userId)).gpayCoins;
   }
 
   await supabase
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
     payoutWinnerMinor: creatorWins ? payoutWinnerMinor : 0,
     houseCutMinor,
     netMinor,
-    sweepsCoins: sweepsAfter,
+    gpayCoins: gpayAfter,
     gpayBalanceMinor: 0,
   });
 }

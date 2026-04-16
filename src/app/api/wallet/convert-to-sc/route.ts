@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
-import { USD_TO_SC } from "@/lib/coins";
+import { USD_TO_GPC } from "@/lib/coins";
 
 /**
  * POST /api/wallet/convert-to-sc
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   /** $1 = 100 SC → SC awarded equals dollar cents (e.g. 500¢ → 500 SC). */
-  const scToAward = Math.floor((amount_cents * USD_TO_SC) / 100);
+  const scToAward = Math.floor((amount_cents * USD_TO_GPC) / 100);
   if (scToAward <= 0) {
     return NextResponse.json({ error: "Amount too small to convert" }, { status: 400 });
   }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const { error: rpcErr } = await supabase.rpc("credit_coins", {
     p_user_id: userId,
     p_gold_coins: 0,
-    p_sweeps_coins: scToAward,
+    p_gpay_coins: scToAward,
   });
 
   if (rpcErr) {
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     user_id: userId,
     type: "usd_to_sc",
     gold_coins: 0,
-    sweeps_coins: scToAward,
+    gpay_coins: scToAward,
     description: `Converted $${(amount_cents / 100).toFixed(2)} USD to ${scToAward} GPC`,
     reference: logRef,
   });

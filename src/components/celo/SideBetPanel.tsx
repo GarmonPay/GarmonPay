@@ -57,11 +57,11 @@ export default function SideBetPanel({
       return;
     }
     if (amount < 100 || amount % 100 !== 0) {
-      setErr("Entry must be at least 100 SC and a multiple of 100.");
+      setErr("Entry must be at least 100 GPC and a multiple of 100.");
       return;
     }
     if (amount > myBalance) {
-      setErr("Not enough Sweeps Coins.");
+      setErr("Not enough GPay Coins.");
       return;
     }
     setPosting(true);
@@ -155,7 +155,7 @@ export default function SideBetPanel({
                   <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{creator}</div>
                   <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>{b.bet_type.replace(/_/g, " ")}</div>
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                    {b.amount_sc} SC → up to {Math.floor(b.amount_sc * b.odds_multiplier)} SC · {left}s
+                    {b.amount_sc} GPC → up to {Math.floor(b.amount_sc * b.odds_multiplier)} GPC · {left}s
                   </div>
                   <button
                     type="button"
@@ -228,7 +228,7 @@ export default function SideBetPanel({
             ))}
           </div>
         )}
-        <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Amount (SC, multiple of 100)</label>
+        <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Amount (GPC, multiple of 100)</label>
         <input
           type="number"
           min={100}
@@ -245,7 +245,7 @@ export default function SideBetPanel({
             marginBottom: 8,
           }}
         />
-        <div style={{ fontSize: 11, color: "#86efac", marginBottom: 8 }}>If you earn: +{potential} SC (prize estimate)</div>
+        <div style={{ fontSize: 11, color: "#86efac", marginBottom: 8 }}>If you earn: +{potential} GPC (prize estimate)</div>
         <button
           type="button"
           disabled={posting || !roundId || roundStatus === "completed"}
@@ -273,7 +273,7 @@ export default function SideBetPanel({
         ) : (
           mine.map((b) => (
             <div key={b.id} style={{ fontSize: 11, color: "#cbd5e1", marginBottom: 4 }}>
-              {b.bet_type} · {b.amount_sc} SC · {b.status}
+              {b.bet_type} · {b.amount_sc} GPC · {b.status}
             </div>
           ))
         )}

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { getGoldCoinPackage, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
 
 /**
- * POST /api/coins/checkout
- * Body: { packageId: string } — Stripe Checkout for a GC package.
+ * POST /api/stripe/gold-coins
+ * Body: { packageId: GoldCoinPackageId } — Stripe Checkout for Gold Coins only.
  */
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {
@@ -24,9 +25,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const packageId = typeof body.packageId === "string" ? body.packageId : null;
-  if (!packageId) {
-    return NextResponse.json({ error: "packageId required" }, { status: 400 });
+  const packageId = typeof body.packageId === "string" ? body.packageId.trim() : "";
+  const pkg = getGoldCoinPackage(packageId);
+  if (!pkg) {
+    return NextResponse.json({ error: "Invalid package" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -34,17 +36,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   }
 
-  const { data: pkg, error: pkgErr } = await supabase
-    .from("gc_packages")
-    .select("id, name, price_cents, gold_coins, bonus_gpay_coins, is_active")
-    .eq("id", packageId)
-    .maybeSingle();
-
-  if (pkgErr || !pkg || !(pkg as { is_active?: boolean }).is_active) {
-    return NextResponse.json({ error: "Package not found" }, { status: 404 });
-  }
-
-  const p = pkg as { id: string; name: string; price_cents: number; gold_coins: number; bonus_gpay_coins: number };
   const { data: userRow } = await supabase.from("users").select("email").eq("id", userId).maybeSingle();
   const email = (userRow as { email?: string } | null)?.email;
   if (!email) {
@@ -52,8 +43,8 @@ export async function POST(request: Request) {
   }
 
   const base = getCheckoutBaseUrl(request);
-  const successUrl = `${base}/dashboard/buy-coins?success=1`;
-  const cancelUrl = `${base}/dashboard/buy-coins?canceled=1`;
+  const successUrl = `${base}/dashboard/wallet?purchased=true`;
+  const cancelUrl = `${base}/dashboard/wallet?canceled=1`;
 
   try {
     const stripe = getStripe();
@@ -65,20 +56,19 @@ export async function POST(request: Request) {
       metadata: {
         user_id: userId,
         email,
-        product_type: "gc_package",
-        gc_package_id: p.id,
-        gc_package_name: p.name,
-        gold_coins: String(p.gold_coins),
-        bonus_gpay_coins: String(p.bonus_gpay_coins),
+        product_type: "gold_coin_pack",
+        package_id: pkg.package_id as GoldCoinPackageId,
+        gold_coins: String(pkg.gold_coins),
       },
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: p.price_cents,
+            unit_amount: pkg.price_cents,
             product_data: {
-              name: `${p.name} — ${p.gold_coins.toLocaleString()} Gold Coins`,
+              name: `Gold Coins — Digital Pack`,
+              description: pkg.stripe_description,
             },
           },
         },
@@ -93,7 +83,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (e) {
-    console.error("[coins/checkout]", e);
+    console.error("[stripe/gold-coins]", e);
     return NextResponse.json({ error: "Checkout failed" }, { status: 500 });
   }
 }

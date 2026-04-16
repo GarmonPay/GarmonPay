@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CeloLobbyPage() {
   const router = useRouter();
-  const { sweepsCoins, refresh: refreshCoins, loading: coinsLoading } = useCoins();
+  const { gpayCoins, refresh: refreshCoins, loading: coinsLoading } = useCoins();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,9 +214,9 @@ export default function CeloLobbyPage() {
 
   /** Keep starting bank ≤ $GPAY balance. */
   useEffect(() => {
-    if (!showCreate || sweepsCoins <= 0) return;
+    if (!showCreate || gpayCoins <= 0) return;
     setForm((f) => {
-      const cap = Math.min(sweepsCoins, 200_000);
+      const cap = Math.min(gpayCoins, 200_000);
       const step = f.minimum_entry_cents;
       let sb = f.starting_bank_cents;
       if (sb > cap) sb = Math.floor(cap / step) * step;
@@ -224,7 +224,7 @@ export default function CeloLobbyPage() {
       if (sb === f.starting_bank_cents) return f;
       return { ...f, starting_bank_cents: sb };
     });
-  }, [showCreate, sweepsCoins]);
+  }, [showCreate, gpayCoins]);
 
   useEffect(() => {
     let isMounted = true;
@@ -417,12 +417,12 @@ export default function CeloLobbyPage() {
     }));
   }
 
-  /** Form fields use legacy `_cents` names; amounts are `users.sweeps_coins` ($GPAY). */
+  /** Form fields use legacy `_cents` names; amounts are GPay Coins (`users.gpay_coins`). */
   const minimumEntryCents = form.minimum_entry_cents;
   const startingBank = form.starting_bank_cents;
-  const hasEnoughForBank = sweepsCoins >= startingBank;
+  const hasEnoughForBank = gpayCoins >= startingBank;
   const canAfford = hasEnoughForBank;
-  const shortfallSc = Math.max(0, startingBank - sweepsCoins);
+  const shortfallSc = Math.max(0, startingBank - gpayCoins);
   const canSubmit =
     !creating &&
     !coinsLoading &&
@@ -453,9 +453,9 @@ export default function CeloLobbyPage() {
             ← Dashboard
           </Link>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">Sweeps Coins</p>
+            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">GPay Coins</p>
             <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              Your balance: {formatGpayAmount(sweepsCoins)}
+              Your balance: {formatGpayAmount(gpayCoins)}
             </p>
           </div>
         </div>
@@ -475,10 +475,10 @@ export default function CeloLobbyPage() {
               🎲 {lobbyStats.liveRooms} rooms live
             </span>
             <span>
-              💰 {Math.floor(lobbyStats.scInPlay / 100).toLocaleString()} SC in play
+              💰 {Math.floor(lobbyStats.scInPlay / 100).toLocaleString()} GPC in play
             </span>
             <span>
-              🏆 Biggest bank today: {Math.floor(lobbyStats.biggestBank / 100).toLocaleString()} SC
+              🏆 Biggest bank today: {Math.floor(lobbyStats.biggestBank / 100).toLocaleString()} GPC
             </span>
           </div>
         </div>
@@ -653,11 +653,11 @@ export default function CeloLobbyPage() {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total earned</p>
-            <p className="text-lg font-bold text-emerald-400/90 mt-1">— SC</p>
+            <p className="text-lg font-bold text-emerald-400/90 mt-1">— GPC</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total used</p>
-            <p className="text-lg font-bold text-rose-400/80 mt-1">— SC</p>
+            <p className="text-lg font-bold text-rose-400/80 mt-1">— GPC</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Best roll</p>
@@ -797,7 +797,7 @@ export default function CeloLobbyPage() {
                 <input
                   type="range"
                   min={minimumEntryCents}
-                  max={Math.max(minimumEntryCents, sweepsCoins > 0 ? sweepsCoins : minimumEntryCents)}
+                  max={Math.max(minimumEntryCents, gpayCoins > 0 ? gpayCoins : minimumEntryCents)}
                   step={minimumEntryCents}
                   value={startingBank}
                   onChange={(e) =>
@@ -814,13 +814,21 @@ export default function CeloLobbyPage() {
                   }`}
                 >
                   {coinsLoading ? (
-                    <>Loading your $GPAY balance…</>
+                    <>Loading your GPay Coins…</>
                   ) : canAfford ? (
-                    <>Your $GPAY: {formatGpayAmount(sweepsCoins)} — enough to reserve this bank.</>
+                    <>Your GPC: {formatGpayAmount(gpayCoins)} — enough to reserve this bank.</>
                   ) : (
                     <>
-                      You need {shortfallSc.toLocaleString()} more $GPAY to reserve {startingBank.toLocaleString()}{" "}
-                      $GPAY.
+                      You need {shortfallSc.toLocaleString()} more GPC to reserve {startingBank.toLocaleString()} GPC for
+                      this bank.{" "}
+                      <a href="/dashboard/wallet" className="underline text-[#F5C842]">
+                        Convert Gold Coins
+                      </a>{" "}
+                      or{" "}
+                      <a href="/dashboard/wallet" className="underline text-[#F5C842]">
+                        buy Gold Coins
+                      </a>
+                      .
                     </>
                   )}
                 </p>
@@ -839,7 +847,7 @@ export default function CeloLobbyPage() {
                       coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
-                    {formatGpayAmount(sweepsCoins)}
+                    {formatGpayAmount(gpayCoins)}
                   </span>
                 </div>
               </div>

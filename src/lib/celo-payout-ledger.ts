@@ -1,5 +1,5 @@
 /**
- * C-Lo payout helpers: credit `users.sweeps_coins` ($GPAY) + platform_earnings fee lines.
+ * C-Lo payout helpers: credit `users.gpay_coins` (GPC) + platform_earnings fee lines.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -14,7 +14,7 @@ export async function celoWalletCredit(
   if (!Number.isFinite(amountCents) || amountCents <= 0) {
     return { success: true };
   }
-  console.error("[celo/payout] crediting sweeps:", { userId, amount: amountCents, reference });
+  console.error("[celo/payout] crediting GPC:", { userId, amount: amountCents, reference });
   const r = await creditGPay(userId, amountCents, {
     description: "C-Lo payout",
     reference,

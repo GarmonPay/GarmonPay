@@ -3,7 +3,7 @@ import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGpayIdempotent } from "@/lib/coins";
 
 type Admin = SupabaseClient;
 
@@ -69,7 +69,7 @@ export async function systemCloseCeloRoomWithRefunds(
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await creditSweepsIdempotent(
+    const result = await creditGpayIdempotent(
       p.user_id,
       cents,
       `C-Lo stake refund (${meta.reason})`,
@@ -86,10 +86,10 @@ export async function systemCloseCeloRoomWithRefunds(
     0,
     Math.round(Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0))
   );
-  /** Bank reserve is debited in SC (`debit_sweeps_coins` on create); refund SC, not USD wallet ledger. */
+  /** Bank reserve is debited in GPC (`debit_gpay_coins` on create); refund GPC, not USD wallet ledger. */
   if (bankCents > 0 && bankerId) {
     const bankRef = celoBankRefundReference(roomId);
-    const bankResult = await creditSweepsIdempotent(
+    const bankResult = await creditGpayIdempotent(
       bankerId,
       bankCents,
       `C-Lo bank refund (${meta.reason})`,

@@ -3,41 +3,57 @@ import { walletLedgerEntry } from "@/lib/wallet-ledger";
 
 /** 1000 GC ≈ $1 (display) */
 export const GC_TO_USD = 0.001;
-/** 1 GPC = $0.01 face value; 100 GPC = $1 (user-facing: GPay Coins / GPC; DB: sweeps_coins) */
-export const SC_TO_USD = 0.01;
+/** 1 GPC = $0.01 face value; 100 GPC = $1 (DB: users.gpay_coins) */
+export const GPC_TO_USD = 0.01;
 /** $1 → 100 GPC */
-export const USD_TO_SC = 100;
+export const USD_TO_GPC = 100;
 
-export function scToUsdDisplay(sc: number): string {
-  const n = Number(sc);
+/** @deprecated use GPC_TO_USD */
+export const SC_TO_USD = GPC_TO_USD;
+/** @deprecated use USD_TO_GPC */
+export const USD_TO_SC = USD_TO_GPC;
+
+export function gpcToUsdDisplay(gpc: number): string {
+  const n = Number(gpc);
   if (!Number.isFinite(n)) return "$0.00";
-  return `$${(n * SC_TO_USD).toFixed(2)}`;
+  return `$${(n * GPC_TO_USD).toFixed(2)}`;
+}
+
+/** @deprecated use gpcToUsdDisplay */
+export function scToUsdDisplay(sc: number): string {
+  return gpcToUsdDisplay(sc);
 }
 
 export async function getUserCoins(userId: string): Promise<{
   goldCoins: number;
-  sweepsCoins: number;
+  gpayCoins: number;
+  gpayTokens: number;
 }> {
   const supabase = createAdminClient();
-  if (!supabase) return { goldCoins: 0, sweepsCoins: 0 };
+  if (!supabase) return { goldCoins: 0, gpayCoins: 0, gpayTokens: 0 };
 
   const { data } = await supabase
     .from("users")
-    .select("gold_coins, sweeps_coins")
+    .select("gold_coins, gpay_coins, gpay_tokens")
     .eq("id", userId)
     .maybeSingle();
 
-  const row = data as { gold_coins?: number | null; sweeps_coins?: number | null } | null;
+  const row = data as {
+    gold_coins?: number | null;
+    gpay_coins?: number | null;
+    gpay_tokens?: number | null;
+  } | null;
   return {
     goldCoins: Math.max(0, Math.floor(Number(row?.gold_coins ?? 0))),
-    sweepsCoins: Math.max(0, Math.floor(Number(row?.sweeps_coins ?? 0))),
+    gpayCoins: Math.max(0, Math.floor(Number(row?.gpay_coins ?? 0))),
+    gpayTokens: Math.max(0, Math.floor(Number(row?.gpay_tokens ?? 0))),
   };
 }
 
 export async function creditCoins(
   userId: string,
   goldCoins: number,
-  sweepsCoins: number,
+  gpayCoins: number,
   description: string,
   reference: string,
   type = "credit"
@@ -58,7 +74,7 @@ export async function creditCoins(
   const { error } = await supabase.rpc("credit_coins", {
     p_user_id: userId,
     p_gold_coins: Math.floor(goldCoins),
-    p_sweeps_coins: Math.floor(sweepsCoins),
+    p_gpay_coins: Math.floor(gpayCoins),
   });
 
   if (error) return { success: false, message: error.message };
@@ -67,7 +83,7 @@ export async function creditCoins(
     user_id: userId,
     type,
     gold_coins: Math.floor(goldCoins),
-    sweeps_coins: Math.floor(sweepsCoins),
+    gpay_coins: Math.floor(gpayCoins),
     description,
     reference,
   });
@@ -79,17 +95,16 @@ export async function creditCoins(
 }
 
 /**
- * Credit SC idempotently: duplicate `reference` in coin_transactions counts as success.
- * Used for C-Lo bank refunds so system close / cron can safely retry.
+ * Credit GPC idempotently: duplicate `reference` in coin_transactions counts as success.
  */
-export async function creditSweepsIdempotent(
+export async function creditGpayIdempotent(
   userId: string,
-  amountSc: number,
+  amountGpc: number,
   description: string,
   reference: string,
   type = "celo_bank_refund"
 ): Promise<{ success: boolean; message?: string }> {
-  const amt = Math.floor(amountSc);
+  const amt = Math.floor(amountGpc);
   if (amt <= 0) return { success: true };
   const r = await creditCoins(userId, 0, amt, description, reference, type);
   if (r.success) return { success: true };
@@ -99,7 +114,18 @@ export async function creditSweepsIdempotent(
   return r;
 }
 
-export async function debitSweepsCoins(
+/** @deprecated use creditGpayIdempotent */
+export async function creditSweepsIdempotent(
+  userId: string,
+  amountSc: number,
+  description: string,
+  reference: string,
+  type = "celo_bank_refund"
+): Promise<{ success: boolean; message?: string }> {
+  return creditGpayIdempotent(userId, amountSc, description, reference, type);
+}
+
+export async function debitGpayCoins(
   userId: string,
   amount: number,
   description: string,
@@ -111,11 +137,11 @@ export async function debitSweepsCoins(
   const amt = Math.floor(amount);
   if (amt <= 0) return { success: false, message: "Invalid amount" };
 
-  const { goldCoins: _g, sweepsCoins } = await getUserCoins(userId);
-  if (sweepsCoins < amt) {
+  const { gpayCoins } = await getUserCoins(userId);
+  if (gpayCoins < amt) {
     return {
       success: false,
-      message: `Insufficient $GPAY balance. You have ${sweepsCoins} $GPAY but need ${amt} $GPAY`,
+      message: `Insufficient GPay Coins. You have ${gpayCoins} GPC but need ${amt} GPC`,
     };
   }
 
@@ -126,7 +152,7 @@ export async function debitSweepsCoins(
     .maybeSingle();
   if (existing) return { success: false, message: "Duplicate transaction" };
 
-  const { error } = await supabase.rpc("debit_sweeps_coins", {
+  const { error } = await supabase.rpc("debit_gpay_coins", {
     p_user_id: userId,
     p_amount: amt,
   });
@@ -134,8 +160,8 @@ export async function debitSweepsCoins(
   if (error) {
     const msg = error.message ?? "";
     const friendly =
-      /insufficient.*sweeps/i.test(msg) || /sweeps coins/i.test(msg)
-        ? "Insufficient $GPAY balance"
+      /insufficient.*gpay/i.test(msg) || /gpay coins/i.test(msg)
+        ? "Insufficient GPay Coins"
         : msg;
     return { success: false, message: friendly };
   }
@@ -144,18 +170,18 @@ export async function debitSweepsCoins(
     user_id: userId,
     type: "debit",
     gold_coins: 0,
-    sweeps_coins: -amt,
+    gpay_coins: -amt,
     description,
     reference,
   });
   if (insErr) {
-    console.error("[debitSweepsCoins] insert failed after RPC — reversing debit:", insErr.message);
+    console.error("[debitGpayCoins] insert failed after RPC — repairing:", insErr.message);
     const repairRef = `${reference}_repair_${Date.now()}`;
     await creditCoins(
       userId,
       0,
       amt,
-      "Repair: ledger insert failed after debit_sweeps_coins RPC",
+      "Repair: ledger insert failed after debit_gpay_coins RPC",
       repairRef,
       "debit_repair"
     );
@@ -164,13 +190,23 @@ export async function debitSweepsCoins(
   return { success: true };
 }
 
+/** @deprecated use debitGpayCoins */
+export async function debitSweepsCoins(
+  userId: string,
+  amount: number,
+  description: string,
+  reference: string
+): Promise<{ success: boolean; message?: string }> {
+  return debitGpayCoins(userId, amount, description, reference);
+}
+
 /**
- * Convert wallet USD (cents) to SC. One-way; deducts via wallet ledger then credits SC.
+ * Convert wallet USD (cents) to GPC. One-way; deducts via wallet ledger then credits GPC.
  */
-export async function convertUSDToSC(
+export async function convertUSDToGPC(
   userId: string,
   amountCents: number
-): Promise<{ success: boolean; scAwarded?: number; message?: string }> {
+): Promise<{ success: boolean; gpcAwarded?: number; message?: string }> {
   const supabase = createAdminClient();
   if (!supabase) return { success: false, message: "Service unavailable" };
 
@@ -188,30 +224,39 @@ export async function convertUSDToSC(
     return { success: false, message: "Insufficient USD balance" };
   }
 
-  const scToAward = Math.floor((cents * USD_TO_SC) / 100);
-  if (scToAward <= 0) {
+  const gpcToAward = Math.floor((cents * USD_TO_GPC) / 100);
+  if (gpcToAward <= 0) {
     return { success: false, message: "Amount too small to convert" };
   }
 
-  const usdRef = `usd_to_sc_debit_${userId}_${cents}_${scToAward}`;
+  const usdRef = `usd_to_gpc_debit_${userId}_${cents}_${gpcToAward}`;
   const ledger = await walletLedgerEntry(userId, "game_play", -cents, usdRef);
   if (!ledger.success) {
     return { success: false, message: ledger.message ?? "Failed to deduct USD balance" };
   }
 
-  const creditRef = `usd_to_sc_credit_${userId}_${cents}_${scToAward}`;
+  const creditRef = `usd_to_gpc_credit_${userId}_${cents}_${gpcToAward}`;
   const credit = await creditCoins(
     userId,
     0,
-    scToAward,
-    `Converted $${(cents / 100).toFixed(2)} USD to ${scToAward} GPC`,
+    gpcToAward,
+    `Converted $${(cents / 100).toFixed(2)} USD to ${gpcToAward} GPC`,
     creditRef,
-    "usd_to_sc"
+    "usd_to_gpc"
   );
 
   if (!credit.success) {
     return { success: false, message: credit.message ?? "Failed to credit GPay Coins" };
   }
 
-  return { success: true, scAwarded: scToAward };
+  return { success: true, gpcAwarded: gpcToAward };
+}
+
+/** @deprecated use convertUSDToGPC */
+export async function convertUSDToSC(
+  userId: string,
+  amountCents: number
+): Promise<{ success: boolean; scAwarded?: number; message?: string }> {
+  const r = await convertUSDToGPC(userId, amountCents);
+  return { success: r.success, scAwarded: r.gpcAwarded, message: r.message };
 }

@@ -43,7 +43,7 @@ export function FreeEntryForm() {
         className="rounded-lg border border-[#22c55e]/50 bg-[#22c55e]/10 px-4 py-4 text-[#bbf7d0]"
         role="status"
       >
-        Your 10 free Sweeps Coins have been added to your account!
+        Your 10 free GPay Coins have been added to your account!
       </div>
     );
   }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGpayIdempotent } from "@/lib/coins";
 import { creditGPay, deductGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
@@ -352,7 +352,7 @@ export async function POST(req: Request) {
       refundIssued = true;
       try {
         const ref = `celo_bank_refund_creation_failed_${Date.now()}`;
-        const cr = await creditSweepsIdempotent(
+        const cr = await creditGpayIdempotent(
           authedUserId,
           startingBankCentsForRefund,
           "C-Lo bank refund (room creation failed)",

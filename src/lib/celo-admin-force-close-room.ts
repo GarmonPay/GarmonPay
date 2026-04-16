@@ -3,7 +3,7 @@ import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoBankRefundReference, celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
-import { creditSweepsIdempotent } from "@/lib/coins";
+import { creditGpayIdempotent } from "@/lib/coins";
 import { settleCeloOpenSideBets } from "@/lib/celo-side-bets-settle";
 
 export type AdminForceCloseCeloRoomResult =
@@ -81,7 +81,7 @@ export async function adminForceCloseCeloRoom(
     const cents = celoPlayerStakeCents(p);
     if (cents <= 0) continue;
     const ref = celoPlayerStakeRefundReference(roomId, p.user_id);
-    const result = await creditSweepsIdempotent(
+    const result = await creditGpayIdempotent(
       p.user_id,
       cents,
       "C-Lo stake refund (admin force close)",
@@ -106,7 +106,7 @@ export async function adminForceCloseCeloRoom(
   );
   if (bankCents > 0 && bankerId) {
     const bankRef = celoBankRefundReference(roomId);
-    const bankResult = await creditSweepsIdempotent(
+    const bankResult = await creditGpayIdempotent(
       bankerId,
       bankCents,
       "C-Lo bank refund (admin force close)",

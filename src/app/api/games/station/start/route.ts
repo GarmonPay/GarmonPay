@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
-import { getUserCoins, debitSweepsCoins } from "@/lib/coins";
+import { getUserCoins, debitGpayCoins } from "@/lib/coins";
 import type { GameSlug } from "@/lib/game-station-db";
 
 /** Per-play cost in GPay Coins / GPC (not USD cents). */
@@ -34,16 +34,16 @@ export async function POST(req: Request) {
   const costSc = COST_SC[slug];
   if (costSc > 0) {
     const ref = `game_station_${slug}_${userId}_${Date.now()}`;
-    const result = await debitSweepsCoins(userId, costSc, `Game Station: ${slug}`, ref);
+    const result = await debitGpayCoins(userId, costSc, `Game Station: ${slug}`, ref);
     if (!result.success) {
       return NextResponse.json(
         { error: result.message ?? "Insufficient GPay Coins", required_sc: costSc },
         { status: 400 }
       );
     }
-    const { sweepsCoins } = await getUserCoins(userId);
-    return NextResponse.json({ ok: true, sweeps_coins: sweepsCoins, cost_sc: costSc });
+    const { gpayCoins } = await getUserCoins(userId);
+    return NextResponse.json({ ok: true, gpay_coins: gpayCoins, cost_sc: costSc });
   }
-  const { sweepsCoins } = await getUserCoins(userId);
-  return NextResponse.json({ ok: true, sweeps_coins: sweepsCoins, cost_sc: 0 });
+  const { gpayCoins } = await getUserCoins(userId);
+  return NextResponse.json({ ok: true, gpay_coins: gpayCoins, cost_sc: 0 });
 }

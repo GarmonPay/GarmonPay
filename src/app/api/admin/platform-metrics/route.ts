@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       .from("users")
       .select("*", { count: "exact", head: true })
       .neq("membership", "free"),
-    supabase.from("users").select("gold_coins, sweeps_coins"),
+    supabase.from("users").select("gold_coins, gpay_coins"),
     supabase
       .from("coin_transactions")
       .select("gold_coins")
@@ -118,14 +118,14 @@ export async function GET(request: Request) {
     supabase.from("coin_transactions").select("gold_coins").eq("type", "gc_purchase").gte("created_at", monthStart),
     supabase
       .from("coin_transactions")
-      .select("sweeps_coins")
-      .lt("sweeps_coins", 0)
+      .select("gpay_coins")
+      .lt("gpay_coins", 0)
       .gte("created_at", todayStart)
       .lt("created_at", tomorrow),
     supabase
       .from("coin_transactions")
-      .select("sweeps_coins")
-      .lt("sweeps_coins", 0)
+      .select("gpay_coins")
+      .lt("gpay_coins", 0)
       .gte("created_at", monthStart),
   ]);
 
@@ -145,20 +145,20 @@ export async function GET(request: Request) {
   let totalGoldCoinsCirculating = 0;
   let totalSweepsCoinsCirculating = 0;
   for (const u of userCoinsRes.data ?? []) {
-    const r = u as { gold_coins?: number; sweeps_coins?: number };
+    const r = u as { gold_coins?: number; gpay_coins?: number };
     totalGoldCoinsCirculating += Math.max(0, Math.floor(Number(r.gold_coins ?? 0)));
-    totalSweepsCoinsCirculating += Math.max(0, Math.floor(Number(r.sweeps_coins ?? 0)));
+    totalSweepsCoinsCirculating += Math.max(0, Math.floor(Number(r.gpay_coins ?? 0)));
   }
 
   const sumGold = (rows: { gold_coins?: number | null }[] | null) =>
     (rows ?? []).reduce((s, x) => s + Math.max(0, Math.floor(Number(x.gold_coins ?? 0))), 0);
-  const sumScOut = (rows: { sweeps_coins?: number | null }[] | null) =>
-    (rows ?? []).reduce((s, x) => s + Math.abs(Math.min(0, Number(x.sweeps_coins ?? 0))), 0);
+  const sumScOut = (rows: { gpay_coins?: number | null }[] | null) =>
+    (rows ?? []).reduce((s, x) => s + Math.abs(Math.min(0, Number(x.gpay_coins ?? 0))), 0);
 
   const gcPurchasedToday = sumGold(gcPurchaseTodayRes.data as { gold_coins?: number }[] | null);
   const gcPurchasedMonth = sumGold(gcPurchaseMonthRes.data as { gold_coins?: number }[] | null);
-  const scRedeemedToday = sumScOut(scDebitTodayRes.data as { sweeps_coins?: number }[] | null);
-  const scRedeemedMonth = sumScOut(scDebitMonthRes.data as { sweeps_coins?: number }[] | null);
+  const scRedeemedToday = sumScOut(scDebitTodayRes.data as { gpay_coins?: number }[] | null);
+  const scRedeemedMonth = sumScOut(scDebitMonthRes.data as { gpay_coins?: number }[] | null);
 
   const platformRevenueTodayCents = sumCents(peTodayRes.data as { amount_cents?: number }[] | null);
   const platformRevenueMonthCents = sumCents(peMonthRes.data as { amount_cents?: number }[] | null);

@@ -1,4 +1,4 @@
-/** C-Lo domain types aligned with `celo_*` tables (sweeps / SC language). */
+/** C-Lo domain types aligned with `celo_*` tables (amounts in GPay Coins / GPC). */
 
 export type CeloRoom = {
   id: string;

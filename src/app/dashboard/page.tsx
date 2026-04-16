@@ -21,7 +21,8 @@ const dmSans = DM_Sans({
 
 type UserRow = {
   gold_coins: number | null;
-  sweeps_coins: number | null;
+  gpay_coins: number | null;
+  gpay_tokens: number | null;
   membership_tier: string | null;
   total_referrals: number | null;
   referral_code: string | null;
@@ -69,7 +70,8 @@ export default function DashboardPage() {
       .select(
         `
       gold_coins,
-      sweeps_coins,
+      gpay_coins,
+      gpay_tokens,
       membership_tier,
       total_referrals,
       referral_code,
@@ -128,7 +130,8 @@ export default function DashboardPage() {
 
   const firstName = user?.full_name?.split(" ")[0] ?? "Member";
   const goldCoins = Math.max(0, Math.floor(Number(user?.gold_coins ?? 0)));
-  const gpay = Math.max(0, Math.floor(Number(user?.sweeps_coins ?? 0)));
+  const gpayCoins = Math.max(0, Math.floor(Number(user?.gpay_coins ?? 0)));
+  const gpayTokens = Math.max(0, Math.floor(Number(user?.gpay_tokens ?? 0)));
   const tierRaw = user?.membership_tier?.trim() ?? "";
   const tier = tierRaw ? formatTierLabel(tierRaw) : "Free";
   const referrals = Math.max(0, Math.floor(Number(user?.total_referrals ?? 0)));
@@ -188,11 +191,11 @@ export default function DashboardPage() {
         </h1>
       </header>
 
-      {/* Coin balances */}
+      {/* Three-tier coin balances */}
       <div
         className="grid gap-4"
         style={{
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
         }}
       >
         <div
@@ -202,22 +205,21 @@ export default function DashboardPage() {
             border: "1px solid #F5C842",
           }}
         >
-          <div className="flex items-start justify-between gap-3">
-            <span className="text-3xl" aria-hidden>
-              🪙
-            </span>
-          </div>
+          <span className="text-3xl" aria-hidden>
+            🪙
+          </span>
           <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200/90">
-            GOLD COINS
+            Gold Coins
           </p>
           <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
             {goldCoins.toLocaleString()} GC
           </p>
+          <p className="mt-2 text-xs text-amber-100/70">Purchased with real money — convert to GPay Coins to play</p>
           <Link
-            href="/dashboard/buy-coins"
-            className="mt-4 inline-block text-sm font-medium text-amber-200/90 underline-offset-2 hover:underline"
+            href="/dashboard/wallet"
+            className="mt-3 inline-block text-sm font-medium text-amber-200/90 underline-offset-2 hover:underline"
           >
-            Purchase more →
+            Wallet →
           </Link>
         </div>
 
@@ -225,31 +227,74 @@ export default function DashboardPage() {
           className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
           style={{
             background: "linear-gradient(135deg, #0e0118, #1a0530)",
-            border: "1px solid #7C3AED",
+            border: "1px solid #A855F7",
           }}
         >
-          <div className="flex items-start justify-between gap-3">
-            <span className="text-3xl" aria-hidden>
-              ⚡
-            </span>
-          </div>
+          <span className="text-3xl" aria-hidden>
+            💜
+          </span>
           <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-300/90">
-            $GPAY
+            GPay Coins
           </p>
           <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {gpay.toLocaleString()} $GPAY
+            {gpayCoins.toLocaleString()} GPC
           </p>
-          <p className="mt-4 text-sm text-violet-200/75">Play games to earn more</p>
+          <p className="mt-2 text-xs text-violet-200/75">Play games and earn prizes</p>
+          <Link
+            href="/dashboard/games"
+            className="mt-3 inline-block text-sm font-medium text-violet-200/90 underline-offset-2 hover:underline"
+          >
+            Play games →
+          </Link>
+        </div>
+
+        <div
+          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
+          style={{
+            background: "linear-gradient(135deg, #0a1f18, #0e2a22)",
+            border: "1px solid #10B981",
+          }}
+        >
+          <span className="text-3xl" aria-hidden>
+            ⬡
+          </span>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
+            $GPAY Tokens
+          </p>
+          <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
+            {gpayTokens.toLocaleString()} $GPAY
+          </p>
+          <p className="mt-2 text-xs text-emerald-200/75">Redeem GPC — trade on Raydium for USDC</p>
+          <Link
+            href="/dashboard/wallet#redeem"
+            className="mt-3 inline-block text-sm font-medium text-emerald-200/90 underline-offset-2 hover:underline"
+          >
+            Redeem →
+          </Link>
         </div>
       </div>
 
-      <Link
-        href="/dashboard/convert"
-        className="flex min-h-[48px] w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-base font-bold transition-opacity hover:opacity-95"
-        style={{ background: "#F5C842", color: "#000" }}
-      >
-        Convert GC → $GPAY
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/dashboard/wallet"
+          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-bold transition-opacity hover:opacity-95"
+          style={{ background: "#F5C842", color: "#000" }}
+        >
+          Buy GC
+        </Link>
+        <Link
+          href="/dashboard/wallet#convert"
+          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl border border-[#A855F7]/60 bg-[#A855F7]/20 px-4 py-3 text-center text-sm font-bold text-violet-100 hover:bg-[#A855F7]/30"
+        >
+          Convert
+        </Link>
+        <Link
+          href="/dashboard/wallet#redeem"
+          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl border border-[#10B981]/60 bg-[#10B981]/20 px-4 py-3 text-center text-sm font-bold text-emerald-100 hover:bg-[#10B981]/30"
+        >
+          Redeem
+        </Link>
+      </div>
 
       {/* Membership */}
       <div

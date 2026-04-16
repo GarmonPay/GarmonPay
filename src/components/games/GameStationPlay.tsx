@@ -16,7 +16,7 @@ function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<stri
 type GameStationPlayProps = {
   gameSlug: string;
   gameName: string;
-  /** Entry cost in GPay Coins (whole GPC; maps to `sweeps_coins`, not USD cents). */
+  /** Entry cost in GPay Coins (whole GPC; maps to `users.gpay_coins`, not USD cents). */
   costSc: number;
   children: (props: { onGameEnd: (score: number) => void; started: boolean }) => React.ReactNode;
 };

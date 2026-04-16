@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("coin_transactions")
-    .select("id, type, gold_coins, sweeps_coins, description, created_at")
+    .select("id, type, gold_coins, gpay_coins, description, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);

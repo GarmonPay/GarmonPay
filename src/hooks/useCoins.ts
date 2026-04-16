@@ -6,8 +6,9 @@ import { formatGpcWithUsd } from "@/lib/gpay-coins-branding";
 
 export function useCoins() {
   const supabase = useMemo(() => createBrowserClient(), []);
-  const [sweepsCoins, setSweepsCoins] = useState(0);
+  const [gpayCoins, setGpayCoins] = useState(0);
   const [goldCoins, setGoldCoins] = useState(0);
+  const [gpayTokens, setGpayTokens] = useState(0);
   /** USD wallet balance in cents (from `wallet_balances.balance`). */
   const [usdBalance, setUsdBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -21,8 +22,9 @@ export function useCoins() {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      setSweepsCoins(0);
+      setGpayCoins(0);
       setGoldCoins(0);
+      setGpayTokens(0);
       setUsdBalance(0);
       setLoading(false);
       return;
@@ -31,14 +33,19 @@ export function useCoins() {
 
     const { data: userRow } = await supabase
       .from("users")
-      .select("sweeps_coins, gold_coins")
+      .select("gpay_coins, gold_coins, gpay_tokens")
       .eq("id", uid)
       .maybeSingle();
 
     if (userRow) {
-      const u = userRow as { sweeps_coins?: number | null; gold_coins?: number | null };
-      setSweepsCoins(Math.max(0, Math.floor(Number(u.sweeps_coins ?? 0))));
+      const u = userRow as {
+        gpay_coins?: number | null;
+        gold_coins?: number | null;
+        gpay_tokens?: number | null;
+      };
+      setGpayCoins(Math.max(0, Math.floor(Number(u.gpay_coins ?? 0))));
       setGoldCoins(Math.max(0, Math.floor(Number(u.gold_coins ?? 0))));
+      setGpayTokens(Math.max(0, Math.floor(Number(u.gpay_tokens ?? 0))));
     }
 
     const { data: wallet } = await supabase
@@ -80,13 +87,20 @@ export function useCoins() {
           "postgres_changes",
           { event: "*", schema: "public", table: "users", filter: `id=eq.${uid}` },
           (payload) => {
-            const n = payload.new as { sweeps_coins?: number; gold_coins?: number } | undefined;
+            const n = payload.new as {
+              gpay_coins?: number;
+              gold_coins?: number;
+              gpay_tokens?: number;
+            } | undefined;
             if (!n) return;
-            if (typeof n.sweeps_coins === "number") {
-              setSweepsCoins(Math.max(0, Math.floor(n.sweeps_coins)));
+            if (typeof n.gpay_coins === "number") {
+              setGpayCoins(Math.max(0, Math.floor(n.gpay_coins)));
             }
             if (typeof n.gold_coins === "number") {
               setGoldCoins(Math.max(0, Math.floor(n.gold_coins)));
+            }
+            if (typeof n.gpay_tokens === "number") {
+              setGpayTokens(Math.max(0, Math.floor(n.gpay_tokens)));
             }
           }
         )
@@ -119,12 +133,15 @@ export function useCoins() {
   }, [supabase, refresh]);
 
   return {
-    sweepsCoins,
+    gpayCoins,
     goldCoins,
-    usdBalance,
+    gpayTokens,
+    /** @deprecated use gpayCoins */
+    sweepsCoins: gpayCoins,
     loading,
     refresh,
     formatGPC,
     formatUSD,
+    usdBalance,
   };
 }
