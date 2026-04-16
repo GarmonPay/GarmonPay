@@ -6,7 +6,7 @@ import { createBrowserClient } from "@/lib/supabase";
 
 type ConnStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
 
-const JOIN_TIMEOUT_MS = 15000;
+const JOIN_TIMEOUT_MS = 8000;
 const RETRY_INTERVAL_MS = 30_000;
 const MAX_AUTO_RETRIES = 3;
 
@@ -164,7 +164,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     }
 
     AgoraRTC.setLogLevel(2);
-    const client = AgoraRTC.createClient({ mode: "rtc", codec: "opus" });
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
     clientRef.current = client;
 
     client.on("connection-state-change", (cur, _prev, reason) => {
