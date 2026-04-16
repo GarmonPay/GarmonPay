@@ -40,20 +40,40 @@ export function DiceDisplay({
   size = 52,
 }: DiceDisplayProps) {
   const diceType = COLOR_TO_TYPE[diceColor.toLowerCase()] ?? "street";
-  const faces: [number, number, number] =
-    dice && dice.length === 3
-      ? [dice[0] ?? 1, dice[1] ?? 1, dice[2] ?? 1]
-      : [1, 1, 1];
-
   const delays = [0, 133, 266];
+
+  if (rolling) {
+    return (
+      <div className="flex w-full flex-1 items-center justify-center gap-1.5 px-1.5 sm:gap-3 sm:px-2">
+        {[0, 1, 2].map((i) => (
+          <DiceFace
+            key={`${animKey}-roll-${i}`}
+            value={1}
+            rolling
+            diceType={diceType}
+            size={size}
+            delay={delays[i]}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (!dice || dice.length !== 3) {
+    return (
+      <div className="flex w-full flex-1 flex-col items-center justify-center px-2 text-center text-xs text-zinc-500">
+        Waiting for roll…
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-1 items-center justify-center gap-1.5 px-1.5 sm:gap-3 sm:px-2">
       {[0, 1, 2].map((i) => (
         <DiceFace
           key={`${animKey}-${i}`}
-          value={clampDie(faces[i] ?? 1)}
-          rolling={rolling}
+          value={clampDie(dice[i] ?? 1)}
+          rolling={false}
           diceType={diceType}
           size={size}
           delay={delays[i]}

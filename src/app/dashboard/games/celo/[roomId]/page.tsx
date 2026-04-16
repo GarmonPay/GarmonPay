@@ -119,7 +119,7 @@ export default function CeloRoomPage() {
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
 
   const [rolling, setRolling] = useState(false);
-  const [dice, setDice] = useState<[number, number, number]>([1, 1, 1]);
+  const [dice, setDice] = useState<[number, number, number] | null>(null);
   const [rollName, setRollName] = useState<string | null>(null);
   const [rollResult, setRollResult] = useState<string | null>(null);
   const rollingRef = useRef(false);
@@ -202,7 +202,12 @@ export default function CeloRoomPage() {
       if (r0.banker_dice && r0.banker_dice.length === 3) {
         setDice([r0.banker_dice[0]!, r0.banker_dice[1]!, r0.banker_dice[2]!]);
         setRollName(r0.banker_roll_name);
+      } else {
+        setDice(null);
       }
+    } else {
+      setRound(null);
+      setDice(null);
     }
     if (chatRes.data) setMessages([...(chatRes.data as Message[])].reverse());
     if (betsRes.data) setSideBets(betsRes.data as SideBet[]);
@@ -263,8 +268,8 @@ export default function CeloRoomPage() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
-          (p) => {
-            if (p.new) setRound(p.new as Round);
+          () => {
+            void fetchAll();
           }
         )
         .on(
@@ -574,6 +579,9 @@ export default function CeloRoomPage() {
   }
 
   const rollKind = parseRollResultKind(rollResult);
+  const isDiceRolling = rolling || rollingAction;
+  const dieSize =
+    typeof window !== "undefined" && window.innerWidth < 400 ? 56 : 68;
 
   return (
     <div
@@ -875,29 +883,67 @@ export default function CeloRoomPage() {
             GP
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 12,
-              position: "relative",
-              zIndex: 5,
-              animation: rolling ? "feltVibrate 0.15s ease-in-out infinite" : "none",
-            }}
-          >
-            {([0, 1, 2] as const).map((i) => (
-              <DiceFace
-                key={i}
-                value={clampDie(dice[i] ?? 1)}
-                diceType={myDiceType}
-                size={typeof window !== "undefined" && window.innerWidth < 400 ? 56 : 68}
-                rolling={rolling}
-                delay={[0, 133, 266][i]}
-              />
-            ))}
-          </div>
+          {isDiceRolling ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                position: "relative",
+                zIndex: 5,
+                animation: "feltVibrate 0.15s ease-in-out infinite",
+              }}
+            >
+              {([0, 1, 2] as const).map((i) => (
+                <DiceFace
+                  key={`roll-${i}`}
+                  value={1}
+                  diceType={myDiceType}
+                  size={dieSize}
+                  rolling
+                  delay={[0, 133, 266][i]}
+                />
+              ))}
+            </div>
+          ) : dice && dice.length === 3 ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                position: "relative",
+                zIndex: 5,
+              }}
+            >
+              {([0, 1, 2] as const).map((i) => (
+                <DiceFace
+                  key={`face-${i}`}
+                  value={clampDie(dice[i]!)}
+                  diceType={myDiceType}
+                  size={dieSize}
+                  rolling={false}
+                  delay={[0, 133, 266][i]}
+                />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 5,
+                color: "#6B7280",
+                fontSize: 13,
+                fontFamily: "Courier New, monospace",
+                textAlign: "center",
+                padding: "0 16px",
+                maxWidth: 280,
+                lineHeight: 1.4,
+              }}
+            >
+              Waiting for roll…
+            </div>
+          )}
 
           <RollNameDisplay
-            rollName={rollName}
+            rollName={isDiceRolling ? null : rollName}
             result={rollKind}
             onComplete={() => setRollName(null)}
           />

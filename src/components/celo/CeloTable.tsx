@@ -131,7 +131,6 @@ export default function CeloTable({
   const [joinSel, setJoinSel] = useState<number | "min" | "2x" | "5x" | "max">("min");
   const [lowerSheetOpen, setLowerSheetOpen] = useState(false);
 
-  const d = dice ?? [1, 1, 1];
   const bankerPlayer = players.find((p) => p.role === "banker");
   const tablePlayers = players.filter((p) => p.role === "player").sort((a, b) => a.seat_number - b.seat_number);
   const myPlayer = players.find((p) => p.user_id === currentUserId);
@@ -716,7 +715,7 @@ export default function CeloTable({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            animation: rolling ? "feltVibrate 0.28s linear infinite" : "none",
+            animation: rollBusy ? "feltVibrate 0.28s linear infinite" : "none",
           }}
         >
           <div
@@ -738,29 +737,70 @@ export default function CeloTable({
           >
             GP
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: gapDice,
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-              zIndex: 6,
-              filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
-            }}
-          >
-            {[0, 1, 2].map((i) => (
-              <DiceFace
-                key={i}
-                value={clampDie(d[i] ?? 1)}
-                rolling={rolling}
-                diceType={mapDice(myDiceType)}
-                size={dieSize}
-                delay={i * 133}
-              />
-            ))}
-          </div>
-          <RollNameDisplay rollName={rolling ? null : rollName} result={rollResultKind} />
+          {rollBusy ? (
+            <div
+              style={{
+                display: "flex",
+                gap: gapDice,
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                zIndex: 6,
+                filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+              }}
+            >
+              {[0, 1, 2].map((i) => (
+                <DiceFace
+                  key={`roll-${i}`}
+                  value={1}
+                  rolling
+                  diceType={mapDice(myDiceType)}
+                  size={dieSize}
+                  delay={i * 133}
+                />
+              ))}
+            </div>
+          ) : dice && dice.length === 3 ? (
+            <div
+              style={{
+                display: "flex",
+                gap: gapDice,
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                zIndex: 6,
+                filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+              }}
+            >
+              {[0, 1, 2].map((i) => (
+                <DiceFace
+                  key={`face-${i}`}
+                  value={clampDie(dice[i]!)}
+                  rolling={false}
+                  diceType={mapDice(myDiceType)}
+                  size={dieSize}
+                  delay={i * 133}
+                />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 6,
+                color: "#6B7280",
+                fontSize: 13,
+                fontFamily: "Courier New, monospace",
+                textAlign: "center",
+                padding: "0 16px",
+                maxWidth: 280,
+                lineHeight: 1.4,
+              }}
+            >
+              Waiting for roll…
+            </div>
+          )}
+          <RollNameDisplay rollName={rollBusy ? null : rollName} result={rollResultKind} />
         </div>
 
         {/* Player seats */}
