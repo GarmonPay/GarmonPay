@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry, ensureWalletBalancesRow } from "@/lib/wallet-ledger";
+import { debitGpayCoins } from "@/lib/coins";
 
 export type FraudCheckResult = {
   trustScore: number;
@@ -303,21 +303,16 @@ export async function reverifyCompletion(params: {
 
       const { data: completion } = await supabase
         .from("social_task_completions")
-        .select("reward_cents")
+        .select("reward_gpc")
         .eq("id", params.completionId)
         .maybeSingle();
 
-      const reward = Number((completion as { reward_cents?: number } | null)?.reward_cents ?? 0);
+      const reward = Number((completion as { reward_gpc?: number } | null)?.reward_gpc ?? 0);
       if (reward > 0) {
-        const ensured = await ensureWalletBalancesRow(params.userId);
-        if (!ensured.ok) {
-          console.error("[social-fraud] ensureWalletBalancesRow:", ensured.message);
-          return;
-        }
-        const claw = await walletLedgerEntry(
+        const claw = await debitGpayCoins(
           params.userId,
-          "admin_adjustment",
-          -reward,
+          reward,
+          "Social task reward clawback",
           `claw_back_${params.completionId}`
         );
         if (!claw.success) console.error("[social-fraud] clawback:", claw.message);

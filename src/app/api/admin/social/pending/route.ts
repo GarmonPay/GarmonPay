@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
   const { data: rows, error } = await supabase
     .from("social_task_completions")
-    .select("id, task_id, user_id, proof_url, status, reward_cents, completed_at")
+    .select("id, task_id, user_id, proof_url, status, reward_gpc, completed_at")
     .eq("status", status)
     .order("completed_at", { ascending: false })
     .limit(200);
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       user_id: string;
       proof_url: string | null;
       status: string;
-      reward_cents: number;
+      reward_gpc: number;
       completed_at: string;
     };
     return {

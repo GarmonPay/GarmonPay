@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditGpayIdempotent } from "@/lib/coins";
 
 export async function POST(req: Request) {
   if (!(await isAdmin(req))) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
   const { data: row, error: fetchErr } = await supabase
     .from("social_task_completions")
-    .select("id, task_id, user_id, status, reward_cents")
+    .select("id, task_id, user_id, status, reward_gpc")
     .eq("id", completion_id)
     .maybeSingle();
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     task_id: string;
     user_id: string;
     status: string;
-    reward_cents: number;
+    reward_gpc: number;
   };
 
   if (c.status !== "pending") {
@@ -83,16 +83,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Task completion cap reached" }, { status: 400 });
   }
 
-  const credit = await walletLedgerEntry(
+  const credit = await creditGpayIdempotent(
     c.user_id,
-    "game_win",
-    c.reward_cents,
-    `social_task_${completion_id}`
+    c.reward_gpc,
+    "Social task reward",
+    `social_task_${completion_id}`,
+    "social_task_reward"
   );
 
   if (!credit.success) {
     return NextResponse.json(
-      { message: credit.message ?? "Failed to credit wallet" },
+      { message: credit.message ?? "Failed to credit GPay Coins" },
       { status: 500 }
     );
   }

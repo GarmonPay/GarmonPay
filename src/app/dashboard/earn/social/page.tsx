@@ -13,7 +13,7 @@ type SocialTask = {
   description: string | null;
   platform: string;
   task_type: string;
-  reward_cents: number;
+  reward_gpc: number;
   min_tier: string;
   proof_required: boolean;
   target_url: string;
@@ -26,7 +26,7 @@ type Completion = {
   id: string;
   task_id: string;
   status: string;
-  reward_cents: number;
+  reward_gpc: number;
   completed_at: string;
 };
 
@@ -113,7 +113,7 @@ export default function SocialTasksEarnPage() {
         sb.from("social_tasks").select("*").eq("status", "active").order("created_at", { ascending: false }),
         sb
           .from("social_task_completions")
-          .select("id, task_id, status, reward_cents, completed_at")
+          .select("id, task_id, status, reward_gpc, completed_at")
           .eq("user_id", user.id),
         sb.from("users").select("membership").eq("id", user.id).maybeSingle(),
       ]);
@@ -148,11 +148,11 @@ export default function SocialTasksEarnPage() {
       if (c.status !== "approved") return false;
       return new Date(c.completed_at).getTime() >= t0;
     });
-    const earningsTodayCents = approvedToday.reduce((s, c) => s + c.reward_cents, 0);
+    const earningsTodayGpc = approvedToday.reduce((s, c) => s + c.reward_gpc, 0);
     const completedToday = approvedToday.length;
     return {
       tasksAvailable: available,
-      earningsTodayCents,
+      earningsTodayGpc,
       tasksCompletedToday: completedToday,
     };
   }, [tasks, completions, membership]);
@@ -243,7 +243,7 @@ export default function SocialTasksEarnPage() {
             { label: "Tasks available", value: String(stats.tasksAvailable) },
             {
               label: "Your earnings today",
-              value: `$${(stats.earningsTodayCents / 100).toFixed(2)}`,
+              value: `${stats.earningsTodayGpc.toLocaleString()} GPC`,
             },
             { label: "Tasks completed today", value: String(stats.tasksCompletedToday) },
             { label: "Your membership tier", value: tierLabel },
@@ -316,7 +316,7 @@ export default function SocialTasksEarnPage() {
 
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-xl font-bold font-mono" style={{ color: "#f5c842" }}>
-                    +${(task.reward_cents / 100).toFixed(2)}
+                    +{task.reward_gpc.toLocaleString()} GPC
                   </p>
                   {existing ? (
                     <span className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 text-violet-200">
@@ -446,7 +446,7 @@ export default function SocialTasksEarnPage() {
                   <strong className="text-white">Step 3:</strong> Confirm your submission. We will review it shortly.
                 </p>
                 <ul className="text-xs text-violet-300/80 space-y-1 font-mono break-all">
-                  <li>Reward: ${(modalTask.reward_cents / 100).toFixed(2)}</li>
+                  <li>Reward: {modalTask.reward_gpc.toLocaleString()} GPC</li>
                   {proofUrl && <li>Proof: {proofUrl}</li>}
                 </ul>
                 {error && <p className="text-sm text-red-400">{error}</p>}

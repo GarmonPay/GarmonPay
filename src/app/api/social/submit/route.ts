@@ -3,7 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { userMeetsMinTier } from "@/lib/social-tier";
 import { runFraudChecks } from "@/lib/social-fraud-detection";
-import { ensureWalletBalancesRow, walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditGpayIdempotent } from "@/lib/coins";
 
 const GENERIC_OK = {
   success: true,
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   const t = task as {
     id: string;
     status: string;
-    reward_cents: number;
+    reward_gpc: number;
     max_completions: number;
     completions: number;
     min_tier: string;
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       user_id: userId,
       proof_url: proof_url || null,
       status: "pending",
-      reward_cents: t.reward_cents,
+      reward_gpc: t.reward_gpc,
       claimed_at: claimed_at ?? null,
     })
     .select("id")
@@ -141,23 +141,21 @@ export async function POST(req: Request) {
   }
 
   if (fraudResult.action === "approve" && fraudResult.shouldCredit) {
-    const ensured = await ensureWalletBalancesRow(userId);
-    if (ensured.ok) {
-      const credit = await walletLedgerEntry(
-        userId,
-        "ad_earning",
-        t.reward_cents,
-        `social_task_${completionId}`
-      );
-      if (credit.success) {
-        await supabase.from("social_task_completions").update({ status: "approved" }).eq("id", completionId);
-        await supabase
-          .from("social_tasks")
-          .update({ completions: t.completions + 1 })
-          .eq("id", task_id);
-      } else {
-        console.error("[social/submit] ledger:", credit.message);
-      }
+    const credit = await creditGpayIdempotent(
+      userId,
+      t.reward_gpc,
+      "Social task reward",
+      `social_task_${completionId}`,
+      "social_task_reward"
+    );
+    if (credit.success) {
+      await supabase.from("social_task_completions").update({ status: "approved" }).eq("id", completionId);
+      await supabase
+        .from("social_tasks")
+        .update({ completions: t.completions + 1 })
+        .eq("id", task_id);
+    } else {
+      console.error("[social/submit] GPC credit:", credit.message);
     }
   }
 
