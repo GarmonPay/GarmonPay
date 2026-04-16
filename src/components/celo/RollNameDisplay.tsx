@@ -70,7 +70,7 @@ export default function RollNameDisplay({ rollName, result }: Props) {
     left: "50%",
     top: "42%",
     transform: "translate(-50%, -50%)",
-    zIndex: 50,
+    zIndex: 20,
     textAlign: "center",
     pointerEvents: "none",
     maxWidth: "96vw",

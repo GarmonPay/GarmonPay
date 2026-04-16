@@ -1,20 +1,35 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import Dice3D, { type Dice3DType } from "@/components/celo/Dice3D";
+import { Cinzel_Decorative } from "next/font/google";
+import DiceFace, { type DiceFaceType } from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
 import type { CeloPlayer, CeloRoom, CeloRound } from "@/types/celo";
 import { DICE_TYPES } from "@/lib/celo-engine";
 
-function scToUsd(sc: number): string {
-  return (Math.max(0, sc) / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
+
+function gpcToUsd(gpc: number): string {
+  return (Math.max(0, gpc) / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-function mapDice(t: string | undefined): Dice3DType {
+function truncate(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function mapDice(t: string | undefined): DiceFaceType {
   const x = String(t ?? "standard").toLowerCase();
-  if (x in DICE_TYPES) return x as Dice3DType;
+  if (x in DICE_TYPES) return x as DiceFaceType;
   return "standard";
 }
+
+const NAV_STACK = "calc(5rem + env(safe-area-inset-bottom, 0px))";
+const TAB_H = 44;
+const PANEL_MAX = 240;
+const ACTION_H = 64;
 
 export type CeloTableProps = {
   room: CeloRoom;
@@ -24,7 +39,6 @@ export type CeloTableProps = {
   onRoll: () => void | Promise<void>;
   onStartRound: () => void;
   rolling: boolean;
-  /** True while POST /roll is in flight (disables double-tap). */
   rollSubmitting?: boolean;
   dice: [number, number, number] | null;
   rollName: string | null;
@@ -34,17 +48,33 @@ export type CeloTableProps = {
   prizePoolSc: number;
   canLowerBank: boolean;
   lowerBankSecondsLeft: number;
-  onLowerBank: (amountSc: number) => void;
+  onLowerBank: (amountGpc: number) => void;
+  onDismissLowerBank?: () => void;
   showCoverBank: boolean;
-  coverBankAmountSc: number;
+  coverBankAmountGpc: number;
   onCoverBank: () => void;
   onOpenDiceShop: () => void;
   diceShopOpen: boolean;
   onCloseDiceShop: () => void;
-  onPurchaseDice: (diceType: Dice3DType, quantity: number) => void;
-  myDiceType: Dice3DType;
+  onPurchaseDice: (diceType: DiceFaceType, quantity: number) => void;
+  myDiceType: DiceFaceType;
   isBanker: boolean;
   compact?: boolean;
+  roomTitle?: string;
+  roundNumber?: number;
+  onBackToLobby?: () => void;
+  connectionStatus?: "live" | "connecting" | "offline";
+  spectatorCount?: number;
+  onJoinRound?: (entryGpc: number) => void;
+  joinRoundBusy?: boolean;
+  joinRoundError?: string | null;
+  mobileTab?: "bets" | "chat" | "voice";
+  onMobileTabChange?: (t: "bets" | "chat" | "voice") => void;
+  mobileTabPanels?: {
+    bets: ReactNode;
+    chat: ReactNode;
+    voice: ReactNode;
+  };
 };
 
 export default function CeloTable({
@@ -65,8 +95,9 @@ export default function CeloTable({
   canLowerBank,
   lowerBankSecondsLeft,
   onLowerBank,
+  onDismissLowerBank,
   showCoverBank,
-  coverBankAmountSc,
+  coverBankAmountGpc,
   onCoverBank,
   onOpenDiceShop,
   diceShopOpen,
@@ -75,16 +106,41 @@ export default function CeloTable({
   myDiceType,
   isBanker,
   compact = false,
+  roomTitle,
+  roundNumber = 0,
+  onBackToLobby,
+  connectionStatus = "live",
+  spectatorCount = 0,
+  onJoinRound,
+  joinRoundBusy = false,
+  joinRoundError = null,
+  mobileTab = "bets",
+  onMobileTabChange,
+  mobileTabPanels,
 }: CeloTableProps) {
-  const [lowerAmt, setLowerAmt] = useState(room.minimum_entry_sc);
   const [shopQty, setShopQty] = useState(1);
-  const [shopType, setShopType] = useState<Dice3DType>("street");
+  const [shopType, setShopType] = useState<DiceFaceType>("street");
+  const [lowerAmt, setLowerAmt] = useState(room.minimum_entry_sc);
+  const [coverConfirmOpen, setCoverConfirmOpen] = useState(false);
+  const [joinSel, setJoinSel] = useState<number | "min" | "2x" | "5x" | "max">("min");
+  const [lowerSheetOpen, setLowerSheetOpen] = useState(false);
 
   const d = dice ?? [1, 1, 1];
   const bankerPlayer = players.find((p) => p.role === "banker");
   const tablePlayers = players.filter((p) => p.role === "player").sort((a, b) => a.seat_number - b.seat_number);
   const myPlayer = players.find((p) => p.user_id === currentUserId);
   const spectator = myPlayer?.role === "spectator";
+
+  const minEntry = room.minimum_entry_sc;
+  const maxEntry = room.max_bet_cents > 0 ? room.max_bet_cents : Math.max(minEntry * 10, minEntry);
+
+  const resolvedJoinAmount = useMemo(() => {
+    if (joinSel === "min") return minEntry;
+    if (joinSel === "2x") return Math.min(maxEntry, minEntry * 2);
+    if (joinSel === "5x") return Math.min(maxEntry, minEntry * 5);
+    if (joinSel === "max") return Math.min(maxEntry, myBalance);
+    return joinSel;
+  }, [joinSel, minEntry, maxEntry, myBalance]);
 
   const turnUserId = useMemo(() => {
     if (!currentRound) return null;
@@ -110,126 +166,507 @@ export default function CeloTable({
     return null;
   }, [rollResult]);
 
-  const tableSize = compact ? 280 : 400;
-  const dieSize = compact ? 56 : 72;
-  /** Same offset as dashboard layout + mobile tab strip — keeps controls above MobileNav (z-100) */
-  const mobileShellNavOffset = "calc(5rem + env(safe-area-inset-bottom, 0px))";
-  const mobileTabStripH = "3.25rem";
-  const compactActionBarBottom = compact
-    ? `calc(${mobileShellNavOffset} + ${mobileTabStripH})`
-    : "0";
+  const lowerBankWindow =
+    canLowerBank ||
+    (isBanker &&
+      room.last_round_was_celo &&
+      room.banker_celo_at &&
+      Date.now() - new Date(room.banker_celo_at).getTime() < 60_000);
+
+  const lowerPills = useMemo(() => {
+    const min = room.minimum_entry_sc;
+    const cur = room.current_bank_sc;
+    const opts: number[] = [];
+    for (let v = min; v < cur; v += min) {
+      opts.push(v);
+      if (opts.length >= 10) break;
+    }
+    return opts;
+  }, [room.minimum_entry_sc, room.current_bank_sc]);
+
+  const title = roomTitle ?? room.name ?? "Table";
+  const dieSize = compact ? 72 : 80;
+  const gapDice = compact ? 12 : 16;
+
+  const actionBarBottom = compact ? `calc(${NAV_STACK} + ${TAB_H}px + ${PANEL_MAX}px)` : "auto";
+
+  const tabBarBottom = NAV_STACK;
+  const panelBottom = `calc(${NAV_STACK} + ${TAB_H}px)`;
+
+  const showJoinUi =
+    Boolean(onJoinRound) &&
+    !spectator &&
+    myPlayer?.role === "player" &&
+    myEntry <= 0 &&
+    !currentRound;
+
+  const primaryCenter = () => {
+    if (showCoverBank && !isBanker && myPlayer?.role === "player" && currentRound && !showJoinUi) {
+      return (
+        <button
+          type="button"
+          onClick={() => setCoverConfirmOpen(true)}
+          style={{
+            width: "100%",
+            maxWidth: 280,
+            height: 44,
+            borderRadius: 10,
+            border: "none",
+            fontWeight: 900,
+            fontFamily: cinzel.style.fontFamily,
+            fontSize: 13,
+            cursor: "pointer",
+            background: "linear-gradient(135deg,#92400E,#D4A017)",
+            color: "#FFFBEB",
+          }}
+        >
+          COVER ({coverBankAmountGpc.toLocaleString()} GPC)
+        </button>
+      );
+    }
+    if (showJoinUi) {
+      return (
+        <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 8 }}>
+            {(["min", "2x", "5x", "max"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setJoinSel(k)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: joinSel === k ? "2px solid #F5C842" : "1px solid rgba(124,58,237,0.5)",
+                  background: joinSel === k ? "linear-gradient(135deg,#F5C842,#D4A017)" : "transparent",
+                  color: joinSel === k ? "#0A0A0F" : "#A855F7",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {k === "min" ? "MIN" : k === "2x" ? "2×" : k === "5x" ? "5×" : "MAX"}
+              </button>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>
+            = {resolvedJoinAmount.toLocaleString()} GPC ({gpcToUsd(resolvedJoinAmount)})
+          </div>
+          <button
+            type="button"
+            disabled={joinRoundBusy || resolvedJoinAmount > myBalance}
+            onClick={() => onJoinRound?.(resolvedJoinAmount)}
+            style={{
+              width: "100%",
+              height: 44,
+              borderRadius: 10,
+              border: "none",
+              fontWeight: 900,
+              fontFamily: cinzel.style.fontFamily,
+              fontSize: 14,
+              cursor: joinRoundBusy ? "wait" : "pointer",
+              background: "linear-gradient(135deg,#F5C842,#D4A017)",
+              color: "#0A0A0F",
+              opacity: resolvedJoinAmount > myBalance ? 0.45 : 1,
+            }}
+          >
+            JOIN ROUND
+          </button>
+          {joinRoundError ? (
+            <p style={{ marginTop: 8, fontSize: 10, color: "#F87171", textAlign: "center" }}>{joinRoundError}</p>
+          ) : null}
+        </div>
+      );
+    }
+    if (canStart) {
+      return (
+        <button
+          type="button"
+          onClick={onStartRound}
+          style={{
+            width: "100%",
+            maxWidth: 280,
+            height: 44,
+            borderRadius: 10,
+            border: "none",
+            fontWeight: 900,
+            fontFamily: cinzel.style.fontFamily,
+            fontSize: 14,
+            cursor: "pointer",
+            background: "linear-gradient(135deg,#F5C842,#D4A017)",
+            color: "#0A0A0F",
+          }}
+        >
+          🎲 START ROUND
+        </button>
+      );
+    }
+    if (myTurn) {
+      return (
+        <button
+          type="button"
+          disabled={rollSubmitting}
+          onClick={() => void onRoll()}
+          style={{
+            width: "100%",
+            maxWidth: 280,
+            height: 44,
+            borderRadius: 10,
+            border: "none",
+            fontWeight: 900,
+            fontFamily: cinzel.style.fontFamily,
+            fontSize: 14,
+            cursor: rollBusy ? "wait" : "pointer",
+            background: "linear-gradient(135deg,#F5C842,#D4A017)",
+            color: "#0A0A0F",
+            opacity: rollBusy ? 0.75 : 1,
+            animation: "pulseGold 1.5s ease-in-out infinite",
+            boxShadow: rollBusy ? undefined : "0 0 0 0 rgba(245,200,66,0)",
+          }}
+        >
+          🎲 ROLL DICE
+        </button>
+      );
+    }
+    const waitingPlayers = !tablePlayers.some((p) => p.entry_sc > 0);
+    return (
+      <div style={{ textAlign: "center", width: "100%" }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 10,
+            background: "rgba(255,255,255,0.05)",
+            color: "#6B7280",
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          {waitingPlayers
+            ? "Waiting for players…"
+            : turnUserId
+              ? `${players.find((p) => p.user_id === turnUserId)?.user?.full_name ?? "Player"} rolling…`
+              : "Waiting…"}
+        </div>
+      </div>
+    );
+  };
+
+  const connLabel =
+    connectionStatus === "live" ? "🟢 LIVE" : connectionStatus === "connecting" ? "🟡 CONNECTING" : "🔴 OFFLINE";
+
+  const mobileBottomPadding = compact
+    ? `calc(${NAV_STACK} + ${TAB_H}px + ${PANEL_MAX}px + ${ACTION_H}px + 12px)`
+    : undefined;
 
   return (
     <div
       style={{
         position: "relative",
-        minHeight: "100%",
-        background: "#0A0A0F",
+        minHeight: compact ? "100%" : "100%",
+        background: "#05010F",
         overflow: "hidden",
         fontFamily: "var(--font-dm-sans), system-ui, sans-serif",
-        ...(compact && {
-          paddingBottom: `calc(${mobileShellNavOffset} + ${mobileTabStripH} + 8.5rem)`,
-        }),
+        paddingBottom: mobileBottomPadding,
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: `
-            radial-gradient(ellipse 80% 45% at 50% 0%, rgba(245,200,100,0.14), transparent 55%),
-            linear-gradient(180deg, rgba(10,10,15,0.9), #0A0A0F),
-            repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 18px),
-            repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 14px)
-          `,
-          pointerEvents: "none",
-        }}
-      />
-      {/* graffiti */}
-      <div
-        style={{
-          position: "absolute",
-          top: "6%",
-          left: "4%",
-          right: "4%",
-          height: 90,
-          opacity: 0.35,
-          background:
-            "radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.5), transparent 50%), radial-gradient(ellipse at 70% 40%, rgba(245,200,66,0.35), transparent 45%), radial-gradient(ellipse at 50% 80%, rgba(16,185,129,0.25), transparent 50%)",
-          filter: "blur(2px)",
-        }}
-      />
-      {/* neon tubes */}
-      <div
-        style={{
-          position: "absolute",
-          left: 8,
-          top: "15%",
-          bottom: "25%",
-          width: 4,
-          borderRadius: 4,
-          background: "#7C3AED",
-          boxShadow: "0 0 20px #7C3AED, 0 0 40px #7C3AED, 0 0 80px #7C3AED",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          right: 8,
-          top: "18%",
-          bottom: "28%",
-          width: 4,
-          borderRadius: 4,
-          background: "#F5C842",
-          boxShadow: "0 0 20px #F5C842, 0 0 40px #F5C842",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 6,
-          background: "#10B981",
-          boxShadow: "0 0 15px #10B981",
-          opacity: 0.45,
-        }}
-      />
-      {/* smoke */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          opacity: 0.05,
-          animation: "haze 14s ease-in-out infinite alternate",
-          background: "radial-gradient(circle at 30% 40%, rgba(200,200,255,0.3), transparent 55%)",
-          pointerEvents: "none",
-        }}
-      />
       <style>{`
-        @keyframes haze { from { opacity: 0.03; } to { opacity: 0.07; } }
-        @keyframes feltVibe { 0%,100% { transform: translate(0,0); } 50% { transform: translate(0.5px,-0.5px); } }
-        @keyframes pulseBtn { 0%,100% { box-shadow: 0 0 0 0 rgba(245,200,66,0.45); } 50% { box-shadow: 0 0 24px 4px rgba(245,200,66,0.35); } }
+        @keyframes pulseGold {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(245,200,66,0); }
+          50% { box-shadow: 0 0 16px 4px rgba(245,200,66,0.45); }
+        }
+        @keyframes pulseLive {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.55; }
+        }
+        @keyframes feltVibrate {
+          0%, 100% { transform: translateY(0); }
+          25% { transform: translateY(-1px); }
+          75% { transform: translateY(1px); }
+        }
+        @keyframes bankerPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(245,200,66,0.35); }
+          50% { box-shadow: 0 0 12px 2px rgba(245,200,66,0.55); }
+        }
       `}</style>
 
-      {/* prize pool */}
-      <div style={{ textAlign: "center", paddingTop: compact ? 12 : 20, position: "relative", zIndex: 2 }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.25em", color: "#94a3b8" }}>PRIZE POOL</div>
-        <div style={{ fontSize: compact ? 26 : 34, fontWeight: 900, color: "#F5C842", textShadow: "0 0 24px rgba(245,200,66,0.35)" }}>
-          {prizePoolSc.toLocaleString()} SC
-        </div>
-        <div style={{ fontSize: 12, color: "#64748b" }}>{scToUsd(prizePoolSc)}</div>
-      </div>
+      {/* —— Mobile header —— */}
+      {compact ? (
+        <header
+          style={{
+            height: 56,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 12px",
+            background: "rgba(5,1,15,0.95)",
+            backdropFilter: "blur(12px)",
+            borderBottom: "1px solid rgba(124,58,237,0.2)",
+            position: "sticky",
+            top: 0,
+            zIndex: 40,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+            <button
+              type="button"
+              aria-label="Back to lobby"
+              onClick={onBackToLobby}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#A855F7",
+                fontSize: 20,
+                cursor: onBackToLobby ? "pointer" : "default",
+                padding: 4,
+                lineHeight: 1,
+              }}
+            >
+              ←
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#E5E7EB", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {truncate(title, 16)}
+            </span>
+          </div>
+          <div
+            className={cinzel.className}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#F5C842",
+              letterSpacing: "0.08em",
+              flexShrink: 0,
+              margin: "0 8px",
+            }}
+          >
+            ROUND {roundNumber > 0 ? roundNumber : "—"}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: connectionStatus === "live" ? "#10B981" : connectionStatus === "connecting" ? "#EAB308" : "#EF4444",
+                animation: connectionStatus === "live" ? "pulseLive 1.4s ease-in-out infinite" : undefined,
+              }}
+            >
+              {connLabel}
+            </span>
+            <span style={{ fontSize: 9, color: "#6B7280" }}>
+              👁 {spectatorCount} watching
+            </span>
+          </div>
+        </header>
+      ) : null}
 
-      {/* banker */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: 12, position: "relative", zIndex: 2 }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: "#F5C842", letterSpacing: "0.15em", marginBottom: 4 }}>BANKER</div>
+      {/* Bank / prize / status strip */}
+      <section
+        style={{
+          minHeight: 72,
+          display: "grid",
+          gridTemplateColumns: "1fr 1.2fr 1fr",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          background: "linear-gradient(135deg, rgba(13,5,32,0.9), rgba(30,10,60,0.9))",
+          borderBottom: "1px solid rgba(245,200,66,0.15)",
+          position: "relative",
+          zIndex: 25,
+        }}
+      >
+        {/* Left: banker */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "linear-gradient(145deg,#4c1d95,#7c3aed)",
+              border: "2px solid #F5C842",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 14,
+              fontWeight: 800,
+              color: "#fff",
+            }}
+          >
+            {(bankerPlayer?.user?.full_name ?? "?")[0]?.toUpperCase() ?? "B"}
+          </div>
+          <span style={{ fontSize: 11, color: "#D1D5DB", maxWidth: 96, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {bankerPlayer?.user?.full_name ?? "Banker"}
+          </span>
+          <span style={{ fontSize: 9, fontWeight: 800, color: "#F5C842", letterSpacing: "0.12em" }}>BANKER</span>
+        </div>
+
+        {/* Center: prize pool */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: "#F5C842", letterSpacing: "0.14em" }}>PRIZE POOL</div>
+          <div style={{ fontFamily: "Courier New, monospace", fontSize: compact ? 17 : 19, fontWeight: 700, color: "#F5F3FF", marginTop: 2 }}>
+            {prizePoolSc.toLocaleString()} GPC
+          </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>({gpcToUsd(prizePoolSc)})</div>
+          {currentRound?.bank_covered ? (
+            <div style={{ marginTop: 4, fontSize: 9, fontWeight: 900, color: "#F5C842" }}>🔒 COVERED</div>
+          ) : null}
+        </div>
+
+        {/* Right: bank */}
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: "#F5C842", letterSpacing: "0.14em" }}>BANK</div>
+          <div style={{ fontFamily: "Courier New, monospace", fontSize: compact ? 15 : 17, fontWeight: 700, color: "#F5F3FF" }}>
+            {room.current_bank_sc.toLocaleString()} GPC
+          </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>({gpcToUsd(room.current_bank_sc)})</div>
+          {lowerBankWindow && isBanker ? (
+            <button
+              type="button"
+              onClick={() => {
+                setLowerAmt(lowerPills[0] ?? room.minimum_entry_sc);
+                setLowerSheetOpen(true);
+              }}
+              style={{
+                marginTop: 6,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid rgba(245,200,66,0.45)",
+                background: "rgba(245,200,66,0.12)",
+                color: "#F5C842",
+                fontSize: 10,
+                fontWeight: 900,
+                cursor: "pointer",
+                animation: "pulseGold 1.8s ease-in-out infinite",
+              }}
+            >
+              LOWER BANK ↓
+            </button>
+          ) : null}
+        </div>
+      </section>
+
+      {/* Main table area */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          position: "relative",
+          overflow: "auto",
+          minHeight: compact ? 280 : 360,
+          padding: "12px 12px 24px",
+        }}
+      >
+        {/* Scene */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `
+              radial-gradient(ellipse 60% 50% at 50% -10%, rgba(245,200,66,0.12) 0%, transparent 70%),
+              linear-gradient(180deg, rgba(20,15,30,0.85) 0%, #05010F 45%)
+            `,
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: "-20%",
+            top: "15%",
+            width: 200,
+            height: 200,
+            borderRadius: "50%",
+            background: "rgba(124,58,237,0.06)",
+            filter: "blur(60px)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            right: "-15%",
+            top: "22%",
+            width: 150,
+            height: 150,
+            borderRadius: "50%",
+            background: "rgba(245,200,66,0.04)",
+            filter: "blur(50px)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: "10%",
+            bottom: "8%",
+            width: "80%",
+            height: 120,
+            background: "rgba(16,185,129,0.03)",
+            filter: "blur(40px)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Neon edges */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 96,
+            width: 2,
+            background: "#7C3AED",
+            boxShadow: "0 0 8px #7C3AED, 0 0 20px #7C3AED, 0 0 40px rgba(124,58,237,0.4)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            bottom: 96,
+            width: 2,
+            background: "#F5C842",
+            boxShadow: "0 0 8px #F5C842, 0 0 20px #F5C842, 0 0 40px rgba(245,200,66,0.3)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 4,
+            background: "#10B981",
+            boxShadow: "0 0 12px #10B981, 0 0 24px rgba(16,185,129,0.4)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Banker seat above felt */}
+        <div style={{ position: "relative", zIndex: 5, textAlign: "center", marginBottom: 10 }}>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 9,
+              fontWeight: 900,
+              letterSpacing: "0.15em",
+              color: "#0A0A0F",
+              background: "linear-gradient(90deg,#F5C842,#D4A017)",
+              marginBottom: 6,
+            }}
+          >
+            BANKER
+          </div>
+          <div
+            style={{
+              width: 52,
+              height: 52,
               margin: "0 auto",
               borderRadius: "50%",
               border: "3px solid #F5C842",
@@ -237,341 +674,447 @@ export default function CeloTable({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 800,
               color: "#fff",
-              boxShadow: "0 0 20px rgba(245,200,66,0.25)",
+              boxShadow: "0 0 16px rgba(245,200,66,0.35)",
+              animation: turnUserId === room.banker_id && currentRound?.status === "banker_rolling" ? "bankerPulse 1.2s ease-in-out infinite" : undefined,
             }}
           >
             {(bankerPlayer?.user?.full_name ?? "?")[0]?.toUpperCase() ?? "B"}
           </div>
-          <div style={{ fontSize: 12, color: "#e2e8f0", marginTop: 6, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {bankerPlayer?.user?.full_name ?? "Banker"}
+          <div style={{ marginTop: 6, fontFamily: "Courier New, monospace", fontSize: 11, color: "#F5C842" }}>
+            BANK: {room.current_bank_sc.toLocaleString()} GPC
           </div>
-          <div style={{ fontSize: 13, color: "#F5C842", fontWeight: 700 }}>
-            BANK: {room.current_bank_sc.toLocaleString()} SC
-          </div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>{scToUsd(room.current_bank_sc)}</div>
         </div>
-      </div>
 
-      {/* table + dice */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: 16, position: "relative", zIndex: 2 }}>
+        {/* Felt */}
         <div
           style={{
-            width: tableSize,
-            maxWidth: "92vw",
-            height: Math.round(tableSize * 0.72),
+            position: "relative",
+            zIndex: 4,
+            width: "min(320px, 90vw)",
+            height: compact ? 200 : 260,
             borderRadius: "50%",
-            background: "#1A3A1A",
-            border: "12px solid #5C3A1A",
+            background: "#0D2B0D",
+            backgroundImage: `repeating-linear-gradient(
+              45deg,
+              rgba(255,255,255,0.01) 0px,
+              rgba(255,255,255,0.01) 1px,
+              transparent 1px,
+              transparent 8px
+            )`,
+            border: "10px solid #5C3A1A",
             boxShadow:
-              "0 0 0 4px #8B5E3C, inset 0 0 60px rgba(0,0,0,0.45), 0 24px 50px rgba(0,0,0,0.55)",
+              "0 0 0 2px #8B5E3C, 0 4px 20px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,0,0,0.4)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            position: "relative",
-            animation: rolling ? "feltVibe 0.25s linear infinite" : "none",
+            animation: rolling ? "feltVibrate 0.28s linear infinite" : "none",
           }}
         >
           <div
+            aria-hidden
             style={{
               position: "absolute",
               inset: 0,
               borderRadius: "50%",
-              opacity: 0.08,
-              background: "radial-gradient(circle at 50% 45%, rgba(255,255,255,0.25), transparent 55%)",
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: "50%",
-              opacity: 0.08,
-              background: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='80' height='80' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E\")",
-              mixBlendMode: "overlay",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              fontSize: 42,
-              fontWeight: 900,
-              color: "rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: cinzel.style.fontFamily,
+              fontSize: 48,
+              fontWeight: 700,
+              color: "rgba(245,200,66,0.06)",
               userSelect: "none",
               pointerEvents: "none",
             }}
           >
             GP
           </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", position: "relative", zIndex: 3 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: gapDice,
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              zIndex: 6,
+              filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+            }}
+          >
             {[0, 1, 2].map((i) => (
-              <Dice3D
+              <DiceFace
                 key={i}
                 value={d[i] ?? 1}
                 rolling={rolling}
-                diceType={myDiceType}
+                diceType={mapDice(myDiceType)}
                 size={dieSize}
-                delay={i * 40}
-                dieIndex={i as 0 | 1 | 2}
+                delay={i * 133}
               />
             ))}
           </div>
           <RollNameDisplay rollName={rolling ? null : rollName} result={rollResultKind} />
         </div>
-      </div>
 
-      {/* seats arc */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: 10,
-          padding: "16px 12px 120px",
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        {Array.from({ length: room.max_players }).map((_, idx) => {
-          const seatNum = idx + 1;
-          const p = tablePlayers.find((x) => Number(x.seat_number) === seatNum);
-          const active = turnUserId === p?.user_id;
-          if (!p) {
+        {/* Player seats */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 8,
+            display: "flex",
+            flexDirection: "row",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: 12,
+            padding: "12px 16px",
+            marginTop: 12,
+            maxWidth: 420,
+          }}
+        >
+          {Array.from({ length: room.max_players }).map((_, idx) => {
+            const seatNum = idx + 1;
+            const p = tablePlayers.find((x) => Number(x.seat_number) === seatNum);
+            const active = turnUserId === p?.user_id;
+            if (!p) {
+              return (
+                <div key={seatNum} style={{ width: 56, textAlign: "center" }}>
+                  <button
+                    type="button"
+                    disabled={Boolean(currentRound)}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      margin: "0 auto",
+                      borderRadius: "50%",
+                      border: "2px dashed rgba(124,58,237,0.3)",
+                      background: "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#A855F7",
+                      fontSize: 18,
+                      cursor: currentRound ? "not-allowed" : "pointer",
+                      opacity: currentRound ? 0.4 : 1,
+                    }}
+                  >
+                    +
+                  </button>
+                  <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4 }}>OPEN</div>
+                </div>
+              );
+            }
+            const initial = (p.user?.full_name ?? "P")[0]?.toUpperCase() ?? "P";
+            const shortName = truncate(p.user_id === currentUserId ? "You" : p.user?.full_name ?? "Player", 6);
             return (
-              <div key={seatNum} style={{ width: 72, textAlign: "center", opacity: 0.55 }}>
+              <div key={p.id} style={{ width: 56, textAlign: "center" }}>
                 <div
                   style={{
-                    width: 48,
-                    height: 48,
+                    width: 40,
+                    height: 40,
                     margin: "0 auto",
                     borderRadius: "50%",
-                    border: "2px dashed #444",
+                    background: "linear-gradient(145deg,#4c1d95,#7c3aed)",
+                    border: active ? "2px solid #F5C842" : "2px solid rgba(124,58,237,0.4)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#555",
-                    fontSize: 18,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    boxShadow: active ? "0 0 8px rgba(245,200,66,0.6)" : "none",
+                    animation: active ? "pulseGold 1.4s ease-in-out infinite" : undefined,
                   }}
                 >
-                  +
+                  {initial}
                 </div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 4 }}>OPEN</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis" }}>{shortName}</div>
+                <div style={{ fontSize: 10, color: "#F5C842", fontFamily: "Courier New, monospace" }}>{p.entry_sc.toLocaleString()} GPC</div>
+                <div style={{ fontSize: 9, fontWeight: 800, color: active ? "#F5C842" : "#6B7280" }}>{active ? "ROLLING" : "—"}</div>
               </div>
             );
-          }
-          const initial = (p.user?.full_name ?? "P")[0]?.toUpperCase() ?? "P";
-          return (
-            <div key={p.id} style={{ width: 76, textAlign: "center" }}>
-              {active && (
-                <div style={{ fontSize: 9, color: "#F5C842", fontWeight: 800, marginBottom: 2 }}>YOUR TURN</div>
-              )}
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  margin: "0 auto",
-                  borderRadius: "50%",
-                  background: "linear-gradient(145deg,#4c1d95,#6d28d9)",
-                  border: active ? "2px solid #F5C842" : "2px solid rgba(124,58,237,0.4)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  fontWeight: 800,
-                  boxShadow: active ? "0 0 18px rgba(245,200,66,0.45)" : "none",
-                }}
-              >
-                {initial}
-              </div>
-              <div style={{ fontSize: 11, color: "#cbd5e1", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis" }}>
-                {p.user_id === currentUserId ? "YOU" : p.user?.full_name ?? "Player"}
-              </div>
-              <div style={{ fontSize: 10, color: "#86efac" }}>{p.entry_sc} SC entry</div>
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
 
-      {/* lower bank */}
-      {canLowerBank && isBanker && (
+      {/* Lower bank bottom sheet */}
+      {lowerBankWindow && isBanker && lowerSheetOpen ? (
         <div
           style={{
-            margin: "0 16px 12px",
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid rgba(245,200,66,0.35)",
-            background: "rgba(245,200,66,0.06)",
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 110,
+            height: 280,
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            background: "#0D0520",
+            borderTop: "2px solid #F5C842",
+            borderRadius: "20px 20px 0 0",
+            padding: 16,
+            boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
           }}
         >
-          <div style={{ fontSize: 12, color: "#F5C842", fontWeight: 700 }}>Lower your bank? ({lowerBankSecondsLeft}s)</div>
-          <input
-            type="range"
-            min={room.minimum_entry_sc}
-            max={room.current_bank_sc}
-            value={lowerAmt}
-            onChange={(e) => setLowerAmt(Number(e.target.value))}
-            style={{ width: "100%", marginTop: 8 }}
-          />
+          <h3 className={cinzel.className} style={{ color: "#F5C842", fontSize: 18, marginBottom: 8 }}>
+            Lower Your Bank?
+          </h3>
+          <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 8 }}>
+            Available for: {lowerBankSecondsLeft}s
+          </p>
+          <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.08)", marginBottom: 12, overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.min(100, (lowerBankSecondsLeft / 60) * 100)}%`,
+                background: "linear-gradient(90deg,#F5C842,#D4A017)",
+                transition: "width 1s linear",
+              }}
+            />
+          </div>
+          <p style={{ fontFamily: "Courier New, monospace", fontSize: 13, color: "#E5E7EB", marginBottom: 12 }}>
+            Current: {room.current_bank_sc.toLocaleString()} GPC ({gpcToUsd(room.current_bank_sc)})
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {lowerPills.map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => setLowerAmt(amt)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: lowerAmt === amt ? "2px solid #F5C842" : "1px solid rgba(124,58,237,0.4)",
+                  background: lowerAmt === amt ? "rgba(245,200,66,0.15)" : "transparent",
+                  color: "#F5F3FF",
+                  fontSize: 11,
+                  fontFamily: "Courier New, monospace",
+                  cursor: "pointer",
+                }}
+              >
+                {amt.toLocaleString()} GPC
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={() => onLowerBank(lowerAmt)}
-            style={{
-              marginTop: 8,
-              width: "100%",
-              padding: 10,
-              borderRadius: 10,
-              border: "none",
-              fontWeight: 800,
-              cursor: "pointer",
-              background: "linear-gradient(90deg,#f5c842,#ca8a04)",
-              color: "#0a0a0f",
+            onClick={() => {
+              onLowerBank(lowerAmt);
+              setLowerSheetOpen(false);
             }}
-          >
-            CONFIRM LOWER BANK
-          </button>
-        </div>
-      )}
-
-      {showCoverBank && !isBanker && myPlayer?.role === "player" && (
-        <div style={{ padding: "0 16px 12px" }}>
-          <button
-            type="button"
-            onClick={onCoverBank}
             style={{
               width: "100%",
               padding: 12,
               borderRadius: 12,
               border: "none",
-              fontWeight: 800,
+              fontWeight: 900,
+              background: "linear-gradient(135deg,#F5C842,#D4A017)",
+              color: "#0A0A0F",
               cursor: "pointer",
-              background: "linear-gradient(90deg,#f5c842,#ca8a04)",
-              color: "#0a0a0f",
+              marginBottom: 8,
             }}
           >
-            COVER THE BANK ({coverBankAmountSc.toLocaleString()} SC)
+            CONFIRM
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLowerSheetOpen(false);
+              onDismissLowerBank?.();
+            }}
+            style={{ width: "100%", padding: 10, background: "transparent", border: "none", color: "#6B7280", fontSize: 13 }}
+          >
+            KEEP SAME
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* bottom bar */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: compactActionBarBottom,
-          zIndex: compact ? 55 : 30,
-          background: "linear-gradient(180deg, rgba(8,6,16,0.92), rgba(5,4,12,0.98))",
-          borderTop: "1px solid rgba(124,58,237,0.25)",
-          padding: compact
-            ? "12px 14px 12px"
-            : "12px 14px calc(12px + env(safe-area-inset-bottom))",
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          gap: 10,
-          alignItems: "center",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 10, color: "#64748b" }}>Your balance</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#F5C842" }}>{myBalance.toLocaleString()} SC</div>
-          <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>Your entry</div>
-          <div style={{ fontSize: 12, color: "#e2e8f0" }}>{myEntry.toLocaleString()} SC</div>
-        </div>
-        <div style={{ textAlign: "center" }}>
-          {canStart ? (
+      {/* Cover bank confirmation */}
+      {coverConfirmOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 110,
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setCoverConfirmOpen(false)}
+          role="presentation"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              background: "#0D0520",
+              borderTop: "2px solid #F5C842",
+              borderRadius: "20px 20px 0 0",
+              padding: 20,
+              marginBottom: compact ? NAV_STACK : 0,
+            }}
+          >
+            <h3 className={cinzel.className} style={{ color: "#F5C842", fontSize: 18, marginBottom: 12 }}>
+              Cover the Entire Bank
+            </h3>
+            <p style={{ fontSize: 13, color: "#D1D5DB", marginBottom: 8 }}>
+              You will enter {coverBankAmountGpc.toLocaleString()} GPC ({gpcToUsd(coverBankAmountGpc)}).
+            </p>
+            <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 4 }}>Other players locked out this round.</p>
+            <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Side entries still open for spectators.</p>
             <button
               type="button"
-              onClick={onStartRound}
+              onClick={() => {
+                setCoverConfirmOpen(false);
+                onCoverBank();
+              }}
               style={{
-                padding: "12px 22px",
+                width: "100%",
+                padding: 12,
                 borderRadius: 12,
                 border: "none",
                 fontWeight: 900,
-                fontSize: 13,
+                background: "linear-gradient(135deg,#F5C842,#D4A017)",
+                color: "#0A0A0F",
                 cursor: "pointer",
-                background: "linear-gradient(135deg,#f5c842,#d97706)",
-                color: "#0a0a0f",
+                marginBottom: 8,
               }}
             >
-              START ROUND
+              CONFIRM COVER
             </button>
-          ) : myTurn ? (
             <button
               type="button"
-              disabled={rollSubmitting}
-              onClick={() => void onRoll()}
-              style={{
-                padding: "14px 28px",
-                borderRadius: 14,
-                border: "none",
-                fontWeight: 900,
-                fontSize: 15,
-                cursor: rollBusy ? "wait" : "pointer",
-                background: "linear-gradient(135deg,#f5c842,#d97706)",
-                color: "#0a0a0f",
-                animation: "pulseBtn 2s ease-in-out infinite",
-                opacity: rollBusy ? 0.7 : 1,
-              }}
+              onClick={() => setCoverConfirmOpen(false)}
+              style={{ width: "100%", padding: 10, background: "transparent", border: "none", color: "#6B7280" }}
             >
-              🎲 ROLL DICE
+              CANCEL
             </button>
-          ) : (
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
-                {turnUserId
-                  ? `${players.find((p) => p.user_id === turnUserId)?.user?.full_name ?? "Player"} is rolling…`
-                  : "Waiting…"}
-              </div>
-              <button
-                type="button"
-                disabled
-                style={{
-                  padding: "12px 20px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  opacity: 0.4,
-                  color: "#94a3b8",
-                  background: "transparent",
-                }}
-              >
-                🎲 ROLL DICE
-              </button>
-            </div>
-          )}
+          </div>
         </div>
+      ) : null}
+
+      {/* Action bar */}
+      <div
+        style={{
+          position: compact ? "fixed" : "relative",
+          left: 0,
+          right: 0,
+          bottom: compact ? actionBarBottom : "auto",
+          zIndex: 55,
+          height: ACTION_H,
+          background: "rgba(5,1,15,0.96)",
+          backdropFilter: "blur(16px)",
+          borderTop: "1px solid rgba(124,58,237,0.2)",
+          padding: "0 16px",
+          display: "grid",
+          gridTemplateColumns: "25% 50% 25%",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 9, color: "#6B7280", letterSpacing: "0.06em" }}>BALANCE</div>
+          <div style={{ fontFamily: "Courier New, monospace", fontSize: 13, color: "#F5C842", fontWeight: 700 }}>
+            {myBalance.toLocaleString()} GPC
+          </div>
+          <div style={{ fontSize: 10, color: "#6B7280" }}>({gpcToUsd(myBalance)})</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>{primaryCenter()}</div>
         <div style={{ textAlign: "right" }}>
           <button
             type="button"
             onClick={onOpenDiceShop}
             style={{
-              padding: "10px 14px",
+              padding: "8px 10px",
               borderRadius: 10,
-              border: "1px solid rgba(245,200,66,0.35)",
-              background: "rgba(245,200,66,0.08)",
-              color: "#F5C842",
-              fontWeight: 700,
-              fontSize: 11,
+              background: "rgba(124,58,237,0.2)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              color: "#A855F7",
+              fontWeight: 800,
+              fontSize: 10,
               cursor: "pointer",
             }}
           >
-            🎲 BUY DICE
+            🎲 DICE
           </button>
         </div>
       </div>
 
-      {diceShopOpen && (
+      {/* Mobile tabs + panel */}
+      {compact && onMobileTabChange && mobileTabPanels ? (
+        <>
+          <div
+            style={{
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: tabBarBottom,
+              zIndex: 52,
+              height: TAB_H,
+              background: "rgba(5,1,15,0.96)",
+              backdropFilter: "blur(12px)",
+              borderTop: "1px solid rgba(124,58,237,0.15)",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              alignItems: "stretch",
+            }}
+          >
+            {(
+              [
+                ["bets", "🎰 SIDE"],
+                ["chat", "💬 CHAT"],
+                ["voice", "🎤 VOICE"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => onMobileTabChange(k)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: mobileTab === k ? "#F5C842" : "#6B7280",
+                  borderBottom: mobileTab === k ? "2px solid #F5C842" : "2px solid transparent",
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
+            style={{
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: panelBottom,
+              zIndex: 51,
+              maxHeight: PANEL_MAX,
+              height: PANEL_MAX,
+              overflow: "auto",
+              background: "rgba(13,5,32,0.98)",
+              borderTop: "1px solid rgba(124,58,237,0.1)",
+              padding: 12,
+            }}
+          >
+            {mobileTab === "bets" ? mobileTabPanels.bets : mobileTab === "chat" ? mobileTabPanels.chat : mobileTabPanels.voice}
+          </div>
+        </>
+      ) : null}
+
+      {/* Dice shop */}
+      {diceShopOpen ? (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 60,
-            background: "rgba(0,0,0,0.72)",
+            zIndex: 110,
+            background: "rgba(0,0,0,0.85)",
+            backdropFilter: "blur(8px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -582,45 +1125,51 @@ export default function CeloTable({
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: "min(480px, 100%)",
+              width: "100%",
+              maxWidth: 360,
               maxHeight: "90vh",
               overflowY: "auto",
-              background: "#0f0d1a",
-              borderRadius: 16,
-              border: "1px solid rgba(124,58,237,0.35)",
-              padding: 16,
+              background: "#0D0520",
+              border: "1px solid rgba(124,58,237,0.3)",
+              borderRadius: 20,
+              padding: 24,
             }}
           >
-            <div style={{ fontSize: 16, fontWeight: 900, color: "#F5C842", marginBottom: 12 }}>UPGRADE YOUR DICE</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 10 }}>
+            <div className={cinzel.className} style={{ fontSize: 18, fontWeight: 700, color: "#F5C842", marginBottom: 16 }}>
+              UPGRADE YOUR DICE
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {(Object.keys(DICE_TYPES) as Array<keyof typeof DICE_TYPES>).map((key) => {
                 const cfg = DICE_TYPES[key];
                 const isStandard = String(key) === "standard";
                 const disabled = isStandard || (String(key) === "gold" && !isBanker);
+                const cost = cfg.costCents;
                 return (
                   <div
                     key={key}
                     style={{
-                      padding: 10,
+                      padding: 12,
                       borderRadius: 12,
-                      border: shopType === key ? "2px solid #F5C842" : "1px solid rgba(255,255,255,0.08)",
-                      background: "rgba(255,255,255,0.03)",
+                      border: shopType === key ? "2px solid #F5C842" : "1px solid rgba(124,58,237,0.25)",
+                      background: "rgba(255,255,255,0.02)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-                      <Dice3D value={3} rolling={false} diceType={key as Dice3DType} size={44} />
+                      <DiceFace value={6} rolling={false} diceType={key} size={48} />
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#e2e8f0" }}>{cfg.name}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{cfg.costCents === 0 ? "FREE" : `${cfg.costCents} SC`}</div>
-                    {key === "gold" && !isBanker && <div style={{ fontSize: 10, color: "#f87171" }}>Banker only</div>}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#E5E7EB" }}>{cfg.name}</div>
+                    <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "Courier New, monospace" }}>
+                      {cost === 0 ? "FREE" : `${cost.toLocaleString()} GPC (${gpcToUsd(cost)})`}
+                    </div>
+                    {key === "gold" && !isBanker ? <div style={{ fontSize: 10, color: "#F87171" }}>Banker only</div> : null}
                     <button
                       type="button"
                       disabled={disabled || isStandard}
-                      onClick={() => setShopType(key as Dice3DType)}
+                      onClick={() => setShopType(key)}
                       style={{
                         marginTop: 8,
                         width: "100%",
-                        padding: 6,
+                        padding: 8,
                         borderRadius: 8,
                         border: "none",
                         fontSize: 11,
@@ -636,41 +1185,52 @@ export default function CeloTable({
                 );
               })}
             </div>
-            <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>Quantity</span>
-              {[1, 2, 3].map((q) => (
+            <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#94A3B8" }}>Quantity</span>
+              {(
+                [
+                  [1, "1 DIE"],
+                  [2, "2 DICE"],
+                  [3, "3 DICE"],
+                ] as const
+              ).map(([q, label]) => (
                 <button
                   key={q}
                   type="button"
                   onClick={() => setShopQty(q)}
                   style={{
-                    padding: "6px 12px",
+                    padding: "8px 12px",
                     borderRadius: 8,
-                    border: shopQty === q ? "2px solid #F5C842" : "1px solid #334155",
+                    border: shopQty === q ? "2px solid #F5C842" : "1px solid rgba(124,58,237,0.35)",
                     background: "transparent",
-                    color: "#fff",
+                    color: "#F5F3FF",
+                    fontSize: 11,
                     cursor: "pointer",
                   }}
                 >
-                  {q}
+                  {label}
                 </button>
               ))}
             </div>
-            <div style={{ marginTop: 8, fontSize: 13, color: "#86efac" }}>
-              Total: {(DICE_TYPES[shopType as keyof typeof DICE_TYPES]?.costCents ?? 0) * shopQty} SC
+            <div style={{ marginTop: 12, fontSize: 13, color: "#A7F3D0", fontFamily: "Courier New, monospace" }}>
+              Total: {((DICE_TYPES[shopType]?.costCents ?? 0) * shopQty).toLocaleString()} GPC (
+              {gpcToUsd((DICE_TYPES[shopType]?.costCents ?? 0) * shopQty)})
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}>
+              Balance: {myBalance.toLocaleString()} GPC
             </div>
             <button
               type="button"
               onClick={() => onPurchaseDice(shopType, shopQty)}
               style={{
-                marginTop: 12,
+                marginTop: 16,
                 width: "100%",
                 padding: 12,
                 borderRadius: 12,
                 border: "none",
                 fontWeight: 900,
-                background: "linear-gradient(135deg,#f5c842,#ca8a04)",
-                color: "#0a0a0f",
+                background: "linear-gradient(135deg,#F5C842,#D4A017)",
+                color: "#0A0A0F",
                 cursor: "pointer",
               }}
             >
@@ -679,13 +1239,13 @@ export default function CeloTable({
             <button
               type="button"
               onClick={onCloseDiceShop}
-              style={{ marginTop: 8, width: "100%", padding: 8, background: "transparent", border: "none", color: "#94a3b8" }}
+              style={{ marginTop: 8, width: "100%", padding: 8, background: "transparent", border: "none", color: "#6B7280" }}
             >
-              Close
+              CANCEL
             </button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

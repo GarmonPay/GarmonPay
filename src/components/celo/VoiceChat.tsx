@@ -132,7 +132,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       ]);
     } catch (e) {
       console.error("[celo/voice] token fetch failed", e);
-      setError("Voice unavailable. Try again.");
+      setError("Voice unavailable. Tap Retry.");
       setConn("disconnected");
       return;
     }
@@ -146,7 +146,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
 
     if (!res.ok) {
       console.error("[celo/voice] rtc-token failed", res.status, data);
-      setError(data.error ?? "Voice unavailable. Try again.");
+      setError(data.error ?? "Voice unavailable. Tap Retry.");
       setConn("disconnected");
       return;
     }
@@ -158,7 +158,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     console.info("[celo/voice] rtc-token ok", { channelName, uid, hasToken: Boolean(token), audience: isSpectator });
 
     if (!channelName || uid == null) {
-      setError("Voice unavailable. Try again.");
+      setError("Voice unavailable. Tap Retry.");
       setConn("disconnected");
       return;
     }
@@ -180,7 +180,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
             void connectVoice();
           }, RETRY_INTERVAL_MS);
         } else {
-          setError("Voice disconnected. Try again.");
+          setError("Voice disconnected. Tap Retry.");
           setConn("disconnected");
         }
       }
@@ -215,7 +215,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       console.info("[celo/voice] join ok");
     } catch (e) {
       console.error("[celo/voice] join failed", e);
-      setError("Voice unavailable. Try again.");
+      setError("Voice unavailable. Tap Retry.");
       setConn("disconnected");
       await leave();
       return;
@@ -264,37 +264,53 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
   }, [micOn, isSpectator]);
 
   const statusLine = useMemo(() => {
-    if (conn === "connected") return "🟢 Connected";
-    if (conn === "connecting") return "🟡 Connecting…";
-    if (conn === "reconnecting") return "🟡 Reconnecting…";
-    return "🔴 Disconnected — Retry";
+    if (conn === "connected") return { emoji: "🟢", label: "Connected", color: "#10B981" };
+    if (conn === "connecting") return { emoji: "🟡", label: "Connecting…", color: "#EAB308" };
+    if (conn === "reconnecting") return { emoji: "🟡", label: "Reconnecting…", color: "#EAB308" };
+    return { emoji: "🔴", label: "Offline", color: "#EF4444" };
   }, [conn]);
 
   if (!appId) {
     return (
-      <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 text-[11px] text-violet-200/80">
+      <div
+        className="rounded-xl border border-violet-500/25 p-4 text-[11px]"
+        style={{ background: "#0D0520", color: "#A855F7" }}
+      >
         Set <code className="text-violet-300">NEXT_PUBLIC_AGORA_APP_ID</code> for voice.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-violet-500/25 bg-[#08051a]/90 p-3 backdrop-blur-sm">
-      <p className="mb-1 text-[10px] uppercase tracking-widest text-violet-400/70">Voice</p>
-      <p className="text-[11px] text-slate-300">{statusLine}</p>
-      <p className="mt-1 text-[10px] text-slate-500">
-        {userName ?? userId ?? "You"} {isSpectator ? "· audience (listen only)" : "· mic"}
-        {remoteCount > 0 ? ` · ${remoteCount} remote` : ""}
+    <div className="rounded-xl border border-[rgba(124,58,237,0.25)] p-4 backdrop-blur-sm" style={{ background: "#0D0520" }}>
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: "#A855F7" }}>
+        Voice
       </p>
-      {error && <p className="mt-2 text-[11px] text-red-400/90">{error}</p>}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <p className="text-base font-bold" style={{ color: statusLine.color }}>
+        {statusLine.emoji} {statusLine.label}
+      </p>
+      <p className="mt-2 text-[12px] text-slate-400">
+        {userName ?? userId ?? "You"}
+        {isSpectator ? " · audience (listen only)" : " · microphone"}
+        {remoteCount > 0 ? ` · ${remoteCount} in channel` : ""}
+      </p>
+      {isSpectator ? (
+        <p className="mt-2 text-[11px] text-slate-500">Spectators can listen only.</p>
+      ) : null}
+      {error ? (
+        <p className="mt-3 text-[12px] font-medium text-red-400/95">
+          {error}
+        </p>
+      ) : null}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {conn === "disconnected" || conn === "reconnecting" ? (
           <button
             type="button"
             onClick={join}
-            className="rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-[11px] font-semibold text-white"
+            className="rounded-lg px-4 py-2 text-[12px] font-bold text-[#0A0A0F]"
+            style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
           >
-            {error ? "Retry voice" : "Connect voice"}
+            {error ? "RETRY" : "JOIN VOICE"}
           </button>
         ) : (
           <>
@@ -302,13 +318,17 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
               <button
                 type="button"
                 onClick={() => void toggleMic()}
-                className="rounded-lg border border-violet-500/50 px-3 py-1.5 text-[11px] text-violet-100"
+                className="rounded-lg border border-violet-500/50 px-3 py-2 text-[11px] text-violet-100"
               >
-                {micOn ? "Mute" : "Unmute"}
+                {micOn ? "MUTE" : "UNMUTE"}
               </button>
             )}
-            <button type="button" onClick={() => void leave()} className="rounded-lg border border-red-500/40 px-2 py-1 text-[11px] text-red-300">
-              Leave
+            <button
+              type="button"
+              onClick={() => void leave()}
+              className="rounded-lg border border-red-500/40 px-3 py-2 text-[11px] text-red-300"
+            >
+              LEAVE VOICE
             </button>
           </>
         )}

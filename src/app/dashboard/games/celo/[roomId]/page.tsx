@@ -9,7 +9,7 @@ import CeloTable from "@/components/celo/CeloTable";
 import CeloChat from "@/components/celo/CeloChat";
 import SideBetPanel from "@/components/celo/SideBetPanel";
 import type { CeloLatestPlayerRoll, CeloMessage, CeloPlayer, CeloRoom, CeloRound, CeloSideBet } from "@/types/celo";
-import type { Dice3DType } from "@/components/celo/Dice3D";
+import type { DiceFaceType } from "@/components/celo/DiceFace";
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 
 const VoiceChat = dynamic(() => import("@/components/celo/VoiceChat"), { ssr: false });
@@ -157,6 +157,9 @@ export default function CeloDashboardRoomPage() {
   const [lowerTimer, setLowerTimer] = useState(0);
   const [showBecomeBanker, setShowBecomeBanker] = useState(false);
   const [becomeTimer, setBecomeTimer] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<"live" | "connecting" | "offline">("connecting");
+  const [joinRoundBusy, setJoinRoundBusy] = useState(false);
+  const [joinRoundError, setJoinRoundError] = useState<string | null>(null);
 
   const myPlayer = players.find((p) => p.user_id === userId);
   const myEntry = myPlayer?.entry_sc ?? 0;
@@ -167,10 +170,12 @@ export default function CeloDashboardRoomPage() {
     return players.filter((p) => p.role === "player").reduce((s, p) => s + (p.entry_sc ?? 0), 0);
   }, [round, players]);
 
-  const mapDiceType = useCallback((t: string | undefined): Dice3DType => {
+  const spectatorCount = useMemo(() => players.filter((p) => p.role === "spectator").length, [players]);
+
+  const mapDiceType = useCallback((t: string | undefined): DiceFaceType => {
     const x = String(t ?? "standard").toLowerCase();
-    const allowed: Dice3DType[] = ["standard", "gold", "diamond", "blood", "street", "midnight", "fire"];
-    return allowed.includes(x as Dice3DType) ? (x as Dice3DType) : "standard";
+    const allowed: DiceFaceType[] = ["standard", "gold", "diamond", "blood", "street", "midnight", "fire"];
+    return allowed.includes(x as DiceFaceType) ? (x as DiceFaceType) : "standard";
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -347,6 +352,7 @@ export default function CeloDashboardRoomPage() {
 
   useEffect(() => {
     if (!supabase || !roomId) return;
+    setConnectionStatus("connecting");
     const ch = supabase.channel(`celo-dash-${roomId}`)
       .on(
         "postgres_changes",
@@ -434,7 +440,11 @@ export default function CeloDashboardRoomPage() {
           scheduleSnapshotRefetch();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setConnectionStatus("live");
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") setConnectionStatus("offline");
+        else setConnectionStatus("connecting");
+      });
 
     return () => {
       supabase.removeChannel(ch);
@@ -506,7 +516,7 @@ export default function CeloDashboardRoomPage() {
   );
 
   const purchaseDice = useCallback(
-    async (diceType: Dice3DType, quantity: number) => {
+    async (diceType: DiceFaceType, quantity: number) => {
       if (!accessToken) return;
       await fetch("/api/celo/dice/buy", {
         method: "POST",
@@ -535,6 +545,32 @@ export default function CeloDashboardRoomPage() {
       await fetchAll();
     },
     [accessToken, roomId, room?.minimum_entry_sc, fetchAll]
+  );
+
+  const handleJoinRound = useCallback(
+    async (entryGpc: number) => {
+      if (!accessToken) return;
+      setJoinRoundBusy(true);
+      setJoinRoundError(null);
+      try {
+        const res = await fetch("/api/celo/room/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ room_id: roomId, role: "player", entry_cents: entryGpc }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setJoinRoundError(typeof data.error === "string" ? data.error : "Could not join this table.");
+          return;
+        }
+        await fetchAll();
+      } catch {
+        setJoinRoundError("Could not join this table.");
+      } finally {
+        setJoinRoundBusy(false);
+      }
+    },
+    [accessToken, roomId, fetchAll]
   );
 
   const coverBank = useCallback(async () => {
@@ -601,8 +637,9 @@ export default function CeloDashboardRoomPage() {
           canLowerBank={canLowerBank}
           lowerBankSecondsLeft={lowerTimer}
           onLowerBank={(amount) => void lowerBank(amount)}
+          onDismissLowerBank={() => setCanLowerBank(false)}
           showCoverBank={Boolean(round && !round.bank_covered && balance >= room.current_bank_sc)}
-          coverBankAmountSc={room.current_bank_sc}
+          coverBankAmountGpc={room.current_bank_sc}
           onCoverBank={() => void coverBank()}
           onOpenDiceShop={() => setDiceShopOpen(true)}
           diceShopOpen={diceShopOpen}
@@ -610,6 +647,13 @@ export default function CeloDashboardRoomPage() {
           onPurchaseDice={(dt, q) => void purchaseDice(dt, q)}
           myDiceType={mapDiceType(myPlayer?.dice_type)}
           isBanker={isBanker}
+          roomTitle={room.name}
+          roundNumber={round?.round_number ?? 0}
+          connectionStatus={connectionStatus}
+          spectatorCount={spectatorCount}
+          onJoinRound={(e) => void handleJoinRound(e)}
+          joinRoundBusy={joinRoundBusy}
+          joinRoundError={joinRoundError}
         />
         <aside className="flex flex-col gap-3 border-l border-violet-500/20 bg-[#08051a]/95 p-3">
           <h2 className={`${cinzel.className} text-center text-sm text-amber-200/90`}>Table</h2>
@@ -632,7 +676,7 @@ export default function CeloDashboardRoomPage() {
         </aside>
       </div>
 
-      <div className="lg:hidden">
+      <div className="lg:hidden -mx-4 flex min-h-0 min-w-0 flex-1 flex-col px-0 pb-0">
         <CeloTable
           room={room}
           currentRound={round}
@@ -651,8 +695,9 @@ export default function CeloDashboardRoomPage() {
           canLowerBank={canLowerBank}
           lowerBankSecondsLeft={lowerTimer}
           onLowerBank={(amount) => void lowerBank(amount)}
+          onDismissLowerBank={() => setCanLowerBank(false)}
           showCoverBank={Boolean(round && !round.bank_covered && balance >= room.current_bank_sc)}
-          coverBankAmountSc={room.current_bank_sc}
+          coverBankAmountGpc={room.current_bank_sc}
           onCoverBank={() => void coverBank()}
           onOpenDiceShop={() => setDiceShopOpen(true)}
           diceShopOpen={diceShopOpen}
@@ -661,64 +706,68 @@ export default function CeloDashboardRoomPage() {
           myDiceType={mapDiceType(myPlayer?.dice_type)}
           isBanker={isBanker}
           compact
+          roomTitle={room.name}
+          roundNumber={round?.round_number ?? 0}
+          onBackToLobby={() => router.push("/dashboard/games/celo")}
+          connectionStatus={connectionStatus}
+          spectatorCount={spectatorCount}
+          onJoinRound={(e) => void handleJoinRound(e)}
+          joinRoundBusy={joinRoundBusy}
+          joinRoundError={joinRoundError}
+          mobileTab={mobileTab}
+          onMobileTabChange={setMobileTab}
+          mobileTabPanels={{
+            bets: (
+              <SideBetPanel
+                roomId={roomId}
+                roundId={round?.id ?? null}
+                sideBets={sideBets}
+                myUserId={userId}
+                myBalance={balance}
+                roundStatus={round?.status ?? ""}
+                accessToken={accessToken}
+                onRefresh={() => void fetchAll()}
+              />
+            ),
+            chat: <CeloChat roomId={roomId} userId={userId} userName={userName} messages={messages} onSendMessage={(m) => void sendChat(m)} />,
+            voice: <VoiceChat roomId={roomId} userId={userId} userName={userName} isSpectator={spectator} />,
+          }}
         />
-        <div
-          className="fixed left-0 right-0 z-50 flex border-t border-violet-500/30 bg-[#08051a]/98"
-          style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}
-        >
-          {(
-            [
-              ["bets", "🎰 Side"],
-              ["chat", "💬 Chat"],
-              ["voice", "🎤 Voice"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              className={`flex-1 py-3 text-center text-[11px] font-bold ${mobileTab === k ? "bg-violet-600/30 text-amber-200" : "text-slate-400"}`}
-              onClick={() => setMobileTab(k)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div
-          className="border-t border-violet-500/20 bg-[#08051a]/95 p-3 pb-24"
-          style={{ minHeight: 280, display: mobileTab === "bets" ? "block" : "none" }}
-        >
-          <SideBetPanel
-            roomId={roomId}
-            roundId={round?.id ?? null}
-            sideBets={sideBets}
-            myUserId={userId}
-            myBalance={balance}
-            roundStatus={round?.status ?? ""}
-            accessToken={accessToken}
-            onRefresh={() => void fetchAll()}
-          />
-        </div>
-        <div style={{ display: mobileTab === "chat" ? "block" : "none" }} className="border-t border-violet-500/20 bg-[#08051a]/95 p-3 pb-24">
-          <CeloChat roomId={roomId} userId={userId} userName={userName} messages={messages} onSendMessage={(m) => void sendChat(m)} />
-        </div>
-        <div style={{ display: mobileTab === "voice" ? "block" : "none" }} className="border-t border-violet-500/20 bg-[#08051a]/95 p-3 pb-24">
-          <VoiceChat roomId={roomId} userId={userId} userName={userName} isSpectator={spectator} />
-        </div>
       </div>
 
       {showBecomeBanker && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
-          <div className="max-w-md rounded-2xl border-2 border-amber-400/50 bg-[#0f0a1a] p-6 text-center shadow-2xl">
-            <p className={`${cinzel.className} text-xl text-amber-300`}>You rolled C-Lo! 🎲</p>
-            <p className="mt-2 text-sm text-slate-300">Become the banker? You need enough GPC to cover the bank.</p>
-            <p className="mt-2 text-xs text-slate-500">{becomeTimer}s</p>
-            <div className="mt-4 flex gap-3">
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/80 backdrop-blur-sm">
+          <div
+            className="w-full max-w-[480px] rounded-t-[20px] border-t-2 border-[#F5C842] bg-[#0D0520] p-6 shadow-2xl"
+            style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="text-center text-4xl" aria-hidden>
+              🎲
+            </div>
+            <p className={`${cinzel.className} mt-2 text-center text-[28px] font-bold text-[#F5C842]`}>YOU ROLLED C-LO!</p>
+            <p className="mt-3 text-center text-sm text-slate-300">Do you want to become the Banker?</p>
+            <p className="mt-3 text-center text-sm text-slate-200">
+              You need {room.current_bank_sc.toLocaleString()} GPC (
+              {(room.current_bank_sc / 100).toLocaleString(undefined, { style: "currency", currency: "USD" })}) to take the bank
+            </p>
+            <p className={`mt-2 text-center text-sm font-semibold ${balance >= room.current_bank_sc ? "text-emerald-400" : "text-red-400"}`}>
+              You have: {balance.toLocaleString()} GPC {balance >= room.current_bank_sc ? "✓" : "✗ (not enough)"}
+            </p>
+            <p className="mt-2 text-center text-xs text-slate-500">{becomeTimer} seconds to decide</p>
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#F5C842] to-[#D4A017] transition-all duration-1000"
+                style={{ width: `${Math.min(100, (becomeTimer / 30) * 100)}%` }}
+              />
+            </div>
+            <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
-                className="flex-1 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 py-3 font-bold text-black"
+                disabled={balance < room.current_bank_sc}
+                className="w-full rounded-xl bg-gradient-to-r from-[#F5C842] to-[#D4A017] py-3 text-sm font-bold text-[#0A0A0F] disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => {
                   void (async () => {
-                    if (!accessToken || !round?.id) return;
+                    if (!accessToken || !round?.id || balance < room.current_bank_sc) return;
                     await fetch("/api/celo/banker/accept", {
                       method: "POST",
                       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -729,9 +778,9 @@ export default function CeloDashboardRoomPage() {
                   })();
                 }}
               >
-                YES — BECOME BANKER
+                BECOME BANKER
               </button>
-              <button type="button" className="flex-1 rounded-xl bg-slate-700 py-3 font-bold text-slate-200" onClick={() => setShowBecomeBanker(false)}>
+              <button type="button" className="w-full py-2 text-sm font-semibold text-slate-500" onClick={() => setShowBecomeBanker(false)}>
                 NO THANKS
               </button>
             </div>

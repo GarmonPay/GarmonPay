@@ -1,6 +1,7 @@
 "use client";
 
-import Dice3D from "@/components/celo/Dice3D";
+import DiceFace from "@/components/celo/DiceFace";
+import type { DiceFaceType } from "@/components/celo/DiceFace";
 
 export interface DiceDisplayProps {
   dice: [number, number, number] | null;
@@ -10,10 +11,7 @@ export interface DiceDisplayProps {
   size?: number;
 }
 
-const COLOR_TO_TYPE: Record<
-  string,
-  "standard" | "gold" | "street" | "midnight" | "diamond" | "blood" | "fire"
-> = {
+const COLOR_TO_TYPE: Record<string, DiceFaceType> = {
   red: "standard",
   gold: "gold",
   green: "street",
@@ -26,7 +24,7 @@ const COLOR_TO_TYPE: Record<
 };
 
 /**
- * Three 3D dice; `animKey` bumps so spin keyframes restart when a new roll starts.
+ * Three dice faces; `animKey` bumps so animations restart when a new roll starts.
  */
 export function DiceDisplay({
   dice,
@@ -41,16 +39,18 @@ export function DiceDisplay({
       ? [dice[0] ?? 1, dice[1] ?? 1, dice[2] ?? 1]
       : [1, 1, 1];
 
+  const delays = [0, 133, 266];
+
   return (
-    <div className="flex flex-1 w-full items-center justify-center gap-1.5 px-1.5 sm:gap-3 sm:px-2">
+    <div className="flex w-full flex-1 items-center justify-center gap-1.5 px-1.5 sm:gap-3 sm:px-2">
       {[0, 1, 2].map((i) => (
-        <Dice3D
+        <DiceFace
           key={`${animKey}-${i}`}
           value={faces[i] ?? 1}
           rolling={rolling}
           diceType={diceType}
           size={size}
-          dieIndex={i as 0 | 1 | 2}
+          delay={delays[i]}
         />
       ))}
     </div>
