@@ -204,6 +204,7 @@ export default function CeloLobbyPage() {
     r.banker?.full_name || r.banker?.email?.split("@")[0] || "Unknown";
 
   const gpcInPlay = rooms.reduce((s, r) => s + (r.current_bank_sc || 0), 0);
+  const statsQuiet = rooms.length === 0 && gpcInPlay === 0;
 
   if (loading) {
     return (
@@ -288,6 +289,31 @@ export default function CeloLobbyPage() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
+        .celo-hero-title-glow {
+          filter: drop-shadow(0 0 20px rgba(245, 200, 66, 0.45))
+            drop-shadow(0 0 48px rgba(124, 58, 237, 0.25));
+        }
+        .celo-btn-primary {
+          min-height: 52px;
+          border-radius: 14px;
+          box-shadow:
+            0 4px 0 rgba(180, 130, 20, 0.55),
+            0 8px 32px rgba(245, 200, 66, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        }
+        .celo-btn-primary:active {
+          transform: translateY(1px);
+          box-shadow:
+            0 2px 0 rgba(180, 130, 20, 0.45),
+            0 4px 20px rgba(245, 200, 66, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+        .celo-filter-scroll {
+          scrollbar-width: none;
+        }
+        .celo-filter-scroll::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
 
       <div className="celo-lobby-inner">
@@ -322,156 +348,388 @@ export default function CeloLobbyPage() {
           </div>
         ) : null}
 
-        {/* HERO */}
+        {/* HERO — premium C-LO card */}
         <div
           style={{
-            background: `
-              linear-gradient(135deg, #0D0520, #1A0535),
-              radial-gradient(ellipse at 30% 50%, rgba(124,58,237,0.15) 0%, transparent 60%),
-              radial-gradient(ellipse at 70% 50%, rgba(245,200,66,0.08) 0%, transparent 60%)
-            `,
-            padding: "32px 0 28px",
-            borderBottom: "1px solid rgba(124,58,237,0.2)",
-            position: "relative",
-            overflow: "hidden",
+            marginTop: 4,
+            marginBottom: 14,
             marginLeft: -16,
             marginRight: -16,
             paddingLeft: 16,
             paddingRight: 16,
+            position: "relative",
           }}
         >
           <div
+            aria-hidden
             style={{
               position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              background: "#7C3AED",
-              boxShadow: "0 0 12px #7C3AED, 0 0 30px rgba(124,58,237,0.5)",
+              left: "50%",
+              top: -8,
+              transform: "translateX(-50%)",
+              width: "min(100%, 420px)",
+              height: 140,
+              background:
+                "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245,200,66,0.18), transparent 55%)",
+              pointerEvents: "none",
             }}
           />
           <div
             style={{
-              position: "absolute",
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              background: "#F5C842",
-              boxShadow: "0 0 12px #F5C842, 0 0 30px rgba(245,200,66,0.4)",
-            }}
-          />
-
-          <h1
-            className={cinzel.className}
-            style={{
-              fontSize: "clamp(48px, 12vw, 96px)",
-              fontWeight: 900,
-              textAlign: "center",
-              margin: "0 0 8px",
-              background: "linear-gradient(135deg, #F5C842, #D4A017)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              letterSpacing: "0.05em",
-              lineHeight: 1.05,
+              position: "relative",
+              borderRadius: 22,
+              border: "1px solid rgba(124,58,237,0.45)",
+              background:
+                "linear-gradient(165deg, rgba(26,12,48,0.97) 0%, rgba(8,4,18,0.99) 100%)",
+              boxShadow:
+                "0 0 0 1px rgba(245,200,66,0.12), 0 24px 56px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)",
+              overflow: "hidden",
+              backdropFilter: "blur(14px)",
             }}
           >
-            C-LO
-          </h1>
-
-          <p
-            style={{
-              color: "#9CA3AF",
-              textAlign: "center",
-              fontSize: 13,
-              margin: "0 0 20px",
-              letterSpacing: "0.08em",
-              fontFamily: "Courier New, monospace",
-            }}
-          >
-            THE FIRST LEGITIMATE DIGITAL STREET DICE
-          </p>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 20,
-              marginBottom: 20,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ color: "#9CA3AF", fontSize: 13, fontFamily: "Courier New, monospace" }}>
-              🎲 {rooms.length} rooms live
-            </div>
-            <div style={{ color: "#9CA3AF", fontSize: 13, fontFamily: "Courier New, monospace" }}>
-              💰 {gpcInPlay.toLocaleString()} GPC in play
-            </div>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <button
-              type="button"
-              className="celo-hero-cta"
-              onClick={() => setShowCreate(true)}
+            <div
               style={{
-                background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                color: "#0A0A0F",
-                border: "none",
-                borderRadius: 10,
-                padding: "14px 28px",
-                fontSize: 15,
-                fontWeight: 700,
-                fontFamily: cinzel.style.fontFamily,
-                cursor: "pointer",
-                letterSpacing: "0.05em",
-                maxWidth: 400,
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                background: "linear-gradient(180deg, #7C3AED, #5B21B6)",
+                boxShadow: "0 0 16px rgba(124,58,237,0.6)",
               }}
-            >
-              🎲 CREATE ROOM
-            </button>
-          </div>
+            />
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                background: "linear-gradient(180deg, #F5C842, #B45309)",
+                boxShadow: "0 0 14px rgba(245,200,66,0.45)",
+              }}
+            />
+            <div style={{ padding: "18px 16px 16px", position: "relative" }}>
+              <p
+                style={{
+                  textAlign: "center",
+                  margin: "0 0 4px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.28em",
+                  textTransform: "uppercase",
+                  color: "rgba(167,139,250,0.95)",
+                  fontFamily: "Courier New, monospace",
+                }}
+              >
+                Street dice · Sweeps
+              </p>
+              <h1
+                className={`${cinzel.className} celo-hero-title-glow`}
+                style={{
+                  fontSize: "clamp(52px, 14vw, 104px)",
+                  fontWeight: 900,
+                  textAlign: "center",
+                  margin: "0 0 6px",
+                  background: "linear-gradient(180deg, #FFEFB8 0%, #EAB308 38%, #B45309 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  letterSpacing: "0.04em",
+                  lineHeight: 0.98,
+                }}
+              >
+                C-LO
+              </h1>
+              <p
+                style={{
+                  color: "#D1D5DB",
+                  textAlign: "center",
+                  fontSize: "clamp(12px, 3.4vw, 13px)",
+                  margin: "0 0 14px",
+                  letterSpacing: "0.12em",
+                  fontFamily: "Courier New, monospace",
+                  fontWeight: 600,
+                  lineHeight: 1.45,
+                  maxWidth: 360,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                }}
+              >
+                THE FIRST LEGITIMATE
+                <br />
+                DIGITAL STREET DICE
+              </p>
 
-          <div
-            style={{
-              textAlign: "center",
-              color: "#6B7280",
-              fontSize: 12,
-              fontFamily: "Courier New, monospace",
-            }}
-          >
-            {myBalance <= 0 ? (
-              <>
-                You need GPC to play →{" "}
-                <Link href="/dashboard/coins/buy" style={{ color: "#F5C842", fontWeight: 700 }}>
-                  Get GPC
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginBottom: statsQuiet ? 8 : 12,
+                }}
+              >
+                <div
+                  style={{
+                    borderRadius: 12,
+                    border: "1px solid rgba(124,58,237,0.35)",
+                    background: "rgba(0,0,0,0.35)",
+                    padding: "10px 12px",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 18, lineHeight: 1, marginBottom: 4 }} aria-hidden>
+                    🎲
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.14em",
+                      color: "#9CA3AF",
+                      fontFamily: "Courier New, monospace",
+                      marginBottom: 2,
+                    }}
+                  >
+                    ROOMS LIVE
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color: "#F5C842",
+                      fontFamily: "Courier New, monospace",
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    {rooms.length}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    borderRadius: 12,
+                    border: "1px solid rgba(245,200,66,0.25)",
+                    background: "rgba(0,0,0,0.35)",
+                    padding: "10px 12px",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 18, lineHeight: 1, marginBottom: 4 }} aria-hidden>
+                    💰
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.14em",
+                      color: "#9CA3AF",
+                      fontFamily: "Courier New, monospace",
+                      marginBottom: 2,
+                    }}
+                  >
+                    GPC IN PLAY
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 800,
+                      color: "#FEF3C7",
+                      fontFamily: "Courier New, monospace",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {gpcInPlay.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {statsQuiet ? (
+                <p
+                  style={{
+                    textAlign: "center",
+                    margin: "0 0 12px",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    color: "rgba(209,213,219,0.85)",
+                    fontFamily: "system-ui, sans-serif",
+                    fontWeight: 500,
+                  }}
+                >
+                  No active rooms yet — open a table and start the action.
+                </p>
+              ) : null}
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  maxWidth: 420,
+                  margin: "0 auto 14px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="celo-btn-primary celo-hero-cta"
+                  onClick={() => setShowCreate(true)}
+                  style={{
+                    width: "100%",
+                    background: "linear-gradient(180deg, #FDE68A 0%, #F5C842 40%, #CA8A04 100%)",
+                    color: "#0A0A0F",
+                    border: "1px solid rgba(255,250,220,0.45)",
+                    padding: "16px 20px",
+                    fontSize: 16,
+                    fontWeight: 800,
+                    fontFamily: cinzel.style.fontFamily,
+                    cursor: "pointer",
+                    letterSpacing: "0.06em",
+                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                  }}
+                >
+                  🎲 START A GAME
+                </button>
+                <Link
+                  href="/dashboard/coins/buy"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "center",
+                    textDecoration: "none",
+                    borderRadius: 14,
+                    minHeight: 48,
+                    padding: "14px 18px",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontFamily: cinzel.style.fontFamily,
+                    letterSpacing: "0.04em",
+                    color: "#E9D5FF",
+                    border: "1px solid rgba(124,58,237,0.65)",
+                    background: "linear-gradient(180deg, rgba(45,20,80,0.9), rgba(15,8,28,0.95))",
+                    boxShadow:
+                      "0 0 0 1px rgba(168,85,247,0.15), inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.35)",
+                  }}
+                >
+                  💎 TOP UP GPC
                 </Link>
-              </>
-            ) : (
-              <>
-                Your balance: <span style={{ color: "#F5C842" }}>{myBalance.toLocaleString()} GPC</span> (
-                {gpcToUsd(myBalance)})
-              </>
-            )}
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 16,
+                  border: "1px solid rgba(124,58,237,0.3)",
+                  background: "rgba(0,0,0,0.4)",
+                  padding: "14px 14px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "linear-gradient(135deg, rgba(124,58,237,0.5), rgba(88,28,135,0.4))",
+                    border: "1px solid rgba(245,200,66,0.25)",
+                    fontSize: 22,
+                  }}
+                  aria-hidden
+                >
+                  🪙
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.2em",
+                      color: "#9CA3AF",
+                      fontFamily: "Courier New, monospace",
+                      marginBottom: 4,
+                    }}
+                  >
+                    TABLE BALANCE
+                  </div>
+                  {myBalance <= 0 ? (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: "#FCA5A5",
+                          marginBottom: 6,
+                          fontFamily: "system-ui, sans-serif",
+                        }}
+                      >
+                        0 GPC · $0.00
+                      </div>
+                      <Link
+                        href="/dashboard/coins/buy"
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#F5C842",
+                          textDecoration: "none",
+                          fontFamily: "system-ui, sans-serif",
+                        }}
+                      >
+                        You need GPC to play → Get GPC
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          color: "#F5C842",
+                          fontFamily: "Courier New, monospace",
+                          letterSpacing: "-0.02em",
+                          lineHeight: 1.15,
+                        }}
+                      >
+                        {myBalance.toLocaleString()}{" "}
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#E5E7EB" }}>GPC</span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#94A3B8",
+                          fontFamily: "Courier New, monospace",
+                          marginTop: 2,
+                        }}
+                      >
+                        ≈ {gpcToUsd(myBalance)} USD
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* FILTER TABS */}
         <div
+          className="celo-filter-scroll"
           style={{
             display: "flex",
-            gap: 0,
+            gap: 6,
             overflowX: "auto",
             WebkitOverflowScrolling: "touch",
-            borderBottom: "1px solid rgba(124,58,237,0.15)",
-            background: "rgba(13,5,32,0.8)",
+            borderRadius: 16,
+            border: "1px solid rgba(124,58,237,0.28)",
+            background: "linear-gradient(180deg, rgba(20,8,40,0.92), rgba(10,4,20,0.96))",
             marginLeft: -16,
             marginRight: -16,
-            paddingLeft: 16,
-            paddingRight: 16,
+            padding: "10px 12px",
             marginTop: 0,
+            marginBottom: 4,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
           {(
@@ -482,33 +740,41 @@ export default function CeloLobbyPage() {
               ["high", "HIGH ROLLER"],
               ["vip", "VIP"],
             ] as const
-          ).map(([key, label]) => (
-            <button
-              type="button"
-              key={key}
-              onClick={() => setFilter(key)}
-              style={{
-                background: "none",
-                border: "none",
-                borderBottom: filter === key ? "2px solid #F5C842" : "2px solid transparent",
-                color: filter === key ? "#F5C842" : "#6B7280",
-                padding: "14px 16px",
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontFamily: "Courier New, monospace",
-                letterSpacing: "0.05em",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          ).map(([key, label]) => {
+            const active = filter === key;
+            return (
+              <button
+                type="button"
+                key={key}
+                onClick={() => setFilter(key)}
+                style={{
+                  background: active
+                    ? "linear-gradient(180deg, rgba(245,200,66,0.22), rgba(245,200,66,0.08))"
+                    : "transparent",
+                  border: active ? "1px solid rgba(245,200,66,0.45)" : "1px solid transparent",
+                  borderRadius: 12,
+                  color: active ? "#FEF3C7" : "#9CA3AF",
+                  padding: "12px 14px",
+                  minHeight: 44,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontFamily: "Courier New, monospace",
+                  letterSpacing: "0.08em",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                  boxShadow: active ? "0 0 20px rgba(245,200,66,0.12)" : "none",
+                  transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ROOMS */}
-        <div style={{ paddingTop: 16, paddingBottom: 24 }}>
+        <div id="celo-room-list" style={{ paddingTop: 12, paddingBottom: 24 }}>
           {!loadError && filteredRooms.length === 0 && rooms.length === 0 ? (
             <div
               style={{
@@ -524,23 +790,28 @@ export default function CeloLobbyPage() {
               >
                 No rooms yet
               </div>
-              <div style={{ fontSize: 14, marginBottom: 20 }}>Be the first to create one</div>
+              <div style={{ fontSize: 14, marginBottom: 20, color: "#9CA3AF" }}>
+                Be the first to open a room — the lobby updates live.
+              </div>
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
+                className="celo-btn-primary"
                 style={{
-                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                  background: "linear-gradient(180deg, #FDE68A 0%, #F5C842 40%, #CA8A04 100%)",
                   color: "#0A0A0F",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "12px 24px",
-                  fontSize: 14,
-                  fontWeight: 700,
+                  border: "1px solid rgba(255,250,220,0.4)",
+                  borderRadius: 14,
+                  padding: "14px 28px",
+                  fontSize: 15,
+                  fontWeight: 800,
                   fontFamily: cinzel.style.fontFamily,
                   cursor: "pointer",
+                  letterSpacing: "0.05em",
+                  minHeight: 48,
                 }}
               >
-                CREATE ROOM
+                🎲 START A GAME
               </button>
             </div>
           ) : !loadError && filteredRooms.length === 0 && rooms.length > 0 ? (
@@ -561,10 +832,12 @@ export default function CeloLobbyPage() {
                 <div
                   key={room.id}
                   style={{
-                    background: "#0D0520",
-                    border: "1px solid rgba(124,58,237,0.2)",
-                    borderRadius: 14,
+                    background: "linear-gradient(180deg, rgba(15,8,35,0.98), rgba(8,4,18,0.99))",
+                    border: "1px solid rgba(124,58,237,0.35)",
+                    borderRadius: 16,
                     padding: 16,
+                    boxShadow:
+                      "0 0 0 1px rgba(245,200,66,0.06), 0 12px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
                   }}
                 >
                   <div
@@ -734,7 +1007,7 @@ export default function CeloLobbyPage() {
                 className={cinzel.className}
                 style={{ color: "#F5C842", fontSize: 20, margin: 0 }}
               >
-                Create Room
+                Start a game
               </h2>
               <button
                 type="button"
@@ -979,7 +1252,7 @@ export default function CeloLobbyPage() {
                 letterSpacing: "0.05em",
               }}
             >
-              {creating ? "CREATING..." : "🎲 CREATE ROOM"}
+              {creating ? "STARTING…" : "🎲 START GAME"}
             </button>
           </div>
         </div>
