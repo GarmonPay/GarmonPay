@@ -6,8 +6,9 @@ import { getSessionAsync } from "@/lib/session";
 import { getReferralDashboard } from "@/lib/api";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
 
-function formatGpc(gpc: number) {
-  return `${gpc.toLocaleString()} GPC`;
+function formatGpc(gpc: number | null | undefined) {
+  const n = Math.max(0, Math.floor(Number(gpc ?? 0)));
+  return `${Number.isFinite(n) ? n.toLocaleString() : "0"} GPC`;
 }
 
 function tierLabel(tier: string) {

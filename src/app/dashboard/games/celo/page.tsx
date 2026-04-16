@@ -51,6 +51,10 @@ function safeSc(n: unknown): number {
   return Number.isFinite(v) ? Math.max(0, v) : 0;
 }
 
+function safeLocale(n: unknown): string {
+  return safeSc(n).toLocaleString();
+}
+
 export default function CeloLobbyPage() {
   const router = useRouter();
   const supabaseRef = useRef<SupabaseClient | null>(null);
@@ -312,7 +316,7 @@ export default function CeloLobbyPage() {
     return true;
   });
 
-  const gpcToUsd = (gpc: number) => `$${(gpc / 100).toFixed(2)}`;
+  const gpcToUsd = (gpc: unknown) => `$${(safeSc(gpc) / 100).toFixed(2)}`;
 
   const bankerName = (r: CeloRoom) =>
     r.banker?.full_name || r.banker?.email?.split("@")[0] || "Unknown";
@@ -649,8 +653,8 @@ export default function CeloLobbyPage() {
                           "Players",
                           `${room.player_count != null ? safeSc(room.player_count) : 1}/${room.max_players != null ? safeSc(room.max_players) : 6}`,
                         ],
-                        ["Min entry", `${safeSc(room.minimum_entry_sc).toLocaleString()} GPC`],
-                        ["Table bank", `${safeSc(room.current_bank_sc).toLocaleString()} GPC`],
+                        ["Min entry", `${safeLocale(room.minimum_entry_sc)} GPC`],
+                        ["Table bank", `${safeLocale(room.current_bank_sc)} GPC`],
                       ] as const
                     ).map(([label, val]) => (
                       <div key={label}>
@@ -845,7 +849,7 @@ export default function CeloLobbyPage() {
               >
                 MINIMUM ENTRY —{" "}
                 <span style={{ color: "#F5C842" }}>
-                  {form.minimum_entry_sc.toLocaleString()} GPC ({gpcToUsd(form.minimum_entry_sc)})
+                  {safeLocale(form.minimum_entry_sc)} GPC ({gpcToUsd(form.minimum_entry_sc)})
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -896,21 +900,23 @@ export default function CeloLobbyPage() {
               >
                 STARTING BANK —{" "}
                 <span style={{ color: "#F5C842" }}>
-                  {form.starting_bank_sc.toLocaleString()} GPC ({gpcToUsd(form.starting_bank_sc)})
+                  {safeLocale(form.starting_bank_sc)} GPC ({gpcToUsd(form.starting_bank_sc)})
                 </span>
               </div>
               <input
                 type="number"
-                value={form.starting_bank_sc}
+                value={safeSc(form.starting_bank_sc)}
                 onChange={(e) => {
                   const raw = parseInt(e.target.value, 10);
+                  const minSc = safeSc(form.minimum_entry_sc);
+                  const step = minSc > 0 ? minSc : 1;
                   const v = Math.max(
-                    form.minimum_entry_sc,
-                    Math.round(raw / form.minimum_entry_sc) * form.minimum_entry_sc
+                    minSc,
+                    Math.round(raw / step) * step
                   );
                   setForm((f) => ({
                     ...f,
-                    starting_bank_sc: Number.isFinite(v) ? v : f.minimum_entry_sc,
+                    starting_bank_sc: Number.isFinite(v) ? v : safeSc(f.minimum_entry_sc),
                   }));
                 }}
                 style={{
@@ -943,7 +949,7 @@ export default function CeloLobbyPage() {
                 <span style={{ color: form.starting_bank_sc > gpayCoins ? "#EF4444" : "#6B7280" }}>
                   {form.starting_bank_sc > gpayCoins
                     ? "✗ Insufficient GPC"
-                    : `✓ You have ${safeSc(gpayCoins).toLocaleString()} GPC available`}
+                    : `✓ You have ${safeLocale(gpayCoins)} GPC available`}
                 </span>
                 <span style={{ color: "#6B7280" }}>Multiple of min entry</span>
               </div>

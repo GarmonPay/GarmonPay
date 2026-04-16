@@ -5,6 +5,11 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
 
+function localeInt(n: unknown): string {
+  const x = Math.max(0, Math.floor(Number(n ?? 0)));
+  return (Number.isFinite(x) ? x : 0).toLocaleString();
+}
+
 export function DashboardCoinBalances({ compact = false }: { compact?: boolean }) {
   const [hasToken, setHasToken] = useState(false);
   const { goldCoins, gpayCoins, gpayTokens, loading } = useCoins();
@@ -33,7 +38,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-amber-200/70">Gold</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-amber-300">
-                  {Math.max(0, Math.floor(Number(goldCoins ?? 0))).toLocaleString()}
+                  {localeInt(goldCoins)}
                 </span>
               </div>
               <div
@@ -42,7 +47,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-violet-300/80">GPC</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-violet-200">
-                  {Math.max(0, Math.floor(Number(gpayCoins ?? 0))).toLocaleString()}
+                  {localeInt(gpayCoins)}
                 </span>
               </div>
               <div
@@ -51,7 +56,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300/75">$GPAY</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-emerald-200">
-                  {Math.max(0, Math.floor(Number(gpayTokens ?? 0))).toLocaleString()}
+                  {localeInt(gpayTokens)}
                 </span>
               </div>
             </div>
@@ -95,7 +100,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               <span aria-hidden>🪙</span> Gold Coins
             </span>
             <span className="font-mono font-semibold tabular-nums text-[#F5C842]">
-              {Math.max(0, Math.floor(Number(goldCoins ?? 0))).toLocaleString()} GC
+              {localeInt(goldCoins)} GC
             </span>
           </li>
           <li className="flex justify-between items-center gap-2">
@@ -103,7 +108,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               <span aria-hidden>💜</span> GPay Coins
             </span>
             <span className="font-mono font-semibold tabular-nums text-[#A855F7]">
-              {Math.max(0, Math.floor(Number(gpayCoins ?? 0))).toLocaleString()} GPC
+              {localeInt(gpayCoins)} GPC
             </span>
           </li>
           <li className="flex justify-between items-center gap-2">
@@ -111,7 +116,7 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
               <span aria-hidden>⬡</span> $GPAY Tokens
             </span>
             <span className="font-mono font-semibold tabular-nums text-[#10B981]">
-              {Math.max(0, Math.floor(Number(gpayTokens ?? 0))).toLocaleString()} $GPAY
+              {localeInt(gpayTokens)} $GPAY
             </span>
           </li>
         </ul>
