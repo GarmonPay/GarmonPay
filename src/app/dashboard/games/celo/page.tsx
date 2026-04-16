@@ -87,7 +87,7 @@ export default function CeloLobbyPage() {
   });
 
   const loadRooms = useCallback(async (sb: SupabaseClient) => {
-    const { data, error } = await sb
+    const withBanker = await sb
       .from("celo_rooms")
       .select(
         `
@@ -101,23 +101,132 @@ export default function CeloLobbyPage() {
       .or("room_type.eq.public,room_type.is.null")
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
-    setRooms((data ?? []) as CeloRoom[]);
+    if (!withBanker.error) {
+      setRooms((withBanker.data ?? []) as CeloRoom[]);
+      return;
+    }
+
+    console.warn("[celo/lobby] load with banker embed failed, retrying without embed", withBanker.error.message);
+
+    const plain = await sb
+      .from("celo_rooms")
+      .select("*")
+      .eq("status", "waiting")
+      .or("room_type.eq.public,room_type.is.null")
+      .order("created_at", { ascending: false });
+
+    if (plain.error) throw plain.error;
+    setRooms((plain.data ?? []) as CeloRoom[]);
   }, []);
+
+  const [realtimeChannelStatus, setRealtimeChannelStatus] = useState<string>("idle");
+  const [restFailureStreak, setRestFailureStreak] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     let channel: RealtimeChannel | null = null;
+    let realtimeBackoffMs = 1000;
+    let realtimeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let restPollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const devLog = (...args: unknown[]) => {
+      if (process.env.NODE_ENV === "development") console.log("[celo/lobby]", ...args);
+    };
+
+    const clearRealtimeReconnect = () => {
+      if (realtimeReconnectTimer) {
+        clearTimeout(realtimeReconnectTimer);
+        realtimeReconnectTimer = null;
+      }
+    };
+
+    const attemptRestLoad = async (sb: SupabaseClient, reason: string): Promise<boolean> => {
+      try {
+        await loadRooms(sb);
+        if (!cancelled) {
+          setRestFailureStreak(0);
+          setRoomsUnavailable(false);
+          void refreshCoins();
+        }
+        devLog(`REST ok (${reason})`);
+        return true;
+      } catch (e) {
+        console.error(`[celo/lobby] REST load failed (${reason})`, e);
+        if (!cancelled) {
+          setRestFailureStreak((s) => {
+            const n = s + 1;
+            if (n >= 2) setRoomsUnavailable(true);
+            return n;
+          });
+        }
+        devLog(`REST fail (${reason})`);
+        return false;
+      }
+    };
+
+    const subscribeRealtime = (sb: SupabaseClient) => {
+      clearRealtimeReconnect();
+      if (channel) {
+        void sb.removeChannel(channel);
+        channel = null;
+      }
+
+      const ch = sb
+        .channel("celo-lobby")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "celo_rooms" },
+          () => {
+            void loadRooms(sb).catch((err) => console.error("[celo/lobby] realtime refresh", err));
+          }
+        )
+        .subscribe((status, err) => {
+          console.log("[celo/lobby] realtime status:", status, err?.message ?? "");
+          if (!cancelled) setRealtimeChannelStatus(status + (err ? `: ${err.message}` : ""));
+
+          if (status === "SUBSCRIBED") {
+            realtimeBackoffMs = 1000;
+            devLog("realtime SUBSCRIBED");
+            return;
+          }
+
+          if (cancelled) return;
+
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            const delayMs = realtimeBackoffMs;
+            devLog("realtime terminal status, will resubscribe after backoff ms=", delayMs, status);
+            if (channel) {
+              void sb.removeChannel(channel);
+              channel = null;
+            }
+            realtimeReconnectTimer = setTimeout(() => {
+              if (cancelled) return;
+              realtimeBackoffMs = Math.min(realtimeBackoffMs * 2, 30_000);
+              subscribeRealtime(sb);
+            }, delayMs);
+          }
+
+          if (status === "CLOSED") {
+            devLog("realtime CLOSED (cleanup or server)");
+          }
+        });
+
+      channel = ch;
+    };
 
     const init = async () => {
       setRoomsUnavailable(false);
+      setRestFailureStreak(0);
+      setRealtimeChannelStatus("connecting");
 
       const sb = createBrowserClient();
       supabaseRef.current = sb;
       if (!sb) {
         if (!cancelled) {
+          setRestFailureStreak(2);
           setRoomsUnavailable(true);
           setLoading(false);
+          setRealtimeChannelStatus("no_client");
         }
         return;
       }
@@ -131,60 +240,37 @@ export default function CeloLobbyPage() {
 
       if (cancelled) return;
 
-      try {
-        await loadRooms(sb);
-        if (!cancelled) setRoomsUnavailable(false);
-      } catch (e) {
-        console.error("[celo/lobby] load failed", e);
-        if (!cancelled) setRoomsUnavailable(true);
-      } finally {
-        if (!cancelled) setLoading(false);
+      const initialOk = await attemptRestLoad(sb, "initial");
+      if (!cancelled && !initialOk) {
+        await attemptRestLoad(sb, "initial-retry");
       }
 
+      if (!cancelled) setLoading(false);
       if (cancelled) return;
 
-      channel = sb
-        .channel("celo-lobby")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "celo_rooms" },
-          () => {
-            void loadRooms(sb).catch((err) => console.error("[celo/lobby] realtime refresh", err));
-          }
-        )
-        .subscribe();
+      subscribeRealtime(sb);
+
+      restPollTimer = setInterval(() => {
+        if (cancelled || !supabaseRef.current) return;
+        void attemptRestLoad(supabaseRef.current, "poll");
+      }, 25_000);
     };
 
     void init();
 
     return () => {
       cancelled = true;
+      clearRealtimeReconnect();
+      if (restPollTimer) {
+        clearInterval(restPollTimer);
+        restPollTimer = null;
+      }
       const sb = supabaseRef.current;
       if (channel && sb) void sb.removeChannel(channel);
       supabaseRef.current = null;
+      setRealtimeChannelStatus("idle");
     };
-  }, [router, loadRooms]);
-
-  /** Background reconnect when room list failed */
-  useEffect(() => {
-    if (!roomsUnavailable) return;
-    const tick = async () => {
-      const sb = createBrowserClient();
-      if (!sb) return;
-      try {
-        await loadRooms(sb);
-        setRoomsUnavailable(false);
-        void refreshCoins();
-      } catch {
-        /* keep banner; next interval retries */
-      }
-    };
-    void tick();
-    const id = setInterval(() => {
-      void tick();
-    }, 5000);
-    return () => clearInterval(id);
-  }, [roomsUnavailable, loadRooms, refreshCoins]);
+  }, [router, loadRooms, refreshCoins]);
 
   const openCreatePublic = () => {
     setCreateMode("public");
@@ -247,7 +333,7 @@ export default function CeloLobbyPage() {
 
   const filteredRooms = rooms.filter((r) => {
     if (filter === "all") return true;
-    const min = r.minimum_entry_sc;
+    const min = safeSc(r.minimum_entry_sc);
     if (filter === "micro") return min <= 1000;
     if (filter === "standard") return min > 1000 && min <= 5000;
     if (filter === "high") return min > 5000 && min <= 10000;
@@ -651,6 +737,19 @@ export default function CeloLobbyPage() {
           )}
         </div>
       </div>
+
+      {process.env.NODE_ENV === "development" ? (
+        <div
+          className="pointer-events-none fixed bottom-24 left-2 z-[90] max-w-[min(100vw-1rem,22rem)] rounded-lg border border-amber-500/35 bg-black/88 px-2.5 py-2 font-mono text-[10px] leading-relaxed text-amber-100/95 shadow-xl backdrop-blur-sm"
+          aria-hidden
+        >
+          <div className="text-amber-400/95">C-Lo realtime</div>
+          <div className="break-all opacity-95">{realtimeChannelStatus}</div>
+          <div className="mt-1 text-slate-400">
+            REST fail streak: {restFailureStreak} · roomsUnavailable: {String(roomsUnavailable)}
+          </div>
+        </div>
+      ) : null}
 
       {showCreate ? (
         <div
