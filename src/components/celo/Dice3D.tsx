@@ -74,6 +74,12 @@ function FaceDots({
         borderRadius: "50%",
         background: colors.dot,
         boxShadow: colors.dotShadow,
+        flexShrink: 0,
+        /* iOS Safari: keep dots painted on 3D faces */
+        transform: "translateZ(0.1px)",
+        WebkitTransform: "translateZ(0.1px)",
+        position: "relative",
+        zIndex: 2,
       }}
     />
   );
@@ -204,6 +210,8 @@ export default function Dice3D({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    WebkitFontSmoothing: "antialiased",
     backfaceVisibility: "hidden",
     WebkitBackfaceVisibility: "hidden",
   });
@@ -222,6 +230,7 @@ export default function Dice3D({
     }
     .cube_${uid} {
       transform-style: preserve-3d;
+      -webkit-transform-style: preserve-3d;
       width: ${size}px;
       height: ${size}px;
       position: relative;
@@ -242,7 +251,9 @@ export default function Dice3D({
         height: size,
         perspective: 900,
         perspectiveOrigin: "50% 50%",
-        filter: "drop-shadow(0 8px 10px rgba(0,0,0,0.45))",
+        /* Do not use filter: here — breaks 3D + child paint on iOS Safari */
+        boxShadow: "0 10px 18px rgba(0,0,0,0.45)",
+        borderRadius: 6,
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: keyStyle }} />

@@ -543,7 +543,10 @@ export default function CeloDashboardRoomPage() {
           isBanker={isBanker}
           compact
         />
-        <div className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-violet-500/30 bg-[#08051a]/98 pb-[env(safe-area-inset-bottom)]">
+        <div
+          className="fixed left-0 right-0 z-50 flex border-t border-violet-500/30 bg-[#08051a]/98"
+          style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           {(
             [
               ["bets", "🎰 Side"],

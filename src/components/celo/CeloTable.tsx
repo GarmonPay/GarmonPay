@@ -108,6 +108,12 @@ export default function CeloTable({
 
   const tableSize = compact ? 280 : 400;
   const dieSize = compact ? 56 : 72;
+  /** Same offset as dashboard layout + mobile tab strip — keeps controls above MobileNav (z-100) */
+  const mobileShellNavOffset = "calc(5rem + env(safe-area-inset-bottom, 0px))";
+  const mobileTabStripH = "3.25rem";
+  const compactActionBarBottom = compact
+    ? `calc(${mobileShellNavOffset} + ${mobileTabStripH})`
+    : "0";
 
   return (
     <div
@@ -117,6 +123,9 @@ export default function CeloTable({
         background: "#0A0A0F",
         overflow: "hidden",
         fontFamily: "var(--font-dm-sans), system-ui, sans-serif",
+        ...(compact && {
+          paddingBottom: `calc(${mobileShellNavOffset} + ${mobileTabStripH} + 8.5rem)`,
+        }),
       }}
     >
       <div
@@ -449,11 +458,13 @@ export default function CeloTable({
           position: "fixed",
           left: 0,
           right: 0,
-          bottom: 0,
-          zIndex: 30,
+          bottom: compactActionBarBottom,
+          zIndex: compact ? 55 : 30,
           background: "linear-gradient(180deg, rgba(8,6,16,0.92), rgba(5,4,12,0.98))",
           borderTop: "1px solid rgba(124,58,237,0.25)",
-          padding: "12px 14px calc(12px + env(safe-area-inset-bottom))",
+          padding: compact
+            ? "12px 14px 12px"
+            : "12px 14px calc(12px + env(safe-area-inset-bottom))",
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
           gap: 10,
