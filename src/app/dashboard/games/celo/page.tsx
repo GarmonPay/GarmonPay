@@ -1,896 +1,1101 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Cinzel_Decorative, DM_Sans } from "next/font/google";
-import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
-import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
-import { consumeCeloPublicLobbyStale } from "@/lib/celo-public-lobby-client";
-import { formatGpayAmount } from "@/lib/gpay-coins-branding";
-import { useCoins } from "@/hooks/useCoins";
 
-function formatScLine(sc: number): string {
-  return formatGpayAmount(Math.max(0, Math.floor(Number(sc))));
-}
-
-const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
-const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
-
-type Room = {
+interface CeloRoom {
   id: string;
   name: string;
+  banker_id: string;
   status: string;
   room_type: string;
+  minimum_entry_sc: number;
+  current_bank_sc: number;
   max_players: number;
-  min_bet_cents: number;
-  current_bank_cents: number;
-  platform_fee_pct: number;
+  created_at: string;
   last_activity: string;
-  /** Filled when available from realtime player counts */
+  banker?: {
+    full_name: string;
+    email: string;
+  };
   player_count?: number;
-};
+}
 
-type CreateForm = {
+interface CreateRoomForm {
   name: string;
+  max_players: number;
   room_type: "public" | "private";
-  max_players: 2 | 4 | 6 | 10;
-  minimum_entry_cents: number;
-  starting_bank_cents: number;
   join_code: string;
-};
-
-const DEFAULT_FORM: CreateForm = {
-  name: "",
-  room_type: "public",
-  max_players: 4,
-  minimum_entry_cents: 500,
-  starting_bank_cents: 2000,
-  join_code: "",
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  waiting: "text-amber-400 bg-amber-400/10",
-  active: "text-emerald-400 bg-emerald-400/10",
-  rolling: "text-violet-400 bg-violet-400/10",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  waiting: "Waiting",
-  active: "Open",
-  rolling: "In Round",
-};
+  minimum_entry_sc: number;
+  starting_bank_sc: number;
+}
 
 export default function CeloLobbyPage() {
+  const supabase = useMemo(() => {
+    const c = createBrowserClient();
+    if (!c) throw new Error("Supabase not configured");
+    return c;
+  }, []);
   const router = useRouter();
-  const { gpayCoins, refresh: refreshCoins, loading: coinsLoading } = useCoins();
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
+
+  const [rooms, setRooms] = useState<CeloRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myBalance, setMyBalance] = useState(0);
+  const [myUserId, setMyUserId] = useState("");
+  const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState<CreateForm>(DEFAULT_FORM);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [lobbyCode, setLobbyCode] = useState("");
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
-  const [myOpenRoom, setMyOpenRoom] = useState<{ id: string; name: string; room_type: string } | null>(null);
-  const [lobbyFilter, setLobbyFilter] = useState<"all" | "micro" | "standard" | "high" | "vip">("all");
+  const [createError, setCreateError] = useState("");
+  const [form, setForm] = useState<CreateRoomForm>({
+    name: "",
+    max_players: 6,
+    room_type: "public",
+    join_code: "",
+    minimum_entry_sc: 500,
+    starting_bank_sc: 500,
+  });
 
-  const fetchMyOpenRoom = useCallback(async () => {
-    const s = await getSessionAsync();
-    if (!s?.accessToken) {
-      setMyOpenRoom(null);
-      return;
-    }
-    try {
-      const r = await fetch("/api/celo/room/my-open", {
-        headers: { Authorization: `Bearer ${s.accessToken}` },
-      });
-      const d = (await r.json()) as {
-        room?: { id: string; name?: string; room_type?: string } | null;
-      };
-      if (d.room?.id) {
-        setMyOpenRoom({
-          id: d.room.id,
-          name: d.room.name ?? "Room",
-          room_type: d.room.room_type ?? "public",
-        });
-      } else {
-        setMyOpenRoom(null);
-      }
-    } catch {
-      setMyOpenRoom(null);
-    }
-  }, []);
+  const loadRooms = useCallback(async () => {
+    const { data } = await supabase
+      .from("celo_rooms")
+      .select(
+        `
+        *,
+        banker:users!celo_rooms_banker_id_fkey(
+          full_name, email
+        )
+      `
+      )
+      .eq("status", "waiting")
+      .order("created_at", { ascending: false });
+    if (data) setRooms(data as CeloRoom[]);
+  }, [supabase]);
 
-  const filteredRooms = useMemo(() => {
-    const m = (r: Room) => r.min_bet_cents;
-    switch (lobbyFilter) {
-      case "micro":
-        return rooms.filter((r) => m(r) >= 500 && m(r) <= 1000);
-      case "standard":
-        return rooms.filter((r) => m(r) > 1000 && m(r) <= 5000);
-      case "high":
-        return rooms.filter((r) => m(r) > 5000 && m(r) <= 10000);
-      case "vip":
-        return rooms.filter((r) => m(r) > 10000);
-      default:
-        return rooms;
-    }
-  }, [rooms, lobbyFilter]);
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
-  const lobbyStats = useMemo(() => {
-    const scInPlay = rooms.reduce((s, r) => s + r.current_bank_cents, 0);
-    const biggestBank = rooms.reduce((m, r) => Math.max(m, r.current_bank_cents), 0);
-    return { liveRooms: rooms.length, scInPlay, biggestBank };
-  }, [rooms]);
-
-  const mapRowToLobbyRoom = useCallback((raw: Record<string, unknown>, playerCount?: number): Room | null => {
-    const n = normalizeCeloRoomRow(raw);
-    if (!n) return null;
-    const r = raw;
-    return {
-      id: String(r.id),
-      name: String(r.name ?? n.name ?? ""),
-      status: String(r.status ?? ""),
-      room_type: String(r.room_type ?? ""),
-      max_players: Number(r.max_players ?? n.max_players ?? 0),
-      min_bet_cents: n.min_bet_cents,
-      current_bank_cents: n.current_bank_cents,
-      platform_fee_pct: n.platform_fee_pct,
-      last_activity: String(r.last_activity ?? ""),
-      player_count: playerCount,
-    };
-  }, []);
-
-  /** Canonical lobby list — service role + stale cleanup; bypasses RLS (fixes mobile vs desktop). */
-  const loadPublicRooms = useCallback(async () => {
-    console.info("[celo-lobby-debug] loadPublicRooms start");
-    try {
-      const res = await fetch("/api/celo/rooms/public", {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-      });
-      console.info("[celo-lobby-debug] loadPublicRooms response status", res.status);
-      if (!res.ok) {
-        console.warn("[celo-lobby-debug] loadPublicRooms non-OK, keeping previous rooms");
+    const init = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/login");
         return;
       }
-      const json = (await res.json().catch(() => ({}))) as { rooms?: Record<string, unknown>[] };
-      const rows = json.rooms ?? [];
-      const mapped = rows
-        .map((row) => mapRowToLobbyRoom(row))
-        .filter((x): x is Room => x !== null);
-      console.info("[celo-lobby-debug] loadPublicRooms room count", mapped.length, {
-        ids: mapped.map((r) => r.id),
-        join_codes: rows.map((row) => String(row.join_code ?? "")),
-      });
-      setRooms(mapped);
-      void fetchMyOpenRoom();
-    } catch (e) {
-      console.warn("[celo-lobby-debug] loadPublicRooms error", e);
-    }
-  }, [mapRowToLobbyRoom, fetchMyOpenRoom]);
+      if (cancelled) return;
+      setMyUserId(session.user.id);
+      const { data: user } = await supabase
+        .from("users")
+        .select("gpay_coins")
+        .eq("id", session.user.id)
+        .single();
+      if (user && !cancelled)
+        setMyBalance((user as { gpay_coins?: number }).gpay_coins || 0);
+      await loadRooms();
+      if (!cancelled) setLoading(false);
 
-  const lobbyRefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleLobbyRefetch = useCallback(() => {
-    if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
-    lobbyRefetchTimer.current = setTimeout(() => {
-      lobbyRefetchTimer.current = null;
-      void loadPublicRooms();
-    }, 200);
-  }, [loadPublicRooms]);
-
-  useEffect(() => {
-    if (!showCreate) return;
-    void refreshCoins();
-  }, [showCreate, refreshCoins]);
-
-  useEffect(() => {
-    if (!session?.accessToken) {
-      setMyOpenRoom(null);
-      return;
-    }
-    void fetchMyOpenRoom();
-  }, [session?.accessToken, fetchMyOpenRoom]);
-
-  useEffect(() => {
-    getSessionAsync().then((s) => {
-      if (!s) {
-        setLoading(false);
-        return;
-      }
-      setSession(s);
-      if (s.accessToken) {
-        void refreshCoins();
-      }
-    });
-  }, [refreshCoins]);
-
-  /** Keep starting bank ≤ $GPAY balance. */
-  useEffect(() => {
-    if (!showCreate || gpayCoins <= 0) return;
-    setForm((f) => {
-      const cap = Math.min(gpayCoins, 200_000);
-      const step = f.minimum_entry_cents;
-      let sb = f.starting_bank_cents;
-      if (sb > cap) sb = Math.floor(cap / step) * step;
-      if (sb < step) sb = step;
-      if (sb === f.starting_bank_cents) return f;
-      return { ...f, starting_bank_cents: sb };
-    });
-  }, [showCreate, gpayCoins]);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (consumeCeloPublicLobbyStale()) {
-      console.info("[celo-lobby-debug] consumed stale flag from room page — refetching");
-    }
-    /** Eager fetch: do not wait for Realtime SUBSCRIBED (fixes slow mobile / delayed first paint). */
-    void loadPublicRooms().finally(() => {
-      if (isMounted) setLoading(false);
-    });
-
-    const sb = createBrowserClient();
-    if (!sb) {
-      return () => {
-        isMounted = false;
-        if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
-      };
-    }
-
-    const onRoomsChange = () => {
-      if (!isMounted) return;
-      scheduleLobbyRefetch();
+      channel = supabase
+        .channel("celo-lobby")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "celo_rooms",
+          },
+          () => {
+            void loadRooms();
+          }
+        )
+        .subscribe();
     };
 
-    const channel = sb
-      .channel("celo-lobby-v2")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "celo_rooms",
-        },
-        onRoomsChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "celo_rooms",
-        },
-        onRoomsChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "celo_rooms",
-        },
-        onRoomsChange
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED" && isMounted) {
-          void loadPublicRooms();
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          if (isMounted) void loadPublicRooms();
-        }
-      });
-
-    const poll = window.setInterval(() => {
-      if (isMounted) void loadPublicRooms();
-    }, 60_000);
-
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted && isMounted) {
-        console.info("[celo-lobby-debug] pageshow from bfcache — refetch");
-        void loadPublicRooms();
-      }
-    };
-    window.addEventListener("pageshow", onPageShow);
-
-    let visTimer: ReturnType<typeof setTimeout> | null = null;
-    const onVis = () => {
-      if (document.visibilityState !== "visible" || !isMounted) return;
-      if (visTimer) clearTimeout(visTimer);
-      visTimer = setTimeout(() => {
-        visTimer = null;
-        console.info("[celo-lobby-debug] visibility visible — refetch");
-        void loadPublicRooms();
-      }, 400);
-    };
-    document.addEventListener("visibilitychange", onVis);
+    void init();
 
     return () => {
-      isMounted = false;
-      if (lobbyRefetchTimer.current) clearTimeout(lobbyRefetchTimer.current);
-      if (visTimer) clearTimeout(visTimer);
-      window.removeEventListener("pageshow", onPageShow);
-      document.removeEventListener("visibilitychange", onVis);
-      window.clearInterval(poll);
-      sb.removeChannel(channel);
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
     };
-  }, [loadPublicRooms, scheduleLobbyRefetch]);
+  }, [supabase, router, loadRooms]);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!session?.accessToken) return;
+  const handleCreate = async () => {
+    if (!form.name.trim()) {
+      setCreateError("Enter a room name");
+      return;
+    }
+    if (form.starting_bank_sc > myBalance) {
+      setCreateError("Insufficient GPC balance");
+      return;
+    }
     setCreating(true);
-    setCreateError(null);
+    setCreateError("");
     try {
-      const body = {
-        name: form.name.trim(),
-        room_type: form.room_type,
-        max_players: form.max_players,
-        minimum_entry_cents: form.minimum_entry_cents,
-        starting_bank_cents: form.starting_bank_cents,
-        join_code: form.room_type === "private" ? form.join_code.trim() : null,
-      };
       const res = await fetch("/api/celo/room/create", {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(form),
       });
-      const data = (await res.json().catch(() => ({}))) as {
-        room?: { id: string };
-        error?: string;
-        details?: string;
-      };
-
-      // Do not navigate until the API returns a persisted room row (no optimistic room state).
+      const data = (await res.json()) as { error?: string; room?: { id: string } };
       if (!res.ok) {
-        console.error("Create room error:", data);
-        setCreateError(data.details || data.error || "Failed to create room");
+        setCreateError(data.error || "Failed to create room");
         return;
       }
       if (data.room?.id) {
-        void loadPublicRooms();
-        router.push(`/dashboard/games/celo/${data.room.id}?created=1`);
+        router.push(`/dashboard/games/celo/${data.room.id}`);
       }
     } catch {
-      setCreateError("Network error — try again");
+      setCreateError("Something went wrong");
     } finally {
       setCreating(false);
     }
-  }
+  };
 
-  async function handleJoinByCode(e: React.FormEvent) {
-    e.preventDefault();
-    const code = lobbyCode.trim().toUpperCase();
-    if (!code) return;
-    setJoinError(null);
-    setJoining(true);
+  const handleJoinPrivate = async () => {
+    if (!joinCode.trim()) return;
     try {
-      const s = await getSessionAsync();
-      if (!s?.accessToken) {
-        setJoinError("Log in to join a room");
-        return;
-      }
-      const res = await fetch(`/api/celo/room/lookup?code=${encodeURIComponent(code)}`);
-      const data = (await res.json().catch(() => ({}))) as { roomId?: string; error?: string };
-      if (!res.ok || !data.roomId) {
-        setJoinError(data.error ?? "No active room with that code");
-        return;
-      }
-      const joinRes = await fetch("/api/celo/room/join", {
+      const res = await fetch("/api/celo/room/join", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${s.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ room_id: data.roomId, role: "spectator" }),
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          join_code: joinCode.trim().toUpperCase(),
+          role: "player",
+          entry_sc: form.minimum_entry_sc,
+        }),
       });
-      const joinData = (await joinRes.json().catch(() => ({}))) as { error?: string };
-      if (!joinRes.ok) {
-        const err = joinData.error ?? "";
-        if (err.toLowerCase().includes("already")) {
-          router.push(`/dashboard/games/celo/${data.roomId}`);
-          return;
-        }
-        setJoinError(err || "Could not join room");
-        return;
+      const data = (await res.json()) as { room?: { id: string } };
+      if (data.room?.id) {
+        router.push(`/dashboard/games/celo/${data.room.id}`);
       }
-      router.push(`/dashboard/games/celo/${data.roomId}`);
     } catch {
-      setJoinError("Join failed — try again");
-    } finally {
-      setJoining(false);
+      /* ignore */
     }
-  }
+  };
 
-  // Keep starting_bank_cents snapped to a multiple of minimum_entry_cents
-  function setMinEntry(v: number) {
-    setForm((f) => ({
-      ...f,
-      minimum_entry_cents: v,
-      // Round starting bank up to nearest multiple of new min entry
-      starting_bank_cents: Math.ceil(Math.max(f.starting_bank_cents, v) / v) * v,
-    }));
-  }
+  const filteredRooms = rooms.filter((r) => {
+    if (filter === "all") return true;
+    const min = r.minimum_entry_sc;
+    if (filter === "micro") return min <= 1000;
+    if (filter === "standard") return min > 1000 && min <= 5000;
+    if (filter === "high") return min > 5000 && min <= 10000;
+    if (filter === "vip") return min > 10000;
+    return true;
+  });
 
-  /** Form fields use legacy `_cents` names; amounts are GPay Coins (`users.gpay_coins`). */
-  const minimumEntryCents = form.minimum_entry_cents;
-  const startingBank = form.starting_bank_cents;
-  const hasEnoughForBank = gpayCoins >= startingBank;
-  const canAfford = hasEnoughForBank;
-  const shortfallSc = Math.max(0, startingBank - gpayCoins);
-  const canSubmit =
-    !creating &&
-    !coinsLoading &&
-    canAfford &&
-    form.name.trim().length > 0 &&
-    (form.room_type === "public" || form.join_code.trim().length >= 1);
+  const gpcToUsd = (gpc: number) => `$${(gpc / 100).toFixed(2)}`;
 
-  if (loading) {
+  const bankerName = (r: CeloRoom) =>
+    r.banker?.full_name || r.banker?.email?.split("@")[0] || "Unknown";
+
+  if (loading)
     return (
-      <div className="min-h-screen bg-[#0e0118] flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-2 border-[#F5C842] border-t-transparent animate-spin" />
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#05010F",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            color: "#F5C842",
+            fontFamily: "Courier New",
+            fontSize: 16,
+          }}
+        >
+          Loading rooms...
+        </div>
       </div>
     );
-  }
 
   return (
-    <div className={`${dmSans.className} min-h-screen bg-[#05010F] text-white relative overflow-x-hidden`}>
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -left-24 top-16 h-96 w-96 rounded-full bg-violet-700/15 blur-[130px]" />
-        <div className="absolute right-0 bottom-10 h-80 w-80 rounded-full bg-[#F5C842]/8 blur-[120px]" />
-      </div>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#05010F",
+        paddingBottom: 100,
+        fontFamily: "DM Sans, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          background: `
+          linear-gradient(135deg, #0D0520, #1A0535),
+          radial-gradient(ellipse at 30% 50%,
+            rgba(124,58,237,0.15) 0%, transparent 60%),
+          radial-gradient(ellipse at 70% 50%,
+            rgba(245,200,66,0.08) 0%, transparent 60%)
+        `,
+          padding: "40px 20px 32px",
+          borderBottom: "1px solid rgba(124,58,237,0.2)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            background: "#7C3AED",
+            boxShadow: "0 0 12px #7C3AED, 0 0 30px rgba(124,58,237,0.5)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            background: "#F5C842",
+            boxShadow: "0 0 12px #F5C842, 0 0 30px rgba(245,200,66,0.4)",
+          }}
+        />
 
-      <div className="relative z-10 mx-auto max-w-5xl px-4 py-8 pb-28">
+        <h1
+          style={{
+            fontFamily: '"Cinzel Decorative", serif',
+            fontSize: "clamp(48px, 12vw, 96px)",
+            fontWeight: 900,
+            textAlign: "center",
+            margin: "0 0 8px",
+            background: "linear-gradient(135deg, #F5C842, #D4A017)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            letterSpacing: "0.05em",
+          }}
+        >
+          C-LO
+        </h1>
 
-        {/* Top bar */}
-        <div className="flex items-center justify-between mb-8">
-          <Link href="/dashboard" className="text-violet-300/70 text-sm hover:text-[#F5C842] transition-colors">
-            ← Dashboard
-          </Link>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-violet-400/60">GPay Coins</p>
-            <p className="text-base font-bold text-[#F5C842] font-mono leading-snug mt-0.5">
-              Your balance: {formatGpayAmount(gpayCoins)}
-            </p>
-          </div>
-        </div>
+        <p
+          style={{
+            color: "#9CA3AF",
+            textAlign: "center",
+            fontSize: 14,
+            margin: "0 0 24px",
+            letterSpacing: "0.05em",
+          }}
+        >
+          THE FIRST LEGITIMATE DIGITAL STREET DICE
+        </p>
 
-        {/* Hero */}
-        <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-b from-violet-950/40 to-transparent px-6 py-10 text-center mb-10 shadow-[0_0_60px_rgba(124,58,237,0.12)]">
-          <h1
-            className={`${cinzel.className} text-6xl sm:text-7xl md:text-[96px] font-bold leading-none bg-gradient-to-br from-[#F5C842] via-[#fde047] to-[#a16207] bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(245,200,66,0.25)]`}
-          >
-            C-LO
-          </h1>
-          <p className={`${cinzel.className} mt-4 text-sm sm:text-base text-violet-200/75 max-w-lg mx-auto`}>
-            The first legitimate digital street dice game
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-violet-300/80">
-            <span>
-              🎲 {lobbyStats.liveRooms} rooms live
-            </span>
-            <span>
-              💰 {Math.floor(lobbyStats.scInPlay / 100).toLocaleString()} GPC in play
-            </span>
-            <span>
-              🏆 Biggest bank today: {Math.floor(lobbyStats.biggestBank / 100).toLocaleString()} GPC
-            </span>
-          </div>
-        </div>
-
-        {/* Actions row */}
-        <div className="flex flex-wrap gap-3 justify-center mb-6">
-          {session ? (
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreate(true);
-                setCreateError(null);
-                setForm(DEFAULT_FORM);
-              }}
-              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#ca8a04] px-8 py-3.5 font-bold text-black shadow-lg shadow-amber-900/30 text-sm"
-            >
-              🎲 CREATE ROOM
-            </button>
-          ) : (
-            <Link
-              href="/login?redirect=/dashboard/games/celo"
-              className="rounded-xl bg-gradient-to-r from-[#F5C842] to-[#eab308] px-8 py-3.5 font-bold text-black shadow-lg text-sm"
-            >
-              Login to Play
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={() => document.getElementById("join-private-panel")?.scrollIntoView({ behavior: "smooth" })}
-            className="rounded-xl border-2 border-[#7C3AED] bg-transparent px-8 py-3.5 font-bold text-violet-200 text-sm hover:bg-violet-950/50"
-          >
-            🔑 JOIN PRIVATE ROOM
-          </button>
-        </div>
-
-        <div id="join-private-panel" className="max-w-md mx-auto mb-10">
-          <form onSubmit={handleJoinByCode} className="flex gap-2 justify-center">
-            <input
-              type="text"
-              placeholder="6-character code"
-              value={lobbyCode}
-              onChange={(e) => setLobbyCode(e.target.value.toUpperCase())}
-              maxLength={12}
-              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-400/40 outline-none focus:border-[#F5C842]/50 uppercase font-mono text-sm"
-            />
-            <button
-              type="submit"
-              disabled={joining}
-              className="rounded-xl border border-[#F5C842]/40 bg-[#F5C842]/10 px-5 py-3 text-[#F5C842] font-bold text-sm hover:bg-[#F5C842]/20 disabled:opacity-50"
-            >
-              JOIN
-            </button>
-          </form>
-          {joinError && <p className="text-center text-sm text-red-400 mt-3">{joinError}</p>}
-        </div>
-
-        {myOpenRoom && (
-          <div className="mb-4 rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-left">
-            <p className="text-[11px] uppercase tracking-wider text-emerald-400/90">Your table</p>
-            <p className="text-sm font-semibold text-white mt-0.5 truncate">{myOpenRoom.name}</p>
-            <p className="text-[11px] text-violet-300/70 mt-0.5">
-              {myOpenRoom.room_type === "private" ? "Private — won’t show in public list" : "Banker — open to continue"}
-            </p>
-            <Link
-              href={`/dashboard/games/celo/${myOpenRoom.id}`}
-              className="mt-2 inline-flex text-sm font-semibold text-[#F5C842] hover:underline"
-            >
-              Open your room →
-            </Link>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex flex-wrap justify-center gap-2 mb-6">
-          {(
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 24,
+            marginBottom: 24,
+            flexWrap: "wrap",
+          }}
+        >
+          {[
+            ["🎲", `${rooms.length} rooms live`],
             [
-              ["all", "ALL"],
-              ["micro", "MICRO ($5–$10)"],
-              ["standard", "STANDARD ($10–$50)"],
-              ["high", "HIGH ROLLER ($50–$100)"],
-              ["vip", "VIP ($100+)"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setLobbyFilter(k)}
-              className={`rounded-full px-3 py-1.5 text-[10px] font-bold tracking-wide border transition-colors ${
-                lobbyFilter === k ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842]" : "border-white/10 text-violet-300/60 hover:border-white/20"
-              }`}
+              "💰",
+              `${rooms.reduce((s, r) => s + r.current_bank_sc, 0).toLocaleString()} GPC in play`,
+            ],
+            ["👁", `${rooms.reduce((s) => s + 2, 0)} watching`],
+          ].map(([icon, label]) => (
+            <div
+              key={String(label)}
+              style={{
+                color: "#9CA3AF",
+                fontSize: 13,
+                fontFamily: "Courier New",
+              }}
             >
-              {label}
-            </button>
+              {icon} {label}
+            </div>
           ))}
         </div>
 
-        {/* Room grid */}
-        <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-violet-400/50 mb-3">
-            Rooms ({filteredRooms.length})
-          </p>
-          {filteredRooms.length === 0 ? (
-            <div className="rounded-2xl border border-white/[0.05] bg-[#12081f]/50 p-10 text-center">
-              <p className="text-violet-200/50 text-sm">No rooms in this filter.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {filteredRooms.map((room) => (
-                <div
-                  key={room.id}
-                  className="rounded-2xl border border-white/[0.07] bg-[#12081f]/70 p-4 hover:border-violet-500/30 transition-all"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-white truncate flex items-center gap-2">
-                        {room.name}
-                        {room.room_type === "private" ? "🔒" : null}
-                      </p>
-                      <span className="text-[10px] text-red-400 font-bold">🔴 LIVE</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-violet-300/70 mt-2">Banker: open table</p>
-                  <p className="text-[11px] text-violet-400/60 mt-1">
-                    Players: — / {room.max_players} · Min entry: {formatScLine(room.min_bet_cents)}
-                  </p>
-                  <p className="text-[#F5C842] font-mono text-sm mt-2">Bank: {formatScLine(room.current_bank_cents)}</p>
-                  <p className="text-[10px] text-violet-500/50 mt-3">Last roll: —</p>
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
-                      className="flex-1 rounded-lg border border-violet-500/40 py-2 text-xs font-bold text-violet-200"
-                    >
-                      👁 WATCH
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
-                      className="flex-1 rounded-lg bg-gradient-to-r from-[#F5C842] to-[#ca8a04] py-2 text-xs font-bold text-black"
-                    >
-                      🎲 JOIN TABLE
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            style={{
+              background: "linear-gradient(135deg, #F5C842, #D4A017)",
+              color: "#0A0A0F",
+              border: "none",
+              borderRadius: 10,
+              padding: "14px 28px",
+              fontSize: 15,
+              fontWeight: 700,
+              fontFamily: '"Cinzel Decorative", serif',
+              cursor: "pointer",
+              letterSpacing: "0.05em",
+            }}
+          >
+            🎲 CREATE ROOM
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowJoin(true)}
+            style={{
+              background: "transparent",
+              color: "#A855F7",
+              border: "1.5px solid #7C3AED",
+              borderRadius: 10,
+              padding: "14px 28px",
+              fontSize: 15,
+              fontWeight: 700,
+              fontFamily: '"Cinzel Decorative", serif',
+              cursor: "pointer",
+              letterSpacing: "0.05em",
+            }}
+          >
+            🔑 PRIVATE ROOM
+          </button>
         </div>
 
-        {/* Quick rules */}
-        <div className="mt-12 rounded-2xl border border-white/[0.05] bg-[#12081f]/40 p-5">
-          <p className="text-xs font-semibold uppercase tracking-widest text-violet-400/60 mb-3">How to Play</p>
-          <div className="grid grid-cols-1 gap-2 text-xs text-violet-200/60 leading-relaxed">
-            <p><span className="text-[#F5C842] font-medium">4-5-6</span> = C-Lo — instant win. Bank grows (banker) or shrinks (player).</p>
-            <p><span className="text-emerald-400 font-medium">Trips</span> or <span className="text-emerald-400 font-medium">Pair+6</span> = instant win. <span className="text-red-400 font-medium">1-2-3</span> or <span className="text-red-400 font-medium">Pair+1</span> = instant loss.</p>
-            <p><span className="text-violet-300 font-medium">Pair+2-5</span> sets your point. Higher point wins. Ties go to banker.</p>
-            <p>No pair = no count, roll again.</p>
-          </div>
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: 16,
+            color: "#6B7280",
+            fontSize: 12,
+            fontFamily: "Courier New",
+          }}
+        >
+          Your balance:{" "}
+          <span style={{ color: "#F5C842" }}>{myBalance.toLocaleString()} GPC</span> ({gpcToUsd(myBalance)})
         </div>
       </div>
 
-      <section className="relative z-10 mx-auto max-w-5xl px-4 mt-12 mb-8">
-        <p className={`${cinzel.className} text-center text-sm text-amber-200/80 mb-4`}>YOUR C-LO RECORD</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-2xl border border-white/[0.06] bg-[#12081f]/40 p-5 text-center text-xs text-violet-300/80">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Rounds</p>
-            <p className="text-lg font-bold text-white mt-1">—</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Earn rate</p>
-            <p className="text-lg font-bold text-white mt-1">—</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total earned</p>
-            <p className="text-lg font-bold text-emerald-400/90 mt-1">— GPC</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Total used</p>
-            <p className="text-lg font-bold text-rose-400/80 mt-1">— GPC</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Best roll</p>
-            <p className="text-lg font-bold text-amber-200/90 mt-1">—</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-violet-500/60">Streak</p>
-            <p className="text-lg font-bold text-white mt-1">—</p>
-          </div>
-        </div>
-      </section>
+      <div
+        style={{
+          display: "flex",
+          gap: 0,
+          overflowX: "auto",
+          borderBottom: "1px solid rgba(124,58,237,0.15)",
+          background: "rgba(13,5,32,0.8)",
+          padding: "0 16px",
+        }}
+      >
+        {(
+          [
+            ["all", "ALL"],
+            ["micro", "MICRO"],
+            ["standard", "STANDARD"],
+            ["high", "HIGH ROLLER"],
+            ["vip", "VIP"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            type="button"
+            key={key}
+            onClick={() => setFilter(key)}
+            style={{
+              background: "none",
+              border: "none",
+              borderBottom:
+                filter === key ? "2px solid #F5C842" : "2px solid transparent",
+              color: filter === key ? "#F5C842" : "#6B7280",
+              padding: "14px 16px",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: "Courier New",
+              letterSpacing: "0.05em",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {/* ── Create Room Modal ──────────────────────────────────────────────── */}
+      <div style={{ padding: "16px" }}>
+        {filteredRooms.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "60px 20px",
+              color: "#6B7280",
+            }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎲</div>
+            <div
+              style={{
+                fontFamily: '"Cinzel Decorative", serif',
+                fontSize: 16,
+                color: "#9CA3AF",
+                marginBottom: 8,
+              }}
+            >
+              No rooms yet
+            </div>
+            <div style={{ fontSize: 13 }}>Be the first to create one</div>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {filteredRooms.map((room) => (
+              <div
+                key={room.id}
+                style={{
+                  background: "#0D0520",
+                  border: "1px solid rgba(124,58,237,0.2)",
+                  borderRadius: 14,
+                  padding: "16px",
+                  transition: "border-color 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: '"Cinzel Decorative", serif',
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {room.name}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 11,
+                      color: "#10B981",
+                      fontFamily: "Courier New",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#10B981",
+                        animation: "pulse 1.5s infinite",
+                      }}
+                    />
+                    LIVE
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                    marginBottom: 14,
+                  }}
+                >
+                  {(
+                    [
+                      ["Banker", bankerName(room)],
+                      [
+                        "Players",
+                        `${room.player_count || 1}/${room.max_players}`,
+                      ],
+                      [
+                        "Min Entry",
+                        `${room.minimum_entry_sc.toLocaleString()} GPC`,
+                      ],
+                      ["Bank", `${room.current_bank_sc.toLocaleString()} GPC`],
+                    ] as const
+                  ).map(([label, val]) => (
+                    <div key={label}>
+                      <div
+                        style={{
+                          fontSize: 9,
+                          color: "#6B7280",
+                          fontFamily: "Courier New",
+                          letterSpacing: "0.08em",
+                          marginBottom: 2,
+                        }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#F5C842",
+                          fontFamily: "Courier New",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {val}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/dashboard/games/celo/${room.id}`)
+                    }
+                    style={{
+                      flex: 1,
+                      background: "transparent",
+                      border: "1px solid rgba(124,58,237,0.4)",
+                      borderRadius: 8,
+                      color: "#A855F7",
+                      padding: "10px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "Courier New",
+                    }}
+                  >
+                    👁 WATCH
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/dashboard/games/celo/${room.id}`)
+                    }
+                    style={{
+                      flex: 2,
+                      background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                      border: "none",
+                      borderRadius: 8,
+                      color: "#0A0A0F",
+                      padding: "10px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "Courier New",
+                    }}
+                  >
+                    🎲 JOIN TABLE
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowCreate(false); }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 100,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            padding: "0",
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl border border-[#F5C842]/20 bg-[#0e0118] shadow-2xl shadow-black/80 overflow-hidden">
-
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
-              <h2 className="font-bold text-[#F5C842] text-lg">Create Room</h2>
+          <div
+            style={{
+              background: "#0D0520",
+              borderTop: "2px solid #F5C842",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px",
+              width: "100%",
+              maxWidth: 480,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: '"Cinzel Decorative", serif',
+                  color: "#F5C842",
+                  fontSize: 20,
+                  margin: 0,
+                }}
+              >
+                Create Room
+              </h2>
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
-                className="text-violet-300/40 hover:text-white text-2xl leading-none transition-colors"
-              >×</button>
+                onClick={() => {
+                  setShowCreate(false);
+                  setCreateError("");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#6B7280",
+                  fontSize: 24,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
             </div>
 
-            <form onSubmit={handleCreate} className="px-6 py-5 space-y-5 max-h-[82vh] overflow-y-auto">
-
-              {/* ── Room Name ── */}
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Room Name</label>
-                <input
-                  type="text"
-                  required
-                  maxLength={40}
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Bishop's Table"
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/30 outline-none focus:border-[#F5C842]/50"
-                />
+            <label style={{ display: "block", marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9CA3AF",
+                  fontFamily: "Courier New",
+                  letterSpacing: "0.08em",
+                  marginBottom: 6,
+                }}
+              >
+                ROOM NAME
               </div>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    name: e.target.value,
+                  }))
+                }
+                placeholder="e.g. Head Crack House"
+                style={{
+                  width: "100%",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(124,58,237,0.3)",
+                  borderRadius: 8,
+                  color: "#fff",
+                  padding: "12px 14px",
+                  fontSize: 15,
+                  fontFamily: "DM Sans",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </label>
 
-              {/* ── Public / Private ── */}
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Room Type</label>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {(["public", "private"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, room_type: t }))}
-                      className={`rounded-xl border py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
-                        form.room_type === t
-                          ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842] shadow-[0_0_16px_rgba(245,200,66,0.15)]"
-                          : "border-white/10 text-violet-300/50 hover:border-white/20 hover:text-violet-200/70"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-
-                {form.room_type === "private" && (
-                  <div className="mt-3">
-                    <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Join Code</label>
-                    <input
-                      type="text"
-                      required
-                      minLength={1}
-                      maxLength={6}
-                      value={form.join_code}
-                      onChange={(e) => setForm((f) => ({ ...f, join_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))}
-                      placeholder="e.g. BALLER"
-                      className="mt-1.5 w-full rounded-xl border border-[#F5C842]/30 bg-black/40 px-4 py-3 text-white text-sm placeholder:text-violet-400/30 outline-none focus:border-[#F5C842]/60 uppercase font-mono tracking-widest"
-                    />
-                    <p className="text-[10px] text-violet-400/50 mt-1.5">Members need this code to join</p>
-                  </div>
-                )}
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9CA3AF",
+                  fontFamily: "Courier New",
+                  letterSpacing: "0.08em",
+                  marginBottom: 8,
+                }}
+              >
+                MAX PLAYERS
               </div>
-
-              {/* ── Max Players ── */}
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Max Players</label>
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {([2, 4, 6, 10] as const).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, max_players: n }))}
-                      className={`rounded-xl border py-3 text-sm font-bold transition-all ${
+              <div style={{ display: "flex", gap: 8 }}>
+                {[2, 4, 6, 10].map((n) => (
+                  <button
+                    type="button"
+                    key={n}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        max_players: n,
+                      }))
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      borderRadius: 8,
+                      border:
                         form.max_players === n
-                          ? "border-[#F5C842] bg-[#F5C842]/10 text-[#F5C842] shadow-[0_0_16px_rgba(245,200,66,0.15)]"
-                          : "border-white/10 text-violet-300/50 hover:border-white/20 hover:text-violet-200/70"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
+                          ? "2px solid #F5C842"
+                          : "1px solid rgba(124,58,237,0.3)",
+                      background:
+                        form.max_players === n
+                          ? "rgba(245,200,66,0.1)"
+                          : "transparent",
+                      color: form.max_players === n ? "#F5C842" : "#6B7280",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "Courier New",
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* ── Min Entry ── */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Min Entry</label>
-                  <span className="text-sm font-bold text-[#F5C842] font-mono">
-                    {formatScLine(form.minimum_entry_cents)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={500}
-                  max={10000}
-                  step={500}
-                  value={form.minimum_entry_cents}
-                  onChange={(e) => setMinEntry(Number(e.target.value))}
-                  className="mt-2 w-full accent-[#F5C842]"
-                />
-                <div className="flex justify-between text-[10px] text-violet-400/40 mt-1">
-                  <span>500 $GPAY</span>
-                  <span>10,000 $GPAY</span>
-                </div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9CA3AF",
+                  fontFamily: "Courier New",
+                  letterSpacing: "0.08em",
+                  marginBottom: 8,
+                }}
+              >
+                ROOM TYPE
               </div>
-
-              {/* ── Starting Bank ── */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] uppercase tracking-widest text-violet-400/70">Starting Bank</label>
-                  <span className="text-sm font-bold text-[#F5C842] font-mono">
-                    {formatScLine(form.starting_bank_cents)}
-                  </span>
-                </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["public", "private"] as const).map((t) => (
+                  <button
+                    type="button"
+                    key={t}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        room_type: t,
+                      }))
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      borderRadius: 8,
+                      border:
+                        form.room_type === t
+                          ? "2px solid #F5C842"
+                          : "1px solid rgba(124,58,237,0.3)",
+                      background:
+                        form.room_type === t
+                          ? "rgba(245,200,66,0.1)"
+                          : "transparent",
+                      color: form.room_type === t ? "#F5C842" : "#6B7280",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "Courier New",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {form.room_type === "private" && (
                 <input
-                  type="range"
-                  min={minimumEntryCents}
-                  max={Math.max(minimumEntryCents, gpayCoins > 0 ? gpayCoins : minimumEntryCents)}
-                  step={minimumEntryCents}
-                  value={startingBank}
+                  value={form.join_code}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      starting_bank_cents: Number(e.target.value),
+                      join_code: e.target.value.toUpperCase().slice(0, 6),
                     }))
                   }
-                  className="mt-2 w-full accent-[#F5C842]"
+                  placeholder="6-CHAR CODE"
+                  style={{
+                    width: "100%",
+                    marginTop: 8,
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(124,58,237,0.3)",
+                    borderRadius: 8,
+                    color: "#fff",
+                    padding: "10px 14px",
+                    fontSize: 14,
+                    fontFamily: "Courier New",
+                    outline: "none",
+                    letterSpacing: "0.2em",
+                    boxSizing: "border-box",
+                  }}
                 />
-                <p
-                  className={`text-[10px] mt-1.5 font-medium ${
-                    coinsLoading ? "text-violet-400/70" : canAfford ? "text-emerald-400/90" : "text-red-400"
-                  }`}
-                >
-                  {coinsLoading ? (
-                    <>Loading your GPay Coins…</>
-                  ) : canAfford ? (
-                    <>Your GPC: {formatGpayAmount(gpayCoins)} — enough to reserve this bank.</>
-                  ) : (
-                    <>
-                      You need {shortfallSc.toLocaleString()} more GPC to reserve {startingBank.toLocaleString()} GPC for
-                      this bank.{" "}
-                      <a href="/dashboard/wallet" className="underline text-[#F5C842]">
-                        Convert Gold Coins
-                      </a>{" "}
-                      or{" "}
-                      <a href="/dashboard/wallet" className="underline text-[#F5C842]">
-                        buy Gold Coins
-                      </a>
-                      .
-                    </>
-                  )}
-                </p>
-              </div>
-
-              {/* ── Summary ── */}
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-violet-300/70">You will reserve</span>
-                  <span className="font-bold text-[#F5C842] font-mono text-xs">{formatScLine(form.starting_bank_cents)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm border-t border-white/[0.05] pt-2">
-                  <span className="text-violet-300/70">Your balance</span>
-                  <span
-                    className={`font-bold font-mono text-xs ${
-                      coinsLoading ? "text-violet-300/80" : canAfford ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {formatGpayAmount(gpayCoins)}
-                  </span>
-                </div>
-              </div>
-
-              {createError && (
-                <p className="text-sm text-red-400 text-center rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5">
-                  {createError}
-                </p>
               )}
+            </div>
 
-              {/* ── Create button ── */}
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`w-full rounded-xl py-4 font-bold text-sm tracking-wide shadow-lg transition-all ${
-                  coinsLoading
-                    ? "bg-white/10 border border-white/10 text-violet-200/80 cursor-wait"
-                    : canAfford
-                    ? "bg-gradient-to-r from-[#F5C842] to-[#eab308] text-black shadow-amber-900/30 hover:from-[#fde047] hover:to-[#F5C842] disabled:opacity-60"
-                    : "bg-red-900/40 border border-red-500/30 text-red-400 cursor-not-allowed"
-                }`}
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9CA3AF",
+                  fontFamily: "Courier New",
+                  letterSpacing: "0.08em",
+                  marginBottom: 8,
+                }}
               >
-                {creating
-                  ? "Creating…"
-                  : coinsLoading
-                  ? "Loading balance…"
-                  : !canAfford
-                  ? "Insufficient $GPAY"
-                  : `CREATE ROOM — ${formatScLine(form.starting_bank_cents)}`}
-              </button>
+                MINIMUM ENTRY —{" "}
+                <span style={{ color: "#F5C842" }}>
+                  {form.minimum_entry_sc.toLocaleString()} GPC ({gpcToUsd(form.minimum_entry_sc)})
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[500, 1000, 2000, 5000, 10000].map((v) => (
+                  <button
+                    type="button"
+                    key={v}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        minimum_entry_sc: v,
+                        starting_bank_sc: Math.max(f.starting_bank_sc, v),
+                      }))
+                    }
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      border:
+                        form.minimum_entry_sc === v
+                          ? "2px solid #F5C842"
+                          : "1px solid rgba(124,58,237,0.3)",
+                      background:
+                        form.minimum_entry_sc === v
+                          ? "rgba(245,200,66,0.1)"
+                          : "transparent",
+                      color: form.minimum_entry_sc === v ? "#F5C842" : "#6B7280",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "Courier New",
+                    }}
+                  >
+                    ${v / 100}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-              {!coinsLoading && !canAfford && (
-                <p className="text-center text-[10px] text-violet-400/50">
-                  <Link href="/dashboard/wallet" className="text-[#F5C842]/70 underline underline-offset-2 hover:text-[#F5C842]">
-                    Get more $GPAY →
-                  </Link>
-                </p>
-              )}
+            <div style={{ marginBottom: 20 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9CA3AF",
+                  fontFamily: "Courier New",
+                  letterSpacing: "0.08em",
+                  marginBottom: 8,
+                }}
+              >
+                STARTING BANK —{" "}
+                <span style={{ color: "#F5C842" }}>
+                  {form.starting_bank_sc.toLocaleString()} GPC ({gpcToUsd(form.starting_bank_sc)})
+                </span>
+              </div>
+              <input
+                type="number"
+                value={form.starting_bank_sc}
+                onChange={(e) => {
+                  const raw = parseInt(e.target.value, 10);
+                  const v = Math.max(
+                    form.minimum_entry_sc,
+                    Math.round(raw / form.minimum_entry_sc) * form.minimum_entry_sc
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    starting_bank_sc: Number.isFinite(v) ? v : f.minimum_entry_sc,
+                  }));
+                }}
+                style={{
+                  width: "100%",
+                  background: "rgba(255,255,255,0.05)",
+                  border:
+                    form.starting_bank_sc > myBalance
+                      ? "1px solid #EF4444"
+                      : "1px solid rgba(124,58,237,0.3)",
+                  borderRadius: 8,
+                  color: "#fff",
+                  padding: "12px 14px",
+                  fontSize: 15,
+                  fontFamily: "Courier New",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: 6,
+                  fontSize: 11,
+                  fontFamily: "Courier New",
+                }}
+              >
+                <span
+                  style={{
+                    color:
+                      form.starting_bank_sc > myBalance ? "#EF4444" : "#6B7280",
+                  }}
+                >
+                  {form.starting_bank_sc > myBalance
+                    ? "✗ Insufficient GPC"
+                    : `✓ You have ${myBalance.toLocaleString()} GPC`}
+                </span>
+                <span style={{ color: "#6B7280" }}>Must be multiple of min entry</span>
+              </div>
+            </div>
 
-            </form>
+            {createError ? (
+              <div
+                style={{
+                  color: "#EF4444",
+                  fontSize: 13,
+                  marginBottom: 12,
+                  fontFamily: "Courier New",
+                  textAlign: "center",
+                }}
+              >
+                {createError}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={
+                creating || !form.name.trim() || form.starting_bank_sc > myBalance
+              }
+              style={{
+                width: "100%",
+                background:
+                  creating || form.starting_bank_sc > myBalance
+                    ? "rgba(255,255,255,0.1)"
+                    : "linear-gradient(135deg, #F5C842, #D4A017)",
+                border: "none",
+                borderRadius: 10,
+                color:
+                  creating || form.starting_bank_sc > myBalance
+                    ? "#6B7280"
+                    : "#0A0A0F",
+                padding: "16px",
+                fontSize: 15,
+                fontWeight: 700,
+                cursor:
+                  creating || form.starting_bank_sc > myBalance
+                    ? "not-allowed"
+                    : "pointer",
+                fontFamily: '"Cinzel Decorative", serif',
+                letterSpacing: "0.05em",
+              }}
+            >
+              {creating ? "CREATING..." : "🎲 CREATE ROOM"}
+            </button>
           </div>
         </div>
       )}
+
+      {showJoin && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "#0D0520",
+              border: "1px solid rgba(124,58,237,0.3)",
+              borderRadius: 16,
+              padding: 24,
+              width: "100%",
+              maxWidth: 360,
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: '"Cinzel Decorative", serif',
+                color: "#F5C842",
+                fontSize: 18,
+                margin: "0 0 16px",
+              }}
+            >
+              Join Private Room
+            </h3>
+            <input
+              value={joinCode}
+              onChange={(e) =>
+                setJoinCode(e.target.value.toUpperCase().slice(0, 6))
+              }
+              placeholder="ENTER CODE"
+              style={{
+                width: "100%",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(124,58,237,0.3)",
+                borderRadius: 8,
+                color: "#fff",
+                padding: "14px",
+                fontSize: 20,
+                fontFamily: "Courier New",
+                letterSpacing: "0.3em",
+                textAlign: "center",
+                outline: "none",
+                marginBottom: 16,
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setShowJoin(false)}
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "1px solid rgba(124,58,237,0.3)",
+                  borderRadius: 8,
+                  color: "#6B7280",
+                  padding: "12px",
+                  cursor: "pointer",
+                  fontFamily: "Courier New",
+                  fontSize: 13,
+                }}
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleJoinPrivate()}
+                disabled={joinCode.length < 6}
+                style={{
+                  flex: 2,
+                  background:
+                    joinCode.length < 6
+                      ? "rgba(255,255,255,0.1)"
+                      : "linear-gradient(135deg, #F5C842, #D4A017)",
+                  border: "none",
+                  borderRadius: 8,
+                  color: joinCode.length < 6 ? "#6B7280" : "#0A0A0F",
+                  padding: "12px",
+                  cursor: joinCode.length < 6 ? "not-allowed" : "pointer",
+                  fontFamily: '"Cinzel Decorative", serif',
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                JOIN ROOM
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1 }
+          50% { opacity: 0.4 }
+        }
+      `}</style>
     </div>
   );
 }

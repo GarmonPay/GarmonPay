@@ -26,6 +26,12 @@ function mapDice(t: string | undefined): DiceFaceType {
   return "standard";
 }
 
+function clampDie(n: number): 1 | 2 | 3 | 4 | 5 | 6 {
+  if (!Number.isFinite(n)) return 1;
+  const x = Math.min(6, Math.max(1, Math.round(n)));
+  return x as 1 | 2 | 3 | 4 | 5 | 6;
+}
+
 const NAV_STACK = "calc(5rem + env(safe-area-inset-bottom, 0px))";
 const TAB_H = 44;
 const PANEL_MAX = 240;
@@ -746,7 +752,7 @@ export default function CeloTable({
             {[0, 1, 2].map((i) => (
               <DiceFace
                 key={i}
-                value={d[i] ?? 1}
+                value={clampDie(d[i] ?? 1)}
                 rolling={rolling}
                 diceType={mapDice(myDiceType)}
                 size={dieSize}

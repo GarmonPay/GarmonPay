@@ -11,6 +11,12 @@ export interface DiceDisplayProps {
   size?: number;
 }
 
+function clampDie(n: number): 1 | 2 | 3 | 4 | 5 | 6 {
+  if (!Number.isFinite(n)) return 1;
+  const x = Math.min(6, Math.max(1, Math.round(n)));
+  return x as 1 | 2 | 3 | 4 | 5 | 6;
+}
+
 const COLOR_TO_TYPE: Record<string, DiceFaceType> = {
   red: "standard",
   gold: "gold",
@@ -46,7 +52,7 @@ export function DiceDisplay({
       {[0, 1, 2].map((i) => (
         <DiceFace
           key={`${animKey}-${i}`}
-          value={faces[i] ?? 1}
+          value={clampDie(faces[i] ?? 1)}
           rolling={rolling}
           diceType={diceType}
           size={size}
