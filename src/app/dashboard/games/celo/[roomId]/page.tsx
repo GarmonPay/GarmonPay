@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
+import VoiceChat from "@/components/celo/VoiceChat";
 
 interface Player {
   id: string;
@@ -1604,17 +1605,19 @@ export default function CeloRoomPage() {
               height: "100%",
               display: "flex",
               flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems: "stretch",
+              justifyContent: "flex-start",
               gap: 12,
               padding: 16,
+              overflowY: "auto",
             }}
           >
-            <div style={{ fontSize: 32 }}>🎤</div>
-            <div style={{ fontFamily: '"Cinzel Decorative", serif', color: "#F5C842", fontSize: 14 }}>VOICE CHAT</div>
-            <div style={{ color: "#6B7280", fontSize: 12, fontFamily: "Courier New", textAlign: "center" }}>
-              Voice coming soon. Use chat to communicate.
-            </div>
+            <VoiceChat
+              roomId={roomId}
+              userId={myUserId || undefined}
+              userName={getName(myPlayer?.user)}
+              isSpectator={myRole === "spectator"}
+            />
           </div>
         ) : null}
       </div>
