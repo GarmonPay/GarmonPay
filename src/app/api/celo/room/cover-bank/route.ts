@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   };
 
   if (!["betting", "banker_rolling"].includes(roundRecord.status)) {
-    return NextResponse.json({ error: "Round is not in a bettable state" }, { status: 400 });
+    return NextResponse.json({ error: "Round is not open for covering the bank" }, { status: 400 });
   }
 
   if (roundRecord.bank_covered) {

@@ -1,4 +1,5 @@
 import { randomInt as nodeRandomInt } from "node:crypto";
+import { CELO_ROLL } from "@/lib/celo-roll-names";
 
 function randomInt(min: number, max: number): number {
   return nodeRandomInt(min, max);
@@ -43,7 +44,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_win",
-      rollName: "C-Lo (4-5-6) — street crown",
+      rollName: CELO_ROLL.celo,
       point: undefined,
       isCelo: true,
       isCraps: false,
@@ -53,17 +54,17 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
   // Trips — automatic win
   if (a === b && b === c) {
     const names: Record<number, string> = {
-      1: "Trips — Aces (trip 1s)",
-      2: "Trips — Deuces (trip 2s)",
-      3: "Trips — Treys (trip 3s)",
-      4: "Trips — Fours (trip 4s)",
-      5: "Trips — Fives (trip 5s)",
-      6: "Trips — Sixes (trip 6s) — head crack",
+      1: CELO_ROLL.aceOut,
+      2: CELO_ROLL.trip2,
+      3: CELO_ROLL.trip3,
+      4: CELO_ROLL.trip4,
+      5: CELO_ROLL.trip5,
+      6: CELO_ROLL.trip6,
     };
     return {
       dice,
       result: "instant_win",
-      rollName: names[a] || "Trips — three of a kind",
+      rollName: names[a] || CELO_ROLL.trip6,
       point: undefined,
       isCelo: false,
       isCraps: false,
@@ -79,7 +80,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_win",
-      rollName: "Pair + 6 — hand crack (auto win)",
+      rollName: CELO_ROLL.handCrack,
       point: undefined,
       isCelo: false,
       isCraps: false,
@@ -91,7 +92,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_loss",
-      rollName: "Ace-Deuce-Trey (1-2-3) — instant loss",
+      rollName: CELO_ROLL.shit,
       point: undefined,
       isCelo: false,
       isCraps: true,
@@ -107,7 +108,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
     return {
       dice,
       result: "instant_loss",
-      rollName: "Pair + 1 — instant loss",
+      rollName: CELO_ROLL.dick,
       point: undefined,
       isCelo: false,
       isCraps: true,
@@ -116,10 +117,10 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
 
   // Points: pair + 2–5 (re-roll if no pair / no scoring combo above)
   const pointNames: Record<number, string> = {
-    2: "Point 2 — Shortly / Jit (lowest point)",
-    3: "Point 3",
-    4: "Point 4",
-    5: "Point 5",
+    2: CELO_ROLL.shortly,
+    3: CELO_ROLL.girl,
+    4: CELO_ROLL.zoe,
+    5: CELO_ROLL.pound,
   };
 
   if ((a === b && c === 2) || (a === c && b === 2) || (b === c && a === 2)) {
@@ -166,7 +167,7 @@ export function evaluateRoll(dice: [number, number, number]): RollResult {
   return {
     dice,
     result: "no_count",
-    rollName: "No point — re-roll",
+    rollName: CELO_ROLL.noCount,
     point: undefined,
     isCelo: false,
     isCraps: false,

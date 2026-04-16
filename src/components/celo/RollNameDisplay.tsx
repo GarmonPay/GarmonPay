@@ -20,7 +20,7 @@ function classify(name: string | null): {
   if (!name || !name.trim()) return { durationMs: 0, key: "none" };
   const u = name.toUpperCase();
 
-  if (u.includes("NO POINT") || u.includes("RE-ROLL") || u.includes("NO COUNT")) {
+  if (u.includes("NO POINT") || u.includes("RE-ROLL") || u.includes("NO COUNT") || u.includes("ROLL AGAIN")) {
     return { durationMs: 1500, key: "nocount" };
   }
   if (u.includes("C-LO") || u.includes("4-5-6")) return { durationMs: 3000, key: "clo" };

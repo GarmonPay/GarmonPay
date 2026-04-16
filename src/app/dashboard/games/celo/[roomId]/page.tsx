@@ -93,6 +93,9 @@ function mapRound(raw: Record<string, unknown> | null): CeloRound | null {
     roll_animation_duration_ms:
       raw.roll_animation_duration_ms != null ? Number(raw.roll_animation_duration_ms) : null,
     updated_at: raw.updated_at != null ? String(raw.updated_at) : null,
+    player_celo_offer: Boolean(raw.player_celo_offer),
+    player_celo_expires_at:
+      raw.player_celo_expires_at != null ? String(raw.player_celo_expires_at) : null,
   };
 }
 

@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
   if (new_bank_sc < new_minimum_sc) {
     return NextResponse.json(
-      { error: "Bank must be greater than or equal to minimum bet" },
+      { error: "Bank must be greater than or equal to minimum entry" },
       { status: 400 }
     );
   }
@@ -99,6 +99,22 @@ export async function POST(req: Request) {
   const currentBank = rm.current_bank_cents;
   const delta = new_bank_sc - currentBank;
 
+  if (delta >= 0) {
+    return NextResponse.json(
+      { error: "Bank can only be lowered after C-Lo, not raised or unchanged" },
+      { status: 400 }
+    );
+  }
+
+  if (new_bank_sc % rm.min_bet_cents !== 0) {
+    return NextResponse.json(
+      {
+        error: `Bank must be a whole multiple of minimum entry (${rm.min_bet_cents} SC)`,
+      },
+      { status: 400 }
+    );
+  }
+
   const { data: stakeRows, error: stakeErr } = await supabase
     .from("celo_room_players")
     .select("bet_cents, entry_sc")
@@ -106,7 +122,7 @@ export async function POST(req: Request) {
     .eq("role", "player");
 
   if (stakeErr) {
-    return NextResponse.json({ error: "Could not validate player stakes" }, { status: 500 });
+    return NextResponse.json({ error: "Could not validate player entries" }, { status: 500 });
   }
 
   const sumStakes = sumPlayerTableStakesCents(
@@ -128,31 +144,13 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Cannot adjust bank: reserved liability would fall below total committed player stakes (integer US cents).",
+          "Cannot adjust bank: reserved liability would fall below total committed player entries (integer US cents).",
       },
       { status: 400 }
     );
   }
 
-  if (delta > 0) {
-    const balance = await getGPayBalance(userId);
-    if (balance < delta) {
-      return NextResponse.json(
-        { error: "Insufficient $GPAY to raise the bank by this amount" },
-        { status: 400 }
-      );
-    }
-    const debit = await deductGPay(userId, delta, balance, {
-      description: "C-Lo bank raise",
-      reference: `celo_bank_raise_${room_id}_${Date.now()}`,
-    });
-    if (!debit.ok) {
-      return NextResponse.json(
-        { error: debit.message ?? "Failed to reserve additional bank funds" },
-        { status: 400 }
-      );
-    }
-  } else if (delta < 0) {
+  if (delta < 0) {
     const credit = await creditGPay(userId, -delta, {
       description: "C-Lo bank lower",
       reference: `celo_bank_lower_${room_id}_${Date.now()}`,

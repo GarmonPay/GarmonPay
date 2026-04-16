@@ -102,23 +102,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "entry_cents required for players" }, { status: 400 });
     }
 
+    const MIN_ENTRY_SC = 500;
+    if (entry_cents < MIN_ENTRY_SC) {
+      return NextResponse.json(
+        { error: `Entry must be at least ${MIN_ENTRY_SC} SC ($5.00 minimum)` },
+        { status: 400 }
+      );
+    }
+
     if (entry_cents < roomRecord.min_bet_cents) {
       return NextResponse.json(
-        { error: `Entry must be at least ${roomRecord.min_bet_cents} cents` },
+        { error: `Entry must be at least ${roomRecord.min_bet_cents} SC (table minimum)` },
         { status: 400 }
       );
     }
 
     if (entry_cents % roomRecord.min_bet_cents !== 0) {
       return NextResponse.json(
-        { error: `Entry must be a multiple of ${roomRecord.min_bet_cents} cents` },
+        { error: `Entry must be a whole multiple of ${roomRecord.min_bet_cents} SC (minimum entry for this table)` },
         { status: 400 }
       );
     }
 
     if (entry_cents > roomRecord.max_bet_cents) {
       return NextResponse.json(
-        { error: `Entry cannot exceed ${roomRecord.max_bet_cents} cents` },
+        { error: `Entry cannot exceed ${roomRecord.max_bet_cents} SC` },
         { status: 400 }
       );
     }
@@ -154,7 +162,7 @@ export async function POST(req: Request) {
       reserveCents: reserve,
       sumStakesCents: totalCommitted + entry_cents,
       messageWhenExceeded:
-        "Your bet cannot exceed the banker's remaining coverage for this table (total player stakes cannot exceed the reserved bank).",
+        "Your entry cannot exceed the banker's remaining coverage for this table (total player entries cannot exceed the reserved bank).",
     });
     if (!cap.ok) {
       celoQaLog("join_reserve_rejected", {

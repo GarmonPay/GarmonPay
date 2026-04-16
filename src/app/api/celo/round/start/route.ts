@@ -109,7 +109,7 @@ export async function POST(req: Request) {
       roomStatus: roomRecord.status,
     });
     return NextResponse.json(
-      { error: "At least one non-banker player with a bet is required to start a round" },
+      { error: "At least one non-banker player with an entry is required to start a round" },
       { status: 400 }
     );
   }

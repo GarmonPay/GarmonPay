@@ -165,6 +165,11 @@ export async function POST(req: Request) {
     },
   });
 
+  await supabase
+    .from("celo_rounds")
+    .update({ player_celo_offer: false, player_celo_expires_at: null })
+    .eq("id", round_id);
+
   return NextResponse.json({
     new_banker_id: userId,
     previous_banker_id: rm.banker_id,

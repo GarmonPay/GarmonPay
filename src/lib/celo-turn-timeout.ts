@@ -3,7 +3,6 @@ import { celoFirstRow } from "@/lib/celo-first-row";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeRefundReference } from "@/lib/celo-room-refund-refs";
 import { creditSweepsIdempotent } from "@/lib/coins";
-import { getGPayBalance } from "@/lib/gpay-balance";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { getEligibleStakedPlayers } from "@/lib/celo-eligible-players";
 import { celoSameAuthUserId, resolveCurrentPlayerForSeat } from "@/lib/celo-room-rules";
@@ -38,42 +37,6 @@ async function lastPlayerPhaseActivityMs(
   const animMs = isoToMs(round.roll_animation_start_at as string | undefined);
   const createdMs = isoToMs(round.created_at as string | undefined);
   return Math.max(prMs, animMs, createdMs);
-}
-
-async function rotateBankerToNextEligible(
-  admin: SupabaseClient,
-  roomId: string,
-  oldBankerId: string,
-  minBetCents: number
-): Promise<{ rotated: boolean; cancelled: boolean }> {
-  const { data: allPlayers } = await admin
-    .from("celo_room_players")
-    .select("user_id, seat_number, role")
-    .eq("room_id", roomId)
-    .neq("role", "spectator")
-    .order("seat_number", { ascending: true });
-
-  for (const row of allPlayers ?? []) {
-    const p = row as { user_id: string };
-    if (p.user_id === oldBankerId) continue;
-    const balance = await getGPayBalance(p.user_id);
-    if (balance >= minBetCents) {
-      await admin
-        .from("celo_room_players")
-        .update({ role: "player" })
-        .eq("room_id", roomId)
-        .eq("user_id", oldBankerId);
-      await admin
-        .from("celo_room_players")
-        .update({ role: "banker" })
-        .eq("room_id", roomId)
-        .eq("user_id", p.user_id);
-      await admin.from("celo_rooms").update({ banker_id: p.user_id }).eq("id", roomId);
-      return { rotated: true, cancelled: false };
-    }
-  }
-  await admin.from("celo_rooms").update({ status: "cancelled" }).eq("id", roomId);
-  return { rotated: false, cancelled: true };
 }
 
 async function handleBankerTurnTimeout(
@@ -132,22 +95,16 @@ async function handleBankerTurnTimeout(
     .update({ status: "completed", completed_at: now })
     .eq("id", roundId);
 
-  const oldBankerId = String(rm.banker_id ?? "");
-  const rot = await rotateBankerToNextEligible(admin, roomId, oldBankerId, rm.min_bet_cents);
-
-  if (rot.cancelled) {
-    await admin.from("celo_rooms").update({ last_activity: now }).eq("id", roomId);
-  } else {
-    await admin
-      .from("celo_rooms")
-      .update(
-        mergeCeloRoomUpdate(rm.current_bank_cents, {
-          status: "active",
-          last_activity: now,
-        })
-      )
-      .eq("id", roomId);
-  }
+  /* GarmonPay: banker stays until C-Lo; no auto banker rotation or room cancel. */
+  await admin
+    .from("celo_rooms")
+    .update(
+      mergeCeloRoomUpdate(rm.current_bank_cents, {
+        status: "active",
+        last_activity: now,
+      })
+    )
+    .eq("id", roomId);
 
   await broadcastCeloRoomEvent(admin, roomId, "turn_timeout", {
     roomId,
@@ -161,10 +118,10 @@ async function handleBankerTurnTimeout(
     round_id: roundId,
     user_id: null,
     action: "banker_turn_timeout",
-    details: { reason: "cron_5min_banker_no_roll", banker_rotated: rot.rotated, room_cancelled: rot.cancelled },
+    details: { reason: "cron_5min_banker_no_roll", banker_rotated: false, room_cancelled: false },
   });
 
-  celoQaLog("celo_banker_turn_timeout", { roomId, roundId, rot });
+  celoQaLog("celo_banker_turn_timeout", { roomId, roundId, bankerRotated: false });
   return true;
 }
 

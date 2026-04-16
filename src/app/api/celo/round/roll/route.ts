@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { getGPayBalance } from "@/lib/gpay-balance";
 import { celoWalletCredit, insertCeloPlatformFee } from "@/lib/celo-payout-ledger";
 import { rollThreeDice, evaluateRoll, calculatePayout, resolvePlayerVsBankerPoint } from "@/lib/celo-engine";
 import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schema";
@@ -158,7 +157,6 @@ export async function POST(req: Request) {
         current_player_seat: roll.result === "point" ? firstSeat : null,
         completed_at:
           roll.result === "instant_win" || roll.result === "instant_loss" ? nowIso : null,
-        banker_rerolls: Number(r.banker_rerolls ?? 0) + (roll.result === "no_count" ? 1 : 0),
         roll_animation_start_at: spinStart,
         roll_animation_duration_ms: CELO_ROLL_ANIMATION_DURATION_MS,
         roll_processing: false,
@@ -289,50 +287,12 @@ export async function POST(req: Request) {
         totalPaidOut += payoutSC;
       }
 
-      let newBank = Math.max(0, rm.current_bank_cents - totalPaidOut);
-
-      let bankerBroke = false;
-      let newBankerId = bankerId;
-
-      if (newBank < rm.min_bet_cents) {
-        bankerBroke = true;
-        const { data: allPlayers } = await supabase
-          .from("celo_room_players")
-          .select("user_id, seat_number")
-          .eq("room_id", room_id)
-          .neq("user_id", bankerId)
-          .order("seat_number", { ascending: true });
-
-        for (const p of allPlayers ?? []) {
-          const row = p as { user_id: string };
-          const bal = await getGPayBalance(row.user_id);
-          if (bal >= newBank) {
-            newBankerId = row.user_id;
-            await supabase
-              .from("celo_room_players")
-              .update({ role: "player" })
-              .eq("room_id", room_id)
-              .eq("user_id", bankerId);
-            await supabase
-              .from("celo_room_players")
-              .update({ role: "banker" })
-              .eq("room_id", room_id)
-              .eq("user_id", newBankerId);
-            await supabase.from("celo_rooms").update({ banker_id: newBankerId }).eq("id", room_id);
-            break;
-          }
-        }
-
-        if (newBankerId === bankerId) {
-          await supabase.from("celo_rooms").update({ status: "cancelled" }).eq("id", room_id);
-        }
-      }
-
+      /* Bank display amount does not shrink on player wins — only grows on banker wins or voluntary lower after C-Lo. */
       await supabase
         .from("celo_rooms")
         .update(
-          mergeCeloRoomUpdate(newBank, {
-            status: bankerBroke && newBankerId === bankerId ? "cancelled" : "active",
+          mergeCeloRoomUpdate(rm.current_bank_cents, {
+            status: "active",
             last_activity: now,
             last_round_was_celo: false,
           })
@@ -345,10 +305,8 @@ export async function POST(req: Request) {
         result: "instant_loss",
         outcome: "players_win",
         totalPaidOut,
-        newBankSC: newBank,
+        newBankSC: rm.current_bank_cents,
         bankerStays: true,
-        bankerBroke,
-        newBankerId,
         animation: bankerRollPayload,
       });
     }
@@ -372,12 +330,18 @@ export async function POST(req: Request) {
       .gt("entry_sc", 0)
       .order("seat_number", { ascending: true });
 
-    const players = (playersData ?? []) as Array<{
+    let players = (playersData ?? []) as Array<{
       user_id: string;
       entry_sc?: number;
       bet_cents?: number;
       seat_number: number | null;
     }>;
+
+    const bankCovered = Boolean(r.bank_covered);
+    const coveredBy = r.covered_by != null ? String(r.covered_by) : null;
+    if (bankCovered && coveredBy) {
+      players = players.filter((p) => p.user_id === coveredBy);
+    }
 
     const currentSeat = Number(r.current_player_seat ?? players[0]?.seat_number ?? 1);
     const currentPlayer =
@@ -482,10 +446,9 @@ export async function POST(req: Request) {
         });
       }
 
-      const newBank = Math.max(0, rm.current_bank_cents - playerEntry);
       await supabase
         .from("celo_rooms")
-        .update(mergeCeloRoomUpdate(newBank, { last_activity: now }))
+        .update(mergeCeloRoomUpdate(rm.current_bank_cents, { last_activity: now }))
         .eq("id", room_id);
     } else {
       const bankerNet = Math.floor((playerEntry * (100 - feePct)) / 100);
@@ -539,6 +502,16 @@ export async function POST(req: Request) {
       .select("id")
       .single();
     let resolvingAnimation: ReturnType<typeof buildCeloRollStartedPayload> | undefined;
+    if (!prResErr && playerWins && roll.isCelo) {
+      await supabase
+        .from("celo_rounds")
+        .update({
+          player_celo_offer: true,
+          player_celo_expires_at: new Date(Date.now() + 30_000).toISOString(),
+        })
+        .eq("id", round_id);
+    }
+
     if (!prResErr && prResolving?.id) {
       console.info("[celo/roll] player resolving row saved", { player_roll_id: prResolving.id });
       resolvingAnimation = buildCeloRollStartedPayload({
@@ -577,6 +550,7 @@ export async function POST(req: Request) {
         roundComplete: false,
         animation: resolvingAnimation,
         player_roll_id: prResolving?.id ?? null,
+        player_can_become_banker: Boolean(playerWins && roll.isCelo),
       });
     }
 
@@ -602,6 +576,7 @@ export async function POST(req: Request) {
       roundComplete: true,
       animation: resolvingAnimation,
       player_roll_id: prResolving?.id ?? null,
+      player_can_become_banker: Boolean(playerWins && roll.isCelo),
     });
     } finally {
       await celoReleaseRoundRollLock(supabase, round_id);

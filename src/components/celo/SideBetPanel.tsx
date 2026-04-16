@@ -123,7 +123,7 @@ export default function SideBetPanel({
         minHeight: 200,
       }}
     >
-      <div style={{ fontSize: 12, letterSpacing: "0.1em", color: "#fde68a", fontWeight: 800 }}>SIDE BETS 🎰</div>
+      <div style={{ fontSize: 12, letterSpacing: "0.1em", color: "#fde68a", fontWeight: 800 }}>SIDE ENTRIES 🎰</div>
       {err && (
         <div style={{ color: "#fca5a5", fontSize: 12, padding: 8, background: "rgba(239,68,68,0.1)", borderRadius: 8 }}>{err}</div>
       )}

@@ -70,6 +70,8 @@ export type CeloRound = {
   roll_animation_start_at?: string | null;
   roll_animation_duration_ms?: number | null;
   updated_at?: string | null;
+  player_celo_offer?: boolean;
+  player_celo_expires_at?: string | null;
 };
 
 /** Latest row from `celo_player_rolls` for the active round (server truth for player dice). */

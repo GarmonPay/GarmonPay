@@ -67,17 +67,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
-    const staleBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const { error: staleErr } = await supabase
-      .from("celo_rooms")
-      .update({ status: "cancelled", last_activity: new Date().toISOString() })
-      .eq("creator_id", userId)
-      .in("status", ["waiting", "active"])
-      .lt("last_activity", staleBefore);
-    if (staleErr) {
-      console.error("[celo/room/create] stale room cleanup:", staleErr.message);
-    }
-
     const { data: existingRows } = await supabase
       .from("celo_rooms")
       .select("id, status")
@@ -90,7 +79,8 @@ export async function POST(req: Request) {
       const er = existingRoom as { id: string; status?: string };
       return NextResponse.json(
         {
-          message: "You already have an open room. Close it before creating a new one.",
+          message:
+            "You already have an open table. Leave or finish there before creating another room.",
           existingRoomId: er.id,
         },
         { status: 409 }
