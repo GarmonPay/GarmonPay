@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Cinzel_Decorative } from "next/font/google";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -8,6 +7,11 @@ import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
+import {
+  CeloEmptyRoomsCard,
+  CeloLiveStatusStrip,
+  CeloReadinessPanel,
+} from "@/components/celo/CeloLobbySections";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -55,13 +59,7 @@ function randomJoinCode(): string {
 export default function CeloLobbyPage() {
   const router = useRouter();
   const supabaseRef = useRef<SupabaseClient | null>(null);
-  const {
-    goldCoins,
-    gpayCoins,
-    gpayTokens,
-    refresh: refreshCoins,
-    formatGPC,
-  } = useCoins();
+  const { gpayCoins, refresh: refreshCoins, formatGPC } = useCoins();
 
   const [rooms, setRooms] = useState<CeloRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,25 +254,19 @@ export default function CeloLobbyPage() {
     r.banker?.full_name || r.banker?.email?.split("@")[0] || "Unknown";
 
   const playersAtTables = rooms.reduce((s, r) => s + (r.player_count ?? 1), 0);
-  const liveStatusText =
-    rooms.length > 0
-      ? `🟢 LIVE • ${playersAtTables} player${playersAtTables === 1 ? "" : "s"} • ${rooms.length} room${rooms.length === 1 ? "" : "s"}`
-      : "🟡 Waiting for players — start the first game";
+  const liveStripVariant = roomsUnavailable
+    ? ("reconnect" as const)
+    : rooms.length > 0
+      ? ("live" as const)
+      : ("empty" as const);
+  const minEntryForReadiness = 500;
 
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#05010F",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          paddingBottom: 100,
-        }}
-      >
-        <div style={{ color: "#F5C842", fontFamily: "Courier New, monospace", fontSize: 16 }}>
-          Loading rooms...
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#030008] pb-24">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400" />
+          <p className="font-mono text-sm font-medium tracking-wide text-amber-200/90">Loading lobby…</p>
         </div>
       </div>
     );
@@ -282,11 +274,10 @@ export default function CeloLobbyPage() {
 
   return (
     <div
-      className="celo-lobby-root"
+      className="celo-lobby-root bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(88,28,135,0.22),transparent_50%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(245,200,66,0.05),transparent_45%),#030008]"
       style={{
         position: "relative",
         minHeight: "100vh",
-        background: "#05010F",
         paddingBottom: 100,
         fontFamily: "var(--font-dm-sans), DM Sans, sans-serif",
         overflowX: "hidden",
@@ -343,8 +334,6 @@ export default function CeloLobbyPage() {
           max-width: var(--celo-max);
           margin-left: auto;
           margin-right: auto;
-          padding-left: 16px;
-          padding-right: 16px;
         }
         .celo-room-grid {
           display: grid;
@@ -385,10 +374,6 @@ export default function CeloLobbyPage() {
             width: auto;
           }
         }
-        @keyframes celo-pulse-dot {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
         .celo-hero-title-glow {
           filter: drop-shadow(0 0 20px rgba(245, 200, 66, 0.45))
             drop-shadow(0 0 48px rgba(124, 58, 237, 0.25));
@@ -414,364 +399,89 @@ export default function CeloLobbyPage() {
         .celo-filter-scroll::-webkit-scrollbar {
           display: none;
         }
-        @keyframes celo-spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .celo-reconnect-spinner {
-          width: 14px;
-          height: 14px;
-          border: 2px solid rgba(245, 200, 66, 0.22);
-          border-top-color: #f5c842;
-          border-radius: 50%;
-          animation: celo-spin 0.75s linear infinite;
-          flex-shrink: 0;
-        }
-        .celo-reconnect-pulse {
-          animation: celo-pulse-dot 1.2s ease-in-out infinite;
-        }
       `}</style>
 
-      <div className="celo-lobby-inner" style={{ position: "relative", zIndex: 1 }}>
-        {/* Wallet strip — balance + actions */}
-        <div
-          style={{
-            marginTop: 0,
-            marginBottom: 10,
-            padding: "10px 12px",
-            borderRadius: 16,
-            border: "1px solid rgba(124,58,237,0.35)",
-            background: "linear-gradient(180deg, rgba(22,10,42,0.95), rgba(8,4,18,0.98))",
-            boxShadow: "0 0 0 1px rgba(245,200,66,0.08), inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-                rowGap: 8,
-              }}
-            >
-              {(
-                [
-                  ["Gold", goldCoins, "#FDE68A"],
-                  ["GPC", gpayCoins, "#F5C842"],
-                  ["Tokens", gpayTokens, "#C4B5FD"],
-                ] as const
-              ).map(([label, val, color]) => (
-                <div
-                  key={label}
-                  style={{
-                    minWidth: 0,
-                    padding: "6px 10px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(0,0,0,0.35)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 800,
-                      letterSpacing: "0.14em",
-                      color: "#9CA3AF",
-                      fontFamily: "Courier New, monospace",
-                      marginBottom: 2,
-                    }}
-                  >
-                    {label === "GPC" ? "GPay Coins" : label === "Gold" ? "Gold Coins" : "Tokens"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 800,
-                      color,
-                      fontFamily: "Courier New, monospace",
-                      letterSpacing: "-0.02em",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {label === "GPC" ? formatGPC(val) : val.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                alignItems: "center",
-              }}
-            >
-              <Link
-                href="/dashboard/coins/buy"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: "0.06em",
-                  textDecoration: "none",
-                  color: "#0A0A0F",
-                  background: "linear-gradient(180deg, #FDE68A, #CA8A04)",
-                  border: "1px solid rgba(255,250,220,0.35)",
-                  fontFamily: cinzel.style.fontFamily,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Buy
-              </Link>
-              <Link
-                href="/dashboard/convert"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textDecoration: "none",
-                  color: "#E9D5FF",
-                  border: "1px solid rgba(124,58,237,0.5)",
-                  background: "rgba(15,8,28,0.9)",
-                  fontFamily: "Courier New, monospace",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Convert
-              </Link>
-              <Link
-                href="/dashboard/wallet#redeem"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textDecoration: "none",
-                  color: "#A7F3D0",
-                  border: "1px solid rgba(16,185,129,0.45)",
-                  background: "rgba(6,24,18,0.75)",
-                  fontFamily: "Courier New, monospace",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Redeem
-              </Link>
-            </div>
-          </div>
-        </div>
+      <div
+        className="celo-lobby-inner -mt-1 max-w-[min(100%,1200px)] px-3 sm:px-4 tablet:px-0"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        <CeloLiveStatusStrip
+          variant={liveStripVariant}
+          roomCount={rooms.length}
+          playerCount={playersAtTables}
+          className="mb-3 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+        />
 
-        {roomsUnavailable ? (
-          <div
-            role="status"
-            aria-live="polite"
-            style={{
-              marginBottom: 12,
-              padding: "12px 14px",
-              borderRadius: 14,
-              border: "1px solid rgba(245,158,11,0.35)",
-              background: "linear-gradient(180deg, rgba(55,35,10,0.85), rgba(25,15,8,0.92))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <span className="celo-reconnect-pulse" style={{ fontSize: 16 }} aria-hidden>
-              ⚠️
-            </span>
-            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-              <div
-                style={{
-                  color: "#FDE68A",
-                  fontWeight: 800,
-                  fontSize: 13,
-                  fontFamily: "system-ui, sans-serif",
-                  marginBottom: 2,
-                }}
-              >
-                Rooms temporarily unavailable
-              </div>
-              <div
-                style={{
-                  color: "rgba(253,230,138,0.85)",
-                  fontSize: 12,
-                  fontFamily: "Courier New, monospace",
-                }}
-              >
-                Reconnecting…
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div className="celo-reconnect-spinner" aria-hidden />
-              <span style={{ color: "#94A3B8", fontSize: 11, fontFamily: "Courier New, monospace" }}>
-                Auto-retry
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        {/* HERO — premium C-LO card */}
-        <div
-          style={{
-            marginTop: 0,
-            marginBottom: 10,
-            marginLeft: -16,
-            marginRight: -16,
-            paddingLeft: 16,
-            paddingRight: 16,
-            position: "relative",
-          }}
-        >
+        {/* HERO — centerpiece game card */}
+        <div className="relative -mx-3 mb-3 sm:-mx-4 tablet:mx-0 tablet:mb-4">
           <div
             aria-hidden
+            className="pointer-events-none absolute left-1/2 top-0 h-[min(160px,28vw)] w-[min(100%,440px)] -translate-x-1/2"
             style={{
-              position: "absolute",
-              left: "50%",
-              top: -8,
-              transform: "translateX(-50%)",
-              width: "min(100%, 420px)",
-              height: 140,
               background:
-                "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245,200,66,0.18), transparent 55%)",
-              pointerEvents: "none",
+                "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245,200,66,0.2), transparent 58%)",
             }}
           />
           <div
+            className="relative overflow-hidden rounded-[22px] border border-violet-500/45 shadow-[0_0_0_1px_rgba(245,200,66,0.1),0_28px_64px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl"
             style={{
-              position: "relative",
-              borderRadius: 22,
-              border: "1px solid rgba(124,58,237,0.45)",
-              background:
-                "linear-gradient(165deg, rgba(26,12,48,0.97) 0%, rgba(8,4,18,0.99) 100%)",
-              boxShadow:
-                "0 0 0 1px rgba(245,200,66,0.12), 0 24px 56px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)",
-              overflow: "hidden",
-              backdropFilter: "blur(14px)",
+              background: "linear-gradient(165deg, rgba(22,10,42,0.98) 0%, rgba(5,2,12,0.99) 100%)",
             }}
           >
             <div
+              className="absolute bottom-0 left-0 top-0 w-[3px]"
               style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 3,
                 background: "linear-gradient(180deg, #7C3AED, #5B21B6)",
-                boxShadow: "0 0 16px rgba(124,58,237,0.6)",
+                boxShadow: "0 0 16px rgba(124,58,237,0.5)",
               }}
             />
             <div
+              className="absolute bottom-0 right-0 top-0 w-[3px]"
               style={{
-                position: "absolute",
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: 3,
                 background: "linear-gradient(180deg, #F5C842, #B45309)",
-                boxShadow: "0 0 14px rgba(245,200,66,0.45)",
+                boxShadow: "0 0 14px rgba(245,200,66,0.4)",
               }}
             />
-            <div style={{ padding: "14px 14px 14px", position: "relative" }}>
+            <div className="relative px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4">
               <p
-                style={{
-                  textAlign: "center",
-                  margin: "0 0 4px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.28em",
-                  textTransform: "uppercase",
-                  color: "rgba(167,139,250,0.95)",
-                  fontFamily: "Courier New, monospace",
-                }}
+                className="mb-1 text-center font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-violet-300/95"
               >
-                Street dice · Sweeps
+                Street dice · Sweeps · Real stakes
               </p>
               <h1
-                className={`${cinzel.className} celo-hero-title-glow`}
+                className={`${cinzel.className} celo-hero-title-glow text-center text-[clamp(3.25rem,14vw,6.75rem)] font-black leading-[0.95] tracking-[0.04em]`}
                 style={{
-                  fontSize: "clamp(56px, 15vw, 108px)",
-                  fontWeight: 900,
-                  textAlign: "center",
-                  margin: "0 0 4px",
-                  background: "linear-gradient(180deg, #FFF8E6 0%, #F5C842 42%, #A16207 100%)",
+                  background: "linear-gradient(180deg, #FFF8EA 0%, #EAB308 42%, #92400E 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
-                  letterSpacing: "0.04em",
-                  lineHeight: 0.98,
                   filter:
-                    "drop-shadow(0 2px 24px rgba(245,200,66,0.35)) drop-shadow(0 0 40px rgba(124,58,237,0.2))",
+                    "drop-shadow(0 2px 20px rgba(245,200,66,0.28)) drop-shadow(0 0 36px rgba(124,58,237,0.18))",
                 }}
               >
                 C-LO
               </h1>
-              <p
-                style={{
-                  color: "#E5E7EB",
-                  textAlign: "center",
-                  fontSize: "clamp(12px, 3.2vw, 14px)",
-                  margin: "0 0 10px",
-                  letterSpacing: "0.1em",
-                  fontFamily: "Courier New, monospace",
-                  fontWeight: 600,
-                  lineHeight: 1.5,
-                  maxWidth: 380,
-                  marginLeft: "auto",
-                  marginRight: "auto",
-                  opacity: 0.95,
-                }}
-              >
-                THE FIRST LEGITIMATE
-                <br />
-                DIGITAL STREET DICE
+              <p className="mx-auto mb-3 max-w-[22rem] text-center font-mono text-[clamp(0.8rem,3.5vw,0.95rem)] font-semibold leading-snug tracking-wide text-slate-200/95">
+                Digital street dice. Real pressure.
               </p>
 
-              <div
-                style={{
-                  marginBottom: 12,
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(16,185,129,0.22)",
-                  background: "rgba(0,0,0,0.35)",
-                  textAlign: "center",
-                  fontSize: "clamp(11px, 3vw, 12px)",
-                  fontWeight: 700,
-                  color: rooms.length > 0 ? "#A7F3D0" : "#FDE68A",
-                  fontFamily: "Courier New, monospace",
-                  letterSpacing: "0.04em",
-                  lineHeight: 1.45,
-                }}
-              >
-                {liveStatusText}
-              </div>
+              {!roomsUnavailable && rooms.length > 0 ? (
+                <div className="mb-3 flex justify-center gap-2 font-mono text-[11px] text-slate-400">
+                  <span className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5">
+                    <span className="text-slate-500">Rooms</span>{" "}
+                    <span className="font-bold text-amber-200/90">{rooms.length}</span>
+                  </span>
+                  <span className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5">
+                    <span className="text-slate-500">At tables</span>{" "}
+                    <span className="font-bold text-emerald-300/90">{playersAtTables}</span>
+                  </span>
+                </div>
+              ) : null}
 
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                  maxWidth: 420,
-                  margin: "0 auto 0",
-                }}
-              >
+              <div className="mx-auto flex max-w-[26rem] flex-col gap-2.5">
                 <button
                   type="button"
-                  className="celo-btn-primary celo-hero-cta"
+                  className="celo-btn-primary celo-hero-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                   onClick={openCreatePublic}
                   style={{
                     width: "100%",
@@ -784,17 +494,17 @@ export default function CeloLobbyPage() {
                     fontWeight: 800,
                     fontFamily: cinzel.style.fontFamily,
                     cursor: "pointer",
-                    letterSpacing: "0.06em",
+                    letterSpacing: "0.04em",
                     transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     boxShadow:
-                      "0 5px 0 rgba(120,80,10,0.55), 0 12px 40px rgba(245,200,66,0.4), inset 0 1px 0 rgba(255,255,255,0.45)",
+                      "0 5px 0 rgba(120,80,10,0.55), 0 12px 40px rgba(245,200,66,0.38), inset 0 1px 0 rgba(255,255,255,0.45)",
                   }}
                 >
-                  🎲 START A GAME
+                  🎲 Start a Game
                 </button>
                 <button
                   type="button"
-                  className="celo-hero-cta"
+                  className="celo-hero-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
                   onClick={openCreatePrivate}
                   style={{
                     width: "100%",
@@ -806,39 +516,32 @@ export default function CeloLobbyPage() {
                     fontWeight: 800,
                     fontFamily: cinzel.style.fontFamily,
                     letterSpacing: "0.05em",
-                    color: "#DDD6FE",
-                    border: "1px solid rgba(167,139,250,0.55)",
-                    background: "linear-gradient(180deg, rgba(28,12,52,0.95), rgba(8,4,18,0.98))",
+                    color: "#E9D5FF",
+                    border: "1px solid rgba(167,139,250,0.5)",
+                    background: "linear-gradient(180deg, rgba(32,14,58,0.96), rgba(8,4,18,0.99))",
                     boxShadow:
-                      "0 0 0 1px rgba(124,58,237,0.35), 0 0 28px rgba(124,58,237,0.25), inset 0 1px 0 rgba(255,255,255,0.07)",
+                      "0 0 0 1px rgba(124,58,237,0.4), 0 0 24px rgba(124,58,237,0.22), inset 0 1px 0 rgba(255,255,255,0.08)",
                     cursor: "pointer",
                   }}
                 >
-                  🔐 HOST PRIVATE GAME
+                  🔐 Host Private Game
                 </button>
               </div>
+
+              <CeloReadinessPanel
+                className="mt-3"
+                gpayCoins={gpayCoins}
+                minEntrySc={minEntryForReadiness}
+                formatGPC={formatGPC}
+              />
             </div>
           </div>
         </div>
 
-        {/* FILTER TABS */}
+        {/* Stake filters — segmented control */}
         <div
-          className="celo-filter-scroll"
-          style={{
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
-            WebkitOverflowScrolling: "touch",
-            borderRadius: 16,
-            border: "1px solid rgba(124,58,237,0.28)",
-            background: "linear-gradient(180deg, rgba(20,8,40,0.92), rgba(10,4,20,0.96))",
-            marginLeft: -16,
-            marginRight: -16,
-            padding: "10px 12px",
-            marginTop: 0,
-            marginBottom: 4,
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
+          className="celo-filter-scroll -mx-3 mb-2 flex gap-1 overflow-x-auto rounded-2xl border border-violet-500/30 bg-gradient-to-b from-[#140a22]/95 to-[#08030f] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:-mx-4 tablet:mx-0"
+          style={{ WebkitOverflowScrolling: "touch" }}
         >
           {(
             [
@@ -855,25 +558,11 @@ export default function CeloLobbyPage() {
                 type="button"
                 key={key}
                 onClick={() => setFilter(key)}
-                style={{
-                  background: active
-                    ? "linear-gradient(180deg, rgba(245,200,66,0.22), rgba(245,200,66,0.08))"
-                    : "transparent",
-                  border: active ? "1px solid rgba(245,200,66,0.45)" : "1px solid transparent",
-                  borderRadius: 12,
-                  color: active ? "#FEF3C7" : "#9CA3AF",
-                  padding: "12px 14px",
-                  minHeight: 44,
-                  fontSize: 10,
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  fontFamily: "Courier New, monospace",
-                  letterSpacing: "0.08em",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                  boxShadow: active ? "0 0 20px rgba(245,200,66,0.12)" : "none",
-                  transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
-                }}
+                className={`min-h-[46px] shrink-0 rounded-xl px-3.5 py-2.5 font-mono text-[10px] font-extrabold tracking-[0.1em] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 sm:px-4 ${
+                  active
+                    ? "border border-amber-400/50 bg-gradient-to-b from-amber-400/25 to-amber-600/10 text-amber-50 shadow-[0_0_24px_rgba(245,200,66,0.15)]"
+                    : "border border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                }`}
               >
                 {label}
               </button>
@@ -882,187 +571,65 @@ export default function CeloLobbyPage() {
         </div>
 
         {/* ROOMS */}
-        <div id="celo-room-list" style={{ paddingTop: 8, paddingBottom: 20 }}>
+        <div id="celo-room-list" className="pb-6 pt-1">
           {!roomsUnavailable && filteredRooms.length === 0 && rooms.length === 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "48px 16px",
-                color: "#6B7280",
-              }}
-            >
-              <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
-              <div
-                className={cinzel.className}
-                style={{ fontSize: 18, color: "#9CA3AF", marginBottom: 8, fontWeight: 700 }}
-              >
-                No rooms yet
-              </div>
-              <div style={{ fontSize: 14, marginBottom: 20, color: "#9CA3AF" }}>
-                Be the first to open a room — the lobby updates live.
-              </div>
-              <button
-                type="button"
-                onClick={openCreatePublic}
-                className="celo-btn-primary"
-                style={{
-                  background: "linear-gradient(180deg, #FDE68A 0%, #F5C842 40%, #CA8A04 100%)",
-                  color: "#0A0A0F",
-                  border: "1px solid rgba(255,250,220,0.4)",
-                  borderRadius: 14,
-                  padding: "14px 28px",
-                  fontSize: 15,
-                  fontWeight: 800,
-                  fontFamily: cinzel.style.fontFamily,
-                  cursor: "pointer",
-                  letterSpacing: "0.05em",
-                  minHeight: 48,
-                }}
-              >
-                🎲 START A GAME
-              </button>
-            </div>
+            <CeloEmptyRoomsCard onStart={openCreatePublic} cinzelClassName={cinzel.className} />
           ) : !roomsUnavailable && filteredRooms.length === 0 && rooms.length > 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "32px 16px",
-                color: "#6B7280",
-                fontFamily: "Courier New, monospace",
-                fontSize: 14,
-              }}
-            >
-              No rooms match this filter.
+            <div className="rounded-2xl border border-violet-500/25 bg-[#0c0618]/90 px-4 py-10 text-center font-mono text-sm text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              No tables match this stake filter.
             </div>
           ) : roomsUnavailable ? null : (
             <div className="celo-room-grid">
               {filteredRooms.map((room) => (
                 <div
                   key={room.id}
-                  style={{
-                    background: "linear-gradient(180deg, rgba(15,8,35,0.98), rgba(8,4,18,0.99))",
-                    border: "1px solid rgba(124,58,237,0.35)",
-                    borderRadius: 16,
-                    padding: 16,
-                    boxShadow:
-                      "0 0 0 1px rgba(245,200,66,0.06), 0 12px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
-                  }}
+                  className="rounded-2xl border border-violet-500/35 bg-gradient-to-b from-[#140a24]/98 to-[#06020e] p-4 shadow-[0_0_0_1px_rgba(245,200,66,0.07),0_16px_48px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]"
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <div
-                      className={cinzel.className}
-                      style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}
-                    >
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div className={`${cinzel.className} min-w-0 text-[15px] font-bold leading-tight text-white`}>
                       {room.name}
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontSize: 11,
-                        color: "#10B981",
-                        fontFamily: "Courier New, monospace",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          background: "#10B981",
-                          animation: "celo-pulse-dot 1.5s infinite",
-                        }}
+                    <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                      <span
+                        className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                        aria-hidden
                       />
-                      LIVE
+                      Live
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
-                      marginBottom: 14,
-                    }}
-                  >
+                  <div className="mb-4 grid grid-cols-2 gap-3">
                     {(
                       [
                         ["Banker", bankerName(room)],
                         ["Players", `${room.player_count ?? 1}/${room.max_players}`],
-                        ["Min Entry", `${room.minimum_entry_sc.toLocaleString()} GPC`],
-                        ["Bank", `${room.current_bank_sc.toLocaleString()} GPC`],
+                        ["Min entry", `${room.minimum_entry_sc.toLocaleString()} GPC`],
+                        ["Table bank", `${room.current_bank_sc.toLocaleString()} GPC`],
                       ] as const
                     ).map(([label, val]) => (
                       <div key={label}>
-                        <div
-                          style={{
-                            fontSize: 9,
-                            color: "#6B7280",
-                            fontFamily: "Courier New, monospace",
-                            letterSpacing: "0.08em",
-                            marginBottom: 2,
-                          }}
-                        >
+                        <div className="mb-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-slate-500">
                           {label}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            color: "#F5C842",
-                            fontFamily: "Courier New, monospace",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {val}
-                        </div>
+                        <div className="font-mono text-[13px] font-bold text-amber-200/95">{val}</div>
                       </div>
                     ))}
                   </div>
 
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
-                      style={{
-                        flex: 1,
-                        background: "transparent",
-                        border: "1px solid rgba(124,58,237,0.4)",
-                        borderRadius: 8,
-                        color: "#A855F7",
-                        padding: "10px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontFamily: "Courier New, monospace",
-                      }}
+                      className="min-h-[48px] flex-1 rounded-xl border border-violet-500/40 bg-violet-950/30 py-2.5 font-mono text-[12px] font-bold text-violet-200 transition hover:border-violet-400/50 hover:bg-violet-900/40"
                     >
-                      👁 WATCH
+                      Watch
                     </button>
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
-                      style={{
-                        flex: 2,
-                        background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                        border: "none",
-                        borderRadius: 8,
-                        color: "#0A0A0F",
-                        padding: "10px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontFamily: "Courier New, monospace",
-                      }}
+                      className="min-h-[48px] flex-[1.6] rounded-xl bg-gradient-to-r from-amber-300 via-amber-500 to-amber-700 py-2.5 font-mono text-[12px] font-bold text-[#0a0610] shadow-[0_4px_16px_rgba(245,200,66,0.25)] transition hover:brightness-105"
                     >
-                      🎲 JOIN TABLE
+                      Join table
                     </button>
                   </div>
                 </div>
