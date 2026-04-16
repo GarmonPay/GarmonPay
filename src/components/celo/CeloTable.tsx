@@ -26,12 +26,6 @@ function mapDice(t: string | undefined): DiceFaceType {
   return "standard";
 }
 
-function clampDie(n: number): 1 | 2 | 3 | 4 | 5 | 6 {
-  if (!Number.isFinite(n)) return 1;
-  const x = Math.min(6, Math.max(1, Math.round(n)));
-  return x as 1 | 2 | 3 | 4 | 5 | 6;
-}
-
 const NAV_STACK = "calc(5rem + env(safe-area-inset-bottom, 0px))";
 const TAB_H = 44;
 const PANEL_MAX = 240;
@@ -374,6 +368,19 @@ export default function CeloTable({
       }}
     >
       <style>{`
+        @keyframes diceShake {
+          0%   { transform: rotate(0deg) scale(1) }
+          10%  { transform: rotate(-15deg) scale(0.95) }
+          20%  { transform: rotate(15deg) scale(1.05) }
+          30%  { transform: rotate(-10deg) scale(0.98) }
+          40%  { transform: rotate(10deg) scale(1.02) }
+          50%  { transform: rotate(-8deg) scale(0.99) }
+          60%  { transform: rotate(8deg) scale(1.01) }
+          70%  { transform: rotate(-5deg) scale(1) }
+          80%  { transform: rotate(5deg) scale(1) }
+          90%  { transform: rotate(-2deg) scale(1) }
+          100% { transform: rotate(0deg) scale(1) }
+        }
         @keyframes pulseGold {
           0%, 100% { box-shadow: 0 0 0 0 rgba(245,200,66,0); }
           50% { box-shadow: 0 0 16px 4px rgba(245,200,66,0.45); }
@@ -713,6 +720,7 @@ export default function CeloTable({
             boxShadow:
               "0 0 0 2px #8B5E3C, 0 4px 20px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,0,0,0.4)",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             animation: rollBusy ? "feltVibrate 0.28s linear infinite" : "none",
@@ -737,69 +745,79 @@ export default function CeloTable({
           >
             GP
           </div>
-          {rollBusy ? (
-            <div
-              style={{
-                display: "flex",
-                gap: gapDice,
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                zIndex: 6,
-                filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
-              }}
-            >
-              {[0, 1, 2].map((i) => (
-                <DiceFace
-                  key={`roll-${i}`}
-                  value={1}
-                  rolling
-                  diceType={mapDice(myDiceType)}
-                  size={dieSize}
-                  delay={i * 133}
-                />
-              ))}
-            </div>
-          ) : dice && dice.length === 3 ? (
-            <div
-              style={{
-                display: "flex",
-                gap: gapDice,
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                zIndex: 6,
-                filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
-              }}
-            >
-              {[0, 1, 2].map((i) => (
-                <DiceFace
-                  key={`face-${i}`}
-                  value={clampDie(dice[i]!)}
-                  rolling={false}
-                  diceType={mapDice(myDiceType)}
-                  size={dieSize}
-                  delay={i * 133}
-                />
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                position: "relative",
-                zIndex: 6,
-                color: "#6B7280",
-                fontSize: 13,
-                fontFamily: "Courier New, monospace",
-                textAlign: "center",
-                padding: "0 16px",
-                maxWidth: 280,
-                lineHeight: 1.4,
-              }}
-            >
-              Waiting for roll…
-            </div>
-          )}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 6,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {rollBusy ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: gapDice,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+                }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={`shake-${i}`}
+                    style={{
+                      width: dieSize,
+                      height: dieSize,
+                      borderRadius: 12,
+                      background: "linear-gradient(135deg, #DC2626, #991B1B)",
+                      border: "1.5px solid rgba(255,255,255,0.2)",
+                      boxShadow: "2px 3px 8px rgba(0,0,0,0.6)",
+                      animation: `diceShake 0.4s ease-in-out ${[0, 133, 266][i]}ms infinite`,
+                      filter: "blur(0.5px)",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : dice && dice[0] > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: gapDice,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+                }}
+              >
+                {dice.map((value, i) => (
+                  <DiceFace
+                    key={`face-${i}`}
+                    value={Math.max(1, Math.min(6, value)) as 1 | 2 | 3 | 4 | 5 | 6}
+                    rolling={false}
+                    diceType={mapDice(myDiceType)}
+                    size={dieSize}
+                    delay={i * 133}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {!rollBusy && (!dice || dice[0] === 0) && currentRound ? (
+              <div
+                style={{
+                  color: "rgba(255,255,255,0.2)",
+                  fontSize: 12,
+                  fontFamily: "Courier New, monospace",
+                  letterSpacing: "0.1em",
+                  marginTop: 8,
+                }}
+              >
+                WAITING FOR ROLL...
+              </div>
+            ) : null}
+          </div>
           <RollNameDisplay rollName={rollBusy ? null : rollName} result={rollResultKind} />
         </div>
 

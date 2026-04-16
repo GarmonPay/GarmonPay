@@ -87,12 +87,6 @@ function parseRollResultKind(s: string | null): RollResultKind {
   return null;
 }
 
-function clampDie(n: number): 1 | 2 | 3 | 4 | 5 | 6 {
-  if (!Number.isFinite(n)) return 1;
-  const x = Math.min(6, Math.max(1, Math.round(n)));
-  return x as 1 | 2 | 3 | 4 | 5 | 6;
-}
-
 export default function CeloRoomPage() {
   const supabase = useMemo(() => {
     const c = createBrowserClient();
@@ -200,8 +194,9 @@ export default function CeloRoomPage() {
     const r0 = roundRes.data?.[0];
     if (r0) {
       setRound(r0 as Round);
-      if (r0.banker_dice && r0.banker_dice.length === 3) {
-        setDice([r0.banker_dice[0]!, r0.banker_dice[1]!, r0.banker_dice[2]!]);
+      const bd = r0.banker_dice;
+      if (bd && bd.length === 3 && bd[0]! > 0) {
+        setDice([bd[0]!, bd[1]!, bd[2]!]);
         setRollName(r0.banker_roll_name);
       } else {
         setDice(null);
@@ -269,7 +264,13 @@ export default function CeloRoomPage() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "celo_rounds", filter: `room_id=eq.${roomId}` },
-          () => {
+          (p) => {
+            const row = p.new as { status?: string } | null;
+            if (row?.status === "banker_rolling") {
+              setDice(null);
+              setRollName(null);
+              setRollResult(null);
+            }
             void fetchAll();
           }
         )
@@ -322,6 +323,9 @@ export default function CeloRoomPage() {
     return () => {
       cancelled = true;
       if (channel) void supabase.removeChannel(channel);
+      setDice(null);
+      setRollName(null);
+      setRollResult(null);
     };
   }, [supabase, router, roomId, fetchAll, triggerAnimation]);
 
@@ -580,7 +584,7 @@ export default function CeloRoomPage() {
   }
 
   const rollKind = parseRollResultKind(rollResult);
-  const isDiceRolling = rolling || rollingAction;
+  const showRollingUi = rolling || rollingAction;
   const dieSize =
     typeof window !== "undefined" && window.innerWidth < 400 ? 56 : 68;
 
@@ -884,67 +888,81 @@ export default function CeloRoomPage() {
             GP
           </div>
 
-          {isDiceRolling ? (
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                position: "relative",
-                zIndex: 5,
-                animation: "feltVibrate 0.15s ease-in-out infinite",
-              }}
-            >
-              {([0, 1, 2] as const).map((i) => (
-                <DiceFace
-                  key={`roll-${i}`}
-                  value={1}
-                  diceType={myDiceType}
-                  size={dieSize}
-                  rolling
-                  delay={[0, 133, 266][i]}
-                />
-              ))}
-            </div>
-          ) : dice && dice.length === 3 ? (
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                position: "relative",
-                zIndex: 5,
-              }}
-            >
-              {([0, 1, 2] as const).map((i) => (
-                <DiceFace
-                  key={`face-${i}`}
-                  value={clampDie(dice[i]!)}
-                  diceType={myDiceType}
-                  size={dieSize}
-                  rolling={false}
-                  delay={[0, 133, 266][i]}
-                />
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                position: "relative",
-                zIndex: 5,
-                color: "#6B7280",
-                fontSize: 13,
-                fontFamily: "Courier New, monospace",
-                textAlign: "center",
-                padding: "0 16px",
-                maxWidth: 280,
-                lineHeight: 1.4,
-              }}
-            >
-              Waiting for roll…
-            </div>
-          )}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {showRollingUi ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  animation: "feltVibrate 0.15s ease-in-out infinite",
+                }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={`shake-${i}`}
+                    style={{
+                      width: dieSize,
+                      height: dieSize,
+                      borderRadius: 12,
+                      background: "linear-gradient(135deg, #DC2626, #991B1B)",
+                      border: "1.5px solid rgba(255,255,255,0.2)",
+                      boxShadow: "2px 3px 8px rgba(0,0,0,0.6)",
+                      animation: `diceShake 0.4s ease-in-out ${[0, 133, 266][i]}ms infinite`,
+                      filter: "blur(0.5px)",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : dice && dice[0] > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {dice.map((value, i) => (
+                  <DiceFace
+                    key={`face-${i}`}
+                    value={Math.max(1, Math.min(6, value)) as 1 | 2 | 3 | 4 | 5 | 6}
+                    diceType={myDiceType || "standard"}
+                    size={dieSize}
+                    rolling={false}
+                    delay={[0, 133, 266][i]}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {!showRollingUi && (!dice || dice[0] === 0) && round ? (
+              <div
+                style={{
+                  color: "rgba(255,255,255,0.2)",
+                  fontSize: 12,
+                  fontFamily: "Courier New, monospace",
+                  letterSpacing: "0.1em",
+                  marginTop: 8,
+                }}
+              >
+                WAITING FOR ROLL...
+              </div>
+            ) : null}
+          </div>
 
           <RollNameDisplay
-            rollName={isDiceRolling ? null : rollName}
+            rollName={showRollingUi ? null : rollName}
             result={rollKind}
             onComplete={() => setRollName(null)}
           />
@@ -1894,6 +1912,19 @@ export default function CeloRoomPage() {
       ) : null}
 
       <style>{`
+        @keyframes diceShake {
+          0%   { transform: rotate(0deg) scale(1) }
+          10%  { transform: rotate(-15deg) scale(0.95) }
+          20%  { transform: rotate(15deg) scale(1.05) }
+          30%  { transform: rotate(-10deg) scale(0.98) }
+          40%  { transform: rotate(10deg) scale(1.02) }
+          50%  { transform: rotate(-8deg) scale(0.99) }
+          60%  { transform: rotate(8deg) scale(1.01) }
+          70%  { transform: rotate(-5deg) scale(1) }
+          80%  { transform: rotate(5deg) scale(1) }
+          90%  { transform: rotate(-2deg) scale(1) }
+          100% { transform: rotate(0deg) scale(1) }
+        }
         @keyframes pulse {
           0%, 100% { opacity: 1 }
           50% { opacity: 0.4 }
