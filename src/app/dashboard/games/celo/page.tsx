@@ -11,6 +11,7 @@ import {
   CeloEmptyRoomsCard,
   CeloLiveStatusStrip,
   CeloReadinessPanel,
+  CeloRoomsReconnectCard,
 } from "@/components/celo/CeloLobbySections";
 
 const cinzel = Cinzel_Decorative({
@@ -59,7 +60,7 @@ function randomJoinCode(): string {
 export default function CeloLobbyPage() {
   const router = useRouter();
   const supabaseRef = useRef<SupabaseClient | null>(null);
-  const { gpayCoins, refresh: refreshCoins, formatGPC } = useCoins();
+  const { goldCoins, gpayCoins, refresh: refreshCoins, formatGPC } = useCoins();
 
   const [rooms, setRooms] = useState<CeloRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -530,6 +531,7 @@ export default function CeloLobbyPage() {
 
               <CeloReadinessPanel
                 className="mt-3"
+                goldCoins={goldCoins}
                 gpayCoins={gpayCoins}
                 minEntrySc={minEntryForReadiness}
                 formatGPC={formatGPC}
@@ -578,7 +580,9 @@ export default function CeloLobbyPage() {
             <div className="rounded-2xl border border-violet-500/25 bg-[#0c0618]/90 px-4 py-10 text-center font-mono text-sm text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               No tables match this stake filter.
             </div>
-          ) : roomsUnavailable ? null : (
+          ) : roomsUnavailable ? (
+            <CeloRoomsReconnectCard />
+          ) : (
             <div className="celo-room-grid">
               {filteredRooms.map((room) => (
                 <div

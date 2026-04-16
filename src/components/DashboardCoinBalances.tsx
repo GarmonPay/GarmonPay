@@ -22,20 +22,33 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
           <span className="text-[11px] text-fintech-muted">Loading…</span>
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
-              <div className="rounded-lg border border-amber-500/20 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div
+              className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5"
+              role="group"
+              aria-label="Wallet summary: Gold Coins, GPay Coins, GPAY Tokens"
+            >
+              <div
+                className="rounded-lg border border-amber-500/20 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-amber-400/35"
+                title="Gold Coins"
+              >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-amber-200/70">Gold</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-amber-300">
                   {goldCoins.toLocaleString()}
                 </span>
               </div>
-              <div className="rounded-lg border border-violet-500/25 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div
+                className="rounded-lg border border-violet-500/25 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-violet-400/40"
+                title="GPay Coins (GPC)"
+              >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-violet-300/80">GPC</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-violet-200">
                   {gpayCoins.toLocaleString()}
                 </span>
               </div>
-              <div className="rounded-lg border border-emerald-500/20 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div
+                className="rounded-lg border border-emerald-500/20 bg-black/50 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-emerald-400/35"
+                title="$GPAY Tokens"
+              >
                 <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300/75">$GPAY</span>
                 <span className="ml-1.5 font-mono text-[12px] font-semibold tabular-nums text-emerald-200">
                   {gpayTokens.toLocaleString()}
