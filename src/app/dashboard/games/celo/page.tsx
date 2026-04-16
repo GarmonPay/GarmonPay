@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Cinzel_Decorative } from "next/font/google";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase";
+import { getSessionAsync } from "@/lib/session";
+
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
 
 interface CeloRoom {
   id: string;
@@ -30,17 +40,13 @@ interface CreateRoomForm {
 }
 
 export default function CeloLobbyPage() {
-  const supabase = useMemo(() => {
-    const c = createBrowserClient();
-    if (!c) throw new Error("Supabase not configured");
-    return c;
-  }, []);
   const router = useRouter();
+  const supabaseRef = useRef<SupabaseClient | null>(null);
 
   const [rooms, setRooms] = useState<CeloRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [myBalance, setMyBalance] = useState(0);
-  const [myUserId, setMyUserId] = useState("");
   const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -52,8 +58,8 @@ export default function CeloLobbyPage() {
     starting_bank_sc: 500,
   });
 
-  const loadRooms = useCallback(async () => {
-    const { data } = await supabase
+  const loadRooms = useCallback(async (sb: SupabaseClient) => {
+    const { data, error } = await sb
       .from("celo_rooms")
       .select(
         `
@@ -65,44 +71,68 @@ export default function CeloLobbyPage() {
       )
       .eq("status", "waiting")
       .order("created_at", { ascending: false });
-    if (data) setRooms(data as CeloRoom[]);
-  }, [supabase]);
+
+    if (error) throw error;
+    setRooms((data ?? []) as CeloRoom[]);
+  }, []);
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
+    let channel: RealtimeChannel | null = null;
 
     const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
+      setLoadError(null);
+
+      const sb = createBrowserClient();
+      supabaseRef.current = sb;
+      if (!sb) {
+        if (!cancelled) {
+          setLoadError("Could not load rooms. Refresh to try again.");
+          setLoading(false);
+        }
         return;
       }
-      if (cancelled) return;
-      setMyUserId(session.user.id);
-      const { data: user } = await supabase
-        .from("users")
-        .select("gpay_coins")
-        .eq("id", session.user.id)
-        .single();
-      if (user && !cancelled)
-        setMyBalance((user as { gpay_coins?: number }).gpay_coins || 0);
-      await loadRooms();
-      if (!cancelled) setLoading(false);
 
-      channel = supabase
+      const session = await getSessionAsync();
+      if (!session?.userId) {
+        router.replace("/login?next=/dashboard/games/celo");
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      if (cancelled) return;
+
+      try {
+        const { data: userRow, error: userErr } = await sb
+          .from("users")
+          .select("gpay_coins")
+          .eq("id", session.userId)
+          .maybeSingle();
+
+        if (userErr) console.error("[celo/lobby] users row:", userErr.message);
+        if (!cancelled && userRow) {
+          setMyBalance((userRow as { gpay_coins?: number }).gpay_coins ?? 0);
+        }
+
+        await loadRooms(sb);
+      } catch (e) {
+        console.error("[celo/lobby] load failed", e);
+        if (!cancelled) {
+          setLoadError("Could not load rooms. Refresh to try again.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+
+      if (cancelled) return;
+
+      channel = sb
         .channel("celo-lobby")
         .on(
           "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "celo_rooms",
-          },
+          { event: "*", schema: "public", table: "celo_rooms" },
           () => {
-            void loadRooms();
+            void loadRooms(sb).catch((err) => console.error("[celo/lobby] realtime refresh", err));
           }
         )
         .subscribe();
@@ -112,9 +142,11 @@ export default function CeloLobbyPage() {
 
     return () => {
       cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
+      const sb = supabaseRef.current;
+      if (channel && sb) void sb.removeChannel(channel);
+      supabaseRef.current = null;
     };
-  }, [supabase, router, loadRooms]);
+  }, [router, loadRooms]);
 
   const handleCreate = async () => {
     if (!form.name.trim()) {
@@ -171,7 +203,9 @@ export default function CeloLobbyPage() {
   const bankerName = (r: CeloRoom) =>
     r.banker?.full_name || r.banker?.email?.split("@")[0] || "Unknown";
 
-  if (loading)
+  const gpcInPlay = rooms.reduce((s, r) => s + (r.current_bank_sc || 0), 0);
+
+  if (loading) {
     return (
       <div
         style={{
@@ -180,413 +214,512 @@ export default function CeloLobbyPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          paddingBottom: 100,
         }}
       >
-        <div
-          style={{
-            color: "#F5C842",
-            fontFamily: "Courier New",
-            fontSize: 16,
-          }}
-        >
+        <div style={{ color: "#F5C842", fontFamily: "Courier New, monospace", fontSize: 16 }}>
           Loading rooms...
         </div>
       </div>
     );
+  }
 
   return (
     <div
+      className="celo-lobby-root"
       style={{
         minHeight: "100vh",
         background: "#05010F",
         paddingBottom: 100,
-        fontFamily: "DM Sans, sans-serif",
+        fontFamily: "var(--font-dm-sans), DM Sans, sans-serif",
       }}
     >
-      <div
-        style={{
-          background: `
-          linear-gradient(135deg, #0D0520, #1A0535),
-          radial-gradient(ellipse at 30% 50%,
-            rgba(124,58,237,0.15) 0%, transparent 60%),
-          radial-gradient(ellipse at 70% 50%,
-            rgba(245,200,66,0.08) 0%, transparent 60%)
-        `,
-          padding: "40px 20px 32px",
-          borderBottom: "1px solid rgba(124,58,237,0.2)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            background: "#7C3AED",
-            boxShadow: "0 0 12px #7C3AED, 0 0 30px rgba(124,58,237,0.5)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            background: "#F5C842",
-            boxShadow: "0 0 12px #F5C842, 0 0 30px rgba(245,200,66,0.4)",
-          }}
-        />
+      <style>{`
+        .celo-lobby-root {
+          --celo-max: 1200px;
+        }
+        .celo-lobby-inner {
+          max-width: var(--celo-max);
+          margin-left: auto;
+          margin-right: auto;
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .celo-room-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 768px) {
+          .celo-room-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        .celo-modal-overlay {
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+        }
+        @media (min-width: 768px) {
+          .celo-modal-overlay {
+            align-items: center;
+          }
+        }
+        .celo-modal-panel {
+          width: 100%;
+          max-width: 480px;
+          border-radius: 20px 20px 0 0;
+        }
+        @media (min-width: 768px) {
+          .celo-modal-panel {
+            border-radius: 20px;
+            max-height: 90vh;
+          }
+        }
+        .celo-hero-cta {
+          width: 100%;
+        }
+        @media (min-width: 768px) {
+          .celo-hero-cta {
+            width: auto;
+          }
+        }
+        @keyframes celo-pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
 
-        <h1
-          style={{
-            fontFamily: '"Cinzel Decorative", serif',
-            fontSize: "clamp(48px, 12vw, 96px)",
-            fontWeight: 900,
-            textAlign: "center",
-            margin: "0 0 8px",
-            background: "linear-gradient(135deg, #F5C842, #D4A017)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            letterSpacing: "0.05em",
-          }}
-        >
-          C-LO
-        </h1>
-
-        <p
-          style={{
-            color: "#9CA3AF",
-            textAlign: "center",
-            fontSize: 14,
-            margin: "0 0 24px",
-            letterSpacing: "0.05em",
-          }}
-        >
-          THE FIRST LEGITIMATE DIGITAL STREET DICE
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 24,
-            marginBottom: 24,
-            flexWrap: "wrap",
-          }}
-        >
-          {[
-            ["🎲", `${rooms.length} rooms live`],
-            [
-              "💰",
-              `${rooms.reduce((s, r) => s + r.current_bank_sc, 0).toLocaleString()} GPC in play`,
-            ],
-            ["👁", `${rooms.reduce((s) => s + 2, 0)} watching`],
-          ].map(([icon, label]) => (
-            <div
-              key={String(label)}
+      <div className="celo-lobby-inner">
+        {loadError ? (
+          <div
+            style={{
+              padding: "24px 0",
+              textAlign: "center",
+              color: "#F87171",
+              fontFamily: "Courier New, monospace",
+              fontSize: 14,
+            }}
+          >
+            {loadError}{" "}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
               style={{
-                color: "#9CA3AF",
-                fontSize: 13,
-                fontFamily: "Courier New",
+                marginLeft: 8,
+                background: "transparent",
+                border: "1px solid rgba(124,58,237,0.5)",
+                color: "#A855F7",
+                borderRadius: 8,
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontFamily: "Courier New, monospace",
+                fontSize: 12,
               }}
             >
-              {icon} {label}
-            </div>
-          ))}
-        </div>
+              Refresh
+            </button>
+          </div>
+        ) : null}
 
+        {/* HERO */}
         <div
           style={{
-            display: "flex",
-            gap: 12,
-            justifyContent: "center",
-            flexWrap: "wrap",
+            background: `
+              linear-gradient(135deg, #0D0520, #1A0535),
+              radial-gradient(ellipse at 30% 50%, rgba(124,58,237,0.15) 0%, transparent 60%),
+              radial-gradient(ellipse at 70% 50%, rgba(245,200,66,0.08) 0%, transparent 60%)
+            `,
+            padding: "32px 0 28px",
+            borderBottom: "1px solid rgba(124,58,237,0.2)",
+            position: "relative",
+            overflow: "hidden",
+            marginLeft: -16,
+            marginRight: -16,
+            paddingLeft: 16,
+            paddingRight: 16,
           }}
         >
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
+          <div
             style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 2,
+              background: "#7C3AED",
+              boxShadow: "0 0 12px #7C3AED, 0 0 30px rgba(124,58,237,0.5)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 2,
+              background: "#F5C842",
+              boxShadow: "0 0 12px #F5C842, 0 0 30px rgba(245,200,66,0.4)",
+            }}
+          />
+
+          <h1
+            className={cinzel.className}
+            style={{
+              fontSize: "clamp(48px, 12vw, 96px)",
+              fontWeight: 900,
+              textAlign: "center",
+              margin: "0 0 8px",
               background: "linear-gradient(135deg, #F5C842, #D4A017)",
-              color: "#0A0A0F",
-              border: "none",
-              borderRadius: 10,
-              padding: "14px 28px",
-              fontSize: 15,
-              fontWeight: 700,
-              fontFamily: '"Cinzel Decorative", serif',
-              cursor: "pointer",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
               letterSpacing: "0.05em",
+              lineHeight: 1.05,
             }}
           >
-            🎲 CREATE ROOM
-          </button>
-        </div>
+            C-LO
+          </h1>
 
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: 16,
-            color: "#6B7280",
-            fontSize: 12,
-            fontFamily: "Courier New",
-          }}
-        >
-          Your balance:{" "}
-          <span style={{ color: "#F5C842" }}>{myBalance.toLocaleString()} GPC</span> ({gpcToUsd(myBalance)})
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 0,
-          overflowX: "auto",
-          borderBottom: "1px solid rgba(124,58,237,0.15)",
-          background: "rgba(13,5,32,0.8)",
-          padding: "0 16px",
-        }}
-      >
-        {(
-          [
-            ["all", "ALL"],
-            ["micro", "MICRO"],
-            ["standard", "STANDARD"],
-            ["high", "HIGH ROLLER"],
-            ["vip", "VIP"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            type="button"
-            key={key}
-            onClick={() => setFilter(key)}
+          <p
             style={{
-              background: "none",
-              border: "none",
-              borderBottom:
-                filter === key ? "2px solid #F5C842" : "2px solid transparent",
-              color: filter === key ? "#F5C842" : "#6B7280",
-              padding: "14px 16px",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "Courier New",
-              letterSpacing: "0.05em",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
+              color: "#9CA3AF",
+              textAlign: "center",
+              fontSize: 13,
+              margin: "0 0 20px",
+              letterSpacing: "0.08em",
+              fontFamily: "Courier New, monospace",
             }}
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            THE FIRST LEGITIMATE DIGITAL STREET DICE
+          </p>
 
-      <div style={{ padding: "16px" }}>
-        {filteredRooms.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 20,
+              marginBottom: 20,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ color: "#9CA3AF", fontSize: 13, fontFamily: "Courier New, monospace" }}>
+              🎲 {rooms.length} rooms live
+            </div>
+            <div style={{ color: "#9CA3AF", fontSize: 13, fontFamily: "Courier New, monospace" }}>
+              💰 {gpcInPlay.toLocaleString()} GPC in play
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+            <button
+              type="button"
+              className="celo-hero-cta"
+              onClick={() => setShowCreate(true)}
+              style={{
+                background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                color: "#0A0A0F",
+                border: "none",
+                borderRadius: 10,
+                padding: "14px 28px",
+                fontSize: 15,
+                fontWeight: 700,
+                fontFamily: cinzel.style.fontFamily,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+                maxWidth: 400,
+              }}
+            >
+              🎲 CREATE ROOM
+            </button>
+          </div>
+
           <div
             style={{
               textAlign: "center",
-              padding: "60px 20px",
               color: "#6B7280",
+              fontSize: 12,
+              fontFamily: "Courier New, monospace",
             }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🎲</div>
-            <div
+            {myBalance <= 0 ? (
+              <>
+                You need GPC to play →{" "}
+                <Link href="/dashboard/coins/buy" style={{ color: "#F5C842", fontWeight: 700 }}>
+                  Get GPC
+                </Link>
+              </>
+            ) : (
+              <>
+                Your balance: <span style={{ color: "#F5C842" }}>{myBalance.toLocaleString()} GPC</span> (
+                {gpcToUsd(myBalance)})
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* FILTER TABS */}
+        <div
+          style={{
+            display: "flex",
+            gap: 0,
+            overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
+            borderBottom: "1px solid rgba(124,58,237,0.15)",
+            background: "rgba(13,5,32,0.8)",
+            marginLeft: -16,
+            marginRight: -16,
+            paddingLeft: 16,
+            paddingRight: 16,
+            marginTop: 0,
+          }}
+        >
+          {(
+            [
+              ["all", "ALL"],
+              ["micro", "MICRO"],
+              ["standard", "STANDARD"],
+              ["high", "HIGH ROLLER"],
+              ["vip", "VIP"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              type="button"
+              key={key}
+              onClick={() => setFilter(key)}
               style={{
-                fontFamily: '"Cinzel Decorative", serif',
-                fontSize: 16,
-                color: "#9CA3AF",
-                marginBottom: 8,
+                background: "none",
+                border: "none",
+                borderBottom: filter === key ? "2px solid #F5C842" : "2px solid transparent",
+                color: filter === key ? "#F5C842" : "#6B7280",
+                padding: "14px 16px",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "Courier New, monospace",
+                letterSpacing: "0.05em",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
-              No rooms yet
-            </div>
-            <div style={{ fontSize: 13 }}>Be the first to create one</div>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-              gap: 12,
-            }}
-          >
-            {filteredRooms.map((room) => (
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ROOMS */}
+        <div style={{ paddingTop: 16, paddingBottom: 24 }}>
+          {!loadError && filteredRooms.length === 0 && rooms.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px 16px",
+                color: "#6B7280",
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
               <div
-                key={room.id}
+                className={cinzel.className}
+                style={{ fontSize: 18, color: "#9CA3AF", marginBottom: 8, fontWeight: 700 }}
+              >
+                No rooms yet
+              </div>
+              <div style={{ fontSize: 14, marginBottom: 20 }}>Be the first to create one</div>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
                 style={{
-                  background: "#0D0520",
-                  border: "1px solid rgba(124,58,237,0.2)",
-                  borderRadius: 14,
-                  padding: "16px",
-                  transition: "border-color 0.2s",
+                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                  color: "#0A0A0F",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "12px 24px",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: cinzel.style.fontFamily,
+                  cursor: "pointer",
                 }}
               >
+                CREATE ROOM
+              </button>
+            </div>
+          ) : !loadError && filteredRooms.length === 0 && rooms.length > 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "32px 16px",
+                color: "#6B7280",
+                fontFamily: "Courier New, monospace",
+                fontSize: 14,
+              }}
+            >
+              No rooms match this filter.
+            </div>
+          ) : loadError ? null : (
+            <div className="celo-room-grid">
+              {filteredRooms.map((room) => (
                 <div
+                  key={room.id}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    marginBottom: 12,
+                    background: "#0D0520",
+                    border: "1px solid rgba(124,58,237,0.2)",
+                    borderRadius: 14,
+                    padding: 16,
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: '"Cinzel Decorative", serif',
-                      color: "#fff",
-                      fontSize: 14,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {room.name}
-                  </div>
                   <div
                     style={{
                       display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: 11,
-                      color: "#10B981",
-                      fontFamily: "Courier New",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: 12,
                     }}
                   >
                     <div
+                      className={cinzel.className}
+                      style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}
+                    >
+                      {room.name}
+                    </div>
+                    <div
                       style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#10B981",
-                        animation: "pulse 1.5s infinite",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 11,
+                        color: "#10B981",
+                        fontFamily: "Courier New, monospace",
                       }}
-                    />
-                    LIVE
+                    >
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#10B981",
+                          animation: "celo-pulse-dot 1.5s infinite",
+                        }}
+                      />
+                      LIVE
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 8,
+                      marginBottom: 14,
+                    }}
+                  >
+                    {(
+                      [
+                        ["Banker", bankerName(room)],
+                        ["Players", `${room.player_count ?? 1}/${room.max_players}`],
+                        ["Min Entry", `${room.minimum_entry_sc.toLocaleString()} GPC`],
+                        ["Bank", `${room.current_bank_sc.toLocaleString()} GPC`],
+                      ] as const
+                    ).map(([label, val]) => (
+                      <div key={label}>
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#6B7280",
+                            fontFamily: "Courier New, monospace",
+                            letterSpacing: "0.08em",
+                            marginBottom: 2,
+                          }}
+                        >
+                          {label}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: "#F5C842",
+                            fontFamily: "Courier New, monospace",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {val}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
+                      style={{
+                        flex: 1,
+                        background: "transparent",
+                        border: "1px solid rgba(124,58,237,0.4)",
+                        borderRadius: 8,
+                        color: "#A855F7",
+                        padding: "10px",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: "Courier New, monospace",
+                      }}
+                    >
+                      👁 WATCH
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/dashboard/games/celo/${room.id}`)}
+                      style={{
+                        flex: 2,
+                        background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                        border: "none",
+                        borderRadius: 8,
+                        color: "#0A0A0F",
+                        padding: "10px",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: "Courier New, monospace",
+                      }}
+                    >
+                      🎲 JOIN TABLE
+                    </button>
                   </div>
                 </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 8,
-                    marginBottom: 14,
-                  }}
-                >
-                  {(
-                    [
-                      ["Banker", bankerName(room)],
-                      [
-                        "Players",
-                        `${room.player_count || 1}/${room.max_players}`,
-                      ],
-                      [
-                        "Min Entry",
-                        `${room.minimum_entry_sc.toLocaleString()} GPC`,
-                      ],
-                      ["Bank", `${room.current_bank_sc.toLocaleString()} GPC`],
-                    ] as const
-                  ).map(([label, val]) => (
-                    <div key={label}>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: "#6B7280",
-                          fontFamily: "Courier New",
-                          letterSpacing: "0.08em",
-                          marginBottom: 2,
-                        }}
-                      >
-                        {label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: "#F5C842",
-                          fontFamily: "Courier New",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {val}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/dashboard/games/celo/${room.id}`)
-                    }
-                    style={{
-                      flex: 1,
-                      background: "transparent",
-                      border: "1px solid rgba(124,58,237,0.4)",
-                      borderRadius: 8,
-                      color: "#A855F7",
-                      padding: "10px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontFamily: "Courier New",
-                    }}
-                  >
-                    👁 WATCH
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/dashboard/games/celo/${room.id}`)
-                    }
-                    style={{
-                      flex: 2,
-                      background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                      border: "none",
-                      borderRadius: 8,
-                      color: "#0A0A0F",
-                      padding: "10px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontFamily: "Courier New",
-                    }}
-                  >
-                    🎲 JOIN TABLE
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {showCreate && (
+      {showCreate ? (
         <div
+          className="celo-modal-overlay"
           style={{
             position: "fixed",
             inset: 0,
             background: "rgba(0,0,0,0.85)",
             zIndex: 100,
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            padding: "0",
+            padding: 0,
+          }}
+          role="presentation"
+          onClick={() => {
+            setShowCreate(false);
+            setCreateError("");
           }}
         >
           <div
+            className="celo-modal-panel"
             style={{
               background: "#0D0520",
               borderTop: "2px solid #F5C842",
-              borderRadius: "20px 20px 0 0",
               padding: "24px 20px",
-              width: "100%",
-              maxWidth: 480,
-              maxHeight: "90vh",
               overflowY: "auto",
+              boxSizing: "border-box",
             }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="celo-create-title"
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
@@ -597,12 +730,9 @@ export default function CeloLobbyPage() {
               }}
             >
               <h2
-                style={{
-                  fontFamily: '"Cinzel Decorative", serif',
-                  color: "#F5C842",
-                  fontSize: 20,
-                  margin: 0,
-                }}
+                id="celo-create-title"
+                className={cinzel.className}
+                style={{ color: "#F5C842", fontSize: 20, margin: 0 }}
               >
                 Create Room
               </h2>
@@ -618,6 +748,7 @@ export default function CeloLobbyPage() {
                   color: "#6B7280",
                   fontSize: 24,
                   cursor: "pointer",
+                  lineHeight: 1,
                 }}
               >
                 ×
@@ -629,7 +760,7 @@ export default function CeloLobbyPage() {
                 style={{
                   fontSize: 11,
                   color: "#9CA3AF",
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   letterSpacing: "0.08em",
                   marginBottom: 6,
                 }}
@@ -638,12 +769,7 @@ export default function CeloLobbyPage() {
               </div>
               <input
                 value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    name: e.target.value,
-                  }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Head Crack House"
                 style={{
                   width: "100%",
@@ -653,7 +779,6 @@ export default function CeloLobbyPage() {
                   color: "#fff",
                   padding: "12px 14px",
                   fontSize: 15,
-                  fontFamily: "DM Sans",
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -665,7 +790,7 @@ export default function CeloLobbyPage() {
                 style={{
                   fontSize: 11,
                   color: "#9CA3AF",
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   letterSpacing: "0.08em",
                   marginBottom: 8,
                 }}
@@ -677,12 +802,7 @@ export default function CeloLobbyPage() {
                   <button
                     type="button"
                     key={n}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        max_players: n,
-                      }))
-                    }
+                    onClick={() => setForm((f) => ({ ...f, max_players: n }))}
                     style={{
                       flex: 1,
                       padding: "10px 0",
@@ -692,14 +812,12 @@ export default function CeloLobbyPage() {
                           ? "2px solid #F5C842"
                           : "1px solid rgba(124,58,237,0.3)",
                       background:
-                        form.max_players === n
-                          ? "rgba(245,200,66,0.1)"
-                          : "transparent",
+                        form.max_players === n ? "rgba(245,200,66,0.1)" : "transparent",
                       color: form.max_players === n ? "#F5C842" : "#6B7280",
                       fontSize: 14,
                       fontWeight: 700,
                       cursor: "pointer",
-                      fontFamily: "Courier New",
+                      fontFamily: "Courier New, monospace",
                     }}
                   >
                     {n}
@@ -713,7 +831,7 @@ export default function CeloLobbyPage() {
                 style={{
                   fontSize: 11,
                   color: "#9CA3AF",
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   letterSpacing: "0.08em",
                   marginBottom: 8,
                 }}
@@ -750,7 +868,7 @@ export default function CeloLobbyPage() {
                       fontSize: 12,
                       fontWeight: 700,
                       cursor: "pointer",
-                      fontFamily: "Courier New",
+                      fontFamily: "Courier New, monospace",
                     }}
                   >
                     ${v / 100}
@@ -764,7 +882,7 @@ export default function CeloLobbyPage() {
                 style={{
                   fontSize: 11,
                   color: "#9CA3AF",
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   letterSpacing: "0.08em",
                   marginBottom: 8,
                 }}
@@ -799,7 +917,7 @@ export default function CeloLobbyPage() {
                   color: "#fff",
                   padding: "12px 14px",
                   fontSize: 15,
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -807,23 +925,20 @@ export default function CeloLobbyPage() {
               <div
                 style={{
                   display: "flex",
+                  flexWrap: "wrap",
                   justifyContent: "space-between",
+                  gap: 8,
                   marginTop: 6,
                   fontSize: 11,
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                 }}
               >
-                <span
-                  style={{
-                    color:
-                      form.starting_bank_sc > myBalance ? "#EF4444" : "#6B7280",
-                  }}
-                >
+                <span style={{ color: form.starting_bank_sc > myBalance ? "#EF4444" : "#6B7280" }}>
                   {form.starting_bank_sc > myBalance
                     ? "✗ Insufficient GPC"
-                    : `✓ You have ${myBalance.toLocaleString()} GPC`}
+                    : `✓ You have ${myBalance.toLocaleString()} GPC available`}
                 </span>
-                <span style={{ color: "#6B7280" }}>Must be multiple of min entry</span>
+                <span style={{ color: "#6B7280" }}>Multiple of min entry</span>
               </div>
             </div>
 
@@ -833,7 +948,7 @@ export default function CeloLobbyPage() {
                   color: "#EF4444",
                   fontSize: 13,
                   marginBottom: 12,
-                  fontFamily: "Courier New",
+                  fontFamily: "Courier New, monospace",
                   textAlign: "center",
                 }}
               >
@@ -844,9 +959,7 @@ export default function CeloLobbyPage() {
             <button
               type="button"
               onClick={() => void handleCreate()}
-              disabled={
-                creating || !form.name.trim() || form.starting_bank_sc > myBalance
-              }
+              disabled={creating || !form.name.trim() || form.starting_bank_sc > myBalance}
               style={{
                 width: "100%",
                 background:
@@ -856,17 +969,13 @@ export default function CeloLobbyPage() {
                 border: "none",
                 borderRadius: 10,
                 color:
-                  creating || form.starting_bank_sc > myBalance
-                    ? "#6B7280"
-                    : "#0A0A0F",
+                  creating || form.starting_bank_sc > myBalance ? "#6B7280" : "#0A0A0F",
                 padding: "16px",
                 fontSize: 15,
                 fontWeight: 700,
                 cursor:
-                  creating || form.starting_bank_sc > myBalance
-                    ? "not-allowed"
-                    : "pointer",
-                fontFamily: '"Cinzel Decorative", serif',
+                  creating || form.starting_bank_sc > myBalance ? "not-allowed" : "pointer",
+                fontFamily: cinzel.style.fontFamily,
                 letterSpacing: "0.05em",
               }}
             >
@@ -874,14 +983,7 @@ export default function CeloLobbyPage() {
             </button>
           </div>
         </div>
-      )}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1 }
-          50% { opacity: 0.4 }
-        }
-      `}</style>
+      ) : null}
     </div>
   );
 }
