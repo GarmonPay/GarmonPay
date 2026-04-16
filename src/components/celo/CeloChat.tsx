@@ -31,7 +31,7 @@ function relTime(iso: string): string {
   return `${Math.floor(d / 86400)}d ago`;
 }
 
-export default function CeloChat({ userId, userName, messages, onSendMessage }: Props) {
+export default function CeloChat({ roomId, userId, userName, messages, onSendMessage }: Props) {
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 

@@ -286,12 +286,33 @@ export default function CeloDashboardRoomPage() {
           void fetchAll();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        async (p) => {
+          const row = p.new as Record<string, unknown>;
+          const roller = String(row.user_id ?? "");
+          if (roller === userId) return;
+          setRolling(true);
+          setRollName(null);
+          setRollResult(null);
+          await new Promise<void>((resolve) => setTimeout(resolve, CELO_ROLL_ANIMATION_DURATION_MS));
+          const diceRaw = row.dice as number[] | undefined;
+          if (Array.isArray(diceRaw) && diceRaw.length === 3) {
+            setDice([diceRaw[0]!, diceRaw[1]!, diceRaw[2]!]);
+          }
+          setRollName(String(row.roll_name ?? ""));
+          setRollResult(String(row.outcome ?? row.roll_result ?? ""));
+          setRolling(false);
+          void fetchAll();
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [roomId, supabase, fetchAll]);
+  }, [roomId, supabase, fetchAll, userId]);
 
   const handleRoll = useCallback(async () => {
     if (!accessToken) return;
