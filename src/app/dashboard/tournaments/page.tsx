@@ -179,7 +179,7 @@ function TournamentCard({
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {countdown && (
+          {countdown != null && (
             <div className="flex items-center gap-2 text-sm tabular-nums">
               <span className="text-fintech-muted">Time left:</span>
               <span className="text-white font-medium">
@@ -212,11 +212,11 @@ function TournamentCard({
                 <span className="text-fintech-muted font-medium w-8">#{p.rank}</span>
                 <span className="text-white truncate flex-1 mx-2">{p.email}</span>
                 <span className="text-fintech-highlight font-semibold">{p.score}</span>
-                {p.prizePosition && (
+                {p.prizePosition != null && p.prizePosition > 0 ? (
                   <span className="ml-2 text-fintech-money text-xs font-medium">
                     {p.prizePosition === 1 ? "1st" : p.prizePosition === 2 ? "2nd" : "3rd"}
                   </span>
-                )}
+                ) : null}
               </li>
             ))}
           </ul>

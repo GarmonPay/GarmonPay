@@ -18,9 +18,10 @@ export function CeloDiceStage({
   statusLine: string;
   showHand: boolean;
 }) {
+  const showHandUi = Boolean(showHand);
   return (
     <div className="relative min-h-[200px]">
-      {showHand && <CeloHandThrow active={phase === "rolling" || phase === "revealing"} />}
+      {showHandUi ? <CeloHandThrow active={phase === "rolling" || phase === "revealing"} /> : null}
       <RealisticDice dice={dice} rolling={rolling} />
       {statusLine ? (
         <p

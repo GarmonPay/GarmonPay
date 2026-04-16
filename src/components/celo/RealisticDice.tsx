@@ -43,6 +43,7 @@ function DieFace({
   rolling: boolean;
   index: number;
 }) {
+  const isRolling = Boolean(rolling);
   const v = value >= 1 && value <= 6 ? value : 1;
   const dots = DOT[v] ?? DOT[1];
   const tumbleDur = `${1.1 + index * 0.12}s`;
@@ -50,7 +51,7 @@ function DieFace({
 
   return (
     <div
-      className={rolling ? "celo-die-tumble" : ""}
+      className={isRolling ? "celo-die-tumble" : ""}
       style={{
         width: 76,
         height: 76,
@@ -63,10 +64,10 @@ function DieFace({
         borderRadius: 16,
         position: "relative",
         flexShrink: 0,
-        filter: rolling ? "blur(0.3px)" : undefined,
+        filter: isRolling ? "blur(0.3px)" : undefined,
       }}
     >
-      {!rolling &&
+      {!isRolling &&
         dots.map(([cx, cy], di) => (
           <div
             key={di}
@@ -82,14 +83,14 @@ function DieFace({
             }}
           />
         ))}
-      {rolling && (
+      {isRolling ? (
         <div
           className="celo-spin-blur absolute inset-0 flex items-center justify-center text-[28px] opacity-90"
           style={{ ["--celo-spin-dur" as string]: spinDur }}
         >
           ✦
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -104,6 +105,7 @@ export function RealisticDice({
   dice: number[] | null;
   rolling: boolean;
 }) {
+  const isRolling = Boolean(rolling);
   const display: [number, number, number] =
     dice && dice.length >= 3
       ? [dice[0] || 1, dice[1] || 1, dice[2] || 1]
@@ -112,7 +114,7 @@ export function RealisticDice({
   return (
     <div className="flex flex-wrap items-center justify-center gap-4 px-2 py-4">
       {[0, 1, 2].map((i) => (
-        <DieFace key={i} index={i} value={display[i]} rolling={rolling} />
+        <DieFace key={i} index={i} value={display[i]} rolling={isRolling} />
       ))}
     </div>
   );

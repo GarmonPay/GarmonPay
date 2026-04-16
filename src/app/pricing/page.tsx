@@ -424,7 +424,7 @@ export default function PricingPage() {
                   key={p.id}
                   className={`relative flex flex-col rounded-2xl border bg-[#0c0618]/80 p-6 backdrop-blur ${chrome.badge ? "pt-10" : ""} ${chrome.border} ${chrome.extraClass}`}
                 >
-                  {chrome.badge && (
+                  {chrome.badge ? (
                     <div
                       className={`absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                         chrome.badge === "MOST POPULAR"
@@ -434,7 +434,7 @@ export default function PricingPage() {
                     >
                       {chrome.badge}
                     </div>
-                  )}
+                  ) : null}
                   <h2 className="text-xl font-bold text-white">{p.name}</h2>
                   <div className="mt-8 flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-[#fde047]">{priceLabel}</span>

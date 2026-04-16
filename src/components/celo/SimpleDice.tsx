@@ -41,6 +41,7 @@ export function SimpleDice({
   dice: number[] | null;
   rolling: boolean;
 }) {
+  const isRolling = Boolean(rolling);
   // Always show face values — fall back to [1,1,1] so dice are never blank/purple
   const displayDice: [number, number, number] =
     dice && dice.length >= 3
@@ -70,15 +71,15 @@ export function SimpleDice({
               background: "#DC2626",
               borderRadius: 14,
               border: "2px solid #991B1B",
-              boxShadow: rolling
+              boxShadow: isRolling
                 ? "0 0 20px rgba(220,38,38,0.5)"
                 : "3px 3px 8px rgba(0,0,0,0.5)",
               position: "relative",
-              animation: rolling ? `celoSpin${i} ${1.5 + i * 0.3}s ease-in-out infinite` : "none",
+              animation: isRolling ? `celoSpin${i} ${1.5 + i * 0.3}s ease-in-out infinite` : "none",
               transition: "background 0.3s ease",
             }}
           >
-            {!rolling && dots.map(([cx, cy], di) => (
+            {!isRolling && dots.map(([cx, cy], di) => (
               <div
                 key={di}
                 style={{
@@ -95,7 +96,7 @@ export function SimpleDice({
               />
             ))}
 
-            {rolling && (
+            {isRolling ? (
               <div
                 style={{
                   position: "absolute",
@@ -110,7 +111,7 @@ export function SimpleDice({
               >
                 🎲
               </div>
-            )}
+            ) : null}
           </div>
         );
       })}
