@@ -16,14 +16,14 @@ export const GPAY_TOKEN_DISPLAY = "$GPAY";
  * Primary balance line: amount + face value in USD.
  * Example: `5,000 GPC ($50.00)`
  */
-export function formatGpcWithUsd(amount: number): string {
-  const n = Math.max(0, Math.floor(Number(amount)));
+export function formatGpcWithUsd(amount: number | null | undefined): string {
+  const n = Math.max(0, Math.floor(Number(amount ?? 0)));
   return `${n.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(n)})`;
 }
 
 /** Amount + ticker only, e.g. `5,000 GPC` */
-export function formatGpcAmount(amount: number): string {
-  const n = Math.max(0, Math.floor(Number(amount)));
+export function formatGpcAmount(amount: number | null | undefined): string {
+  const n = Math.max(0, Math.floor(Number(amount ?? 0)));
   return `${n.toLocaleString()} ${GPAY_COINS_TICKER}`;
 }
 

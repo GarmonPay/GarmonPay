@@ -94,7 +94,8 @@ export function CeloReadinessPanel({
   formatGPC: (n: number) => string;
   className?: string;
 }) {
-  const ready = gpayCoins >= minEntrySc;
+  const gpc = Math.max(0, Math.floor(Number(gpayCoins ?? 0)));
+  const ready = gpc >= minEntrySc;
   return (
     <div
       className={`rounded-xl border border-violet-500/25 bg-black/45 px-3 py-3 shadow-[0_0_0_1px_rgba(245,200,66,0.06),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm ${className}`}
@@ -105,11 +106,13 @@ export function CeloReadinessPanel({
       <div className="mb-3 grid grid-cols-2 gap-2 font-mono text-[11px]">
         <div className="rounded-lg border border-amber-500/15 bg-black/35 px-2 py-1.5">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-200/60">Gold Coins</span>
-          <span className="tabular-nums text-amber-100/95">{goldCoins.toLocaleString()} GC</span>
+          <span className="tabular-nums text-amber-100/95">
+            {Math.max(0, Math.floor(Number(goldCoins ?? 0))).toLocaleString()} GC
+          </span>
         </div>
         <div className="rounded-lg border border-violet-500/20 bg-black/35 px-2 py-1.5">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-violet-300/70">GPay Coins</span>
-          <span className="tabular-nums text-violet-100/95">{formatGPC(gpayCoins)}</span>
+          <span className="tabular-nums text-violet-100/95">{formatGPC(Number(gpayCoins ?? 0))}</span>
         </div>
       </div>
       {ready ? (
@@ -121,7 +124,7 @@ export function CeloReadinessPanel({
         <p className="border-t border-white/5 pt-2 text-[13px] font-medium leading-snug text-slate-200">
           <span className="text-amber-200/95">Add GPC to take a seat</span>
           <span className="text-slate-500"> — min. entry </span>
-          <span className="font-mono text-violet-200/90">${(minEntrySc / 100).toFixed(2)}</span>
+          <span className="font-mono text-violet-200/90">${(Number(minEntrySc ?? 0) / 100).toFixed(2)}</span>
         </p>
       )}
     </div>

@@ -57,6 +57,12 @@ function randomJoinCode(): string {
   return s;
 }
 
+/** Supabase may return null; never call .toLocaleString on undefined */
+function safeSc(n: unknown): number {
+  const v = Math.floor(Number(n));
+  return Number.isFinite(v) ? Math.max(0, v) : 0;
+}
+
 export default function CeloLobbyPage() {
   const router = useRouter();
   const supabaseRef = useRef<SupabaseClient | null>(null);
@@ -606,9 +612,12 @@ export default function CeloLobbyPage() {
                     {(
                       [
                         ["Banker", bankerName(room)],
-                        ["Players", `${room.player_count ?? 1}/${room.max_players}`],
-                        ["Min entry", `${room.minimum_entry_sc.toLocaleString()} GPC`],
-                        ["Table bank", `${room.current_bank_sc.toLocaleString()} GPC`],
+                        [
+                          "Players",
+                          `${room.player_count != null ? safeSc(room.player_count) : 1}/${room.max_players != null ? safeSc(room.max_players) : 6}`,
+                        ],
+                        ["Min entry", `${safeSc(room.minimum_entry_sc).toLocaleString()} GPC`],
+                        ["Table bank", `${safeSc(room.current_bank_sc).toLocaleString()} GPC`],
                       ] as const
                     ).map(([label, val]) => (
                       <div key={label}>
@@ -964,7 +973,7 @@ export default function CeloLobbyPage() {
                 <span style={{ color: form.starting_bank_sc > gpayCoins ? "#EF4444" : "#6B7280" }}>
                   {form.starting_bank_sc > gpayCoins
                     ? "✗ Insufficient GPC"
-                    : `✓ You have ${gpayCoins.toLocaleString()} GPC available`}
+                    : `✓ You have ${safeSc(gpayCoins).toLocaleString()} GPC available`}
                 </span>
                 <span style={{ color: "#6B7280" }}>Multiple of min entry</span>
               </div>
