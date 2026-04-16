@@ -542,7 +542,7 @@ export default function CeloLobbyPage() {
 
         {/* Stake filters — segmented control */}
         <div
-          className="celo-filter-scroll -mx-3 mb-2 flex gap-1 overflow-x-auto rounded-2xl border border-violet-500/30 bg-gradient-to-b from-[#140a22]/95 to-[#08030f] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:-mx-4 tablet:mx-0"
+          className="celo-filter-scroll -mx-3 mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-violet-500/30 bg-gradient-to-b from-[#140a22]/95 to-[#08030f] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:-mx-4 tablet:mx-0 tablet:flex-nowrap tablet:gap-1 tablet:overflow-x-auto tablet:py-1.5 tablet:pl-1 tablet:pr-1"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {(
@@ -560,7 +560,7 @@ export default function CeloLobbyPage() {
                 type="button"
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`min-h-[46px] shrink-0 rounded-xl px-3.5 py-2.5 font-mono text-[10px] font-extrabold tracking-[0.1em] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 sm:px-4 ${
+                className={`min-h-[46px] min-w-[3.25rem] shrink-0 whitespace-nowrap rounded-xl px-3 py-2.5 font-mono text-[10px] font-extrabold tracking-[0.06em] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 sm:min-w-0 sm:px-3.5 sm:tracking-[0.08em] ${
                   active
                     ? "border border-amber-400/50 bg-gradient-to-b from-amber-400/25 to-amber-600/10 text-amber-50 shadow-[0_0_24px_rgba(245,200,66,0.15)]"
                     : "border border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
