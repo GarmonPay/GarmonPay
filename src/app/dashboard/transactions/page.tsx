@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getTransactions } from "@/lib/api";
+import { formatUsdCents } from "@/lib/format-number";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatCents(cents: unknown) {
+  return formatUsdCents(cents);
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString(undefined, {
     dateStyle: "short",
     timeStyle: "short",

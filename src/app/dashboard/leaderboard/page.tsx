@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getLeaderboard } from "@/lib/api";
 import ArenaLogo from "@/components/arena/ArenaLogo";
+import { localeInt } from "@/lib/format-number";
 
-function formatGpc(gpc: number) {
-  return `${gpc.toLocaleString()} GPC`;
+function formatGpc(gpc: unknown) {
+  return `${localeInt(gpc)} GPC`;
 }
 
 function maskEmail(email: string) {

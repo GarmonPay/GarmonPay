@@ -6,6 +6,7 @@ import { createBrowserClient } from "@/lib/supabase";
 import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
 import VoiceChat from "@/components/celo/VoiceChat";
+import { localeInt } from "@/lib/format-number";
 
 interface Player {
   id: string;
@@ -718,7 +719,7 @@ export default function CeloRoomPage() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <div style={{ fontSize: 9, color: "#F5C842", fontFamily: "Courier New", letterSpacing: "0.08em" }}>PRIZE POOL</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", fontFamily: "Courier New" }}>
-            {(round?.prize_pool_sc || 0).toLocaleString()}
+            {localeInt(round?.prize_pool_sc)}
             <span style={{ fontSize: 10, color: "#F5C842", marginLeft: 3 }}>GPC</span>
           </div>
           <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>({gpcToUsd(round?.prize_pool_sc || 0)})</div>
@@ -730,7 +731,7 @@ export default function CeloRoomPage() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New", letterSpacing: "0.08em" }}>BANK</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#F5C842", fontFamily: "Courier New" }}>
-            {room.current_bank_sc.toLocaleString()}
+            {localeInt(room.current_bank_sc)}
             <span style={{ fontSize: 10, color: "#D4A017", marginLeft: 3 }}>GPC</span>
           </div>
           <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>({gpcToUsd(room.current_bank_sc)})</div>
@@ -1133,7 +1134,7 @@ export default function CeloRoomPage() {
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 1 }}>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New", letterSpacing: "0.06em" }}>BALANCE</div>
           <div style={{ fontSize: 13, color: "#F5C842", fontFamily: "Courier New", fontWeight: 700 }}>
-            {myBalance.toLocaleString()}
+            {localeInt(myBalance)}
             <span style={{ fontSize: 9, marginLeft: 2 }}>GPC</span>
           </div>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New" }}>{gpcToUsd(myBalance)}</div>
@@ -1266,7 +1267,7 @@ export default function CeloRoomPage() {
                     fontFamily: "Courier New",
                   }}
                 >
-                  JOIN {entryAmount.toLocaleString()} GPC
+                  JOIN {localeInt(entryAmount)} GPC
                 </button>
                 {myBalance >= room.current_bank_sc ? (
                   <button
@@ -1649,7 +1650,7 @@ export default function CeloRoomPage() {
               <div style={{ height: "100%", width: `${(lowerBankCountdown / 60) * 100}%`, background: "#F5C842", transition: "width 1s linear" }} />
             </div>
             <div style={{ fontSize: 13, color: "#9CA3AF", fontFamily: "Courier New", marginBottom: 12 }}>
-              Current bank: <span style={{ color: "#F5C842" }}>{room.current_bank_sc.toLocaleString()} GPC</span>
+              Current bank: <span style={{ color: "#F5C842" }}>{localeInt(room.current_bank_sc)} GPC</span>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
               {[room.minimum_entry_sc, room.minimum_entry_sc * 2, room.minimum_entry_sc * 5, Math.floor(room.current_bank_sc / 2)]
@@ -1674,7 +1675,7 @@ export default function CeloRoomPage() {
                       fontFamily: "Courier New",
                     }}
                   >
-                    {v.toLocaleString()} GPC
+                    {localeInt(v)} GPC
                   </button>
                 ))}
             </div>
@@ -1739,7 +1740,7 @@ export default function CeloRoomPage() {
             <h3 style={{ fontFamily: '"Cinzel Decorative", serif', color: "#F5C842", fontSize: 22, margin: "0 0 8px" }}>YOU ROLLED C-LO!</h3>
             <div style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 16 }}>Do you want to become the Banker?</div>
             <div style={{ color: "#6B7280", fontSize: 13, fontFamily: "Courier New", marginBottom: 8 }}>
-              You need <span style={{ color: "#F5C842" }}>{room.current_bank_sc.toLocaleString()} GPC</span> to take the bank
+              You need <span style={{ color: "#F5C842" }}>{localeInt(room.current_bank_sc)} GPC</span> to take the bank
             </div>
             <div
               style={{
@@ -1749,7 +1750,7 @@ export default function CeloRoomPage() {
                 color: myBalance >= room.current_bank_sc ? "#10B981" : "#EF4444",
               }}
             >
-              You have: {myBalance.toLocaleString()} GPC {myBalance >= room.current_bank_sc ? "✓" : "✗"}
+              You have: {localeInt(myBalance)} GPC {myBalance >= room.current_bank_sc ? "✓" : "✗"}
             </div>
             <div style={{ height: 4, background: "rgba(245,200,66,0.2)", borderRadius: 2, margin: "16px 0", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${(bankerCountdown / 30) * 100}%`, background: "#F5C842", transition: "width 1s linear" }} />
@@ -1886,7 +1887,7 @@ export default function CeloRoomPage() {
             </div>
 
             <div style={{ color: "#6B7280", fontSize: 11, fontFamily: "Courier New", textAlign: "center", marginBottom: 16 }}>
-              Your balance: <span style={{ color: "#F5C842" }}>{myBalance.toLocaleString()} GPC</span>
+              Your balance: <span style={{ color: "#F5C842" }}>{localeInt(myBalance)} GPC</span>
             </div>
 
             <button

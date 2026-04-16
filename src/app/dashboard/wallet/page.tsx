@@ -10,6 +10,7 @@ import { gpcToUsdDisplay } from "@/lib/coins";
 import { useCoins } from "@/hooks/useCoins";
 import { GOLD_COIN_PACKAGES, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
 import { createBrowserClient } from "@/lib/supabase";
+import { localeInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -126,7 +127,9 @@ function WalletDashboardContent() {
     const minDollars = MIN_WALLET_FUND_CENTS / 100;
     const maxDollars = MAX_PAYMENT_CENTS / 100;
     if (!Number.isFinite(amount) || amount < minDollars || amount > maxDollars) {
-      setDepositError(`Enter an amount between $${minDollars.toFixed(2)} and $${maxDollars.toLocaleString()}.`);
+      setDepositError(
+        `Enter an amount between $${minDollars.toFixed(2)} and $${(Number(maxDollars) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+      );
       return;
     }
     setDepositError(null);
@@ -264,7 +267,7 @@ function WalletDashboardContent() {
           <h2 className={`${cinzel.className} text-lg text-[#F5C842]`}>🪙 Gold Coins</h2>
         </div>
         <p className="text-3xl font-bold tabular-nums text-[#F5C842]">
-          {coinsLoading ? "…" : goldCoins.toLocaleString()} GC
+          {coinsLoading ? "…" : localeInt(goldCoins)} GC
         </p>
         <p className="text-sm text-violet-200/80">Convert to GPay Coins to play prize games</p>
         <p className="text-xs text-fintech-muted">
@@ -296,7 +299,7 @@ function WalletDashboardContent() {
       <section id="convert" className="rounded-xl border border-[#A855F7]/45 bg-[#1a0528]/80 p-6 space-y-3">
         <h2 className={`${cinzel.className} text-lg text-[#A855F7]`}>💜 GPay Coins</h2>
         <p className="text-3xl font-bold tabular-nums text-[#A855F7]">
-          {coinsLoading ? "…" : gpayCoins.toLocaleString()} GPC
+          {coinsLoading ? "…" : localeInt(gpayCoins)} GPC
         </p>
         <p className="text-sm text-violet-200/85">Play games and earn prizes</p>
         <p className="text-xs text-fintech-muted">≈ {gpcToUsdDisplay(gpayCoins)} value</p>
@@ -326,7 +329,7 @@ function WalletDashboardContent() {
       <section id="redeem" className="rounded-xl border border-[#10B981]/45 bg-[#0a1a16]/90 p-6 space-y-3">
         <h2 className={`${cinzel.className} text-lg text-[#10B981]`}>⬡ $GPAY Tokens</h2>
         <p className="text-3xl font-bold tabular-nums text-[#10B981]">
-          {coinsLoading ? "…" : gpayTokens.toLocaleString()} $GPAY
+          {coinsLoading ? "…" : localeInt(gpayTokens)} $GPAY
         </p>
         <p className="text-sm text-emerald-200/85">
           {gpayUsd != null ? `≈ $${gpayUsd.toFixed(4)} USD per token (DexScreener)` : "Live price: configure GPAY_TOKEN_MINT"}
@@ -393,9 +396,11 @@ function WalletDashboardContent() {
                 <span className="text-fintech-muted">{formatType(e.type)}</span>
                 <span className={e.amount >= 0 ? "text-green-400" : "text-red-400"}>
                   {e.amount >= 0 ? "+" : ""}
-                  {(e.amount / 100).toFixed(2)}
+                  {(Number(e.amount ?? 0) / 100).toFixed(2)}
                 </span>
-                <span className="text-fintech-muted text-xs">{new Date(e.created_at).toLocaleDateString()}</span>
+                <span className="text-fintech-muted text-xs">
+                  {e.created_at ? new Date(e.created_at).toLocaleDateString() : "—"}
+                </span>
               </li>
             ))}
           </ul>
@@ -426,7 +431,7 @@ function WalletDashboardContent() {
                   )}
                 </span>
                 <span className="text-fintech-muted text-xs w-full sm:w-auto">
-                  {new Date(c.created_at).toLocaleString()}
+                  {c.created_at ? new Date(c.created_at).toLocaleString() : "—"}
                 </span>
               </li>
             ))}
@@ -455,7 +460,7 @@ function WalletDashboardContent() {
                       <span className="text-[10px] font-bold text-amber-300">⭐ BEST VALUE</span>
                     )}
                     <p className="font-semibold text-white">{p.label}</p>
-                    <p className="text-2xl font-bold text-[#F5C842] my-1">{p.gold_coins.toLocaleString()} GC</p>
+                    <p className="text-2xl font-bold text-[#F5C842] my-1">{localeInt(p.gold_coins)} GC</p>
                     <p className="text-sm text-fintech-muted mb-3">${(p.price_cents / 100).toFixed(2)}</p>
                     <button
                       type="button"
@@ -503,7 +508,7 @@ function WalletDashboardContent() {
               (Your {tierLabel} rate: {(tierRate * 100).toFixed(0)}%)
             </p>
             <p className="text-sm text-white/90 mb-1">
-              Gold Coins: {goldCoins.toLocaleString()} GC
+              Gold Coins: {localeInt(goldCoins)} GC
             </p>
             <p className="text-sm text-emerald-300/90 mb-3">You will receive: {previewGpc} GPC</p>
             {tierRate < 1 && (

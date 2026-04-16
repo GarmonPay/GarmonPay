@@ -7,11 +7,13 @@ import DiceFace, { type DiceFaceType } from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
 import type { CeloPlayer, CeloRoom, CeloRound } from "@/types/celo";
 import { DICE_TYPES } from "@/lib/celo-engine";
+import { localeInt, safeFiniteInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
-function gpcToUsd(gpc: number): string {
-  return (Math.max(0, gpc) / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+function gpcToUsd(gpc: unknown): string {
+  const v = safeFiniteInt(gpc);
+  return (v / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
 function truncate(s: string, max: number): string {
@@ -219,7 +221,7 @@ export default function CeloTable({
             color: "#FFFBEB",
           }}
         >
-          COVER ({coverBankAmountGpc.toLocaleString()} GPC)
+          COVER ({localeInt(coverBankAmountGpc)} GPC)
         </button>
       );
     }
@@ -248,7 +250,7 @@ export default function CeloTable({
             ))}
           </div>
           <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>
-            = {resolvedJoinAmount.toLocaleString()} GPC ({gpcToUsd(resolvedJoinAmount)})
+            = {localeInt(resolvedJoinAmount)} GPC ({gpcToUsd(resolvedJoinAmount)})
           </div>
           <button
             type="button"
@@ -514,7 +516,7 @@ export default function CeloTable({
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 9, fontWeight: 800, color: "#F5C842", letterSpacing: "0.14em" }}>PRIZE POOL</div>
           <div style={{ fontFamily: "Courier New, monospace", fontSize: compact ? 17 : 19, fontWeight: 700, color: "#F5F3FF", marginTop: 2 }}>
-            {prizePoolSc.toLocaleString()} GPC
+            {localeInt(prizePoolSc)} GPC
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF" }}>({gpcToUsd(prizePoolSc)})</div>
           {currentRound?.bank_covered ? (
@@ -526,7 +528,7 @@ export default function CeloTable({
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 9, fontWeight: 800, color: "#F5C842", letterSpacing: "0.14em" }}>BANK</div>
           <div style={{ fontFamily: "Courier New, monospace", fontSize: compact ? 15 : 17, fontWeight: 700, color: "#F5F3FF" }}>
-            {room.current_bank_sc.toLocaleString()} GPC
+            {localeInt(room.current_bank_sc)} GPC
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF" }}>({gpcToUsd(room.current_bank_sc)})</div>
           {lowerBankWindow && isBanker ? (
@@ -696,7 +698,7 @@ export default function CeloTable({
             {(bankerPlayer?.user?.full_name ?? "?")[0]?.toUpperCase() ?? "B"}
           </div>
           <div style={{ marginTop: 6, fontFamily: "Courier New, monospace", fontSize: 11, color: "#F5C842" }}>
-            BANK: {room.current_bank_sc.toLocaleString()} GPC
+            BANK: {localeInt(room.current_bank_sc)} GPC
           </div>
         </div>
 
@@ -893,7 +895,7 @@ export default function CeloTable({
                   {initial}
                 </div>
                 <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis" }}>{shortName}</div>
-                <div style={{ fontSize: 10, color: "#F5C842", fontFamily: "Courier New, monospace" }}>{p.entry_sc.toLocaleString()} GPC</div>
+                <div style={{ fontSize: 10, color: "#F5C842", fontFamily: "Courier New, monospace" }}>{localeInt(p.entry_sc)} GPC</div>
                 <div style={{ fontSize: 9, fontWeight: 800, color: active ? "#F5C842" : "#6B7280" }}>{active ? "ROLLING" : "—"}</div>
               </div>
             );
@@ -936,7 +938,7 @@ export default function CeloTable({
             />
           </div>
           <p style={{ fontFamily: "Courier New, monospace", fontSize: 13, color: "#E5E7EB", marginBottom: 12 }}>
-            Current: {room.current_bank_sc.toLocaleString()} GPC ({gpcToUsd(room.current_bank_sc)})
+            Current: {localeInt(room.current_bank_sc)} GPC ({gpcToUsd(room.current_bank_sc)})
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             {lowerPills.map((amt) => (
@@ -955,7 +957,7 @@ export default function CeloTable({
                   cursor: "pointer",
                 }}
               >
-                {amt.toLocaleString()} GPC
+                {localeInt(amt)} GPC
               </button>
             ))}
           </div>
@@ -1024,7 +1026,7 @@ export default function CeloTable({
               Cover the Entire Bank
             </h3>
             <p style={{ fontSize: 13, color: "#D1D5DB", marginBottom: 8 }}>
-              You will enter {coverBankAmountGpc.toLocaleString()} GPC ({gpcToUsd(coverBankAmountGpc)}).
+              You will enter {localeInt(coverBankAmountGpc)} GPC ({gpcToUsd(coverBankAmountGpc)}).
             </p>
             <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 4 }}>Other players locked out this round.</p>
             <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Side entries still open for spectators.</p>
@@ -1081,7 +1083,7 @@ export default function CeloTable({
         <div>
           <div style={{ fontSize: 9, color: "#6B7280", letterSpacing: "0.06em" }}>BALANCE</div>
           <div style={{ fontFamily: "Courier New, monospace", fontSize: 13, color: "#F5C842", fontWeight: 700 }}>
-            {myBalance.toLocaleString()} GPC
+            {localeInt(myBalance)} GPC
           </div>
           <div style={{ fontSize: 10, color: "#6B7280" }}>({gpcToUsd(myBalance)})</div>
         </div>
@@ -1223,7 +1225,7 @@ export default function CeloTable({
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#E5E7EB" }}>{cfg.name}</div>
                     <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "Courier New, monospace" }}>
-                      {cost === 0 ? "FREE" : `${cost.toLocaleString()} GPC (${gpcToUsd(cost)})`}
+                      {cost === 0 ? "FREE" : `${localeInt(cost)} GPC (${gpcToUsd(cost)})`}
                     </div>
                     {key === "gold" && !isBanker ? <div style={{ fontSize: 10, color: "#F87171" }}>Banker only</div> : null}
                     <button
@@ -1277,11 +1279,11 @@ export default function CeloTable({
               ))}
             </div>
             <div style={{ marginTop: 12, fontSize: 13, color: "#A7F3D0", fontFamily: "Courier New, monospace" }}>
-              Total: {((DICE_TYPES[shopType]?.costCents ?? 0) * shopQty).toLocaleString()} GPC (
+              Total: {localeInt((DICE_TYPES[shopType]?.costCents ?? 0) * shopQty)} GPC (
               {gpcToUsd((DICE_TYPES[shopType]?.costCents ?? 0) * shopQty)})
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}>
-              Balance: {myBalance.toLocaleString()} GPC
+              Balance: {localeInt(myBalance)} GPC
             </div>
             <button
               type="button"

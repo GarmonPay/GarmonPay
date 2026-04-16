@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
+import { localeInt } from "@/lib/format-number";
 
 const API_BASE = getApiRoot();
 
@@ -397,13 +398,13 @@ export default function Dashboard() {
               <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
                 <p className="text-xs text-fintech-muted uppercase">House cut today (GPC)</p>
                 <p className="text-2xl font-bold text-emerald-400 mt-1">
-                  {coinFlipStats.totalHouseCutTodayMinor.toLocaleString()}
+                  {localeInt(coinFlipStats.totalHouseCutTodayMinor)}
                 </p>
               </div>
               <div className="rounded-lg bg-fintech-bg-card border border-white/10 p-4">
                 <p className="text-xs text-fintech-muted uppercase">GPC wagered today</p>
                 <p className="text-2xl font-bold text-amber-200 mt-1">
-                  {coinFlipStats.totalWageredTodayMinor.toLocaleString()}
+                  {localeInt(coinFlipStats.totalWageredTodayMinor)}
                 </p>
               </div>
             </div>

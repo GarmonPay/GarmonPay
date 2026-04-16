@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getTransactions } from "@/lib/api";
+import { formatUsdCents, localeInt } from "@/lib/format-number";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatCents(cents: unknown) {
+  return formatUsdCents(cents);
 }
 
-function formatGpc(gpc: number) {
-  return `${gpc.toLocaleString()} GPC`;
+function formatGpc(gpc: unknown) {
+  return `${localeInt(gpc)} GPC`;
 }
 
 export default function EarningsPage() {
@@ -121,7 +122,9 @@ export default function EarningsPage() {
               <li key={(t as { id?: string }).id ?? t.created_at} className="flex justify-between py-2 border-b border-white/5 text-sm">
                 <span className="text-white capitalize">{t.type.replace(/_/g, " ")}</span>
                 <span className="text-fintech-money font-medium">{formatCents(t.amount)}</span>
-                <span className="text-fintech-muted text-xs">{new Date(t.created_at).toLocaleString()}</span>
+                <span className="text-fintech-muted text-xs">
+                  {t.created_at ? new Date(t.created_at).toLocaleString() : "—"}
+                </span>
               </li>
             ))}
           </ul>

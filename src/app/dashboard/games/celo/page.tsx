@@ -7,6 +7,7 @@ import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
+import { localeInt } from "@/lib/format-number";
 import {
   CeloEmptyRoomsCard,
   CeloLiveStatusStrip,
@@ -49,10 +50,6 @@ interface CreateRoomForm {
 function safeSc(n: unknown): number {
   const v = Math.floor(Number(n));
   return Number.isFinite(v) ? Math.max(0, v) : 0;
-}
-
-function safeLocale(n: unknown): string {
-  return safeSc(n).toLocaleString();
 }
 
 export default function CeloLobbyPage() {
@@ -653,8 +650,8 @@ export default function CeloLobbyPage() {
                           "Players",
                           `${room.player_count != null ? safeSc(room.player_count) : 1}/${room.max_players != null ? safeSc(room.max_players) : 6}`,
                         ],
-                        ["Min entry", `${safeLocale(room.minimum_entry_sc)} GPC`],
-                        ["Table bank", `${safeLocale(room.current_bank_sc)} GPC`],
+                        ["Min entry", `${localeInt(room.minimum_entry_sc)} GPC`],
+                        ["Table bank", `${localeInt(room.current_bank_sc)} GPC`],
                       ] as const
                     ).map(([label, val]) => (
                       <div key={label}>
@@ -849,7 +846,7 @@ export default function CeloLobbyPage() {
               >
                 MINIMUM ENTRY —{" "}
                 <span style={{ color: "#F5C842" }}>
-                  {safeLocale(form.minimum_entry_sc)} GPC ({gpcToUsd(form.minimum_entry_sc)})
+                  {localeInt(form.minimum_entry_sc)} GPC ({gpcToUsd(form.minimum_entry_sc)})
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -900,7 +897,7 @@ export default function CeloLobbyPage() {
               >
                 STARTING BANK —{" "}
                 <span style={{ color: "#F5C842" }}>
-                  {safeLocale(form.starting_bank_sc)} GPC ({gpcToUsd(form.starting_bank_sc)})
+                  {localeInt(form.starting_bank_sc)} GPC ({gpcToUsd(form.starting_bank_sc)})
                 </span>
               </div>
               <input
@@ -949,7 +946,7 @@ export default function CeloLobbyPage() {
                 <span style={{ color: form.starting_bank_sc > gpayCoins ? "#EF4444" : "#6B7280" }}>
                   {form.starting_bank_sc > gpayCoins
                     ? "✗ Insufficient GPC"
-                    : `✓ You have ${safeLocale(gpayCoins)} GPC available`}
+                    : `✓ You have ${localeInt(gpayCoins)} GPC available`}
                 </span>
                 <span style={{ color: "#6B7280" }}>Multiple of min entry</span>
               </div>

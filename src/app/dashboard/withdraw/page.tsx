@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getDashboard, getWithdrawals, submitWithdrawalRequest } from "@/lib/api";
+import { formatUsdCents } from "@/lib/format-number";
 
 const METHODS = [
   { value: "crypto", label: "Crypto" },
@@ -11,11 +12,12 @@ const METHODS = [
   { value: "bank", label: "Bank" },
 ];
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatCents(cents: unknown) {
+  return formatUsdCents(cents);
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString();
 }
 

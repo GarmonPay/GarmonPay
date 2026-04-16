@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { referralCommissionFromMembershipTier } from "@/lib/garmon-plan-config";
+import { formatUsdCents, localeInt } from "@/lib/format-number";
 
 const EARNING_TYPES = new Set([
   "earning",
@@ -55,12 +56,12 @@ function aggregateEarnings(
   return { today, week, month, allTime, pending };
 }
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatCents(cents: unknown) {
+  return formatUsdCents(cents);
 }
 
-function formatGpc(gpc: number) {
-  return `${gpc.toLocaleString()} GPC`;
+function formatGpc(gpc: unknown) {
+  return `${localeInt(gpc)} GPC`;
 }
 
 type Props = {

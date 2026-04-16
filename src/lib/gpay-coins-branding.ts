@@ -1,4 +1,5 @@
 import { scToUsdDisplay } from "@/lib/coins";
+import { safeFiniteInt } from "@/lib/format-number";
 
 /** Full marketing name — “I won 5,000 GPay Coins on GarmonPay!” */
 export const GPAY_COINS_NAME = "GPay Coins";
@@ -17,24 +18,24 @@ export const GPAY_TOKEN_DISPLAY = "$GPAY";
  * Example: `5,000 GPC ($50.00)`
  */
 export function formatGpcWithUsd(amount: number | null | undefined): string {
-  const n = Math.max(0, Math.floor(Number(amount ?? 0)));
+  const n = safeFiniteInt(amount);
   return `${n.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(n)})`;
 }
 
 /** Amount + ticker only, e.g. `5,000 GPC` */
 export function formatGpcAmount(amount: number | null | undefined): string {
-  const n = Math.max(0, Math.floor(Number(amount ?? 0)));
+  const n = safeFiniteInt(amount);
   return `${n.toLocaleString()} ${GPAY_COINS_TICKER}`;
 }
 
 /** C-Lo UI: amount + `$GPAY` + USD face (no “SC” / “GPC” / “Sweeps”). */
 export function formatGpayWithUsd(amount: number): string {
-  const n = Math.max(0, Math.floor(Number(amount)));
+  const n = safeFiniteInt(amount);
   return `${n.toLocaleString()} $GPAY (${scToUsdDisplay(n)})`;
 }
 
 /** Balance lines: amount + `$GPAY` only (no USD). */
 export function formatGpayAmount(amount: number): string {
-  const n = Math.max(0, Math.floor(Number(amount)));
+  const n = safeFiniteInt(amount);
   return `${n.toLocaleString()} $GPAY`;
 }

@@ -6,9 +6,11 @@ import {
   membershipTierRank,
   type MarketingPlanId,
 } from "@/lib/garmon-plan-config";
+import { safeFiniteInt } from "@/lib/format-number";
 
-function formatUsdMonthly(n: number) {
-  return n.toLocaleString("en-US", {
+function formatUsdMonthly(n: unknown) {
+  const v = safeFiniteInt(n);
+  return v.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,

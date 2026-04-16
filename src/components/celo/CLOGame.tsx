@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import VoiceChat from "@/components/celo/VoiceChat";
+import { localeInt } from "@/lib/format-number";
 
 export type CLOGameProps = {
   /** When set, shows VoiceChat below the voice bar (same column as the preview table). */
@@ -482,7 +483,7 @@ export default function CLOGame({ roomId }: CLOGameProps) {
               lineHeight: 1,
             }}
           >
-            {bank.toLocaleString()}
+            {localeInt(bank)}
           </div>
           <div style={{ fontSize: 10, color: "#f5c84270", fontFamily: "'DM Mono',monospace" }}>$GPAY</div>
         </div>
@@ -841,7 +842,7 @@ export default function CLOGame({ roomId }: CLOGameProps) {
           letterSpacing: "0.1em",
         }}
       >
-        Balance: <span style={{ color: "#f5c842" }}>{bank.toLocaleString()} $GPAY</span>
+        Balance: <span style={{ color: "#f5c842" }}>{localeInt(bank)} $GPAY</span>
       </div>
     </div>
   );

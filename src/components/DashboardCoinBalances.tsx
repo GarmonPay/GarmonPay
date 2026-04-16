@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
-
-function localeInt(n: unknown): string {
-  const x = Math.max(0, Math.floor(Number(n ?? 0)));
-  return (Number.isFinite(x) ? x : 0).toLocaleString();
-}
+import { localeInt } from "@/lib/format-number";
 
 export function DashboardCoinBalances({ compact = false }: { compact?: boolean }) {
   const [hasToken, setHasToken] = useState(false);

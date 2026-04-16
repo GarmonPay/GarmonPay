@@ -484,7 +484,7 @@ export function CoinFlipPanel() {
                 {history.map((h) => (
                   <tr key={h.id} className="border-b border-white/5 text-white/60">
                     <td className="py-2 pr-3 whitespace-nowrap text-white/90">
-                      {new Date(h.createdAt).toLocaleString()}
+                      {h.createdAt ? new Date(h.createdAt).toLocaleString() : "—"}
                     </td>
                     <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
                     <td className="py-2 pr-3">{formatGPC(h.betAmountMinor)}</td>

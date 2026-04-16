@@ -1,5 +1,7 @@
 "use client";
 
+import { localeInt } from "@/lib/format-number";
+
 type LiveStripVariant = "live" | "empty" | "reconnect";
 
 export function CeloLiveStatusStrip({
@@ -107,7 +109,7 @@ export function CeloReadinessPanel({
         <div className="rounded-lg border border-amber-500/15 bg-black/35 px-2 py-1.5">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-200/60">Gold Coins</span>
           <span className="tabular-nums text-amber-100/95">
-            {Math.max(0, Math.floor(Number(goldCoins ?? 0))).toLocaleString()} GC
+            {localeInt(goldCoins)} GC
           </span>
         </div>
         <div className="rounded-lg border border-violet-500/20 bg-black/35 px-2 py-1.5">

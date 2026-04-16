@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { localeInt } from "@/lib/format-number";
 
 const API_BASE = getApiRoot();
 
@@ -317,7 +318,7 @@ export default function AdminSocialTasksPage() {
               <div className="space-y-1 text-sm">
                 <p className="font-semibold text-white">{row.task?.title ?? "Task"}</p>
                 <p className="text-slate-400">
-                  {row.task?.platform} · {row.task?.task_type} · {row.reward_gpc.toLocaleString()} GPC
+                  {row.task?.platform} · {row.task?.task_type} · {localeInt(row.reward_gpc)} GPC
                 </p>
                 <p className="text-xs text-slate-500 font-mono">User: {row.user_id}</p>
                 {row.proof_url && (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
+import { localeInt } from "@/lib/format-number";
 
 /**
  * POST /api/coins/checkout
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
             currency: "usd",
             unit_amount: p.price_cents,
             product_data: {
-              name: `${p.name} — ${p.gold_coins.toLocaleString()} Gold Coins`,
+              name: `${p.name} — ${localeInt(p.gold_coins)} Gold Coins`,
             },
           },
         },

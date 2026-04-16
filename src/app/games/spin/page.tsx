@@ -7,6 +7,7 @@ import { getSessionAsync } from "@/lib/session";
 import { gamesSpin } from "@/lib/api";
 import { useCoins } from "@/hooks/useCoins";
 import { scToUsdDisplay } from "@/lib/coins";
+import { localeInt } from "@/lib/format-number";
 
 export default function SpinPage() {
   const router = useRouter();
@@ -70,7 +71,7 @@ export default function SpinPage() {
         {result != null && (
           <div className="rounded-xl bg-[#39ff14]/15 border border-[#39ff14]/50 p-4">
             <p className="text-[#39ff14] font-medium">
-              You won {result.toLocaleString()} GPC ({scToUsdDisplay(result)})!
+              You won {localeInt(result)} GPC ({scToUsdDisplay(result)})!
             </p>
           </div>
         )}

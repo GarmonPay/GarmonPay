@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation";
 import { getSessionAsync } from "@/lib/session";
 import { getReferralDashboard } from "@/lib/api";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
+import { localeInt } from "@/lib/format-number";
 
 function formatGpc(gpc: number | null | undefined) {
-  const n = Math.max(0, Math.floor(Number(gpc ?? 0)));
-  return `${Number.isFinite(n) ? n.toLocaleString() : "0"} GPC`;
+  return `${localeInt(gpc)} GPC`;
 }
 
 function tierLabel(tier: string) {
   return tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "—";
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString(undefined, {
     dateStyle: "short",
     timeStyle: "short",

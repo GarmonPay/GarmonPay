@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+import { localeInt } from "@/lib/format-number";
 
 /** Rows from GET /api/coins/packages (`gc_packages` where is_active). Expected: Starter, Popular, Pro, Elite, VIP — prices $9.99–$249.99. */
 type PackageRow = {
@@ -128,7 +129,7 @@ export default function BuyCoinsPage() {
                     🪙
                   </span>{" "}
                   <span className="text-xl font-bold tabular-nums text-amber-300">
-                    {p.gold_coins.toLocaleString()} GC
+                    {localeInt(p.gold_coins)} GC
                   </span>
                 </p>
                 <div className="rounded-xl border border-emerald-500/35 bg-gradient-to-br from-violet-950/50 to-emerald-950/30 px-4 py-3">
@@ -136,7 +137,7 @@ export default function BuyCoinsPage() {
                     FREE GPay Coins
                   </p>
                   <p className="inline-block text-lg font-bold tabular-nums bg-gradient-to-r from-violet-300 to-emerald-300 bg-clip-text text-transparent">
-                    +{p.bonus_gpay_coins.toLocaleString()} GPC
+                    +{localeInt(p.bonus_gpay_coins)} GPC
                   </p>
                   {p.bonus_label && (
                     <p className="text-[10px] text-emerald-400/90 mt-1">{p.bonus_label}</p>

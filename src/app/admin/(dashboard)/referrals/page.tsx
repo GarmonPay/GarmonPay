@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
 import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { localeInt } from "@/lib/format-number";
 
 const API_BASE = getApiRoot();
 
 type Tier = "starter" | "pro" | "elite" | "vip";
 
-function formatGpc(gpc: number) {
-  return `${gpc.toLocaleString()} GPC`;
+function formatGpc(gpc: unknown) {
+  return `${localeInt(gpc)} GPC`;
 }
 
 function tierLabel(t: string) {

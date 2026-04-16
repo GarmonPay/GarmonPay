@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSessionAsync } from "@/lib/session";
+import { localeInt, safeFiniteInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -128,19 +129,11 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const firstName = user?.full_name?.split(" ")[0] ?? "Member";
-  const goldCoins = Math.max(0, Math.floor(Number(user?.gold_coins ?? 0)));
-  const gpayCoins = Math.max(0, Math.floor(Number(user?.gpay_coins ?? 0)));
-  const gpayTokens = Math.max(0, Math.floor(Number(user?.gpay_tokens ?? 0)));
-  const tierRaw = user?.membership_tier?.trim() ?? "";
-  const tier = tierRaw ? formatTierLabel(tierRaw) : "Free";
-  const referrals = Math.max(0, Math.floor(Number(user?.total_referrals ?? 0)));
-  const referralCode = user?.referral_code?.trim() ?? "";
-
   async function copyReferralCode() {
-    if (!referralCode) return;
+    const code = user?.referral_code?.trim() ?? "";
+    if (!code) return;
     try {
-      await navigator.clipboard.writeText(referralCode);
+      await navigator.clipboard.writeText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -151,9 +144,10 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div
-        className={`flex min-h-[50vh] items-center justify-center bg-[#0e0118] text-violet-300/80 ${dmSans.className}`}
+        className={`flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-[#0e0118] px-4 py-16 text-violet-300/80 ${dmSans.className}`}
       >
-        Loading…
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-violet-500/20 border-t-violet-400" />
+        <p className="text-sm font-medium">Loading your dashboard…</p>
       </div>
     );
   }
@@ -175,6 +169,26 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  if (!user) {
+    return (
+      <div
+        className={`flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-[#0e0118] px-4 py-16 text-violet-300/80 ${dmSans.className}`}
+      >
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400" />
+        <p className="text-sm font-medium">Preparing your balances…</p>
+      </div>
+    );
+  }
+
+  const firstName = user.full_name?.split(" ")[0] ?? "Member";
+  const goldCoins = safeFiniteInt(user.gold_coins);
+  const gpayCoins = safeFiniteInt(user.gpay_coins);
+  const gpayTokens = safeFiniteInt(user.gpay_tokens);
+  const tierRaw = user.membership_tier?.trim() ?? "";
+  const tier = tierRaw ? formatTierLabel(tierRaw) : "Free";
+  const referrals = safeFiniteInt(user.total_referrals);
+  const referralCode = user.referral_code?.trim() ?? "";
 
   return (
     <div className={`min-h-full space-y-8 bg-[#0e0118] pb-4 pt-2 tablet:pb-8 ${dmSans.className}`}>
@@ -212,7 +226,7 @@ export default function DashboardPage() {
             Gold Coins
           </p>
           <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {goldCoins.toLocaleString()} GC
+            {localeInt(goldCoins)} GC
           </p>
           <p className="mt-2 text-xs text-amber-100/70">Purchased with real money — convert to GPay Coins to play</p>
           <Link
@@ -237,7 +251,7 @@ export default function DashboardPage() {
             GPay Coins
           </p>
           <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {gpayCoins.toLocaleString()} GPC
+            {localeInt(gpayCoins)} GPC
           </p>
           <p className="mt-2 text-xs text-violet-200/75">Play games and earn prizes</p>
           <Link
@@ -262,7 +276,7 @@ export default function DashboardPage() {
             $GPAY Tokens
           </p>
           <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {gpayTokens.toLocaleString()} $GPAY
+            {localeInt(gpayTokens)} $GPAY
           </p>
           <p className="mt-2 text-xs text-emerald-200/75">Redeem GPC — trade on Raydium for USDC</p>
           <Link
@@ -359,7 +373,7 @@ export default function DashboardPage() {
       {/* Referrals */}
       <div className="rounded-2xl border border-[#F5C842]/25 bg-black/30 p-4 tablet:p-6">
         <p className="text-base text-white">
-          You have <span className="font-bold text-[#F5C842]">{referrals}</span>{" "}
+          You have <span className="font-bold text-[#F5C842]">{localeInt(referrals)}</span>{" "}
           {referrals === 1 ? "referral" : "referrals"}
         </p>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-400/70">

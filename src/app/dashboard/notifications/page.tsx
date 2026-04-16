@@ -58,7 +58,9 @@ export default function NotificationsPage() {
             >
               <p className="font-medium text-white">{n.title}</p>
               {n.body && <p className="text-sm text-fintech-muted mt-1">{n.body}</p>}
-              <p className="text-xs text-fintech-muted mt-2">{new Date(n.created_at).toLocaleString()}</p>
+              <p className="text-xs text-fintech-muted mt-2">
+                {n.created_at ? new Date(n.created_at).toLocaleString() : "—"}
+              </p>
             </li>
           ))}
         </ul>

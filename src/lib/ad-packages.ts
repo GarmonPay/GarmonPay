@@ -80,8 +80,8 @@ export function rebuildAdPackageFeatures(row: {
   const poolClick =
     Math.round(row.included_clicks * AD_PACKAGE_MEMBER_EARN_PER_CLICK * 100) / 100;
   const poolView = Math.round(row.ad_views * AD_PACKAGE_MEMBER_EARN_PER_VIEW * 100) / 100;
-  const viewsStr = row.ad_views.toLocaleString("en-US");
-  const clicksStr = row.included_clicks.toLocaleString("en-US");
+  const viewsStr = (Number(row.ad_views) || 0).toLocaleString("en-US");
+  const clicksStr = (Number(row.included_clicks) || 0).toLocaleString("en-US");
   return {
     bullets: [
       `${viewsStr} verified views + ${clicksStr} click credits`,

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSessionAsync } from "@/lib/session";
 import { userMeetsMinTier, isEliteOrHigher } from "@/lib/social-tier";
+import { localeInt } from "@/lib/format-number";
 
 type SocialTask = {
   id: string;
@@ -243,7 +244,7 @@ export default function SocialTasksEarnPage() {
             { label: "Tasks available", value: String(stats.tasksAvailable) },
             {
               label: "Your earnings today",
-              value: `${stats.earningsTodayGpc.toLocaleString()} GPC`,
+              value: `${localeInt(stats.earningsTodayGpc)} GPC`,
             },
             { label: "Tasks completed today", value: String(stats.tasksCompletedToday) },
             { label: "Your membership tier", value: tierLabel },
@@ -316,7 +317,7 @@ export default function SocialTasksEarnPage() {
 
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-xl font-bold font-mono" style={{ color: "#f5c842" }}>
-                    +{task.reward_gpc.toLocaleString()} GPC
+                    +{localeInt(task.reward_gpc)} GPC
                   </p>
                   {existing ? (
                     <span className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 text-violet-200">
@@ -446,7 +447,7 @@ export default function SocialTasksEarnPage() {
                   <strong className="text-white">Step 3:</strong> Confirm your submission. We will review it shortly.
                 </p>
                 <ul className="text-xs text-violet-300/80 space-y-1 font-mono break-all">
-                  <li>Reward: {modalTask.reward_gpc.toLocaleString()} GPC</li>
+                  <li>Reward: {localeInt(modalTask.reward_gpc)} GPC</li>
                   {proofUrl && <li>Proof: {proofUrl}</li>}
                 </ul>
                 {error && <p className="text-sm text-red-400">{error}</p>}

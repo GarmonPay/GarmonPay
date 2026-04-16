@@ -17,6 +17,7 @@ import {
 } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
 import { getMonthlyGpcBonusForPlan } from "@/lib/membership-monthly-gpc-bonus";
+import { localeInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -282,7 +283,7 @@ export default function PricingPage() {
       const gpcBonus = typeof (data as { gpcBonus?: number }).gpcBonus === "number" ? (data as { gpcBonus: number }).gpcBonus : 0;
       setSuccessMsg(
         gpcBonus > 0
-          ? `You're now a ${label} member! 🎉 You received ${gpcBonus.toLocaleString()} GPC upgrade bonus!`
+          ? `You're now a ${label} member! 🎉 You received ${localeInt(gpcBonus)} GPC upgrade bonus!`
           : `You're now a ${label} member! 🎉`
       );
       setConfirmTier(null);
@@ -448,7 +449,7 @@ export default function PricingPage() {
                           Monthly GPay Coins bonus
                         </p>
                         <p className="mt-1 text-lg font-bold tabular-nums text-emerald-300">
-                          {monthlyGpc === 0 ? "—" : `+${monthlyGpc.toLocaleString()} GPC`}
+                          {monthlyGpc === 0 ? "—" : `+${localeInt(monthlyGpc)} GPC`}
                         </p>
                         {monthlyGpc > 0 ? (
                           <p className="mt-0.5 text-[10px] text-violet-300/75">Included each billing month</p>

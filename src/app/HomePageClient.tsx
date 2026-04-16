@@ -94,8 +94,9 @@ export default function HomePage() {
   }, [referralCount, hoursPerReferralDay, plan]);
 
   function formatProjectionUsd(n: number): string {
-    if (!Number.isFinite(n)) return "—";
-    return n.toLocaleString("en-US", {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "—";
+    return x.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

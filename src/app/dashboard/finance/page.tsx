@@ -8,11 +8,12 @@ import { getDashboard, getWithdrawals } from "@/lib/api";
 import { normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 import { useCoins } from "@/hooks/useCoins";
+import { formatUsdCents, localeInt } from "@/lib/format-number";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatCents(cents: unknown) {
+  return formatUsdCents(cents);
 }
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
@@ -132,7 +133,7 @@ export default function FinancePage() {
             </p>
             {balanceCents != null && !balanceFetchError && (balanceCents > 0 || sweepsCoins > 0) ? (
               <p className="mt-2 text-[11px] text-fintech-muted">
-                {formatCents(balanceCents)} USD · {sweepsCoins.toLocaleString()} GPC
+                {formatCents(balanceCents)} USD · {localeInt(sweepsCoins)} GPC
               </p>
             ) : null}
           </div>

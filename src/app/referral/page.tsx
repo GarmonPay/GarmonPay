@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Cinzel_Decorative } from "next/font/google";
+import { localeInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -140,22 +141,22 @@ export default function ReferralPartnerPage() {
             <table className="w-full text-sm">
               <tbody>
                 <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Your commission rate</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.commissionRate}%</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Join bonuses this month (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.joinBonusesGpc.toLocaleString()} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Join bonuses this month (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{localeInt(calc.joinBonusesGpc)} GPC</td></tr>
                 <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Referrals who upgrade</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.upgrades}</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Commission per upgrade (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.commissionPerUpgradeGpc).toLocaleString()} GPC</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Upgrade commissions (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.upgradeCommissionsGpc).toLocaleString()} GPC</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Total monthly (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.monthlyTotalGpc).toLocaleString()} GPC</td></tr>
-                <tr><td className="px-4 py-3 font-bold text-[#fde047]">Yearly projection (GPC)</td><td className="px-4 py-3 text-right font-bold text-[#fde047]">{Math.round(calc.yearlyGpc).toLocaleString()} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Commission per upgrade (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{localeInt(Math.round(calc.commissionPerUpgradeGpc))} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Upgrade commissions (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{localeInt(Math.round(calc.upgradeCommissionsGpc))} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Total monthly (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{localeInt(Math.round(calc.monthlyTotalGpc))} GPC</td></tr>
+                <tr><td className="px-4 py-3 font-bold text-[#fde047]">Yearly projection (GPC)</td><td className="px-4 py-3 text-right font-bold text-[#fde047]">{localeInt(Math.round(calc.yearlyGpc))} GPC</td></tr>
               </tbody>
             </table>
           </div>
 
           <div className="mt-8 text-center">
             <p className={`${cinzel.className} text-3xl font-bold text-[#eab308] md:text-4xl`}>
-              Your Estimated Monthly Referral Income: {Math.round(calc.monthlyTotalGpc).toLocaleString()} GPC
+              Your Estimated Monthly Referral Income: {localeInt(Math.round(calc.monthlyTotalGpc))} GPC
             </p>
             <p className={`${cinzel.className} mt-2 text-2xl font-bold text-[#eab308] md:text-3xl`}>
-              Your Estimated Yearly Referral Income: {Math.round(calc.yearlyGpc).toLocaleString()} GPC
+              Your Estimated Yearly Referral Income: {localeInt(Math.round(calc.yearlyGpc))} GPC
             </p>
           </div>
 
