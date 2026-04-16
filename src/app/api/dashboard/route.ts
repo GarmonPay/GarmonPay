@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { findUserById } from "@/lib/auth-store";
 import { getEarningsForUser, listAds } from "@/lib/ads-db";
 import { getTotalsForUser } from "@/lib/transactions-db";
-import { countUserReferrals, getUserReferralEarningsCents } from "@/lib/viral-db";
+import { countUserReferrals, getUserReferralEarningsGpc } from "@/lib/viral-db";
 import {
   getActiveReferralSubscriptionsCount,
-  getMonthlyReferralCommissionCents,
-  getLifetimeReferralCommissionCents,
+  getMonthlyReferralCommissionGpc,
+  getLifetimeReferralCommissionGpc,
 } from "@/lib/referral-commissions-db";
 import { createAdminClient, createServerClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
@@ -38,11 +38,11 @@ export async function GET(request: Request) {
     membershipPaymentSource: null as string | null,
     stripeSubscriptionId: null as string | null,
     referralCode: "",
-    referralEarningsCents: 0,
+    referralEarningsGpc: 0,
     totalReferrals: 0,
     activeReferralSubscriptions: 0,
-    monthlyReferralCommissionCents: 0,
-    lifetimeReferralCommissionCents: 0,
+    monthlyReferralCommissionGpc: 0,
+    lifetimeReferralCommissionGpc: 0,
     announcements: [] as { id: string; title: string; body: string; publishedAt: string }[],
     availableAds: [] as { id: string; title: string; rewardCents: number }[],
     reportableEarningsCents: 0,
@@ -138,7 +138,7 @@ export async function GET(request: Request) {
       let totalWithdrawnCents = 0;
       let totalDepositsCents = 0;
       let totalReferrals = 0;
-      let referralEarningsCents = 0;
+      let referralEarningsGpc = 0;
       let availableAds: { id: string; title: string; rewardCents: number }[] = [];
       try {
         const [earnings, totals, ads] = await Promise.all([
@@ -162,18 +162,18 @@ export async function GET(request: Request) {
       }
       try {
         totalReferrals = await countUserReferrals(authUser.id);
-        referralEarningsCents = await getUserReferralEarningsCents(authUser.id);
+        referralEarningsGpc = await getUserReferralEarningsGpc(authUser.id);
       } catch (_) {
         // viral/referral_bonus tables may be missing
       }
       let activeReferralSubscriptions = 0;
-      let monthlyReferralCommissionCents = 0;
-      let lifetimeReferralCommissionCents = 0;
+      let monthlyReferralCommissionGpc = 0;
+      let lifetimeReferralCommissionGpc = 0;
       try {
-        [activeReferralSubscriptions, monthlyReferralCommissionCents, lifetimeReferralCommissionCents] = await Promise.all([
+        [activeReferralSubscriptions, monthlyReferralCommissionGpc, lifetimeReferralCommissionGpc] = await Promise.all([
           getActiveReferralSubscriptionsCount(authUser.id),
-          getMonthlyReferralCommissionCents(authUser.id),
-          getLifetimeReferralCommissionCents(authUser.id),
+          getMonthlyReferralCommissionGpc(authUser.id),
+          getLifetimeReferralCommissionGpc(authUser.id),
         ]);
       } catch (_) {
         // referral_commissions / subscriptions tables may be missing
@@ -212,11 +212,11 @@ export async function GET(request: Request) {
           membershipPaymentSource: userRow?.membership_payment_source ?? null,
           stripeSubscriptionId: userRow?.stripe_subscription_id ?? null,
           referralCode: userRow?.referral_code ?? "",
-          referralEarningsCents,
+          referralEarningsGpc,
           totalReferrals,
           activeReferralSubscriptions,
-          monthlyReferralCommissionCents,
-          lifetimeReferralCommissionCents,
+          monthlyReferralCommissionGpc,
+          lifetimeReferralCommissionGpc,
           announcements: [],
           availableAds,
           reportableEarningsCents,
@@ -279,11 +279,11 @@ export async function GET(request: Request) {
       membershipPaymentSource: null,
       stripeSubscriptionId: null,
       referralCode: user.referralCode,
-      referralEarningsCents: 0,
+      referralEarningsGpc: 0,
       totalReferrals: 0,
       activeReferralSubscriptions: 0,
-      monthlyReferralCommissionCents: 0,
-      lifetimeReferralCommissionCents: 0,
+      monthlyReferralCommissionGpc: 0,
+      lifetimeReferralCommissionGpc: 0,
       announcements: [],
       availableAds: [],
       reportableEarningsCents: 0,

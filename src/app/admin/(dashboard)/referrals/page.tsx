@@ -8,8 +8,8 @@ const API_BASE = getApiRoot();
 
 type Tier = "starter" | "pro" | "elite" | "vip";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatGpc(gpc: number) {
+  return `${gpc.toLocaleString()} GPC`;
 }
 
 function tierLabel(t: string) {
@@ -19,12 +19,12 @@ function tierLabel(t: string) {
 export default function AdminReferralsPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [config, setConfig] = useState<Array<{ tier: string; percentage: number }>>([]);
-  const [totalPaidCents, setTotalPaidCents] = useState(0);
+  const [totalRecurringPaidGpc, setTotalRecurringPaidGpc] = useState(0);
   const [activeReferralSubs, setActiveReferralSubs] = useState(0);
   const [totalReferrals, setTotalReferrals] = useState(0);
-  const [totalCommissionsPaidCents, setTotalCommissionsPaidCents] = useState(0);
+  const [totalCommissionsPaidGpc, setTotalCommissionsPaidGpc] = useState(0);
   const [activeReferrals, setActiveReferrals] = useState(0);
-  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
+  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,14 +41,14 @@ export default function AdminReferralsPage() {
     setError(null);
     Promise.all([
       fetch(`${API_BASE}/admin/referral-commissions`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed")))),
-      fetch(`${API_BASE}/admin/referrals-stats`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => (r.ok ? r.json() : { totalReferrals: 0, totalCommissionsPaidCents: 0, activeReferrals: 0, leaderboard: [] })),
+      fetch(`${API_BASE}/admin/referrals-stats`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => (r.ok ? r.json() : { totalReferrals: 0, totalCommissionsPaidGpc: 0, activeReferrals: 0, leaderboard: [] })),
     ])
       .then(([commData, statsData]) => {
         setConfig(commData.config ?? []);
-        setTotalPaidCents(commData.totalRecurringCommissionsPaidCents ?? 0);
+        setTotalRecurringPaidGpc(commData.totalRecurringCommissionsPaidGpc ?? 0);
         setActiveReferralSubs(commData.activeReferralSubscriptions ?? 0);
         setTotalReferrals(statsData.totalReferrals ?? 0);
-        setTotalCommissionsPaidCents(statsData.totalCommissionsPaidCents ?? 0);
+        setTotalCommissionsPaidGpc(statsData.totalCommissionsPaidGpc ?? 0);
         setActiveReferrals(statsData.activeReferrals ?? 0);
         setLeaderboard(statsData.leaderboard ?? []);
         const next: Record<string, string> = {};
@@ -130,7 +130,7 @@ export default function AdminReferralsPage() {
         </div>
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
           <p className="text-fintech-muted text-sm">Total commissions paid</p>
-          <p className="text-2xl font-bold text-white">{formatCents(totalCommissionsPaidCents)}</p>
+          <p className="text-2xl font-bold text-white">{formatGpc(totalCommissionsPaidGpc)}</p>
         </div>
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
           <p className="text-fintech-muted text-sm">Active referrals</p>
@@ -138,7 +138,7 @@ export default function AdminReferralsPage() {
         </div>
         <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-4">
           <p className="text-fintech-muted text-sm">Recurring commissions paid</p>
-          <p className="text-2xl font-bold text-white">{formatCents(totalPaidCents)}</p>
+          <p className="text-2xl font-bold text-white">{formatGpc(totalRecurringPaidGpc)}</p>
         </div>
       </div>
 
@@ -160,7 +160,7 @@ export default function AdminReferralsPage() {
                 <td className="p-3 text-white font-medium">{row.rank}</td>
                 <td className="p-3 text-white font-mono text-sm">{row.email}</td>
                 <td className="p-3 text-white">{row.totalReferrals}</td>
-                <td className="p-3 text-emerald-400">{formatCents(row.totalEarningsCents)}</td>
+                <td className="p-3 text-emerald-400">{formatGpc(row.totalEarningsGpc)}</td>
               </tr>
             ))}
           </tbody>

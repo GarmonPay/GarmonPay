@@ -13,9 +13,9 @@ function supabase() {
   return client;
 }
 
-/** Top referrers: user id, email (name), total referrals, total referral earnings (from referral_bonus). */
+/** Top referrers: user id, email (name), total referrals, total referral earnings in GPC (from referral_bonus). */
 export async function getTopReferrers(limit = 20): Promise<
-  { userId: string; email: string; totalReferrals: number; totalEarningsCents: number }[]
+  { userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }[]
 > {
   const { data: bonuses } = await supabase()
     .from("referral_bonus")
@@ -40,7 +40,7 @@ export async function getTopReferrers(limit = 20): Promise<
     userId: s.userId,
     email: emailMap.get(s.userId) ?? "—",
     totalReferrals: s.count,
-    totalEarningsCents: s.cents,
+    totalEarningsGpc: s.cents,
   }));
 }
 
@@ -188,8 +188,8 @@ export async function countUserReferrals(userId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Total referral earnings for user (from referral_bonus). */
-export async function getUserReferralEarningsCents(userId: string): Promise<number> {
+/** Total referral signup bonus earnings for user in GPC (from referral_bonus.amount, stored as GPC). */
+export async function getUserReferralEarningsGpc(userId: string): Promise<number> {
   const { data } = await supabase().from("referral_bonus").select("amount").eq("referrer_id", userId).eq("status", "paid");
   return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
 }

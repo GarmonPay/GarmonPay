@@ -6,8 +6,8 @@ import { getSessionAsync } from "@/lib/session";
 import { getLeaderboard } from "@/lib/api";
 import ArenaLogo from "@/components/arena/ArenaLogo";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatGpc(gpc: number) {
+  return `${gpc.toLocaleString()} GPC`;
 }
 
 function maskEmail(email: string) {
@@ -20,8 +20,8 @@ function maskEmail(email: string) {
 export default function LeaderboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
-  const [topReferrers, setTopReferrers] = useState<Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
-  const [topEarners, setTopEarners] = useState<Array<{ userId: string; email: string; totalEarningsCents: number }>>([]);
+  const [topReferrers, setTopReferrers] = useState<Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }>>([]);
+  const [topEarners, setTopEarners] = useState<Array<{ userId: string; email: string; totalEarningsGpc: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +100,7 @@ export default function LeaderboardPage() {
                       <td className="p-3 font-medium text-fintech-highlight">{i + 1}</td>
                       <td className="p-3 text-white">{maskEmail(r.email)}</td>
                       <td className="p-3 text-right text-white font-medium">{r.totalReferrals}</td>
-                      <td className="p-3 text-right text-fintech-money font-medium">{formatCents(r.totalEarningsCents)}</td>
+                      <td className="p-3 text-right text-fintech-money font-medium">{formatGpc(r.totalEarningsGpc)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -133,7 +133,7 @@ export default function LeaderboardPage() {
                     <tr key={e.userId} className="border-b border-white/5 hover:bg-white/5">
                       <td className="p-3 font-medium text-fintech-highlight">{i + 1}</td>
                       <td className="p-3 text-white">{maskEmail(e.email)}</td>
-                      <td className="p-3 text-right text-fintech-money font-bold">{formatCents(e.totalEarningsCents)}</td>
+                      <td className="p-3 text-right text-fintech-money font-bold">{formatGpc(e.totalEarningsGpc)}</td>
                     </tr>
                   ))}
                 </tbody>

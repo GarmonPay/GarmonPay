@@ -76,7 +76,7 @@ export async function createReferral(params: {
 
 /** Leaderboard: rank, user id/email, total referrals, total earnings (from referral_rewards + referral_bonus). */
 export async function getLeaderboard(limit = 50): Promise<
-  { rank: number; userId: string; email: string; totalReferrals: number; totalEarningsCents: number }[]
+  { rank: number; userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }[]
 > {
   try {
     const { data: refs } = await supabase().from("viral_referrals").select("referrer_user_id");
@@ -116,7 +116,7 @@ export async function getLeaderboard(limit = 50): Promise<
       userId: s.userId,
       email: (emailMap.get(s.userId) ?? "—").toString(),
       totalReferrals: s.totalReferrals,
-      totalEarningsCents: earningsByUser.get(s.userId) ?? 0,
+      totalEarningsGpc: earningsByUser.get(s.userId) ?? 0,
     }));
   } catch {
     return [];
@@ -154,8 +154,8 @@ export async function getTotalReferralsCount(): Promise<number> {
   return error ? 0 : (count ?? 0);
 }
 
-/** Total commissions/rewards paid (referral_rewards amount sum + referral_bonus). */
-export async function getTotalCommissionsPaidCents(): Promise<number> {
+/** Total commissions/rewards paid in GPC (referral_rewards + referral_bonus; 100 GPC ≈ $1). */
+export async function getTotalCommissionsPaidGpc(): Promise<number> {
   try {
     const { data: rewards } = await supabase().from("referral_rewards").select("amount");
     let sum = 0;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import {
   countUserReferrals,
-  getUserReferralEarningsCents,
+  getUserReferralEarningsGpc,
   getReferrerRank,
   getUserBadges,
   canClaimDaily,
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   if (!createAdminClient()) {
     return NextResponse.json({
       totalReferrals: 0,
-      referralEarningsCents: 0,
+      referralEarningsGpc: 0,
       leaderboardRank: null,
       badges: [],
       canClaimDaily: false,
@@ -27,16 +27,16 @@ export async function GET(request: Request) {
   }
   try {
     await ensureBadgesAwarded(userId).catch(() => {});
-    const [totalReferrals, referralEarningsCents, leaderboardRank, badges, canClaim] = await Promise.all([
+    const [totalReferrals, referralEarningsGpc, leaderboardRank, badges, canClaim] = await Promise.all([
       countUserReferrals(userId),
-      getUserReferralEarningsCents(userId),
+      getUserReferralEarningsGpc(userId),
       getReferrerRank(userId),
       getUserBadges(userId),
       canClaimDaily(userId),
     ]);
     return NextResponse.json({
       totalReferrals: totalReferrals ?? 0,
-      referralEarningsCents: referralEarningsCents ?? 0,
+      referralEarningsGpc: referralEarningsGpc ?? 0,
       leaderboardRank: leaderboardRank ?? null,
       badges: badges ?? [],
       canClaimDaily: canClaim ?? false,
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     console.error("Growth error:", e);
     return NextResponse.json({
       totalReferrals: 0,
-      referralEarningsCents: 0,
+      referralEarningsGpc: 0,
       leaderboardRank: null,
       badges: [],
       canClaimDaily: false,

@@ -36,10 +36,6 @@ const NEXT_PLAN: Record<Plan, Plan> = {
   elite: "elite",
 };
 
-function fmt(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 export default function ReferralPartnerPage() {
   const [plan, setPlan] = useState<Plan>("free");
   const [referrals, setReferrals] = useState(25);
@@ -48,32 +44,36 @@ export default function ReferralPartnerPage() {
 
   const calc = useMemo(() => {
     const commissionRate = PLAN_PCT[plan];
-    const joinBonuses = referrals * 0.5;
+    /** 50 GPC per signup ≈ $0.50 at 100 GPC = $1.00 */
+    const joinBonusesGpc = referrals * 50;
     const upgrades = Math.floor(referrals * (upgradePct / 100));
-    const commissionPerUpgrade = UPGRADE_PRICE[upgradePlan] * (commissionRate / 100);
-    const upgradeCommissions = upgrades * commissionPerUpgrade;
-    const monthlyTotal = joinBonuses + upgradeCommissions;
-    const yearly = monthlyTotal * 12;
+    const commissionPerUpgradeUsd = UPGRADE_PRICE[upgradePlan] * (commissionRate / 100);
+    const upgradeCommissionsUsd = upgrades * commissionPerUpgradeUsd;
+    /** Payouts credit GPC; $1.00 commission → 100 GPC */
+    const commissionPerUpgradeGpc = commissionPerUpgradeUsd * 100;
+    const upgradeCommissionsGpc = upgradeCommissionsUsd * 100;
+    const monthlyTotalGpc = joinBonusesGpc + upgradeCommissionsGpc;
+    const yearlyGpc = monthlyTotalGpc * 12;
     return {
       commissionRate,
-      joinBonuses,
+      joinBonusesGpc,
       upgrades,
-      commissionPerUpgrade,
-      upgradeCommissions,
-      monthlyTotal,
-      yearly,
+      commissionPerUpgradeGpc,
+      upgradeCommissionsGpc,
+      monthlyTotalGpc,
+      yearlyGpc,
     };
   }, [plan, referrals, upgradePct, upgradePlan]);
 
   const motivation = useMemo(() => {
-    const m = calc.monthlyTotal;
-    if (m < 50) return "You are just getting started. Share your link daily and watch your network grow.";
-    if (m < 200) return "Good momentum. A few more active referrals and this becomes serious money.";
-    if (m < 500) return "You are building real passive income. Keep recruiting and upgrade your plan to earn more per referral.";
-    if (m < 2000) return "This is significant recurring income. You are running a real referral business with GarmonPay.";
-    if (m < 5000) return "Full time income territory. You have built something most people only dream about.";
+    const m = calc.monthlyTotalGpc;
+    if (m < 5_000) return "You are just getting started. Share your link daily and watch your network grow.";
+    if (m < 20_000) return "Good momentum. A few more active referrals and this becomes serious money.";
+    if (m < 50_000) return "You are building real passive income. Keep recruiting and upgrade your plan to earn more per referral.";
+    if (m < 200_000) return "This is significant recurring income. You are running a real referral business with GarmonPay.";
+    if (m < 500_000) return "Full time income territory. You have built something most people only dream about.";
     return "Elite earner status. This is life changing residual income from membership upgrades alone.";
-  }, [calc.monthlyTotal]);
+  }, [calc.monthlyTotalGpc]);
 
   const next = NEXT_PLAN[plan];
 
@@ -140,22 +140,22 @@ export default function ReferralPartnerPage() {
             <table className="w-full text-sm">
               <tbody>
                 <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Your commission rate</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.commissionRate}%</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Join bonuses this month</td><td className="px-4 py-3 text-right text-[#fde047]">${fmt(calc.joinBonuses)}</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Join bonuses this month (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.joinBonusesGpc.toLocaleString()} GPC</td></tr>
                 <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Referrals who upgrade</td><td className="px-4 py-3 text-right text-[#fde047]">{calc.upgrades}</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Commission per upgrade</td><td className="px-4 py-3 text-right text-[#fde047]">${fmt(calc.commissionPerUpgrade)}</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Upgrade commissions</td><td className="px-4 py-3 text-right text-[#fde047]">${fmt(calc.upgradeCommissions)}</td></tr>
-                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Total monthly income</td><td className="px-4 py-3 text-right text-[#fde047]">${fmt(calc.monthlyTotal)}</td></tr>
-                <tr><td className="px-4 py-3 font-bold text-[#fde047]">Yearly projection</td><td className="px-4 py-3 text-right font-bold text-[#fde047]">${fmt(calc.yearly)}</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Commission per upgrade (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.commissionPerUpgradeGpc).toLocaleString()} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Upgrade commissions (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.upgradeCommissionsGpc).toLocaleString()} GPC</td></tr>
+                <tr className="border-b border-white/10"><td className="px-4 py-3 text-violet-300">Total monthly (GPC)</td><td className="px-4 py-3 text-right text-[#fde047]">{Math.round(calc.monthlyTotalGpc).toLocaleString()} GPC</td></tr>
+                <tr><td className="px-4 py-3 font-bold text-[#fde047]">Yearly projection (GPC)</td><td className="px-4 py-3 text-right font-bold text-[#fde047]">{Math.round(calc.yearlyGpc).toLocaleString()} GPC</td></tr>
               </tbody>
             </table>
           </div>
 
           <div className="mt-8 text-center">
             <p className={`${cinzel.className} text-3xl font-bold text-[#eab308] md:text-4xl`}>
-              Your Estimated Monthly Referral Income: ${fmt(calc.monthlyTotal)}
+              Your Estimated Monthly Referral Income: {Math.round(calc.monthlyTotalGpc).toLocaleString()} GPC
             </p>
             <p className={`${cinzel.className} mt-2 text-2xl font-bold text-[#eab308] md:text-3xl`}>
-              Your Estimated Yearly Referral Income: ${fmt(calc.yearly)}
+              Your Estimated Yearly Referral Income: {Math.round(calc.yearlyGpc).toLocaleString()} GPC
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export default function ReferralPartnerPage() {
           </p>
 
           <p className="mt-6 text-sm text-violet-300">
-            Referral commissions are paid instantly when your referral completes a membership upgrade. You also earn $0.50 when each referral first signs up. Upgrade your own plan to earn a higher percentage on every upgrade. There is no limit to how many people you can refer.
+            Referral commissions credit as GPay Coins (GPC) when your referral completes a membership upgrade. You also earn 50 GPC when each referral first signs up (100 GPC ≈ $1.00). Upgrade your own plan to earn a higher percentage on every upgrade. There is no limit to how many people you can refer.
           </p>
 
           <Link href="/pricing" className="mt-6 block rounded-xl border border-[#eab308] bg-[#1a0f2e] p-4 hover:bg-[#21113a]">

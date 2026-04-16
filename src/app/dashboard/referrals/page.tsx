@@ -6,8 +6,8 @@ import { getSessionAsync } from "@/lib/session";
 import { getReferralDashboard } from "@/lib/api";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatGpc(gpc: number) {
+  return `${gpc.toLocaleString()} GPC`;
 }
 
 function tierLabel(tier: string) {
@@ -24,7 +24,7 @@ function formatDate(iso: string) {
 export default function ReferralsPage() {
   const router = useRouter();
   const [data, setData] = useState<Awaited<ReturnType<typeof getReferralDashboard>> | null>(null);
-  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; email: string; totalReferrals: number; totalEarningsCents: number }>>([]);
+  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; email: string; totalReferrals: number; totalEarningsGpc: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -84,7 +84,7 @@ export default function ReferralsPage() {
     );
   }
 
-  const summary = data?.summary ?? { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeCents: 0, lifetimeReferralEarningsCents: 0, referralCode: "" };
+  const summary = data?.summary ?? { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeGpc: 0, lifetimeReferralEarningsGpc: 0, referralCode: "" };
   const referralLink = data?.referralLink ?? "";
   const referredUsers = data?.referredUsers ?? [];
   const earningsHistory = data?.earningsHistory ?? [];
@@ -114,11 +114,11 @@ export default function ReferralsPage() {
           </div>
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
             <p className="text-xs text-fintech-muted uppercase">Monthly referral income</p>
-            <p className="text-xl font-bold text-fintech-money mt-1">{formatCents(summary.monthlyReferralIncomeCents)}</p>
+            <p className="text-xl font-bold text-fintech-money mt-1">{formatGpc(summary.monthlyReferralIncomeGpc)}</p>
           </div>
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
             <p className="text-xs text-fintech-muted uppercase">Lifetime referral earnings</p>
-            <p className="text-xl font-bold text-fintech-money mt-1">{formatCents(summary.lifetimeReferralEarningsCents)}</p>
+            <p className="text-xl font-bold text-fintech-money mt-1">{formatGpc(summary.lifetimeReferralEarningsGpc)}</p>
           </div>
         </div>
       </section>
@@ -231,7 +231,7 @@ export default function ReferralsPage() {
                     <td className="p-3 text-white font-medium">#{row.rank}</td>
                     <td className="p-3 text-fintech-muted text-sm">{row.email}</td>
                     <td className="p-3 text-white">{row.totalReferrals}</td>
-                    <td className="p-3 text-fintech-money">{formatCents(row.totalEarningsCents)}</td>
+                    <td className="p-3 text-fintech-money">{formatGpc(row.totalEarningsGpc)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -269,8 +269,8 @@ export default function ReferralsPage() {
                         {u.status}
                       </span>
                     </td>
-                    <td className="p-3 text-fintech-money">{formatCents(u.monthlyCommissionCents)}</td>
-                    <td className="p-3 text-fintech-money font-medium">{formatCents(u.totalEarnedCents)}</td>
+                    <td className="p-3 text-fintech-money">{formatGpc(u.monthlyCommissionGpc)}</td>
+                    <td className="p-3 text-fintech-money font-medium">{formatGpc(u.totalEarnedGpc)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -304,7 +304,7 @@ export default function ReferralsPage() {
                     <td className="p-3 text-fintech-muted text-sm whitespace-nowrap">{formatDate(e.createdAt)}</td>
                     <td className="p-3 text-white capitalize">{e.type.replace("_", " ")}</td>
                     <td className="p-3 text-fintech-muted text-sm">{e.description}</td>
-                    <td className="p-3 text-fintech-money font-medium">+{formatCents(e.amountCents)}</td>
+                    <td className="p-3 text-fintech-money font-medium">+{formatGpc(e.amountGpc)}</td>
                     <td className="p-3">
                       <span className={e.status === "completed" ? "text-emerald-400" : "text-amber-400"}>
                         {e.status}

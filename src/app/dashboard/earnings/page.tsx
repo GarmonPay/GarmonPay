@@ -10,6 +10,10 @@ function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function formatGpc(gpc: number) {
+  return `${gpc.toLocaleString()} GPC`;
+}
+
 export default function EarningsPage() {
   const router = useRouter();
   const [data, setData] = useState<{
@@ -18,7 +22,7 @@ export default function EarningsPage() {
     earningsMonthCents: number;
     totalEarningsCents: number;
     totalWithdrawnCents: number;
-    referralEarningsCents: number;
+    referralEarningsGpc: number;
   } | null>(null);
   const [transactions, setTransactions] = useState<{ type: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +47,7 @@ export default function EarningsPage() {
             earningsMonthCents: dash.earningsMonthCents ?? 0,
             totalEarningsCents: dash.totalEarningsCents ?? tx.totalEarningsCents ?? 0,
             totalWithdrawnCents: dash.totalWithdrawnCents ?? tx.totalWithdrawnCents ?? 0,
-            referralEarningsCents: dash.referralEarningsCents ?? 0,
+            referralEarningsGpc: dash.referralEarningsGpc ?? 0,
           });
           setTransactions(tx.transactions ?? []);
         });
@@ -99,8 +103,8 @@ export default function EarningsPage() {
           </div>
         </div>
         <div className="flex justify-between items-baseline mb-4">
-          <p className="text-sm text-fintech-muted">Referral earnings</p>
-          <p className="text-lg font-semibold text-fintech-money">{formatCents(data.referralEarningsCents)}</p>
+          <p className="text-sm text-fintech-muted">Referral earnings (GPC)</p>
+          <p className="text-lg font-semibold text-fintech-money">{formatGpc(data.referralEarningsGpc)}</p>
         </div>
         <Link
           href="/dashboard/transactions"

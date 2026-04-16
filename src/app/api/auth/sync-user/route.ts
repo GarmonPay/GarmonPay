@@ -4,11 +4,11 @@ import { getClientIp } from "@/lib/rate-limit";
 import { isAtLeastAge } from "@/lib/signup-compliance";
 import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
 import { sendWelcomeEmail } from "@/lib/send-email";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditCoins } from "@/lib/coins";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Referrer bonus when someone signs up with their code (USD cents). */
-const REFERRAL_SIGNUP_BONUS_CENTS = 50;
+/** Referrer bonus when someone signs up with their code (GPC; 100 GPC = $1). */
+const REFERRAL_SIGNUP_BONUS_GPC = 50;
 
 async function ensureWalletBalanceRow(supabase: SupabaseClient, userId: string): Promise<void> {
   const { error: wbErr } = await supabase.from("wallet_balances").insert({
@@ -218,17 +218,19 @@ export async function POST(req: Request) {
           });
           referralApplied = true;
           const refKey = `referral_signup_bonus_${id}`;
-          const bonus = await walletLedgerEntry(
+          const bonus = await creditCoins(
             referrerId,
-            "referral_bonus",
-            REFERRAL_SIGNUP_BONUS_CENTS,
-            refKey
+            0,
+            REFERRAL_SIGNUP_BONUS_GPC,
+            `Referral signup bonus — ${REFERRAL_SIGNUP_BONUS_GPC} GPC`,
+            refKey,
+            "referral_bonus"
           );
           if (
             bonus.success === false &&
-            !/duplicate/i.test((bonus as { message?: string }).message ?? "")
+            !/duplicate/i.test((bonus.message ?? "").toLowerCase())
           ) {
-            console.warn("sync-user referral bonus:", (bonus as { message?: string }).message);
+            console.warn("sync-user referral bonus:", bonus.message);
           }
         }
       } catch (refErr) {

@@ -2,7 +2,7 @@
  * Shared ad timing constants + referral upgrade commissions.
  */
 import { createAdminClient } from "@/lib/supabase";
-import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { creditCoins } from "@/lib/coins";
 
 export const MIN_VIDEO_WATCH_SECONDS_DEFAULT = 5;
 export const MIN_BANNER_DWELL_MS = 800;
@@ -58,7 +58,7 @@ export async function creditReferralUpgradeCommission(params: {
   upgradePlan: UpgradePlan;
   stripeSessionId?: string | null;
   stripeSubscriptionId?: string | null;
-}): Promise<{ granted: boolean; amountCents?: number; referrerId?: string; reason?: string }> {
+}): Promise<{ granted: boolean; amountGpc?: number; referrerId?: string; reason?: string }> {
   const supabase = createAdminClient();
   if (!supabase) return { granted: false, reason: "supabase_unavailable" };
 
@@ -79,28 +79,38 @@ export async function creditReferralUpgradeCommission(params: {
   if (!(referrer as { id?: string } | null)?.id) return { granted: false, reason: "referrer_missing" };
 
   const referrerPlan = normalizeMembershipPlan((referrer as { membership?: string }).membership);
+  /** Commission in USD cents; same integer equals GPC credited (100 GPC = $1). */
   const amountCents = upgradeCommissionCents(referrerPlan, params.upgradePlan);
+  const amountGpc = amountCents;
 
   if (!(await isSafeToCredit(referredBy, amountCents))) {
     return { granted: false, reason: "unsafe_credit" };
   }
 
-  const ledger = await walletLedgerEntry(
+  const ref = `referral_upgrade_${params.upgradedUserId}_${params.upgradePlan}`;
+  const credit = await creditCoins(
     referredBy,
-    "commission_payout",
-    amountCents,
-    `referral_upgrade_${params.upgradedUserId}_${params.upgradePlan}`
+    0,
+    amountGpc,
+    `Referral upgrade commission (${params.upgradePlan}) — ${amountGpc} GPC`,
+    ref,
+    "referral_upgrade"
   );
-  if (!ledger.success) return { granted: false, reason: ledger.message };
+  if (!credit.success) {
+    if ((credit.message ?? "").toLowerCase().includes("duplicate")) {
+      return { granted: true, amountGpc, referrerId: referredBy };
+    }
+    return { granted: false, reason: credit.message ?? "credit_failed" };
+  }
 
   await supabase.from("transactions").insert({
     user_id: referredBy,
     type: "referral_upgrade",
-    amount: amountCents,
+    amount: amountGpc,
     status: "completed",
     description: `Referral upgrade commission (${params.upgradePlan})`,
     reference_id: `referral_upgrade_${params.upgradedUserId}`,
   });
 
-  return { granted: true, amountCents, referrerId: referredBy };
+  return { granted: true, amountGpc, referrerId: referredBy };
 }

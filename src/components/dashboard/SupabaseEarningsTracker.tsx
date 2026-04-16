@@ -59,6 +59,10 @@ function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function formatGpc(gpc: number) {
+  return `${gpc.toLocaleString()} GPC`;
+}
+
 type Props = {
   userId: string;
   /** Normalized tier (display / fallback). */
@@ -68,7 +72,7 @@ type Props = {
   dashboardReferrals: {
     totalReferrals: number;
     activeReferralSubscriptions: number;
-    referralEarningsCents: number;
+    referralEarningsGpc: number;
   };
 };
 
@@ -184,7 +188,7 @@ export function SupabaseEarningsTracker({
           <div className="flex justify-between gap-4">
             <dt className="text-xs text-fintech-muted">Total earned from referrals</dt>
             <dd className="font-semibold text-fintech-success">
-              {formatCents(dashboardReferrals.referralEarningsCents)}
+              {formatGpc(dashboardReferrals.referralEarningsGpc)}
             </dd>
           </div>
           <div className="flex justify-between gap-4 border-t border-white/[0.06] pt-3">

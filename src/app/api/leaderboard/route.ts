@@ -12,20 +12,20 @@ export async function GET() {
     });
   }
 
-  let topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }> = [];
-  let topEarners: Array<{ userId: string; email: string; totalEarningsCents: number }> = [];
+  let topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }> = [];
+  let topEarners: Array<{ userId: string; email: string; totalEarningsGpc: number }> = [];
   try {
     const refLeaderboard = await getReferralLeaderboard(30);
     topReferrers = refLeaderboard.map((r) => ({
       userId: r.userId,
       email: r.email,
       totalReferrals: r.totalReferrals,
-      totalEarningsCents: r.totalEarningsCents,
+      totalEarningsGpc: r.totalEarningsGpc,
     }));
     topEarners = [...refLeaderboard]
-      .sort((a, b) => b.totalEarningsCents - a.totalEarningsCents)
+      .sort((a, b) => b.totalEarningsGpc - a.totalEarningsGpc)
       .slice(0, 20)
-      .map((r) => ({ userId: r.userId, email: r.email, totalEarningsCents: r.totalEarningsCents }));
+      .map((r) => ({ userId: r.userId, email: r.email, totalEarningsGpc: r.totalEarningsGpc }));
   } catch {
     // viral tables may be missing
   }

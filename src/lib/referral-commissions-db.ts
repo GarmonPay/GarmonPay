@@ -65,6 +65,7 @@ export async function processSubscriptionBilling(subscriptionId: string): Promis
   success: boolean;
   message?: string;
   commissionPaid?: boolean;
+  commissionGpc?: number;
   commissionCents?: number;
   referrerId?: string;
   reason?: string;
@@ -77,6 +78,7 @@ export async function processSubscriptionBilling(subscriptionId: string): Promis
     success: boolean;
     message?: string;
     commissionPaid?: boolean;
+    commissionGpc?: number;
     commissionCents?: number;
     referrerId?: string;
     reason?: string;
@@ -103,8 +105,8 @@ export async function getActiveReferralSubscriptionsCount(userId: string): Promi
   return count ?? 0;
 }
 
-/** User: monthly referral commission income (current month, from transactions type=referral_commission). */
-export async function getMonthlyReferralCommissionCents(userId: string): Promise<number> {
+/** User: monthly referral commission income in GPC (from transactions type=referral_commission). */
+export async function getMonthlyReferralCommissionGpc(userId: string): Promise<number> {
   const start = new Date();
   start.setDate(1);
   start.setHours(0, 0, 0, 0);
@@ -120,8 +122,8 @@ export async function getMonthlyReferralCommissionCents(userId: string): Promise
   return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
 }
 
-/** User: lifetime referral commission income. */
-export async function getLifetimeReferralCommissionCents(userId: string): Promise<number> {
+/** User: lifetime referral commission income in GPC. */
+export async function getLifetimeReferralCommissionGpc(userId: string): Promise<number> {
   const { data, error } = await supabase()
     .from("transactions")
     .select("amount")
@@ -134,7 +136,7 @@ export async function getLifetimeReferralCommissionCents(userId: string): Promis
 
 /** User: list active referral commission rows (referred user, tier, amount per month). */
 export async function getActiveReferralCommissionsForUser(userId: string): Promise<
-  { referredUserId: string; subscriptionId: string; membershipTier: string; commissionAmountCents: number; lastPaidDate: string | null }[]
+  { referredUserId: string; subscriptionId: string; membershipTier: string; commissionAmountGpc: number; lastPaidDate: string | null }[]
 > {
   const { data, error } = await supabase()
     .from("referral_commissions")
@@ -151,13 +153,13 @@ export async function getActiveReferralCommissionsForUser(userId: string): Promi
     referredUserId: r.referred_user_id,
     subscriptionId: r.subscription_id,
     membershipTier: subMap.get(r.subscription_id) ?? "starter",
-    commissionAmountCents: Number(r.commission_amount),
+    commissionAmountGpc: Number(r.commission_amount),
     lastPaidDate: r.last_paid_date,
   }));
 }
 
-/** Admin: total recurring commissions paid (sum of transactions type=referral_commission). */
-export async function getTotalRecurringCommissionsPaidCents(): Promise<number> {
+/** Admin: total recurring commissions paid in GPC (sum of transactions type=referral_commission). */
+export async function getTotalRecurringCommissionsPaidGpc(): Promise<number> {
   const { data, error } = await supabase()
     .from("transactions")
     .select("amount")

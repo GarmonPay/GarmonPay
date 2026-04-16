@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import {
   getTotalReferralsCount,
-  getTotalCommissionsPaidCents,
+  getTotalCommissionsPaidGpc,
   getLeaderboard,
 } from "@/lib/viral-referral-db";
 import { createAdminClient } from "@/lib/supabase";
@@ -17,9 +17,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [totalReferrals, totalCommissionsPaidCents, leaderboard] = await Promise.all([
+    const [totalReferrals, totalCommissionsPaidGpc, leaderboard] = await Promise.all([
       getTotalReferralsCount(),
-      getTotalCommissionsPaidCents(),
+      getTotalCommissionsPaidGpc(),
       getLeaderboard(20),
     ]);
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       totalReferrals,
-      totalCommissionsPaidCents,
+      totalCommissionsPaidGpc,
       activeReferrals,
       leaderboard,
     });
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     console.error("Admin referrals-stats error:", e);
     return NextResponse.json({
       totalReferrals: 0,
-      totalCommissionsPaidCents: 0,
+      totalCommissionsPaidGpc: 0,
       activeReferrals: 0,
       leaderboard: [],
       message: "Viral referral tables may not exist. Run migration 20250307000000.",

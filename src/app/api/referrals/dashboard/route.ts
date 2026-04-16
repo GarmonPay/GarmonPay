@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { getReferralLink } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase";
-import { countUserReferrals, getUserReferralEarningsCents } from "@/lib/viral-db";
+import { countUserReferrals, getUserReferralEarningsGpc } from "@/lib/viral-db";
 import {
   getActiveReferralSubscriptionsCount,
-  getMonthlyReferralCommissionCents,
-  getLifetimeReferralCommissionCents,
+  getMonthlyReferralCommissionGpc,
+  getLifetimeReferralCommissionGpc,
 } from "@/lib/referral-commissions-db";
 
 /** Mask email for display (privacy). */
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   if (!supabase) {
     return NextResponse.json({
-      summary: { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeCents: 0, lifetimeReferralEarningsCents: 0, referralCode: "" },
+      summary: { totalReferrals: 0, activeReferrals: 0, monthlyReferralIncomeGpc: 0, lifetimeReferralEarningsGpc: 0, referralCode: "" },
       referralLink: "",
       referredUsers: [],
       earningsHistory: [],
@@ -48,23 +48,23 @@ export async function GET(request: Request) {
     const [
       totalReferrals,
       activeReferrals,
-      monthlyReferralIncomeCents,
-      lifetimeOneTimeCents,
-      lifetimeRecurringCents,
+      monthlyReferralIncomeGpc,
+      lifetimeOneTimeGpc,
+      lifetimeRecurringGpc,
     ] = await Promise.all([
       countUserReferrals(userId),
       getActiveReferralSubscriptionsCount(userId),
-      getMonthlyReferralCommissionCents(userId),
-      getUserReferralEarningsCents(userId),
-      getLifetimeReferralCommissionCents(userId),
+      getMonthlyReferralCommissionGpc(userId),
+      getUserReferralEarningsGpc(userId),
+      getLifetimeReferralCommissionGpc(userId),
     ]);
-    const lifetimeReferralEarningsCents = lifetimeOneTimeCents + lifetimeRecurringCents;
+    const lifetimeReferralEarningsGpc = lifetimeOneTimeGpc + lifetimeRecurringGpc;
 
     const summary = {
       totalReferrals,
       activeReferrals,
-      monthlyReferralIncomeCents,
-      lifetimeReferralEarningsCents,
+      monthlyReferralIncomeGpc,
+      lifetimeReferralEarningsGpc,
       referralCode,
     };
 
@@ -136,8 +136,8 @@ export async function GET(request: Request) {
       email: maskEmail(u.email),
       membership: (tierByUser.get(u.id) ?? u.membership ?? "starter").toString(),
       status: activeByUser.has(u.id) ? "Active" : "Inactive",
-      monthlyCommissionCents: monthlyByUser.get(u.id) ?? 0,
-      totalEarnedCents: earnedByReferred.get(u.id) ?? 0,
+      monthlyCommissionGpc: monthlyByUser.get(u.id) ?? 0,
+      totalEarnedGpc: earnedByReferred.get(u.id) ?? 0,
     }));
 
     const earningsHistory = await getEarningsHistory(supabase, userId);
@@ -154,8 +154,8 @@ export async function GET(request: Request) {
     const emptySummary = {
       totalReferrals: 0,
       activeReferrals: 0,
-      monthlyReferralIncomeCents: 0,
-      lifetimeReferralEarningsCents: 0,
+      monthlyReferralIncomeGpc: 0,
+      lifetimeReferralEarningsGpc: 0,
       referralCode: "",
     };
     return NextResponse.json({
@@ -179,7 +179,7 @@ async function getEarningsHistory(supabase: NonNullable<ReturnType<typeof create
   return (data ?? []).map((r: { id: string; type: string; amount: number; status: string; description: string | null; created_at: string }) => ({
     id: r.id,
     type: r.type,
-    amountCents: Number(r.amount),
+    amountGpc: Number(r.amount),
     status: r.status,
     description: r.description ?? (r.type === "referral_commission" ? "Recurring commission" : "Referral bonus"),
     createdAt: r.created_at,

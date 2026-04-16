@@ -3,7 +3,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import {
   getCommissionConfig,
   setCommissionPercentage,
-  getTotalRecurringCommissionsPaidCents,
+  getTotalRecurringCommissionsPaidGpc,
   getActiveReferralSubscriptionsCountAdmin,
   type MembershipTier,
 } from "@/lib/referral-commissions-db";
@@ -17,27 +17,27 @@ export async function GET(request: Request) {
   if (!createAdminClient()) {
     return NextResponse.json({
       config: [],
-      totalRecurringCommissionsPaidCents: 0,
+      totalRecurringCommissionsPaidGpc: 0,
       activeReferralSubscriptions: 0,
       message: "Set SUPABASE_SERVICE_ROLE_KEY for referral data.",
     });
   }
   try {
-    const [config, totalPaidCents, activeReferralSubs] = await Promise.all([
+    const [config, totalPaidGpc, activeReferralSubs] = await Promise.all([
       getCommissionConfig(),
-      getTotalRecurringCommissionsPaidCents(),
+      getTotalRecurringCommissionsPaidGpc(),
       getActiveReferralSubscriptionsCountAdmin(),
     ]);
     return NextResponse.json({
       config: config.map((c) => ({ tier: c.membership_tier, percentage: c.commission_percentage })),
-      totalRecurringCommissionsPaidCents: totalPaidCents,
+      totalRecurringCommissionsPaidGpc: totalPaidGpc,
       activeReferralSubscriptions: activeReferralSubs,
     });
   } catch (e) {
     console.error("Admin referral commissions error:", e);
     return NextResponse.json({
       config: [],
-      totalRecurringCommissionsPaidCents: 0,
+      totalRecurringCommissionsPaidGpc: 0,
       activeReferralSubscriptions: 0,
       message: "Referral tables may not exist. Run migrations.",
     });

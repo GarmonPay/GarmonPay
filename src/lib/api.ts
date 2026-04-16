@@ -305,11 +305,11 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     membershipPaymentSource?: string | null;
     stripeSubscriptionId?: string | null;
     referralCode: string;
-    referralEarningsCents: number;
+    referralEarningsGpc: number;
     totalReferrals: number;
     activeReferralSubscriptions?: number;
-    monthlyReferralCommissionCents?: number;
-    lifetimeReferralCommissionCents?: number;
+    monthlyReferralCommissionGpc?: number;
+    lifetimeReferralCommissionGpc?: number;
     announcements: { id: string; title: string; body: string; publishedAt: string }[];
     availableAds: { id: string; title: string; rewardCents: number }[];
     /** Cumulative paid-out reportable amount (e.g. withdrawals marked paid). */
@@ -348,7 +348,7 @@ export async function getReferralCommissions(accessTokenOrUserId: string, isToke
       referredUserId: string;
       subscriptionId: string;
       membershipTier: string;
-      commissionAmountCents: number;
+      commissionAmountGpc: number;
       lastPaidDate: string | null;
     }>;
   }>("/referral-commissions", { headers: authHeaders(accessTokenOrUserId, isToken) });
@@ -375,8 +375,8 @@ export async function getReferralDashboard(accessTokenOrUserId: string, isToken:
     summary: {
       totalReferrals: number;
       activeReferrals: number;
-      monthlyReferralIncomeCents: number;
-      lifetimeReferralEarningsCents: number;
+      monthlyReferralIncomeGpc: number;
+      lifetimeReferralEarningsGpc: number;
       referralCode: string;
     };
     referralLink: string;
@@ -385,13 +385,13 @@ export async function getReferralDashboard(accessTokenOrUserId: string, isToken:
       email: string;
       membership: string;
       status: string;
-      monthlyCommissionCents: number;
-      totalEarnedCents: number;
+      monthlyCommissionGpc: number;
+      totalEarnedGpc: number;
     }>;
     earningsHistory: Array<{
       id: string;
       type: string;
-      amountCents: number;
+      amountGpc: number;
       status: string;
       description: string;
       createdAt: string;
@@ -421,15 +421,15 @@ export async function convertToAdCredit(accessTokenOrUserId: string, isToken: bo
 
 export async function getLeaderboard(accessTokenOrUserId: string, isToken: boolean) {
   return api<{
-    topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsCents: number }>;
-    topEarners: Array<{ userId: string; email: string; totalEarningsCents: number }>;
+    topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }>;
+    topEarners: Array<{ userId: string; email: string; totalEarningsGpc: number }>;
   }>("/leaderboard", { headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 
 export async function getGrowth(accessTokenOrUserId: string, isToken: boolean) {
   return api<{
     totalReferrals: number;
-    referralEarningsCents: number;
+    referralEarningsGpc: number;
     leaderboardRank: number | null;
     badges: Array<{ badgeId: string; code: string; name: string; description: string; icon: string; earnedAt: string }>;
     canClaimDaily: boolean;
