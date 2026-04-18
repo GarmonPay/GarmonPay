@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 
@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase";
  * POST /api/celo/room/[roomId]/chat — send table message (service insert; bypasses flaky client RLS).
  */
 export async function POST(req: Request, { params }: { params: Promise<{ roomId: string }> }) {
-  const userId = await getAuthUserIdStrict(req);
+  const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

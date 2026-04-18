@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -9,7 +9,7 @@ import { celoQaLog } from "@/lib/celo-qa-log";
 import { countPlayersWithPositiveStake } from "@/lib/celo-room-rules";
 
 export async function POST(req: Request) {
-  const userId = await getAuthUserIdStrict(req);
+  const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

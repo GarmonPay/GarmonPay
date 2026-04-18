@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
@@ -11,7 +11,7 @@ import { celoSameAuthUserId, isRoomEmptyForDelete } from "@/lib/celo-room-rules"
  * Clears celo_audit_log for the room before delete (FK); migration CASCADE too.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
-  const userId = await getAuthUserIdStrict(_req);
+  const userId = await getAuthUserIdBearerOrCookie(_req);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

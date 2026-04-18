@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
 import { creditGpayIdempotent } from "@/lib/coins";
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
   try {
     console.error("[celo/room/create] step: start");
-    const userId = await getAuthUserIdStrict(req);
+    const userId = await getAuthUserIdBearerOrCookie(req);
     if (!userId) {
       celoQaLog("room_create_failure", { kind: "auth", httpStatus: 401 });
       console.error("[celo/room/create] step: auth failed");

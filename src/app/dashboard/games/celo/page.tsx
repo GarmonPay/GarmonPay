@@ -275,9 +275,22 @@ export default function CeloLobbyPage() {
     setCreating(true);
     setCreateError("");
     try {
+      const session = await getSessionAsync();
+      if (process.env.NODE_ENV === "development") {
+        console.log("SESSION:", session);
+        console.log("USER:", session?.userId);
+      }
+      if (!session?.userId) {
+        setCreateError("Not authenticated");
+        return;
+      }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session.accessToken) {
+        headers.Authorization = `Bearer ${session.accessToken}`;
+      }
       const res = await fetch("/api/celo/room/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify({
           name: form.name.trim(),
@@ -424,11 +437,12 @@ export default function CeloLobbyPage() {
           width: 100%;
           max-width: 480px;
           border-radius: 20px 20px 0 0;
+          max-height: min(92dvh, 900px);
         }
         @media (min-width: 768px) {
           .celo-modal-panel {
             border-radius: 20px;
-            max-height: 90vh;
+            max-height: min(90dvh, 900px);
           }
         }
         .celo-hero-cta {
