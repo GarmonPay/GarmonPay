@@ -104,7 +104,7 @@ export default function TransactionsPage() {
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
         <h1 className="text-xl font-bold text-white mb-2">Transaction History</h1>
         <p className="text-sm text-fintech-muted mb-6">
-          Full history of earnings, withdrawals, ad credit conversions, and referrals. Styled like a bank statement.
+          Full history of earnings, referrals, ad credit conversions, and account activity.
         </p>
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>

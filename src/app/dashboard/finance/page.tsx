@@ -4,17 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
-import { getDashboard, getWithdrawals } from "@/lib/api";
+import { getDashboard } from "@/lib/api";
 import { normalizeUserMembershipTier, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { MembershipPlanPicker } from "@/components/dashboard/MembershipPlanPicker";
 import { useCoins } from "@/hooks/useCoins";
-import { formatUsdCents, localeInt } from "@/lib/format-number";
+import { localeInt } from "@/lib/format-number";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-function formatCents(cents: unknown) {
-  return formatUsdCents(cents);
-}
 
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
   return isToken
@@ -24,11 +20,8 @@ function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<stri
 
 export default function FinancePage() {
   const router = useRouter();
-  const { sweepsCoins } = useCoins();
+  const { goldCoins, gpayCoins, loading: coinsLoading } = useCoins();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
-  const [balanceFetchError, setBalanceFetchError] = useState<string | null>(null);
-  const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -46,13 +39,7 @@ export default function FinancePage() {
         const tokenOrId = s.accessToken ?? s.userId;
         const isToken = !!s.accessToken;
         setSession({ tokenOrId, isToken });
-        return Promise.all([
-          getDashboard(tokenOrId, isToken),
-          getWithdrawals(tokenOrId, isToken).catch(() => ({ withdrawals: [], minWithdrawalCents: 100 })),
-        ]).then(([dash, w]) => {
-          setBalanceCents(dash.balanceCents ?? null);
-          setBalanceFetchError(dash.balanceError ?? null);
-          setWithdrawals(w?.withdrawals ?? []);
+        return getDashboard(tokenOrId, isToken).then((dash) => {
           setMembershipPlan(normalizeUserMembershipTier(dash.membershipTier));
         });
       })
@@ -82,10 +69,6 @@ export default function FinancePage() {
       </div>
     );
   }
-
-  const pending = withdrawals.filter((w) => w.status === "pending").length;
-  const completed = withdrawals.filter((w) => ["approved", "paid"].includes(w.status)).length;
-  const totalAvailableCents = balanceCents != null ? balanceCents + sweepsCoins : null;
 
   async function startMembershipCheckout(tier: MarketingPlanId) {
     if (!session) return;
@@ -117,45 +100,29 @@ export default function FinancePage() {
     <div className="space-y-4 tablet:space-y-6">
       <div className="animate-slide-up card-lux p-4 tablet:p-6">
         <h1 className="mb-2 text-xl font-bold text-white">Finance</h1>
-        <p className="mb-4 text-sm text-fintech-muted tablet:mb-6">Balance and withdrawal management.</p>
+        <p className="mb-4 text-sm text-fintech-muted tablet:mb-6">
+          Game balances (GC &amp; GPC) and membership. Use GPay tokens for on-chain transfers from the wallet.
+        </p>
         <div className="mb-6 grid grid-cols-1 gap-4 tablet:grid-cols-2">
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Available Balance</p>
-            <p className="text-[10px] text-fintech-muted mt-0.5">USD wallet + GPay Coins (face value)</p>
-            <p className="text-2xl font-bold text-fintech-money mt-1">
-              {balanceFetchError ? (
-                <span className="text-red-400 text-base font-medium">{balanceFetchError}</span>
-              ) : totalAvailableCents != null ? (
-                formatCents(totalAvailableCents)
-              ) : (
-                "—"
-              )}
+            <p className="text-xs text-fintech-muted uppercase">Gold Coins</p>
+            <p className="text-2xl font-bold text-[#F5C842] mt-1 tabular-nums">
+              {coinsLoading ? "…" : localeInt(goldCoins)} GC
             </p>
-            {balanceCents != null && !balanceFetchError && (balanceCents > 0 || sweepsCoins > 0) ? (
-              <p className="mt-2 text-[11px] text-fintech-muted">
-                {formatCents(balanceCents)} USD · {localeInt(sweepsCoins)} GPC
-              </p>
-            ) : null}
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Withdrawals</p>
-            <p className="text-lg font-semibold text-white mt-1">
-              Pending: {pending} · Completed: {completed}
+            <p className="text-xs text-fintech-muted uppercase">GPay Coins (GPC)</p>
+            <p className="text-2xl font-bold text-fintech-highlight mt-1 tabular-nums">
+              {coinsLoading ? "…" : localeInt(gpayCoins)} GPC
             </p>
           </div>
         </div>
         <div className="flex flex-col gap-3 tablet:flex-row tablet:flex-wrap">
           <Link
-            href="/wallet"
+            href="/dashboard/wallet"
             className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-highlight/90 px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
           >
-            Add funds (Wallet)
-          </Link>
-          <Link
-            href="/dashboard/withdraw"
-            className="btn-press min-h-touch inline-flex items-center justify-center rounded-xl bg-fintech-accent px-5 py-3 font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
-          >
-            Withdraw
+            Open wallet
           </Link>
           <Link
             href="/dashboard/transactions"
@@ -165,7 +132,6 @@ export default function FinancePage() {
           </Link>
         </div>
 
-        {/* Membership + Stripe Connect — same tiers as /pricing and dashboard */}
         <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
           <h2 className="text-sm font-semibold text-white mb-1">Membership (Stripe)</h2>
           <p className="text-sm text-fintech-muted mb-3">
@@ -197,7 +163,7 @@ export default function FinancePage() {
               }}
             />
           </div>
-          <p className="text-xs text-fintech-muted mb-2">Creator / seller payouts</p>
+          <p className="text-xs text-fintech-muted mb-2">Creators &amp; sellers: Stripe Connect for payouts</p>
           <button
             type="button"
             disabled={!session || connectLoading}
@@ -221,7 +187,7 @@ export default function FinancePage() {
             }}
             className="btn-press min-h-touch w-full tablet:w-auto rounded-xl border border-fintech-accent/50 px-4 py-2.5 text-sm font-medium text-fintech-accent hover:bg-fintech-accent/10 disabled:opacity-50"
           >
-            {connectLoading ? "Redirecting…" : "Set up payouts (Stripe Connect)"}
+            {connectLoading ? "Redirecting…" : "Set up Stripe Connect (creators)"}
           </button>
         </div>
       </div>

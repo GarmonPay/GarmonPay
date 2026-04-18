@@ -199,14 +199,12 @@ export default function EarnPage() {
             <p className="text-xs text-fintech-muted uppercase">All time</p>
             <p className="text-lg font-bold text-fintech-money">${totalDollars.toFixed(2)}</p>
           </div>
-          {(balanceCents ?? 0) >= 2000 && (
-            <Link
-              href="/dashboard/withdraw"
-              className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              Withdraw
-            </Link>
-          )}
+          <Link
+            href="/dashboard/wallet"
+            className="rounded-xl border border-white/20 bg-black/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+          >
+            Game wallet
+          </Link>
         </div>
         <div className="mt-2">
           <p className="text-xs text-fintech-muted mb-1">

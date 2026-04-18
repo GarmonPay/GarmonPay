@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
-import { MAX_PAYMENT_CENTS, MIN_WALLET_FUND_CENTS } from "@/lib/security";
 import { gpcToUsdDisplay } from "@/lib/coins";
 import { useCoins } from "@/hooks/useCoins";
 import { GOLD_COIN_PACKAGES, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
@@ -20,15 +19,6 @@ type CoinEntry = {
   gold_coins: number;
   gpay_coins: number;
   description: string | null;
-  created_at: string;
-};
-
-type LedgerEntry = {
-  id: string;
-  type: string;
-  amount: number;
-  balance_after: number;
-  reference: string | null;
   created_at: string;
 };
 
@@ -49,14 +39,10 @@ function WalletDashboardContent() {
     searchParams.get("funded") === "true" ||
     searchParams.get("success") === "1";
 
-  const { goldCoins, gpayCoins, gpayTokens, usdBalance, loading: coinsLoading, refresh } = useCoins();
+  const { goldCoins, gpayCoins, gpayTokens, loading: coinsLoading, refresh } = useCoins();
   const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
   const [tierRaw, setTierRaw] = useState<string>("free");
   const [coinHistory, setCoinHistory] = useState<CoinEntry[]>([]);
-  const [history, setHistory] = useState<LedgerEntry[]>([]);
-  const [depositError, setDepositError] = useState<string | null>(null);
-  const [depositLoading, setDepositLoading] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
   const [gpayUsd, setGpayUsd] = useState<number | null>(null);
 
   const [showBuy, setShowBuy] = useState(false);
@@ -101,11 +87,7 @@ function WalletDashboardContent() {
   useEffect(() => {
     if (!user?.accessToken) return;
     const headers: Record<string, string> = { Authorization: `Bearer ${user.accessToken}` };
-    fetch("/api/wallet/history?limit=20", { headers })
-      .then((res) => (res.ok ? res.json() : Promise.resolve({ entries: [] })))
-      .then((data) => setHistory(data.entries ?? []))
-      .catch(() => setHistory([]));
-    fetch("/api/coins/history?limit=25", { headers })
+    fetch("/api/coins/history?limit=25", { headers, credentials: "include" })
       .then((res) => (res.ok ? res.json() : Promise.resolve({ entries: [] })))
       .then((data) => setCoinHistory(data.entries ?? []))
       .catch(() => setCoinHistory([]));
@@ -121,40 +103,6 @@ function WalletDashboardContent() {
   useEffect(() => {
     if (user?.accessToken && (success || purchased)) void refresh();
   }, [user?.accessToken, success, purchased, refresh]);
-
-  const handleDeposit = async () => {
-    const amount = Number(depositAmount);
-    const minDollars = MIN_WALLET_FUND_CENTS / 100;
-    const maxDollars = MAX_PAYMENT_CENTS / 100;
-    if (!Number.isFinite(amount) || amount < minDollars || amount > maxDollars) {
-      setDepositError(
-        `Enter an amount between $${minDollars.toFixed(2)} and $${(Number(maxDollars) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
-      );
-      return;
-    }
-    setDepositError(null);
-    setDepositLoading(true);
-    try {
-      const session = await getSessionAsync();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-      const res = await fetch("/api/wallet/deposit", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ amount }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-      setDepositError(data?.error || (res.status === 401 ? "Please sign in to deposit." : "Deposit unavailable."));
-    } catch {
-      setDepositError("Network error.");
-    } finally {
-      setDepositLoading(false);
-    }
-  };
 
   const runConvert = async () => {
     const gc = Math.floor(Number(convertGc));
@@ -271,6 +219,10 @@ function WalletDashboardContent() {
         </div>
       )}
 
+      <p className="text-center text-sm text-violet-200/80 px-2">
+        Your game balance: Gold Coins (GC), GPay Coins (GPC), and $GPAY tokens — use GPay tokens for on-chain transfers and trading.
+      </p>
+
       {/* SECTION 1 — Gold Coins */}
       <section className="rounded-xl border border-[#F5C842]/50 bg-black/30 p-6 space-y-3">
         <div className="flex items-center justify-between gap-2">
@@ -344,7 +296,7 @@ function WalletDashboardContent() {
         <p className="text-sm text-emerald-200/85">
           {gpayUsd != null ? `≈ $${gpayUsd.toFixed(4)} USD per token (DexScreener)` : "Live price: configure GPAY_TOKEN_MINT"}
         </p>
-        <p className="text-xs text-fintech-muted">Trade on Raydium for real cash (USDC)</p>
+        <p className="text-xs text-fintech-muted">Trade on Raydium (USDC pairs)</p>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
@@ -354,7 +306,7 @@ function WalletDashboardContent() {
             }}
             className="rounded-xl border border-[#10B981]/60 px-4 py-2.5 text-sm font-semibold text-emerald-100"
           >
-            WITHDRAW TO WALLET
+            SEND $GPAY TO WALLET
           </button>
           <a
             href="https://raydium.io/"
@@ -367,58 +319,8 @@ function WalletDashboardContent() {
         </div>
       </section>
 
-      {/* USD wallet (legacy top-up) */}
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6 space-y-3">
-        <h2 className="text-lg font-bold text-white">USD wallet (Stripe)</h2>
-        <p className="text-fintech-muted text-sm">
-          Add USD for eligible withdrawals and services. Gold Coin game packs use the buttons above.
-        </p>
-        {depositError && <p className="text-red-400 text-sm">{depositError}</p>}
-        <input
-          type="number"
-          min={MIN_WALLET_FUND_CENTS / 100}
-          max={MAX_PAYMENT_CENTS / 100}
-          step="0.01"
-          placeholder={`Amount ($${(MIN_WALLET_FUND_CENTS / 100).toFixed(0)}+)`}
-          value={depositAmount}
-          onChange={(e) => setDepositAmount(e.target.value)}
-          className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-white mb-2"
-        />
-        <button
-          type="button"
-          onClick={handleDeposit}
-          disabled={depositLoading}
-          className="w-full py-3 rounded-xl bg-fintech-accent text-white font-semibold disabled:opacity-60"
-        >
-          {depositLoading ? "Redirecting…" : "Add USD"}
-        </button>
-      </div>
-
-      {/* Ledgers */}
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white mb-3">USD ledger</h2>
-        {history.length === 0 ? (
-          <p className="text-fintech-muted text-sm">No entries yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {history.map((e) => (
-              <li key={e.id} className="flex justify-between items-center py-2 border-b border-white/5 text-sm">
-                <span className="text-fintech-muted">{formatType(e.type)}</span>
-                <span className={e.amount >= 0 ? "text-green-400" : "text-red-400"}>
-                  {e.amount >= 0 ? "+" : ""}
-                  {(Number(e.amount ?? 0) / 100).toFixed(2)}
-                </span>
-                <span className="text-fintech-muted text-xs">
-                  {e.created_at ? new Date(e.created_at).toLocaleDateString() : "—"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-bold text-white mb-3">Coin activity</h2>
+        <h2 className="text-lg font-bold text-white mb-3">Gold & GPay Coin activity</h2>
         {coinHistory.length === 0 ? (
           <p className="text-fintech-muted text-sm">No coin transactions yet.</p>
         ) : (
@@ -601,7 +503,7 @@ function WalletDashboardContent() {
                   }}
                   className={`w-full mb-3 rounded-lg border px-3 py-2 text-left ${redeemCustodial ? "border-[#10B981]" : "border-white/20"}`}
                 >
-                  KEEP IN GARMONPAY — we hold securely; withdraw anytime
+                  KEEP IN GARMONPAY — we hold securely; transfer out anytime
                 </button>
                 {redeemErr && <p className="text-red-400 text-sm mb-2">{redeemErr}</p>}
                 <button

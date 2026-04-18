@@ -43,6 +43,7 @@ const tabs: {
     isActive: (p) =>
       p.startsWith("/dashboard/coins/buy") ||
       p.startsWith("/dashboard/buy-coins") ||
+      p.startsWith("/dashboard/wallet") ||
       p.startsWith(APP_SHELL_LINKS.convert),
   },
   {

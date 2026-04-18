@@ -5,7 +5,7 @@ import { getUserCoins } from "@/lib/coins";
 
 /**
  * GET /api/coins/balance
- * USD (wallet_balances) + GC + GPC + $GPAY for the authenticated user.
+ * GC + GPC + $GPAY from `users`; `balance_cents` is legacy USD wallet row when present (not shown in app UI).
  */
 export async function GET(request: Request) {
   const userId = await getAuthUserIdStrict(request);

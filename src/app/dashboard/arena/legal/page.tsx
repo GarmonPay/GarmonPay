@@ -20,7 +20,7 @@ export default function ArenaLegalPage() {
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-white mb-2">Verification</h2>
         <p className="text-[#9ca3af] text-sm">
-          We may require identity or payment verification for withdrawals and high-value play. Failure to comply may result in account suspension and forfeiture of funds.
+          We may require identity or payment verification for high-value play or payouts. Failure to comply may result in account suspension and forfeiture of funds.
         </p>
       </section>
 

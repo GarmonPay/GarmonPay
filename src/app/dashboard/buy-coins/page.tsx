@@ -70,7 +70,7 @@ export default function BuyCoinsPage() {
       <div className="rounded-xl border border-white/10 bg-fintech-bg-card p-8 text-center text-fintech-muted space-y-3">
         <p>Sign in to purchase Gold Coins.</p>
         <p className="text-sm">
-          Looking for subscription perks (referral rates, ad earn, withdrawals)?{" "}
+          Looking for subscription perks (referral rates, ad earn, higher tiers)?{" "}
           <Link href="/pricing" className="text-violet-300 font-medium hover:underline">
             See membership pricing
           </Link>

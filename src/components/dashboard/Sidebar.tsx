@@ -102,7 +102,7 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
       },
       {
         href: L.convert,
-        label: "Convert GC → $GPAY",
+        label: "Convert GC → GPC",
         icon: "⚡",
         isActive: (p) => p.startsWith(L.convert),
       },

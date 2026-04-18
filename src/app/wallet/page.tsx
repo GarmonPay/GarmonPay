@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Legacy /wallet URLs redirect to dashboard wallet (GC/GPC + USD). */
+/** Legacy /wallet URLs redirect to dashboard wallet (GC, GPC, $GPAY). */
 export default function WalletRedirectPage({
   searchParams,
 }: {

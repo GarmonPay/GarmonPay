@@ -215,27 +215,27 @@ export default function HomePage() {
               How payments work
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-violet-200/85">
-              From your first earn to money in your bank—three simple steps.
+              Gold Coins, GPay Coins, and $GPAY tokens—earn, convert, and use on-chain.
             </p>
             <div className="mt-12 grid gap-8 md:grid-cols-3">
               {[
                 {
                   step: "Step 1",
-                  title: "You earn",
+                  title: "Earn & play",
                   icon: "🪙",
-                  body: "Complete actions and your balance updates in real time.",
+                  body: "Complete actions and games; your balances update in real time.",
                 },
                 {
                   step: "Step 2",
-                  title: "You request withdrawal",
-                  icon: "🏦",
-                  body: "Request a payout from your dashboard whenever you hit your plan minimum.",
+                  title: "Convert & redeem",
+                  icon: "💜",
+                  body: "Convert Gold Coins to GPay Coins for prize games, or redeem GPC for $GPAY tokens.",
                 },
                 {
                   step: "Step 3",
-                  title: "Stripe pays you",
-                  icon: "stripe",
-                  body: "Funds arrive in your bank account within 1 to 5 business days via Stripe.",
+                  title: "Use $GPAY",
+                  icon: "⬡",
+                  body: "Hold $GPAY in-app or send to your Solana wallet and trade on Raydium.",
                 },
               ].map((s) => (
                 <div
@@ -245,17 +245,9 @@ export default function HomePage() {
                   <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
                     {s.step}
                   </p>
-                  {s.icon === "stripe" ? (
-                    <div className="mt-4 flex justify-center">
-                      <span className="rounded-lg bg-white px-4 py-2 text-sm font-bold tracking-tight text-[#635bff]">
-                        Stripe
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="mt-4 text-4xl" aria-hidden>
-                      {s.icon}
-                    </div>
-                  )}
+                  <div className="mt-4 text-4xl" aria-hidden>
+                    {s.icon}
+                  </div>
                   <h3 className="mt-4 text-lg font-semibold text-white">{s.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-violet-200/80">{s.body}</p>
                 </div>
@@ -276,8 +268,8 @@ export default function HomePage() {
               {[
                 {
                   emoji: "💳",
-                  title: "Stripe secured payments",
-                  desc: "Payouts run through Stripe—the same infrastructure trusted by major platforms.",
+                  title: "Stripe for purchases",
+                  desc: "Gold Coin packs and memberships use Stripe—trusted checkout.",
                 },
                 {
                   emoji: "🛡️",
@@ -301,8 +293,8 @@ export default function HomePage() {
                 },
                 {
                   emoji: "📋",
-                  title: "Transparent withdrawals",
-                  desc: "Every payout is logged and visible in your dashboard.",
+                  title: "Transparent activity",
+                  desc: "Coin activity and history are visible in your dashboard.",
                 },
               ].map((t) => (
                 <div

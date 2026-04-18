@@ -67,7 +67,7 @@ export function MembershipPlanPicker({ currentTier, onUpgradePaid, disabled, com
                 {formatUsdMonthly(0)}
                 <span className="text-xs font-normal opacity-80">/mo</span>
               </span>
-              <span className="mt-1 text-xs text-fintech-muted">Earn and withdraw on the free tier — upgrade anytime.</span>
+              <span className="mt-1 text-xs text-fintech-muted">Start free — earn and play; upgrade anytime.</span>
               {isCurrent ? (
                 <span className="mt-2 text-xs font-semibold text-emerald-400/90">Your plan</span>
               ) : null}

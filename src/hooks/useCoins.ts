@@ -9,8 +9,6 @@ export function useCoins() {
   const [gpayCoins, setGpayCoins] = useState(0);
   const [goldCoins, setGoldCoins] = useState(0);
   const [gpayTokens, setGpayTokens] = useState(0);
-  /** USD wallet balance in cents (from `wallet_balances.balance`). */
-  const [usdBalance, setUsdBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -25,7 +23,6 @@ export function useCoins() {
       setGpayCoins(0);
       setGoldCoins(0);
       setGpayTokens(0);
-      setUsdBalance(0);
       setLoading(false);
       return;
     }
@@ -46,19 +43,6 @@ export function useCoins() {
       setGpayCoins(Math.max(0, Math.floor(Number(u.gpay_coins ?? 0))));
       setGoldCoins(Math.max(0, Math.floor(Number(u.gold_coins ?? 0))));
       setGpayTokens(Math.max(0, Math.floor(Number(u.gpay_tokens ?? 0))));
-    }
-
-    const { data: wallet } = await supabase
-      .from("wallet_balances")
-      .select("balance")
-      .eq("user_id", uid)
-      .maybeSingle();
-
-    if (wallet) {
-      const w = wallet as { balance?: number | null };
-      setUsdBalance(Math.max(0, Math.floor(Number(w.balance ?? 0))));
-    } else {
-      setUsdBalance(0);
     }
 
     setLoading(false);
@@ -104,21 +88,6 @@ export function useCoins() {
             }
           }
         )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "wallet_balances",
-            filter: `user_id=eq.${uid}`,
-          },
-          (payload) => {
-            const n = payload.new as { balance?: number } | undefined;
-            if (n && typeof n.balance === "number") {
-              setUsdBalance(Math.max(0, Math.floor(n.balance)));
-            }
-          }
-        )
         .subscribe();
     }
 
@@ -142,6 +111,5 @@ export function useCoins() {
     refresh,
     formatGPC,
     formatUSD,
-    usdBalance,
   };
 }
