@@ -152,10 +152,15 @@ export async function debitGpayCoins(
     .maybeSingle();
   if (existing) return { success: false, message: "Duplicate transaction" };
 
-  const { error } = await supabase.rpc("debit_gpay_coins", {
-    p_user_id: userId,
-    p_amount: amt,
-  });
+  // DB: debit_gpay_coins(p_user_id uuid, p_amount integer) — never debit_sweeps_coins.
+  const { data, error } = await supabase.rpc(
+    "debit_gpay_coins",
+    {
+      p_user_id: userId,
+      p_amount: amt,
+    }
+  );
+  void data;
 
   if (error) {
     const msg = error.message ?? "";
@@ -188,16 +193,6 @@ export async function debitGpayCoins(
   }
 
   return { success: true };
-}
-
-/** @deprecated use debitGpayCoins */
-export async function debitSweepsCoins(
-  userId: string,
-  amount: number,
-  description: string,
-  reference: string
-): Promise<{ success: boolean; message?: string }> {
-  return debitGpayCoins(userId, amount, description, reference);
 }
 
 /**

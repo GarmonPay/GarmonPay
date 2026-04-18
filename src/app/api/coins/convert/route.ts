@@ -57,12 +57,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // DB: convert_gold_to_gpay_coins(p_user_id uuid, p_amount_gc integer) — PostgREST named args must match.
+  const amount = amountGc;
+  // DB: convert_gold_to_gpay_coins(p_user_id uuid, p_amount_gc integer)
   const { data: convRaw, error: rpcErr } = await supabase.rpc(
     "convert_gold_to_gpay_coins",
     {
       p_user_id: userId,
-      p_amount_gc: amountGc,
+      p_amount_gc: amount,
     }
   );
 
