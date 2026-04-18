@@ -9,7 +9,7 @@ import { creditReferralUpgradeCommission } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
 import { MEMBERSHIP_PRICE_ENV_BY_TIER, type PaidMembershipTier } from "@/lib/membership-price-ids";
-import { getGoldCoinPackage } from "@/lib/gold-coin-packages";
+import { bonusGpayFromGcPackageRow, getGoldCoinPackage } from "@/lib/gold-coin-packages";
 
 /**
  * Stripe webhook — use this URL in Stripe Dashboard (Developers → Webhooks):
@@ -604,14 +604,17 @@ export async function POST(req: Request) {
     const gc_package_id = session.metadata?.gc_package_id as string | undefined;
     const goldMeta = parseInt(String(session.metadata?.gold_coins ?? "0"), 10);
     let goldCoins = Number.isFinite(goldMeta) ? goldMeta : 0;
+    const bonusMeta = parseInt(String(session.metadata?.bonus_gpay_coins ?? "0"), 10);
+    let bonusGpc = Number.isFinite(bonusMeta) && bonusMeta > 0 ? bonusMeta : 0;
     let pkgName = (session.metadata?.gc_package_name as string) || "GC package";
 
     if (gc_package_id) {
-      const { data: pkgRow } = await supabase.from("gc_packages").select("name, gold_coins, bonus_gpay_coins").eq("id", gc_package_id).maybeSingle();
+      const { data: pkgRow } = await supabase.from("gc_packages").select("*").eq("id", gc_package_id).maybeSingle();
       if (pkgRow) {
-        const pr = pkgRow as { name?: string; gold_coins?: number; bonus_gpay_coins?: number };
-        pkgName = pr.name ?? pkgName;
+        const pr = pkgRow as Record<string, unknown>;
+        pkgName = typeof pr.name === "string" ? pr.name : pkgName;
         goldCoins = Math.floor(Number(pr.gold_coins ?? goldCoins));
+        bonusGpc = bonusGpayFromGcPackageRow(pr);
       }
     }
 
@@ -619,8 +622,8 @@ export async function POST(req: Request) {
     const cr = await creditCoins(
       user_id,
       goldCoins,
-      0,
-      `Purchased ${pkgName}`,
+      bonusGpc,
+      `Purchased ${pkgName} (+${bonusGpc} GPC bonus)`,
       ref,
       "gc_purchase"
     );

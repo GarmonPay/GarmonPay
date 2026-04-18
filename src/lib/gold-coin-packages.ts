@@ -56,6 +56,16 @@ export function getGoldCoinPackage(id: string): GoldCoinPackage | null {
 }
 
 /**
+ * `gc_packages` rows may use `bonus_gpay_coins` (after rename) or legacy `bonus_sweeps_coins`.
+ * PostgREST returns only columns that exist — the Buy Coins UI always needs a numeric GPC bonus.
+ */
+export function bonusGpayFromGcPackageRow(row: Record<string, unknown>): number {
+  const raw = row.bonus_gpay_coins != null ? row.bonus_gpay_coins : row.bonus_sweeps_coins;
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/**
  * Map a `gc_packages` row to a catalog key when GC + price match the fixed catalog
  * (avoids UUID vs "starter" mismatch on checkout).
  */

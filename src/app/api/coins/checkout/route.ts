@@ -3,7 +3,12 @@ import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
 import { localeInt } from "@/lib/format-number";
-import { getGoldCoinPackage, matchDbPackageToCanonicalId, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
+import {
+  bonusGpayFromGcPackageRow,
+  getGoldCoinPackage,
+  matchDbPackageToCanonicalId,
+  type GoldCoinPackageId,
+} from "@/lib/gold-coin-packages";
 import { createGoldCoinPackCheckoutSession } from "@/lib/stripe-gold-coin-pack-checkout";
 
 const USER_FACING = "Unable to process purchase. Please refresh and try again.";
@@ -69,10 +74,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: result.url });
   }
 
-  // 2) Database package (UUID)
-  const { data: row, error: pkgErr } = await supabase
+  // 2) Database package (UUID) — select * so both bonus_gpay_coins and legacy bonus_sweeps_coins work
+  const { data: rowRaw, error: pkgErr } = await supabase
     .from("gc_packages")
-    .select("id, name, price_cents, gold_coins, bonus_gpay_coins, is_active")
+    .select("*")
     .eq("id", packageIdRaw)
     .maybeSingle();
 
@@ -81,14 +86,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: USER_FACING }, { status: 500 });
   }
 
-  if (row) {
-    const p = row as {
-      id: string;
-      name: string;
-      price_cents: number;
-      gold_coins: number;
-      bonus_gpay_coins: number;
-      is_active: boolean;
+  if (rowRaw) {
+    const raw = rowRaw as Record<string, unknown>;
+    const bonusGpay = bonusGpayFromGcPackageRow(raw);
+    const p = {
+      id: String(raw.id ?? ""),
+      name: String(raw.name ?? "Pack"),
+      price_cents: Math.floor(Number(raw.price_cents ?? 0)),
+      gold_coins: Math.floor(Number(raw.gold_coins ?? 0)),
+      bonus_gpay_coins: bonusGpay,
+      is_active: Boolean(raw.is_active),
     };
 
     // Inactive row but amounts match our catalog — use Stripe catalog checkout so purchase still works
@@ -125,7 +132,7 @@ export async function POST(request: Request) {
           gc_package_id: p.id,
           gc_package_name: p.name,
           gold_coins: String(p.gold_coins),
-          bonus_gpay_coins: String(p.bonus_gpay_coins),
+          bonus_gpay_coins: String(bonusGpay),
           price_cents: String(p.price_cents),
         },
         line_items: [

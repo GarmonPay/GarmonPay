@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { bonusGpayFromGcPackageRow } from "@/lib/gold-coin-packages";
 
 /** GET /api/coins/packages — active GC packages (public). */
 export async function GET() {
@@ -18,5 +19,11 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ packages: data ?? [] });
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const packages = rows.map((row) => ({
+    ...row,
+    bonus_gpay_coins: bonusGpayFromGcPackageRow(row),
+  }));
+
+  return NextResponse.json({ packages });
 }
