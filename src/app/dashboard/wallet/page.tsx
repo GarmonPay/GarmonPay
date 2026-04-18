@@ -157,33 +157,43 @@ function WalletDashboardContent() {
   };
 
   const runConvert = async () => {
-    if (converting || convertGc < 100 || convertGc % 100 !== 0) return;
+    const gc = Math.floor(Number(convertGc));
+    if (converting || !Number.isFinite(gc) || gc < 100 || gc % 100 !== 0) return;
+    if (gc > goldCoins) {
+      setConvertErr("Insufficient Gold Coins.");
+      return;
+    }
     setConvertErr(null);
     setConvertOk(null);
     setConverting(true);
     try {
       const session = await getSessionAsync();
-      if (!session?.accessToken) {
+      if (!session?.userId) {
         setConvertErr("Not signed in.");
         return;
       }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session.accessToken) {
+        headers.Authorization = `Bearer ${session.accessToken}`;
+      }
       const res = await fetch("/api/coins/convert", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({ amount_gc: convertGc }),
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ amount_gc: gc }),
       });
       const data = (await res.json().catch(() => ({}))) as { message?: string; gpay_coins_received?: number };
       if (!res.ok) {
-        setConvertErr(typeof data.message === "string" ? data.message : "Conversion failed");
+        setConvertErr(typeof data.message === "string" ? data.message : `Conversion failed (HTTP ${res.status}).`);
         return;
       }
       await refresh();
       setConvertOk(`You received ${data.gpay_coins_received ?? previewGpc} GPC.`);
+      const histHeaders: Record<string, string> = {};
+      if (session.accessToken) histHeaders.Authorization = `Bearer ${session.accessToken}`;
       const h = await fetch("/api/coins/history?limit=25", {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: histHeaders,
+        credentials: "include",
       });
       if (h.ok) {
         const j = await h.json();

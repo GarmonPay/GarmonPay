@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { getUserCoins } from "@/lib/coins";
 
@@ -8,8 +8,31 @@ import { getUserCoins } from "@/lib/coins";
  * Convert Gold Coins (GC) → GPay Coins (GPC) using membership tier rate.
  * Body: { amount_gc: number } — min 100, multiple of 100.
  */
+function parseRpcConversionResult(convRaw: unknown): {
+  gpay_coins_received?: number;
+  conversion_rate?: number;
+  membership_tier?: string;
+} | null {
+  if (convRaw == null) return null;
+  if (typeof convRaw === "object" && !Array.isArray(convRaw)) {
+    return convRaw as { gpay_coins_received?: number; conversion_rate?: number; membership_tier?: string };
+  }
+  if (typeof convRaw === "string") {
+    try {
+      return JSON.parse(convRaw) as {
+        gpay_coins_received?: number;
+        conversion_rate?: number;
+        membership_tier?: string;
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
-  const userId = await getAuthUserIdStrict(request);
+  const userId = await getAuthUserIdBearerOrCookie(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -41,6 +64,7 @@ export async function POST(request: Request) {
 
   if (rpcErr) {
     const msg = rpcErr.message ?? "";
+    const code = (rpcErr as { code?: string }).code ?? "";
     if (/INSUFFICIENT_GOLD|Insufficient gold/i.test(msg)) {
       return NextResponse.json({ message: "Insufficient Gold Coins" }, { status: 400 });
     }
@@ -50,17 +74,25 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    console.error("[coins/convert]", rpcErr);
-    return NextResponse.json({ message: "Conversion failed" }, { status: 400 });
+    if (/USER_NOT_FOUND/i.test(msg)) {
+      return NextResponse.json(
+        { message: "Profile not found. Try refreshing the page or signing in again." },
+        { status: 400 }
+      );
+    }
+    console.error("[coins/convert] RPC error:", { message: msg, code, details: (rpcErr as { details?: string }).details });
+    const userFacing =
+      msg && !/violates|constraint|column|relation|permission/i.test(msg)
+        ? msg.replace(/^ERROR:\s*/i, "").trim()
+        : "Could not complete conversion. Please try again.";
+    return NextResponse.json({ message: userFacing || "Could not complete conversion." }, { status: 400 });
   }
 
-  const parsed =
-    typeof convRaw === "string" ? (JSON.parse(convRaw) as Record<string, unknown>) : (convRaw as Record<string, unknown> | null);
-  const result = parsed as {
-    gpay_coins_received?: number;
-    conversion_rate?: number;
-    membership_tier?: string;
-  } | null;
+  const result = parseRpcConversionResult(convRaw);
+  if (!result) {
+    console.error("[coins/convert] Unexpected RPC payload:", convRaw);
+    return NextResponse.json({ message: "Invalid response from conversion service." }, { status: 500 });
+  }
 
   const gpayReceived = Math.floor(Number(result?.gpay_coins_received ?? 0));
   const rate = Number(result?.conversion_rate ?? 0);

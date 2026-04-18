@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 
 /** GET /api/coins/history — recent coin_transactions for current user */
 export async function GET(request: Request) {
-  const userId = await getAuthUserIdStrict(request);
+  const userId = await getAuthUserIdBearerOrCookie(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
