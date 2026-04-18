@@ -7,8 +7,8 @@ import { creditGPay, deductGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
- * `celo_rooms`: writes both legacy `min_bet_cents` / `current_bank_cents` and `minimum_entry_sc` /
- * `current_bank_sc` (migration 20260427120000 adds *_sc + `total_rounds` if missing).
+ * `celo_rooms`: writes `minimum_entry_sc`, `current_bank_sc`, `current_bank_cents`, and optionally
+ * legacy `min_bet_cents` only if present (migration 20260427120000 adds *_sc + `total_rounds` if missing).
  *
  * RLS: service role bypasses RLS.
  */
@@ -176,15 +176,13 @@ export async function POST(req: Request) {
       [key: string]: unknown;
     };
     try {
-      // Legacy columns min_bet_cents / current_bank_cents exist on all DBs; *_sc names were added in
-      // 20260427120000_celo_rooms_api_columns_*.sql — set both so reads using either name stay consistent.
-      const insertPayload = {
+      // Some DBs never had `min_bet_cents` (only minimum_entry_sc / *_sc). Do not insert min_bet_cents.
+      const insertPayload: Record<string, unknown> = {
         name: name.trim(),
         creator_id: userId,
         banker_id: userId,
         room_type: room_type === "private" ? "private" : "public",
         max_players: max_players as number,
-        min_bet_cents: minimum_entry_cents,
         minimum_entry_sc: minimum_entry_cents,
         current_bank_cents: starting_bank_cents,
         current_bank_sc: starting_bank_cents,
