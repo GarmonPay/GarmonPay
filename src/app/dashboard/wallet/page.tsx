@@ -190,21 +190,30 @@ function WalletDashboardContent() {
   async function buyGoldPack(packageId: GoldCoinPackageId) {
     try {
       const session = await getSessionAsync();
-      if (!session?.accessToken) return;
+      if (!session?.userId) return;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
       const res = await fetch("/api/stripe/gold-coins", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.accessToken}`,
-        },
+        headers,
+        credentials: "include",
         body: JSON.stringify({ packageId }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) {
-        window.location.href = data.url as string;
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) {
+        console.error("[wallet] gold-coins failed:", res.status, data);
+        window.alert(
+          typeof data.error === "string"
+            ? data.error
+            : "Unable to process purchase. Please refresh and try again."
+        );
+        return;
       }
-    } catch {
-      /* ignore */
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (e) {
+      console.error("[wallet] buyGoldPack", e);
     }
   }
 

@@ -51,6 +51,24 @@ export const GOLD_COIN_PACKAGES: Record<GoldCoinPackageId, GoldCoinPackage> = {
 };
 
 export function getGoldCoinPackage(id: string): GoldCoinPackage | null {
-  const k = id as GoldCoinPackageId;
+  const k = id.trim().toLowerCase() as GoldCoinPackageId;
   return GOLD_COIN_PACKAGES[k] ?? null;
+}
+
+/**
+ * Map a `gc_packages` row to a catalog key when GC + price match the fixed catalog
+ * (avoids UUID vs "starter" mismatch on checkout).
+ */
+export function matchDbPackageToCanonicalId(row: {
+  gold_coins: number;
+  price_cents: number;
+  name?: string;
+}): GoldCoinPackageId | null {
+  for (const id of Object.keys(GOLD_COIN_PACKAGES) as GoldCoinPackageId[]) {
+    const p = GOLD_COIN_PACKAGES[id];
+    if (p.gold_coins === row.gold_coins && p.price_cents === row.price_cents) {
+      return id;
+    }
+  }
+  return null;
 }

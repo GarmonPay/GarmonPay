@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
-import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
+import { isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { createAdminClient } from "@/lib/supabase";
-import { getGoldCoinPackage, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
+import { getGoldCoinPackage, GOLD_COIN_PACKAGES, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
+import { createGoldCoinPackCheckoutSession } from "@/lib/stripe-gold-coin-pack-checkout";
+
+const USER_FACING = "Unable to process purchase. Please refresh and try again.";
 
 /**
  * POST /api/stripe/gold-coins
@@ -13,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
   }
 
-  const userId = await getAuthUserIdStrict(request);
+  const userId = await getAuthUserIdBearerOrCookie(request);
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -25,10 +28,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const packageId = typeof body.packageId === "string" ? body.packageId.trim() : "";
-  const pkg = getGoldCoinPackage(packageId);
+  const rawId = typeof body.packageId === "string" ? body.packageId.trim() : "";
+  const pkg = getGoldCoinPackage(rawId);
   if (!pkg) {
-    return NextResponse.json({ error: "Invalid package" }, { status: 400 });
+    console.error("[stripe/gold-coins] Package not found:", rawId, "Available:", Object.keys(GOLD_COIN_PACKAGES));
+    return NextResponse.json(
+      { error: `${USER_FACING} (invalid pack: ${rawId || "missing"})` },
+      { status: 400 }
+    );
   }
 
   const supabase = createAdminClient();
@@ -43,47 +50,22 @@ export async function POST(request: Request) {
   }
 
   const base = getCheckoutBaseUrl(request);
-  const successUrl = `${base}/dashboard/wallet?purchased=true`;
+  const packageId = pkg.package_id as GoldCoinPackageId;
+  const successUrl = `${base}/dashboard/wallet?purchased=true&package=${encodeURIComponent(packageId)}`;
   const cancelUrl = `${base}/dashboard/wallet?canceled=1`;
 
-  try {
-    const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      customer_email: email,
-      client_reference_id: userId,
-      metadata: {
-        user_id: userId,
-        email,
-        product_type: "gold_coin_pack",
-        package_id: pkg.package_id as GoldCoinPackageId,
-        gold_coins: String(pkg.gold_coins),
-      },
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: pkg.price_cents,
-            product_data: {
-              name: `Gold Coins — Digital Pack`,
-              description: pkg.stripe_description,
-            },
-          },
-        },
-      ],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-    });
+  const result = await createGoldCoinPackCheckoutSession({
+    userId,
+    email,
+    packageId,
+    successUrl,
+    cancelUrl,
+  });
 
-    if (!session.url) {
-      return NextResponse.json({ error: "Checkout URL missing" }, { status: 500 });
-    }
-
-    return NextResponse.json({ url: session.url });
-  } catch (e) {
-    console.error("[stripe/gold-coins]", e);
-    return NextResponse.json({ error: "Checkout failed" }, { status: 500 });
+  if ("error" in result) {
+    console.error("[stripe/gold-coins]", result.error);
+    return NextResponse.json({ error: USER_FACING }, { status: 500 });
   }
+
+  return NextResponse.json({ url: result.url });
 }

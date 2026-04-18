@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { localeInt } from "@/lib/format-number";
+import { matchDbPackageToCanonicalId } from "@/lib/gold-coin-packages";
 
 /** Rows from GET /api/coins/packages (`gc_packages` where is_active). Expected: Starter, Popular, Pro, Elite, VIP — prices $9.99–$249.99. */
 type PackageRow = {
@@ -37,20 +38,27 @@ export default function BuyCoinsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function buy(pkgId: string) {
+  async function buy(p: PackageRow) {
     setError(null);
-    setCheckoutId(pkgId);
+    setCheckoutId(p.id);
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
+      const packageId = matchDbPackageToCanonicalId(p) ?? p.id;
       const res = await fetch("/api/coins/checkout", {
         method: "POST",
         headers,
-        body: JSON.stringify({ packageId: pkgId }),
+        credentials: "include",
+        body: JSON.stringify({ packageId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Checkout failed");
+        const msg =
+          typeof data.error === "string"
+            ? data.error
+            : "Unable to process purchase. Please refresh and try again.";
+        setError(msg);
+        console.error("[buy-coins] checkout failed:", res.status, data);
         return;
       }
       if (data.url) {
@@ -147,7 +155,7 @@ export default function BuyCoinsPage() {
               <button
                 type="button"
                 disabled={checkoutId === p.id}
-                onClick={() => buy(p.id)}
+                onClick={() => buy(p)}
                 className="mt-auto w-full rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-base font-bold text-black shadow-lg shadow-amber-900/20 hover:opacity-95 disabled:opacity-50"
               >
                 {checkoutId === p.id ? "Redirecting…" : "Buy Now"}
