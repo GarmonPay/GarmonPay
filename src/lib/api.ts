@@ -383,6 +383,8 @@ export async function getReferralDashboard(accessTokenOrUserId: string, isToken:
     referredUsers: Array<{
       referredUserId: string;
       email: string;
+      name?: string;
+      joinedAt?: string;
       membership: string;
       status: string;
       monthlyCommissionGpc: number;

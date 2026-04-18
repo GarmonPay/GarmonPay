@@ -5,6 +5,7 @@ import { isAtLeastAge } from "@/lib/signup-compliance";
 import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-states";
 import { sendWelcomeEmail } from "@/lib/send-email";
 import { creditCoins } from "@/lib/coins";
+import { referralCodeFromUserId } from "@/lib/referral-code";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Referrer bonus when someone signs up with their code (GPC; 100 GPC = $1). */
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
         balance: 0,
         balance_cents: 0,
         membership: "free",
+        referral_code: referralCodeFromUserId(id),
         created_at: new Date().toISOString(),
         registration_ip: registrationIp !== "unknown" ? registrationIp : null,
       });
@@ -178,6 +180,17 @@ export async function POST(req: Request) {
         await grantSignupBonusGpc(id);
       } catch (e) {
         console.warn("sync-user signup GPC bonus:", e);
+      }
+    }
+
+    {
+      const { data: rcCheck } = await supabase.from("users").select("referral_code").eq("id", id).maybeSingle();
+      const existingCode = (rcCheck as { referral_code?: string | null } | null)?.referral_code?.trim();
+      if (!existingCode) {
+        await supabase
+          .from("users")
+          .update({ referral_code: referralCodeFromUserId(id), updated_at: new Date().toISOString() })
+          .eq("id", id);
       }
     }
 

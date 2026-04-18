@@ -1,9 +1,11 @@
 /**
- * Get authenticated user id from request (Bearer token or x-user-id).
+ * Get authenticated user id from request (Supabase cookie session, Bearer token, or x-user-id).
  * Used by API routes that require auth.
  * When only X-User-Id is sent, validates user exists in public.users (service role) so add-funds works if token is missing.
  * Returns null if user is banned.
  */
+import { cookies } from "next/headers";
+import { createServerClient as createSsrClient } from "@supabase/ssr";
 import { findUserById } from "./auth-store";
 import { createServerClient, createAdminClient } from "./supabase";
 
@@ -15,6 +17,30 @@ async function isUserBanned(userId: string): Promise<boolean> {
 }
 
 export async function getAuthUserId(request: Request): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (url && anon) {
+    try {
+      const cookieStore = await cookies();
+      const supabaseSsr = createSsrClient(url, anon, {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+        },
+      });
+      const {
+        data: { user: cookieUser },
+      } = await supabaseSsr.auth.getUser();
+      if (cookieUser?.id) {
+        if (await isUserBanned(cookieUser.id)) return null;
+        return cookieUser.id;
+      }
+    } catch {
+      // Not in a request context or cookies unavailable
+    }
+  }
+
   const authHeader = request.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const userIdHeader = request.headers.get("x-user-id");

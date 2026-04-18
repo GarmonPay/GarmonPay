@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserId } from "@/lib/auth-request";
 import { getReferralLink } from "@/lib/site-url";
+import { referralCodeFromUserId } from "@/lib/referral-code";
 import { createAdminClient } from "@/lib/supabase";
 import { countUserReferrals, getUserReferralEarningsGpc } from "@/lib/viral-db";
 import {
@@ -38,12 +39,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data: userRow } = await supabase
-      .from("users")
-      .select("referral_code")
-      .eq("id", userId)
-      .single();
-    const referralCode = (userRow as { referral_code?: string } | null)?.referral_code ?? "";
+    const { data: userRow } = await supabase.from("users").select("referral_code").eq("id", userId).single();
+    let referralCode = (userRow as { referral_code?: string | null } | null)?.referral_code?.trim() ?? "";
+    if (!referralCode) {
+      const generated = referralCodeFromUserId(userId);
+      await supabase.from("users").update({ referral_code: generated, updated_at: new Date().toISOString() }).eq("id", userId);
+      referralCode = generated;
+    }
 
     const [
       totalReferrals,
@@ -68,25 +70,26 @@ export async function GET(request: Request) {
       referralCode,
     };
 
-    const referredIds: string[] = [];
-    if (referralCode) {
-      const { data: referred } = await supabase
+    type ReferredUserRow = {
+      id: string;
+      email: string;
+      membership: string;
+      full_name: string | null;
+      created_at: string | null;
+      membership_tier: string | null;
+    };
+    const referredUsersRaw =
+      ((await supabase
         .from("users")
-        .select("id, email, membership")
-        .eq("referred_by_code", referralCode);
-      referredIds.push(...(referred ?? []).map((r: { id: string }) => r.id));
-    }
-
-    type ReferredUserRow = { id: string; email: string; membership: string };
-    const referredUsersRaw = referralCode
-      ? ((await supabase.from("users").select("id, email, membership").eq("referred_by_code", referralCode)).data ?? []) as ReferredUserRow[]
-      : [];
+        .select("id, email, membership, full_name, created_at, membership_tier")
+        .eq("referred_by", userId)
+        .order("created_at", { ascending: false })).data ?? []) as ReferredUserRow[];
 
     const ids = referredUsersRaw.map((u) => u.id);
     if (ids.length === 0) {
       return NextResponse.json({
         summary,
-        referralLink: getReferralLink(referralCode || userId),
+        referralLink: getReferralLink(referralCode),
         referredUsers: [],
         earningsHistory: await getEarningsHistory(supabase, userId),
       });
@@ -115,14 +118,23 @@ export async function GET(request: Request) {
     const rcIdToReferred = new Map((rcRows ?? []).map((r: { id: string; referred_user_id: string }) => [r.id, r.referred_user_id]));
     const { data: txRows } = await supabase
       .from("transactions")
-      .select("id, amount, reference_id")
+      .select("id, amount, reference_id, type")
       .eq("user_id", userId)
-      .eq("type", "referral_commission")
+      .in("type", ["referral_commission", "referral_upgrade"])
       .eq("status", "completed");
     const earnedByReferred = new Map<string, number>();
+    const upgradePrefix = "referral_upgrade_";
     for (const t of txRows ?? []) {
       const refId = t.reference_id as string | null;
-      const referredId = refId ? rcIdToReferred.get(refId) : null;
+      if (!refId) continue;
+      if (refId.startsWith(upgradePrefix)) {
+        const referredId = refId.slice(upgradePrefix.length);
+        if (referredId && /^[0-9a-f-]{36}$/i.test(referredId)) {
+          earnedByReferred.set(referredId, (earnedByReferred.get(referredId) ?? 0) + Number(t.amount));
+        }
+        continue;
+      }
+      const referredId = rcIdToReferred.get(refId);
       if (referredId) {
         earnedByReferred.set(referredId, (earnedByReferred.get(referredId) ?? 0) + Number(t.amount));
       }
@@ -131,17 +143,24 @@ export async function GET(request: Request) {
       earnedByReferred.set(referredId, (earnedByReferred.get(referredId) ?? 0) + bonus);
     });
 
-    const referredUsers = referredUsersRaw.map((u) => ({
-      referredUserId: u.id,
-      email: maskEmail(u.email),
-      membership: (tierByUser.get(u.id) ?? u.membership ?? "starter").toString(),
-      status: activeByUser.has(u.id) ? "Active" : "Inactive",
-      monthlyCommissionGpc: monthlyByUser.get(u.id) ?? 0,
-      totalEarnedGpc: earnedByReferred.get(u.id) ?? 0,
-    }));
+    const referredUsers = referredUsersRaw.map((u) => {
+      const tier = (tierByUser.get(u.id) ?? u.membership_tier ?? u.membership ?? "free").toString();
+      const displayName =
+        (typeof u.full_name === "string" && u.full_name.trim() ? u.full_name.trim() : null) ?? maskEmail(u.email);
+      return {
+        referredUserId: u.id,
+        email: maskEmail(u.email),
+        name: displayName,
+        joinedAt: u.created_at ?? "",
+        membership: tier,
+        status: activeByUser.has(u.id) ? "Active" : "Inactive",
+        monthlyCommissionGpc: monthlyByUser.get(u.id) ?? 0,
+        totalEarnedGpc: earnedByReferred.get(u.id) ?? 0,
+      };
+    });
 
     const earningsHistory = await getEarningsHistory(supabase, userId);
-    const referralLink = getReferralLink(referralCode || userId);
+    const referralLink = getReferralLink(referralCode);
 
     return NextResponse.json({
       summary,
@@ -172,7 +191,7 @@ async function getEarningsHistory(supabase: NonNullable<ReturnType<typeof create
     .from("transactions")
     .select("id, type, amount, status, description, created_at")
     .eq("user_id", userId)
-    .in("type", ["referral", "referral_commission"])
+    .in("type", ["referral", "referral_commission", "referral_upgrade"])
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw error;
@@ -181,7 +200,7 @@ async function getEarningsHistory(supabase: NonNullable<ReturnType<typeof create
     type: r.type,
     amountGpc: Number(r.amount),
     status: r.status,
-    description: r.description ?? (r.type === "referral_commission" ? "Recurring commission" : "Referral bonus"),
+    description: r.description ?? (r.type === "referral_commission" ? "Referral commission" : "Referral"),
     createdAt: r.created_at,
   }));
 }

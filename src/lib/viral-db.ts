@@ -179,12 +179,13 @@ export async function awardBadge(userId: string, badgeCode: string): Promise<voi
   if (error) throw error;
 }
 
-/** Count user's referrals (users who have referred_by_code = this user's referral_code). */
+/** Count user's referrals (users with referred_by = this user). */
 export async function countUserReferrals(userId: string): Promise<number> {
-  const { data: user } = await supabase().from("users").select("referral_code").eq("id", userId).single();
-  const code = (user as { referral_code?: string } | null)?.referral_code;
-  if (!code) return 0;
-  const { count } = await supabase().from("users").select("id", { count: "exact", head: true }).eq("referred_by_code", code);
+  const { count, error } = await supabase()
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("referred_by", userId);
+  if (error) throw error;
   return count ?? 0;
 }
 

@@ -383,6 +383,7 @@ export async function POST(req: Request) {
       await creditReferralUpgradeCommission({
         upgradedUserId: user_id,
         upgradePlan: targetTier,
+        upgradePriceCents: amount_total,
         stripeSessionId: session_id,
         stripeSubscriptionId: subId,
       });

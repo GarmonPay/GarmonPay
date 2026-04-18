@@ -87,13 +87,10 @@ export async function processSubscriptionBilling(subscriptionId: string): Promis
 
 /** User: active referral subscriptions count (referred users with active subscription). */
 export async function getActiveReferralSubscriptionsCount(userId: string): Promise<number> {
-  const { data: user } = await supabase().from("users").select("referral_code").eq("id", userId).single();
-  const code = (user as { referral_code?: string } | null)?.referral_code;
-  if (!code) return 0;
   const { data: referred } = await supabase()
     .from("users")
     .select("id")
-    .eq("referred_by_code", code);
+    .eq("referred_by", userId);
   const referredIds = (referred ?? []).map((r: { id: string }) => r.id);
   if (referredIds.length === 0) return 0;
   const { count, error } = await supabase()
@@ -122,13 +119,13 @@ export async function getMonthlyReferralCommissionGpc(userId: string): Promise<n
   return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
 }
 
-/** User: lifetime referral commission income in GPC. */
+/** User: lifetime referral commission income in GPC (upgrade + recurring). */
 export async function getLifetimeReferralCommissionGpc(userId: string): Promise<number> {
   const { data, error } = await supabase()
     .from("transactions")
     .select("amount")
     .eq("user_id", userId)
-    .eq("type", "referral_commission")
+    .in("type", ["referral_commission", "referral_upgrade"])
     .eq("status", "completed");
   if (error) throw error;
   return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);

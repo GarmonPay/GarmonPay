@@ -6,6 +6,7 @@ import { getSessionAsync } from "@/lib/session";
 import { getReferralDashboard } from "@/lib/api";
 import { ReferralBannerCreator } from "@/components/banners/ReferralBannerCreator";
 import { localeInt } from "@/lib/format-number";
+import { gpcToUsdDisplay } from "@/lib/coins";
 
 function formatGpc(gpc: number | null | undefined) {
   return `${localeInt(gpc)} GPC`;
@@ -81,7 +82,7 @@ export default function ReferralsPage() {
   if (!data) {
     return (
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <p className="text-fintech-muted">Loading…</p>
+        <p className="text-fintech-muted">Redirecting to sign in…</p>
       </div>
     );
   }
@@ -111,17 +112,52 @@ export default function ReferralsPage() {
             <p className="text-xl font-bold text-white mt-1">{summary.totalReferrals}</p>
           </div>
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Active referrals</p>
+            <p className="text-xs text-fintech-muted uppercase">Active (paid members)</p>
             <p className="text-xl font-bold text-fintech-highlight mt-1">{summary.activeReferrals}</p>
           </div>
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Monthly referral income</p>
+            <p className="text-xs text-fintech-muted uppercase">This month (referrals)</p>
             <p className="text-xl font-bold text-fintech-money mt-1">{formatGpc(summary.monthlyReferralIncomeGpc)}</p>
           </div>
           <div className="rounded-lg bg-black/20 border border-white/10 p-4">
-            <p className="text-xs text-fintech-muted uppercase">Lifetime referral earnings</p>
+            <p className="text-xs text-fintech-muted uppercase">Total earned</p>
             <p className="text-xl font-bold text-fintech-money mt-1">{formatGpc(summary.lifetimeReferralEarningsGpc)}</p>
+            <p className="text-xs text-fintech-muted mt-1">{gpcToUsdDisplay(summary.lifetimeReferralEarningsGpc)} face value</p>
           </div>
+        </div>
+      </section>
+
+      {/* Commission structure */}
+      <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6 overflow-hidden">
+        <h2 className="text-lg font-bold text-white uppercase tracking-wide mb-4 border-b border-white/10 pb-2">
+          Upgrade commission rates
+        </h2>
+        <p className="text-fintech-muted text-sm mb-4">
+          When your referrals upgrade, you earn a percentage of their upgrade payment in GPay Coins (100 GPC = $1.00 face value).
+        </p>
+        <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <table className="w-full text-left min-w-[280px]">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Your plan</th>
+                <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Commission per upgrade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Free", "10%"],
+                ["Starter", "20%"],
+                ["Growth", "30%"],
+                ["Pro", "40%"],
+                ["Elite", "50%"],
+              ].map(([plan, pct]) => (
+                <tr key={plan} className="border-b border-white/5">
+                  <td className="p-3 text-white">{plan}</td>
+                  <td className="p-3 text-fintech-money font-medium">{pct}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -162,12 +198,10 @@ export default function ReferralsPage() {
             WhatsApp
           </a>
           <a
-            href={`https://t.me/share/url?url=${encodeURIComponent(referralLink || "")}&text=${encodeURIComponent("Join GarmonPay and earn through games and referrals. Use my link and get a signup bonus.")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] text-white text-sm font-medium hover:opacity-90"
+            href={`sms:?&body=${encodeURIComponent("Join GarmonPay and earn through games and referrals. Use my link and get a signup bonus. " + (referralLink || ""))}`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-600 text-white text-sm font-medium hover:opacity-90"
           >
-            Telegram
+            SMS
           </a>
         </div>
       </section>
@@ -254,24 +288,24 @@ export default function ReferralsPage() {
             <table className="w-full text-left min-w-[520px]">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Referred user</th>
-                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Membership</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Name</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Joined</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Plan</th>
                   <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Status</th>
-                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Monthly commission</th>
-                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Total earned</th>
+                  <th className="p-3 text-xs font-medium text-fintech-muted uppercase">Commission earned</th>
                 </tr>
               </thead>
               <tbody>
                 {referredUsers.map((u) => (
                   <tr key={u.referredUserId} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="p-3 text-white font-mono text-sm">{u.email}</td>
+                    <td className="p-3 text-white text-sm">{u.name ?? u.email}</td>
+                    <td className="p-3 text-fintech-muted text-sm whitespace-nowrap">{formatDate(u.joinedAt)}</td>
                     <td className="p-3 text-fintech-highlight capitalize">{tierLabel(u.membership)}</td>
                     <td className="p-3">
                       <span className={u.status === "Active" ? "text-emerald-400" : "text-fintech-muted"}>
                         {u.status}
                       </span>
                     </td>
-                    <td className="p-3 text-fintech-money">{formatGpc(u.monthlyCommissionGpc)}</td>
                     <td className="p-3 text-fintech-money font-medium">{formatGpc(u.totalEarnedGpc)}</td>
                   </tr>
                 ))}
