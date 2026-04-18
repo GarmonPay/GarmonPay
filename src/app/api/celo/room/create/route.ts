@@ -176,19 +176,21 @@ export async function POST(req: Request) {
       [key: string]: unknown;
     };
     try {
+      // Legacy columns min_bet_cents / current_bank_cents exist on all DBs; *_sc names were added in
+      // 20260427120000_celo_rooms_api_columns_*.sql — set both so reads using either name stay consistent.
       const insertPayload = {
         name: name.trim(),
         creator_id: userId,
         banker_id: userId,
         room_type: room_type === "private" ? "private" : "public",
         max_players: max_players as number,
+        min_bet_cents: minimum_entry_cents,
         minimum_entry_sc: minimum_entry_cents,
-        current_bank_sc: starting_bank_cents,
         current_bank_cents: starting_bank_cents,
+        current_bank_sc: starting_bank_cents,
         banker_reserve_sc: starting_bank_cents,
         join_code: room_type === "private" ? join_code!.trim() : null,
         status: "waiting",
-        total_rounds: 0,
         platform_fee_pct: 10,
         last_round_was_celo: false,
         last_activity: new Date().toISOString(),
