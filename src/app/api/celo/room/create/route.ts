@@ -7,8 +7,8 @@ import { creditGPay, deductGPay, getGPayBalance } from "@/lib/gpay-balance";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
- * `celo_rooms` production columns: minimum_entry_sc, current_bank_sc (see user DB audit).
- * Do not insert min_bet_cents / current_bank_cents unless those columns exist.
+ * `celo_rooms`: writes both legacy `min_bet_cents` / `current_bank_cents` and `minimum_entry_sc` /
+ * `current_bank_sc` (migration 20260427120000 adds *_sc + `total_rounds` if missing).
  *
  * RLS: service role bypasses RLS.
  */
