@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry, getCanonicalBalanceCents } from "@/lib/wallet-ledger";
-import { USD_TO_GPC } from "@/lib/coins";
+import { rpcCreditCoins, USD_TO_GPC } from "@/lib/coins";
 
 /**
  * POST /api/wallet/convert-to-sc
@@ -52,11 +52,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: rpcErr } = await supabase.rpc("credit_coins", {
-    p_user_id: userId,
-    p_gold_coins: 0,
-    p_gpay_coins: scToAward,
-  });
+  const { error: rpcErr } = await rpcCreditCoins(supabase, userId, 0, scToAward);
 
   if (rpcErr) {
     const refundRef = `usd_to_sc_refund_${userId}_${Date.now()}`;

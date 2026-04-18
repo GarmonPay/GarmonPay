@@ -1,5 +1,41 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
+
+/** PostgREST cannot match RPC if DB still has legacy param name `p_sweeps_coins` instead of `p_gpay_coins`. */
+function isCreditCoinsRpcMismatch(err: { message?: string; code?: string } | null): boolean {
+  const m = err?.message ?? "";
+  if (!/credit_coins/i.test(m)) return false;
+  if (err?.code === "PGRST202") return true;
+  return /Could not find the function/i.test(m) || /schema cache/i.test(m);
+}
+
+/**
+ * Calls `public.credit_coins` with canonical `(p_user_id, p_gold_coins, p_gpay_coins)`.
+ * Retries with legacy `p_sweeps_coins` when the DB has not applied the GPay rename migration.
+ */
+export async function rpcCreditCoins(
+  supabase: SupabaseClient,
+  userId: string,
+  goldCoins: number,
+  gpayCoins: number
+): Promise<{ error: { message: string; code?: string } | null }> {
+  const g = Math.floor(goldCoins);
+  const s = Math.floor(gpayCoins);
+  let { error } = await supabase.rpc("credit_coins", {
+    p_user_id: userId,
+    p_gold_coins: g,
+    p_gpay_coins: s,
+  });
+  if (error && isCreditCoinsRpcMismatch(error)) {
+    ({ error } = await supabase.rpc("credit_coins", {
+      p_user_id: userId,
+      p_gold_coins: g,
+      p_sweeps_coins: s,
+    }));
+  }
+  return { error };
+}
 
 /** 1000 GC ≈ $1 (display) */
 export const GC_TO_USD = 0.001;
@@ -71,11 +107,7 @@ export async function creditCoins(
     return { success: false, message: "Duplicate transaction" };
   }
 
-  const { error } = await supabase.rpc("credit_coins", {
-    p_user_id: userId,
-    p_gold_coins: Math.floor(goldCoins),
-    p_gpay_coins: Math.floor(gpayCoins),
-  });
+  const { error } = await rpcCreditCoins(supabase, userId, goldCoins, gpayCoins);
 
   if (error) return { success: false, message: error.message };
 
