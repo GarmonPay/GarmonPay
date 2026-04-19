@@ -11,10 +11,20 @@ export function useCoins() {
   const [gpayTokens, setGpayTokens] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  /** Apply balance from a trusted API response (same field as DB: users.gpay_coins). */
+  const applyServerGpayBalance = useCallback((gpc: number | null | undefined) => {
+    if (gpc == null || !Number.isFinite(Number(gpc))) return;
+    setGpayCoins(Math.max(0, Math.floor(Number(gpc))));
+  }, []);
+
+  const refresh = useCallback(async (): Promise<{
+    gpayCoins: number;
+    goldCoins: number;
+    gpayTokens: number;
+  } | null> => {
     if (!supabase) {
       setLoading(false);
-      return;
+      return null;
     }
     const {
       data: { session },
@@ -24,15 +34,19 @@ export function useCoins() {
       setGoldCoins(0);
       setGpayTokens(0);
       setLoading(false);
-      return;
+      return null;
     }
     const uid = session.user.id;
 
-    const { data: userRow } = await supabase
+    const { data: userRow, error: rowErr } = await supabase
       .from("users")
       .select("gpay_coins, gold_coins, gpay_tokens")
       .eq("id", uid)
       .maybeSingle();
+
+    if (rowErr) {
+      console.warn("[useCoins] refresh users row failed", rowErr.message);
+    }
 
     if (userRow) {
       const u = userRow as {
@@ -40,12 +54,18 @@ export function useCoins() {
         gold_coins?: number | null;
         gpay_tokens?: number | null;
       };
-      setGpayCoins(Math.max(0, Math.floor(Number(u.gpay_coins ?? 0))));
-      setGoldCoins(Math.max(0, Math.floor(Number(u.gold_coins ?? 0))));
-      setGpayTokens(Math.max(0, Math.floor(Number(u.gpay_tokens ?? 0))));
+      const g = Math.max(0, Math.floor(Number(u.gpay_coins ?? 0)));
+      const gc = Math.max(0, Math.floor(Number(u.gold_coins ?? 0)));
+      const gt = Math.max(0, Math.floor(Number(u.gpay_tokens ?? 0)));
+      setGpayCoins(g);
+      setGoldCoins(gc);
+      setGpayTokens(gt);
+      setLoading(false);
+      return { gpayCoins: g, goldCoins: gc, gpayTokens: gt };
     }
 
     setLoading(false);
+    return null;
   }, [supabase]);
 
   const formatGPC = useCallback((amount: number) => formatGpcWithUsd(amount), []);
@@ -72,19 +92,29 @@ export function useCoins() {
           { event: "*", schema: "public", table: "users", filter: `id=eq.${uid}` },
           (payload) => {
             const n = payload.new as {
-              gpay_coins?: number;
-              gold_coins?: number;
-              gpay_tokens?: number;
+              gpay_coins?: number | string;
+              gold_coins?: number | string;
+              gpay_tokens?: number | string;
             } | undefined;
             if (!n) return;
-            if (typeof n.gpay_coins === "number") {
-              setGpayCoins(Math.max(0, Math.floor(n.gpay_coins)));
+            // Realtime may omit unchanged columns; refetch full wallet row to avoid stale GPC.
+            if (n.gpay_coins === undefined || n.gpay_coins === null) {
+              void refresh();
+              return;
             }
-            if (typeof n.gold_coins === "number") {
-              setGoldCoins(Math.max(0, Math.floor(n.gold_coins)));
+            const gNum = Number(n.gpay_coins);
+            if (!Number.isFinite(gNum)) {
+              void refresh();
+              return;
             }
-            if (typeof n.gpay_tokens === "number") {
-              setGpayTokens(Math.max(0, Math.floor(n.gpay_tokens)));
+            setGpayCoins(Math.max(0, Math.floor(gNum)));
+            if (n.gold_coins !== undefined && n.gold_coins !== null) {
+              const x = Number(n.gold_coins);
+              if (Number.isFinite(x)) setGoldCoins(Math.max(0, Math.floor(x)));
+            }
+            if (n.gpay_tokens !== undefined && n.gpay_tokens !== null) {
+              const x = Number(n.gpay_tokens);
+              if (Number.isFinite(x)) setGpayTokens(Math.max(0, Math.floor(x)));
             }
           }
         )
@@ -109,6 +139,8 @@ export function useCoins() {
     sweepsCoins: gpayCoins,
     loading,
     refresh,
+    /** Set GPC from server settlement JSON (`users.gpay_coins` / `gpayCoins`). */
+    applyServerGpayBalance,
     formatGPC,
     formatUSD,
   };

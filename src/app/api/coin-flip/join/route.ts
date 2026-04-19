@@ -75,8 +75,20 @@ export async function POST(request: Request) {
   );
 
   if (!debit.success) {
-    return NextResponse.json({ message: debit.message }, { status: 400 });
+    console.warn("[coin-flip/join] debit failed", { gameId, userId, betAmountSc, message: debit.message });
+    return NextResponse.json(
+      { ok: false, message: debit.message ?? "Failed to debit user balance" },
+      { status: 400 }
+    );
   }
+
+  const afterDebit = await getUserCoins(userId);
+  console.info("[coin-flip/join] joiner debited", {
+    gameId,
+    userId,
+    betAmountSc,
+    gpayCoinsAfterDebit: afterDebit.gpayCoins,
+  });
 
   const result = flipCoin();
   const creatorWins = result === g.creator_side;
@@ -126,7 +138,16 @@ export async function POST(request: Request) {
   const netMinor = youWon ? payoutWinnerMinor - betAmountSc : -betAmountSc;
   const after = await getUserCoins(userId);
 
+  console.info("[coin-flip/join] complete", {
+    gameId,
+    userId,
+    youWon,
+    netMinor,
+    gpayCoinsFinal: after.gpayCoins,
+  });
+
   return NextResponse.json({
+    ok: true,
     gameId,
     status: "completed",
     outcome: youWon ? "win" : "loss",

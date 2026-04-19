@@ -213,9 +213,14 @@ export async function debitGpayCoins(
     reference,
   });
   if (insErr) {
-    console.error("[debitGpayCoins] insert failed after RPC — repairing:", insErr.message);
+    console.error("[debitGpayCoins] ledger insert failed after RPC debit — reversing", {
+      userId,
+      reference,
+      amount: amt,
+      message: insErr.message,
+    });
     const repairRef = `${reference}_repair_${Date.now()}`;
-    await creditCoins(
+    const repair = await creditCoins(
       userId,
       0,
       amt,
@@ -223,6 +228,18 @@ export async function debitGpayCoins(
       repairRef,
       "debit_repair"
     );
+    if (!repair.success) {
+      console.error("[debitGpayCoins] CRITICAL: repair credit failed after ledger failure", {
+        userId,
+        reference,
+        repairMessage: repair.message,
+      });
+    }
+    // Do not return success: games must not show a settled loss/win when no durable ledger row exists.
+    return {
+      success: false,
+      message: "Loss transaction insert failed; authoritative balance was restored",
+    };
   }
 
   return { success: true };

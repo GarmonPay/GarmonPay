@@ -25,7 +25,7 @@ export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameSt
   const router = useRouter();
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionAsync>>>(null);
   const [loading, setLoading] = useState(true);
-  const { sweepsCoins, refresh } = useCoins();
+  const { sweepsCoins, refresh, applyServerGpayBalance } = useCoins();
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,10 @@ export function GameStationPlay({ gameSlug, gameName, costSc, children }: GameSt
         if (!r.ok) return r.json().then((d: { error?: string }) => Promise.reject(new Error(d.error ?? "Failed to start")));
         return r.json();
       })
-      .then(() => {
+      .then((data: { gpay_coins?: number }) => {
+        if (typeof data?.gpay_coins === "number") {
+          applyServerGpayBalance(data.gpay_coins);
+        }
         void refresh();
         setStarted(true);
       })

@@ -43,7 +43,7 @@ type PendingFlip = {
 };
 
 export function CoinFlipPanel() {
-  const { sweepsCoins, formatGPC, refresh } = useCoins();
+  const { sweepsCoins, formatGPC, refresh, applyServerGpayBalance } = useCoins();
   const [token, setToken] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [tab, setTab] = useState<Tab>("house");
@@ -150,6 +150,7 @@ export function CoinFlipPanel() {
     setFlipGeneration((g) => g + 1);
     setBusy(true);
     try {
+      const balanceBefore = sweepsCoins;
       const d = await Promise.all([
         (async () => {
           const r = await fetch(`${API}/create`, {
@@ -172,6 +173,24 @@ export function CoinFlipPanel() {
         })(),
         new Promise<void>((resolve) => setTimeout(resolve, FLIP_ANIM_MS)),
       ]).then(([data]) => data);
+
+      const authoritative =
+        typeof d.gpayCoins === "number"
+          ? d.gpayCoins
+          : typeof d.new_balance === "number"
+            ? d.new_balance
+            : null;
+      if (authoritative != null) {
+        applyServerGpayBalance(authoritative);
+      }
+      const refreshed = await refresh();
+      console.info("[coin-flip client] vs_house settled", {
+        youWon: d.youWon,
+        netMinor: d.netMinor,
+        serverGpayCoins: authoritative,
+        balanceBefore,
+        balanceAfterRefresh: refreshed?.gpayCoins,
+      });
 
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
@@ -208,7 +227,17 @@ export function CoinFlipPanel() {
         setError(typeof d.message === "string" ? d.message : "Create failed");
         return;
       }
-      void refresh();
+      const j = d as { gpayCoins?: number; new_balance?: number };
+      const authoritative =
+        typeof j.gpayCoins === "number"
+          ? j.gpayCoins
+          : typeof j.new_balance === "number"
+            ? j.new_balance
+            : null;
+      if (authoritative != null) {
+        applyServerGpayBalance(authoritative);
+      }
+      await refresh();
       loadOpen();
       loadHistory();
     } finally {
@@ -226,6 +255,7 @@ export function CoinFlipPanel() {
     setFlipGeneration((g) => g + 1);
     setBusy(true);
     try {
+      const balanceBefore = sweepsCoins;
       const d = await Promise.all([
         (async () => {
           const r = await fetch(`${API}/join`, {
@@ -233,7 +263,14 @@ export function CoinFlipPanel() {
             headers: authHeaders(),
             body: JSON.stringify({ gameId }),
           });
-          const j = (await r.json().catch(() => ({}))) as { message?: string; result?: string; youWon?: boolean; netMinor?: number };
+          const j = (await r.json().catch(() => ({}))) as {
+            message?: string;
+            result?: string;
+            youWon?: boolean;
+            netMinor?: number;
+            gpayCoins?: number;
+            new_balance?: number;
+          };
           if (!r.ok) {
             throw new Error(typeof j.message === "string" ? j.message : "Join failed");
           }
@@ -241,6 +278,24 @@ export function CoinFlipPanel() {
         })(),
         new Promise<void>((resolve) => setTimeout(resolve, FLIP_ANIM_MS)),
       ]).then(([data]) => data);
+
+      const authoritative =
+        typeof d.gpayCoins === "number"
+          ? d.gpayCoins
+          : typeof d.new_balance === "number"
+            ? d.new_balance
+            : null;
+      if (authoritative != null) {
+        applyServerGpayBalance(authoritative);
+      }
+      const refreshed = await refresh();
+      console.info("[coin-flip client] vs_player join settled", {
+        youWon: d.youWon,
+        netMinor: d.netMinor,
+        serverGpayCoins: authoritative,
+        balanceBefore,
+        balanceAfterRefresh: refreshed?.gpayCoins,
+      });
 
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
@@ -250,7 +305,6 @@ export function CoinFlipPanel() {
       };
       setWon(!!d.youWon);
       setTargetFace(res);
-      void refresh();
       loadOpen();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Join failed");

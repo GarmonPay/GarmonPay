@@ -115,8 +115,20 @@ export async function POST(request: Request) {
 
   if (!debit.success) {
     await supabase.from("coin_flip_games").update({ status: "cancelled" }).eq("id", gameId);
-    return NextResponse.json({ message: debit.message }, { status: 400 });
+    console.warn("[coin-flip/create] vs_house debit failed", { gameId, userId, betAmountSc, message: debit.message });
+    return NextResponse.json(
+      { ok: false, message: debit.message ?? "Failed to debit user balance" },
+      { status: 400 }
+    );
   }
+
+  const afterDebit = await getUserCoins(userId);
+  console.info("[coin-flip/create] vs_house debited", {
+    gameId,
+    userId,
+    betAmountSc,
+    gpayCoinsAfterDebit: afterDebit.gpayCoins,
+  });
 
   const result = flipCoin();
   const creatorWins = result === side;
@@ -164,7 +176,16 @@ export async function POST(request: Request) {
 
   const netMinor = creatorWins ? payoutWinnerMinor - betAmountSc : -betAmountSc;
 
+  console.info("[coin-flip/create] vs_house complete", {
+    gameId,
+    userId,
+    outcome: creatorWins ? "win" : "loss",
+    netMinor,
+    gpayCoinsFinal: gpayAfter,
+  });
+
   return NextResponse.json({
+    ok: true,
     gameId,
     status: "completed",
     mode: "vs_house",
