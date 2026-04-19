@@ -8,6 +8,23 @@ const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
 
 /**
+ * Safe canonical site origin for redirects. Malformed NEXT_PUBLIC_SITE_URL must never throw —
+ * otherwise middleware crashes and every page returns 500.
+ */
+function resolveSiteOrigin(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return PRODUCTION_ORIGIN;
+  try {
+    const normalized = raw.includes("://") ? raw : `https://${raw}`;
+    const u = new URL(normalized);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return PRODUCTION_ORIGIN;
+    return u.origin;
+  } catch {
+    return PRODUCTION_ORIGIN;
+  }
+}
+
+/**
  * Skip production HTTPS/canonical redirect for local dev (loopback, typical LAN test IPs, or explicit opt-out).
  * Prevents 301 → garmonpay.com when NODE_ENV=production on a laptop or phone-on-Wi‑Fi.
  */
@@ -99,16 +116,25 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? PRODUCTION_ORIGIN;
-  const canonicalHost = new URL(siteOrigin).host;
+  const siteOrigin = resolveSiteOrigin();
+  let canonicalHost: string;
+  try {
+    canonicalHost = new URL(siteOrigin).host;
+  } catch {
+    canonicalHost = new URL(PRODUCTION_ORIGIN).host;
+  }
 
   const needHttps = proto !== "https";
   const needCanonicalHost = host && host !== canonicalHost;
 
   if (needHttps || needCanonicalHost) {
-    const redirectUrl = new URL(url.pathname + url.search, siteOrigin);
-    redirectUrl.protocol = "https:";
-    return NextResponse.redirect(redirectUrl, 301);
+    try {
+      const redirectUrl = new URL(url.pathname + url.search, siteOrigin);
+      redirectUrl.protocol = "https:";
+      return NextResponse.redirect(redirectUrl, 301);
+    } catch {
+      return NextResponse.next();
+    }
   }
 
   const response = NextResponse.next();
