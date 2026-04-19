@@ -10,6 +10,17 @@ const JOIN_TIMEOUT_MS = 8000;
 const RETRY_INTERVAL_MS = 30_000;
 const MAX_AUTO_RETRIES = 3;
 
+/** User-facing copy only — never raw API or stack traces */
+const COPY = {
+  voiceConnected: "Voice connected",
+  connecting: "Connecting voice…",
+  voiceOff: "Voice off",
+  temporarilyUnavailable: "Voice temporarily unavailable",
+  signIn: "Sign in to use voice",
+  micHint: "Allow microphone access to speak",
+  envUnavailable: "Voice isn’t available in this environment.",
+} as const;
+
 type Props = {
   roomId: string;
   userId?: string;
@@ -17,6 +28,15 @@ type Props = {
   /** spectator = listen only (no microphone publish) */
   isSpectator?: boolean;
 };
+
+function ConnectingSpinner() {
+  return (
+    <span
+      className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400"
+      aria-hidden
+    />
+  );
+}
 
 export default function VoiceChat({ roomId, userId, userName, isSpectator = false }: Props) {
   const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID?.trim() ?? "";
@@ -29,7 +49,8 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
   const wasConnectedRef = useRef(false);
 
   const [conn, setConn] = useState<ConnStatus>("disconnected");
-  const [error, setError] = useState<string | null>(null);
+  /** Subtle hint below status (friendly only; failures log to console) */
+  const [softHint, setSoftHint] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [remoteCount, setRemoteCount] = useState(0);
 
@@ -70,17 +91,18 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     }
     setRemoteCount(0);
     setConn("disconnected");
+    setSoftHint(null);
     console.info("[celo/voice] left channel");
   }, [clearRetryTimer]);
 
   const connectVoice = useCallback(async () => {
     if (!appId || !userId) {
-      setError("Sign in and set NEXT_PUBLIC_AGORA_APP_ID.");
+      setSoftHint(!appId ? COPY.envUnavailable : COPY.signIn);
       setConn("disconnected");
       return;
     }
     intentionalLeaveRef.current = false;
-    setError(null);
+    setSoftHint(null);
     setConn("connecting");
 
     const existing = clientRef.current;
@@ -103,14 +125,15 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
 
     const sb = supabase;
     if (!sb) {
-      setError("Client not configured.");
+      console.error("[celo/voice] supabase client missing");
+      setSoftHint(COPY.temporarilyUnavailable);
       setConn("disconnected");
       return;
     }
 
     const accessToken = (await sb.auth.getSession()).data.session?.access_token;
     if (!accessToken) {
-      setError("Not signed in.");
+      setSoftHint(COPY.signIn);
       setConn("disconnected");
       return;
     }
@@ -133,7 +156,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       ]);
     } catch (e) {
       console.error("[celo/voice] token fetch failed", e);
-      setError("Voice unavailable. Tap Retry.");
+      setSoftHint(COPY.temporarilyUnavailable);
       setConn("disconnected");
       return;
     }
@@ -147,15 +170,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
 
     if (!res.ok) {
       console.error("[celo/voice] rtc-token failed", res.status, data);
-      const hint =
-        res.status === 401
-          ? " Sign in again, then retry."
-          : res.status === 403
-            ? " You may need to join the table first."
-            : res.status === 503
-              ? " Check server Agora env (NEXT_PUBLIC_AGORA_APP_ID, AGORA_APP_CERTIFICATE)."
-              : "";
-      setError(`${data.error ?? "Voice unavailable."}${hint} Tap Retry.`);
+      setSoftHint(COPY.temporarilyUnavailable);
       setConn("disconnected");
       return;
     }
@@ -167,7 +182,8 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     console.info("[celo/voice] rtc-token ok", { channelName, uid, hasToken: Boolean(token), audience: isSpectator });
 
     if (!channelName || uid == null) {
-      setError("Voice unavailable. Tap Retry.");
+      console.error("[celo/voice] missing channel or uid", data);
+      setSoftHint(COPY.temporarilyUnavailable);
       setConn("disconnected");
       return;
     }
@@ -189,7 +205,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
             void connectVoice();
           }, RETRY_INTERVAL_MS);
         } else {
-          setError("Voice disconnected. Tap Retry.");
+          setSoftHint(COPY.temporarilyUnavailable);
           setConn("disconnected");
         }
       }
@@ -224,7 +240,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       console.info("[celo/voice] join ok");
     } catch (e) {
       console.error("[celo/voice] join failed", e);
-      setError("Voice unavailable. Tap Retry.");
+      setSoftHint(COPY.temporarilyUnavailable);
       setConn("disconnected");
       await leave();
       return;
@@ -238,7 +254,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
         console.info("[celo/voice] published mic");
       } catch (e) {
         console.error("[celo/voice] mic failed", e);
-        setError("Microphone unavailable.");
+        setSoftHint(COPY.micHint);
         setConn("disconnected");
         await leave();
         return;
@@ -248,6 +264,7 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     }
 
     retryCountRef.current = 0;
+    setSoftHint(null);
     setConn("connected");
   }, [appId, userId, roomId, supabase, isSpectator, leave, clearRetryTimer]);
 
@@ -272,32 +289,56 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
     setMicOn(next);
   }, [micOn, isSpectator]);
 
-  const statusLine = useMemo(() => {
-    if (conn === "connected") return { emoji: "🟢", label: "Connected", color: "#10B981" };
-    if (conn === "connecting") return { emoji: "🟡", label: "Connecting…", color: "#EAB308" };
-    if (conn === "reconnecting") return { emoji: "🟡", label: "Reconnecting…", color: "#EAB308" };
-    return { emoji: "🔴", label: "Offline", color: "#EF4444" };
+  const statusPresentation = useMemo(() => {
+    if (conn === "connected") {
+      return {
+        emoji: "🟢",
+        title: COPY.voiceConnected,
+        color: "#10B981",
+        showSpinner: false,
+      };
+    }
+    if (conn === "connecting" || conn === "reconnecting") {
+      return {
+        emoji: "🟡",
+        title: COPY.connecting,
+        color: "#EAB308",
+        showSpinner: true,
+      };
+    }
+    return {
+      emoji: "🔴",
+      title: COPY.voiceOff,
+      color: "#94A3B8",
+      showSpinner: false,
+    };
   }, [conn]);
 
   if (!appId) {
     return (
       <div
-        className="rounded-xl border border-violet-500/25 p-4 text-[11px]"
+        className="rounded-xl border border-violet-500/25 p-4 text-[12px] leading-relaxed"
         style={{ background: "#0D0520", color: "#A855F7" }}
       >
-        Set <code className="text-violet-300">NEXT_PUBLIC_AGORA_APP_ID</code> for voice.
+        <p className="font-semibold text-violet-200/95">{COPY.envUnavailable}</p>
       </div>
     );
   }
+
+  const showJoinOrRetry = conn === "disconnected";
+  const needsRetryLabel = Boolean(softHint);
 
   return (
     <div className="rounded-xl border border-[rgba(124,58,237,0.25)] p-4 backdrop-blur-sm" style={{ background: "#0D0520" }}>
       <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: "#A855F7" }}>
         Voice
       </p>
-      <p className="text-base font-bold" style={{ color: statusLine.color }}>
-        {statusLine.emoji} {statusLine.label}
-      </p>
+      <div className="flex items-center gap-2">
+        {statusPresentation.showSpinner ? <ConnectingSpinner /> : null}
+        <p className="text-base font-bold" style={{ color: statusPresentation.color }}>
+          {statusPresentation.emoji} {statusPresentation.title}
+        </p>
+      </div>
       <p className="mt-2 text-[12px] text-slate-400">
         {userName ?? userId ?? "You"}
         {isSpectator ? " · audience (listen only)" : " · microphone"}
@@ -306,22 +347,30 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       {isSpectator ? (
         <p className="mt-2 text-[11px] text-slate-500">Spectators can listen only.</p>
       ) : null}
-      {error ? (
-        <p className="mt-3 text-[12px] font-medium text-red-400/95">
-          {error}
-        </p>
+      {softHint ? (
+        <p className="mt-3 text-[12px] leading-snug text-slate-400">{softHint}</p>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {conn === "disconnected" || conn === "reconnecting" ? (
+        {showJoinOrRetry ? (
           <button
             type="button"
             onClick={join}
             className="rounded-lg px-4 py-2 text-[12px] font-bold text-[#0A0A0F]"
             style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
           >
-            {error ? "RETRY" : "JOIN VOICE"}
+            {needsRetryLabel ? "Retry voice" : "Join voice"}
           </button>
-        ) : (
+        ) : null}
+        {conn === "connecting" || conn === "reconnecting" ? (
+          <button
+            type="button"
+            onClick={() => void leave()}
+            className="rounded-lg border border-white/15 px-3 py-2 text-[11px] text-slate-300"
+          >
+            Cancel
+          </button>
+        ) : null}
+        {conn === "connected" ? (
           <>
             {!isSpectator && (
               <button
@@ -329,18 +378,18 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
                 onClick={() => void toggleMic()}
                 className="rounded-lg border border-violet-500/50 px-3 py-2 text-[11px] text-violet-100"
               >
-                {micOn ? "MUTE" : "UNMUTE"}
+                {micOn ? "Mute" : "Unmute"}
               </button>
             )}
             <button
               type="button"
               onClick={() => void leave()}
-              className="rounded-lg border border-red-500/40 px-3 py-2 text-[11px] text-red-300"
+              className="rounded-lg border border-white/15 px-3 py-2 text-[11px] text-slate-300"
             >
-              LEAVE VOICE
+              Leave voice
             </button>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );
