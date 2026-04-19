@@ -1628,6 +1628,7 @@ export default function CeloRoomPage() {
               justifyContent: "flex-start",
               gap: 12,
               padding: 16,
+              paddingBottom: "max(7rem, calc(16px + env(safe-area-inset-bottom, 0px)))",
               overflowY: "auto",
             }}
           >

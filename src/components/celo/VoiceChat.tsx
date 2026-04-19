@@ -120,11 +120,12 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
       res = await Promise.race([
         fetch("/api/agora/rtc-token", {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({ roomId }),
+          body: JSON.stringify({ roomId, isSpectator }),
         }),
         new Promise<Response>((_, rej) =>
           setTimeout(() => rej(new Error("rtc-token timeout")), JOIN_TIMEOUT_MS)
@@ -146,7 +147,15 @@ export default function VoiceChat({ roomId, userId, userName, isSpectator = fals
 
     if (!res.ok) {
       console.error("[celo/voice] rtc-token failed", res.status, data);
-      setError(data.error ?? "Voice unavailable. Tap Retry.");
+      const hint =
+        res.status === 401
+          ? " Sign in again, then retry."
+          : res.status === 403
+            ? " You may need to join the table first."
+            : res.status === 503
+              ? " Check server Agora env (NEXT_PUBLIC_AGORA_APP_ID, AGORA_APP_CERTIFICATE)."
+              : "";
+      setError(`${data.error ?? "Voice unavailable."}${hint} Tap Retry.`);
       setConn("disconnected");
       return;
     }

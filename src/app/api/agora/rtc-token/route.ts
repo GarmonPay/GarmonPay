@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { RtcRole, RtcTokenBuilder } from "agora-token";
@@ -20,14 +20,14 @@ function agoraUidFromUserId(userId: string): number {
  * Body: { roomId: string } — must match a C-Lo room the user can access.
  */
 export async function POST(req: Request) {
-  const userId = await getAuthUserIdStrict(req);
+  const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { roomId?: string };
+  let body: { roomId?: string; isSpectator?: boolean };
   try {
-    body = (await req.json()) as { roomId?: string };
+    body = (await req.json()) as { roomId?: string; isSpectator?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -55,7 +55,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  const isPublic = roomRow.room_type === "public";
+  // Treat NULL/empty like public (lobby + legacy rows); only explicit "private" is gated.
+  const rt = roomRow.room_type;
+  const isPublic = rt === "public" || rt == null || String(rt).trim() === "";
   const isBanker = String(roomRow.banker_id ?? "") === userId;
 
   const { data: membershipRows } = await admin
@@ -75,17 +77,12 @@ export async function POST(req: Request) {
   const now = Math.floor(Date.now() / 1000);
   const expire = now + TOKEN_TTL_SEC;
 
+  const isSpectator = Boolean(body.isSpectator);
+  const role = isSpectator ? RtcRole.SUBSCRIBER : RtcRole.PUBLISHER;
+
   let token: string | null = null;
   if (certificate) {
-    token = RtcTokenBuilder.buildTokenWithUid(
-      appId,
-      certificate,
-      channelName,
-      uid,
-      RtcRole.PUBLISHER,
-      expire,
-      expire,
-    );
+    token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channelName, uid, role, expire, expire);
   }
 
   return NextResponse.json({
