@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
-import VoiceChat from "@/components/celo/VoiceChat";
 import { localeInt } from "@/lib/format-number";
+import { parseCeloSystemChatMessage } from "@/lib/celo-system-chat";
 
 interface Player {
   id: string;
@@ -76,7 +76,10 @@ type DiceType =
   | "fire"
   | "diamond";
 
-type TabType = "side" | "chat" | "voice";
+type TabType = "side" | "chat";
+
+const MOBILE_NAV_OFFSET = "calc(5rem + env(safe-area-inset-bottom, 0px))";
+const CHAT_MAX = 150;
 
 function parseRollResultKind(s: string | null): RollResultKind {
   if (!s) return null;
@@ -121,6 +124,8 @@ export default function CeloRoomPage() {
   const rollingRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<TabType>("chat");
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<"live" | "connecting" | "offline">("connecting");
@@ -378,6 +383,25 @@ export default function CeloRoomPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const fn = () => setIsDesktop(mq.matches);
+    fn();
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+
+  useEffect(() => {
+    if (round?.status !== "completed") return;
+    const t = window.setTimeout(() => {
+      setDice(null);
+      setRollName(null);
+      setRollResult(null);
+      setRolling(false);
+    }, 3000);
+    return () => window.clearTimeout(t);
+  }, [round?.status, round?.id]);
+
   const handleRoll = async () => {
     if (rollingAction || rollingRef.current) return;
     setRollingAction(true);
@@ -487,13 +511,12 @@ export default function CeloRoomPage() {
 
   const handleSendChat = async () => {
     if (!chatInput.trim()) return;
-    const msg = chatInput.trim();
+    const msg = chatInput.trim().slice(0, CHAT_MAX);
     setChatInput("");
     await supabase.from("celo_chat").insert({
       room_id: roomId,
       user_id: myUserId,
       message: msg,
-      is_system: false,
     });
   };
 
@@ -528,8 +551,18 @@ export default function CeloRoomPage() {
     return false;
   };
 
-  const tabHeight = 44;
-  const actionBarHeight = 64;
+  const onMobileTab = (tab: TabType) => {
+    if (activeTab === tab && mobilePanelOpen) {
+      setMobilePanelOpen(false);
+    } else {
+      setActiveTab(tab);
+      setMobilePanelOpen(true);
+    }
+  };
+
+  const tabBarHeight = 40;
+  const actionBarHeight = 56;
+  const panelMax = 180;
 
   if (loading) {
     return (
@@ -584,34 +617,331 @@ export default function CeloRoomPage() {
     );
   }
 
+  const chatMessagesEl = messages.map((msg) => {
+    const parsed = parseCeloSystemChatMessage(msg.message);
+    if (parsed.variant) {
+      const color =
+        parsed.variant === "gold" ? "#F5C842" : parsed.variant === "red" ? "#EF4444" : "#22C55E";
+      return (
+        <div key={msg.id} style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 11, color, fontFamily: "Courier New", letterSpacing: "0.03em" }}>{parsed.text}</div>
+        </div>
+      );
+    }
+    if (msg.is_system) {
+      return (
+        <div key={msg.id} style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#F5C842", fontFamily: "Courier New", letterSpacing: "0.03em" }}>
+            {msg.message}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div key={msg.id} style={{ display: "flex", gap: 8, textAlign: "left" }}>
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #4C1D95, #7C3AED)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 9,
+            fontWeight: 700,
+            color: "#fff",
+            flexShrink: 0,
+            marginTop: 1,
+          }}
+        >
+          {getInitial(msg.user)}
+        </div>
+        <div>
+          <span style={{ fontSize: 11, color: "#A855F7", fontFamily: "Courier New", marginRight: 6 }}>
+            {getName(msg.user).split(" ")[0]}
+          </span>
+          <span style={{ fontSize: 12, color: "#D1D5DB" }}>{msg.message}</span>
+        </div>
+      </div>
+    );
+  });
+
+  const sidePanelInner = (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: "10px 12px", gap: 8, overflowY: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "Courier New", letterSpacing: "0.08em" }}>SIDE ENTRIES</div>
+        <button
+          type="button"
+          onClick={() => void handlePostSideBet()}
+          style={{
+            background: "rgba(124,58,237,0.2)",
+            border: "1px solid rgba(124,58,237,0.4)",
+            borderRadius: 6,
+            color: "#A855F7",
+            fontSize: 10,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontFamily: "Courier New",
+            fontWeight: 700,
+          }}
+        >
+          + POST
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <select
+          value={sideBetForm.bet_type}
+          onChange={(e) =>
+            setSideBetForm((f) => ({
+              ...f,
+              bet_type: e.target.value,
+            }))
+          }
+          style={{
+            flex: 2,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(124,58,237,0.3)",
+            borderRadius: 6,
+            color: "#fff",
+            padding: "6px 8px",
+            fontSize: 11,
+            fontFamily: "Courier New",
+            outline: "none",
+          }}
+        >
+          <option value="celo">C-Lo (8×)</option>
+          <option value="shit">Shit (8×)</option>
+          <option value="hand_crack">Hand Crack (4.5×)</option>
+          <option value="trips">Trips (8×)</option>
+          <option value="banker_wins">Banker wins (1.8×)</option>
+          <option value="player_wins">Players win (1.8×)</option>
+        </select>
+        <input
+          type="number"
+          value={sideBetForm.amount_sc}
+          onChange={(e) =>
+            setSideBetForm((f) => ({
+              ...f,
+              amount_sc: Math.max(100, Math.round(parseInt(e.target.value, 10) / 100) * 100),
+            }))
+          }
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(124,58,237,0.3)",
+            borderRadius: 6,
+            color: "#F5C842",
+            padding: "6px 8px",
+            fontSize: 11,
+            fontFamily: "Courier New",
+            outline: "none",
+          }}
+        />
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {sideBets.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#4B5563", fontSize: 12, fontFamily: "Courier New", padding: "20px 0" }}>
+            No open side entries
+          </div>
+        ) : (
+          sideBets.map((bet) => (
+            <div
+              key={bet.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: 6,
+                padding: "8px 10px",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <span style={{ color: "#9CA3AF", fontSize: 11, fontFamily: "Courier New" }}>
+                  {bet.creator?.full_name?.split(" ")[0] || "?"}
+                </span>
+                <span style={{ color: "#6B7280", fontSize: 10, fontFamily: "Courier New" }}>
+                  {" "}
+                  → {bet.bet_type.replace("_", " ")}
+                </span>
+              </div>
+              <div style={{ color: "#F5C842", fontSize: 11, fontFamily: "Courier New", fontWeight: 700 }}>{bet.amount_sc} GPC</div>
+              {bet.creator_id !== myUserId && !bet.acceptor_id ? (
+                <button
+                  type="button"
+                  onClick={() => void handleAcceptSideBet(bet.id)}
+                  style={{
+                    background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                    border: "none",
+                    borderRadius: 5,
+                    color: "#0A0A0F",
+                    fontSize: 10,
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    fontFamily: "Courier New",
+                    fontWeight: 700,
+                  }}
+                >
+                  TAKE
+                </button>
+              ) : null}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const chatPanelInner = (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "8px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          minHeight: 0,
+        }}
+      >
+        {chatMessagesEl}
+        <div ref={chatEndRef} />
+      </div>
+      <div
+        style={{
+          padding: "6px 12px",
+          borderTop: "1px solid rgba(124,58,237,0.1)",
+          display: "flex",
+          gap: 6,
+          flexShrink: 0,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <div style={{ display: "flex", gap: 4, marginRight: 4, flexWrap: "wrap" }}>
+          {["🎲", "💰", "🔥", "😂", "💀", "👑"].map((e) => (
+            <button
+              type="button"
+              key={e}
+              onClick={async () => {
+                await supabase.from("celo_chat").insert({
+                  room_id: roomId,
+                  user_id: myUserId,
+                  message: e,
+                });
+              }}
+              style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", padding: "2px" }}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+        <input
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value.slice(0, CHAT_MAX))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void handleSendChat();
+            }
+          }}
+          placeholder="Hype the table..."
+          style={{
+            flex: 1,
+            minWidth: 120,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(124,58,237,0.2)",
+            borderRadius: 8,
+            color: "#fff",
+            padding: "8px 10px",
+            fontSize: 13,
+            outline: "none",
+            fontFamily: "DM Sans",
+          }}
+        />
+        {!isDesktop ? (
+          <button
+            type="button"
+            onClick={() => void handleSendChat()}
+            style={{
+              background: "linear-gradient(135deg, #7C3AED, #A855F7)",
+              border: "none",
+              borderRadius: 8,
+              color: "#fff",
+              padding: "8px 14px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: "Courier New",
+            }}
+          >
+            SEND
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
   const rollKind = parseRollResultKind(rollResult);
   const showRollingUi = rolling || rollingAction;
   const dieSize =
-    typeof window !== "undefined" && window.innerWidth < 400 ? 56 : 68;
+    typeof window !== "undefined" && !isDesktop
+      ? Math.min(68, Math.max(48, Math.round(window.innerWidth * 0.12)))
+      : 68;
+
+  const headerH = isDesktop ? 56 : 48;
+  const bankH = isDesktop ? 72 : 56;
 
   return (
     <div
       style={{
         position: "fixed",
-        inset: 0,
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: isDesktop ? 0 : MOBILE_NAV_OFFSET,
         background: "#05010F",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
         fontFamily: "DM Sans, sans-serif",
+        minHeight: 0,
       }}
     >
       <div
         style={{
-          height: 56,
+          flex: 1,
+          display: "flex",
+          flexDirection: isDesktop ? "row" : "column",
+          minHeight: 0,
+          width: "100%",
+          maxWidth: isDesktop ? 1200 : undefined,
+          margin: isDesktop ? "0 auto" : undefined,
+        }}
+      >
+        <div
+          style={{
+            flex: isDesktop ? "0 0 65%" : 1,
+            minWidth: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+      <div
+        style={{
+          height: headerH,
           flexShrink: 0,
           background: "rgba(5,1,15,0.97)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid rgba(124,58,237,0.2)",
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
-          gap: 12,
+          padding: "0 12px",
+          gap: 8,
           zIndex: 60,
         }}
       >
@@ -643,9 +973,11 @@ export default function CeloRoomPage() {
         >
           {room.name}
         </div>
-        <div style={{ fontFamily: "Courier New", color: "#F5C842", fontSize: 12, whiteSpace: "nowrap" }}>
-          {round ? `ROUND ${round.round_number}` : "—"}
-        </div>
+        {isDesktop ? (
+          <div style={{ fontFamily: "Courier New", color: "#F5C842", fontSize: 12, whiteSpace: "nowrap" }}>
+            {round ? `ROUND ${round.round_number}` : "—"}
+          </div>
+        ) : null}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div
             style={{
@@ -662,14 +994,16 @@ export default function CeloRoomPage() {
             {connectionStatus === "live" ? "LIVE" : connectionStatus === "connecting" ? "CONNECTING" : "OFFLINE"}
           </span>
         </div>
-        <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "Courier New", whiteSpace: "nowrap" }}>
-          👁 {spectatorCount}
-        </div>
+        {isDesktop ? (
+          <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "Courier New", whiteSpace: "nowrap" }}>
+            👁 {spectatorCount}
+          </div>
+        ) : null}
       </div>
 
       <div
         style={{
-          height: 72,
+          height: bankH,
           flexShrink: 0,
           background: "linear-gradient(135deg, rgba(13,5,32,0.95), rgba(30,10,60,0.95))",
           borderBottom: "1px solid rgba(245,200,66,0.12)",
@@ -702,13 +1036,13 @@ export default function CeloRoomPage() {
             </div>
             <div
               style={{
-                fontSize: 12,
+                fontSize: isDesktop ? 12 : 10,
                 color: "#fff",
                 fontFamily: "Courier New",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                maxWidth: 80,
+                maxWidth: isDesktop ? 80 : 72,
               }}
             >
               {getName(bankerPlayer?.user)}
@@ -718,11 +1052,22 @@ export default function CeloRoomPage() {
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <div style={{ fontSize: 9, color: "#F5C842", fontFamily: "Courier New", letterSpacing: "0.08em" }}>PRIZE POOL</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", fontFamily: "Courier New" }}>
+          <div
+            style={{
+              fontSize: isDesktop ? 16 : 11,
+              fontWeight: 700,
+              color: "#fff",
+              fontFamily: "Courier New",
+            }}
+          >
             {localeInt(round?.prize_pool_sc)}
-            <span style={{ fontSize: 10, color: "#F5C842", marginLeft: 3 }}>GPC</span>
+            <span style={{ fontSize: isDesktop ? 10 : 9, color: "#F5C842", marginLeft: 3 }}>GPC</span>
           </div>
-          <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>({gpcToUsd(round?.prize_pool_sc || 0)})</div>
+          {isDesktop ? (
+            <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>
+              ({gpcToUsd(round?.prize_pool_sc || 0)})
+            </div>
+          ) : null}
           {round?.bank_covered ? (
             <div style={{ fontSize: 9, color: "#F5C842", fontFamily: "Courier New", letterSpacing: "0.05em" }}>🔒 COVERED</div>
           ) : null}
@@ -730,11 +1075,20 @@ export default function CeloRoomPage() {
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New", letterSpacing: "0.08em" }}>BANK</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#F5C842", fontFamily: "Courier New" }}>
+          <div
+            style={{
+              fontSize: isDesktop ? 16 : 11,
+              fontWeight: 700,
+              color: "#F5C842",
+              fontFamily: "Courier New",
+            }}
+          >
             {localeInt(room.current_bank_sc)}
-            <span style={{ fontSize: 10, color: "#D4A017", marginLeft: 3 }}>GPC</span>
+            <span style={{ fontSize: isDesktop ? 10 : 9, color: "#D4A017", marginLeft: 3 }}>GPC</span>
           </div>
-          <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>({gpcToUsd(room.current_bank_sc)})</div>
+          {isDesktop ? (
+            <div style={{ fontSize: 10, color: "#6B7280", fontFamily: "Courier New" }}>({gpcToUsd(room.current_bank_sc)})</div>
+          ) : null}
           {myRole === "banker" && room.last_round_was_celo ? (
             <button
               type="button"
@@ -763,6 +1117,7 @@ export default function CeloRoomPage() {
       <div
         style={{
           flex: 1,
+          minHeight: 200,
           position: "relative",
           overflow: "hidden",
           display: "flex",
@@ -846,8 +1201,8 @@ export default function CeloRoomPage() {
           style={{
             position: "relative",
             zIndex: 2,
-            width: "min(320px, 90vw)",
-            height: "clamp(160px, 25vw, 240px)",
+            width: "min(280px, 85vw)",
+            height: "min(180px, 30vh)",
             borderRadius: "50%",
             background: `
             repeating-linear-gradient(
@@ -904,7 +1259,7 @@ export default function CeloRoomPage() {
               <div
                 style={{
                   display: "flex",
-                  gap: 12,
+                  gap: 8,
                   alignItems: "center",
                   justifyContent: "center",
                   animation: "feltVibrate 0.15s ease-in-out infinite",
@@ -930,7 +1285,7 @@ export default function CeloRoomPage() {
               <div
                 style={{
                   display: "flex",
-                  gap: 12,
+                  gap: 8,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -947,17 +1302,18 @@ export default function CeloRoomPage() {
                 ))}
               </div>
             ) : null}
-            {!showRollingUi && (!dice || dice[0] === 0) && round ? (
+            {!showRollingUi && (!dice || dice[0] === 0) ? (
               <div
                 style={{
-                  color: "rgba(255,255,255,0.2)",
+                  color: "rgba(156,163,175,0.9)",
                   fontSize: 12,
                   fontFamily: "Courier New, monospace",
-                  letterSpacing: "0.1em",
+                  letterSpacing: "0.06em",
                   marginTop: 8,
+                  textAlign: "center",
                 }}
               >
-                WAITING FOR ROLL...
+                {!round ? "Waiting to start..." : "Waiting for roll..."}
               </div>
             ) : null}
           </div>
@@ -999,8 +1355,8 @@ export default function CeloRoomPage() {
             </div>
             <div
               style={{
-                width: 44,
-                height: 44,
+                width: isDesktop ? 44 : 36,
+                height: isDesktop ? 44 : 36,
                 borderRadius: "50%",
                 background: "linear-gradient(135deg, #7C3AED, #A855F7)",
                 border: "2px solid #F5C842",
@@ -1008,7 +1364,7 @@ export default function CeloRoomPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 16,
+                fontSize: isDesktop ? 16 : 14,
                 fontWeight: 700,
                 color: "#fff",
               }}
@@ -1027,12 +1383,12 @@ export default function CeloRoomPage() {
             zIndex: 3,
             display: "flex",
             justifyContent: "center",
-            gap: 10,
+            gap: 8,
             padding: "0 12px",
             flexWrap: "wrap",
           }}
         >
-          {Array.from({ length: room.max_players }, (_, i) => {
+          {Array.from({ length: Math.min(5, room.max_players) }, (_, i) => {
             const player = activePlayers.find((p) => p.seat_number === i + 1);
             const isActive = round?.status === "player_rolling" && player?.user_id === myUserId;
             return (
@@ -1043,15 +1399,15 @@ export default function CeloRoomPage() {
                   flexDirection: "column",
                   alignItems: "center",
                   gap: 2,
-                  width: 44,
+                  width: isDesktop ? 44 : 36,
                 }}
               >
                 {player ? (
                   <>
                     <div
                       style={{
-                        width: 36,
-                        height: 36,
+                        width: isDesktop ? 36 : 32,
+                        height: isDesktop ? 36 : 32,
                         borderRadius: "50%",
                         background: "linear-gradient(135deg, #4C1D95, #7C3AED)",
                         border: isActive ? "2px solid #F5C842" : "1.5px solid rgba(124,58,237,0.4)",
@@ -1114,6 +1470,13 @@ export default function CeloRoomPage() {
               </div>
             );
           })}
+          {room.max_players > 5 ? (
+            <div style={{ display: "flex", alignItems: "center", alignSelf: "center", paddingLeft: 4 }}>
+              <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "Courier New", fontWeight: 700 }}>
+                +{room.max_players - 5}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1131,13 +1494,15 @@ export default function CeloRoomPage() {
           zIndex: 55,
         }}
       >
-        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 0, justifyContent: "center" }}>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New", letterSpacing: "0.06em" }}>BALANCE</div>
-          <div style={{ fontSize: 13, color: "#F5C842", fontFamily: "Courier New", fontWeight: 700 }}>
+          <div style={{ fontSize: 12, color: "#F5C842", fontFamily: "Courier New", fontWeight: 700 }}>
             {localeInt(myBalance)}
             <span style={{ fontSize: 9, marginLeft: 2 }}>GPC</span>
           </div>
-          <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New" }}>{gpcToUsd(myBalance)}</div>
+          {isDesktop ? (
+            <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New" }}>{gpcToUsd(myBalance)}</div>
+          ) : null}
         </div>
 
         <div style={{ flex: 1 }}>
@@ -1148,7 +1513,7 @@ export default function CeloRoomPage() {
               disabled={activePlayers.filter((p) => p.entry_sc > 0).length === 0}
               style={{
                 width: "100%",
-                height: 44,
+                height: 40,
                 background:
                   activePlayers.filter((p) => p.entry_sc > 0).length === 0
                     ? "rgba(255,255,255,0.08)"
@@ -1174,7 +1539,7 @@ export default function CeloRoomPage() {
               disabled={rollingAction}
               style={{
                 width: "100%",
-                height: 44,
+                height: 40,
                 background: rollingAction ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #F5C842, #D4A017)",
                 border: "none",
                 borderRadius: 10,
@@ -1196,7 +1561,7 @@ export default function CeloRoomPage() {
             <div
               style={{
                 width: "100%",
-                height: 44,
+                height: 40,
                 background: "rgba(255,255,255,0.04)",
                 borderRadius: 10,
                 display: "flex",
@@ -1318,8 +1683,8 @@ export default function CeloRoomPage() {
           onClick={() => setShowDiceShop(true)}
           style={{
             flexShrink: 0,
-            width: 44,
-            height: 44,
+            width: 36,
+            height: 36,
             background: "rgba(124,58,237,0.15)",
             border: "1px solid rgba(124,58,237,0.35)",
             borderRadius: 10,
@@ -1335,9 +1700,11 @@ export default function CeloRoomPage() {
         </button>
       </div>
 
+      {!isDesktop ? (
+        <>
       <div
         style={{
-          height: tabHeight,
+          height: tabBarHeight,
           flexShrink: 0,
           background: "rgba(5,1,15,0.97)",
           backdropFilter: "blur(12px)",
@@ -1350,20 +1717,20 @@ export default function CeloRoomPage() {
           [
             ["side", "🎰 SIDE"],
             ["chat", "💬 CHAT"],
-            ["voice", "🎤 VOICE"],
           ] as [TabType, string][]
         ).map(([key, label]) => (
           <button
             type="button"
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => onMobileTab(key)}
             style={{
               flex: 1,
               background: "none",
               border: "none",
-              borderBottom: activeTab === key ? "2px solid #F5C842" : "2px solid transparent",
-              color: activeTab === key ? "#F5C842" : "#6B7280",
-              fontSize: 11,
+              borderBottom:
+                activeTab === key && mobilePanelOpen ? "2px solid #F5C842" : "2px solid transparent",
+              color: activeTab === key && mobilePanelOpen ? "#F5C842" : "#6B7280",
+              fontSize: 10,
               fontWeight: 700,
               cursor: "pointer",
               fontFamily: "Courier New",
@@ -1377,269 +1744,77 @@ export default function CeloRoomPage() {
 
       <div
         style={{
-          height: 220,
+          maxHeight: mobilePanelOpen ? panelMax : 0,
+          height: mobilePanelOpen ? panelMax : 0,
           flexShrink: 0,
+          transition: "max-height 0.22s ease, height 0.22s ease",
           background: "rgba(13,5,32,0.98)",
           overflow: "hidden",
           borderTop: "1px solid rgba(124,58,237,0.08)",
           zIndex: 53,
         }}
       >
-        {activeTab === "side" ? (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: "10px 12px", gap: 8, overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "Courier New", letterSpacing: "0.08em" }}>SIDE ENTRIES</div>
-              <button
-                type="button"
-                onClick={() => void handlePostSideBet()}
-                style={{
-                  background: "rgba(124,58,237,0.2)",
-                  border: "1px solid rgba(124,58,237,0.4)",
-                  borderRadius: 6,
-                  color: "#A855F7",
-                  fontSize: 10,
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  fontFamily: "Courier New",
-                  fontWeight: 700,
-                }}
-              >
-                + POST
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <select
-                value={sideBetForm.bet_type}
-                onChange={(e) =>
-                  setSideBetForm((f) => ({
-                    ...f,
-                    bet_type: e.target.value,
-                  }))
-                }
-                style={{
-                  flex: 2,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(124,58,237,0.3)",
-                  borderRadius: 6,
-                  color: "#fff",
-                  padding: "6px 8px",
-                  fontSize: 11,
-                  fontFamily: "Courier New",
-                  outline: "none",
-                }}
-              >
-                <option value="celo">C-Lo (8×)</option>
-                <option value="shit">Shit (8×)</option>
-                <option value="hand_crack">Hand Crack (4.5×)</option>
-                <option value="trips">Trips (8×)</option>
-                <option value="banker_wins">Banker wins (1.8×)</option>
-                <option value="player_wins">Players win (1.8×)</option>
-              </select>
-              <input
-                type="number"
-                value={sideBetForm.amount_sc}
-                onChange={(e) =>
-                  setSideBetForm((f) => ({
-                    ...f,
-                    amount_sc: Math.max(100, Math.round(parseInt(e.target.value, 10) / 100) * 100),
-                  }))
-                }
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(124,58,237,0.3)",
-                  borderRadius: 6,
-                  color: "#F5C842",
-                  padding: "6px 8px",
-                  fontSize: 11,
-                  fontFamily: "Courier New",
-                  outline: "none",
-                }}
-              />
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-              {sideBets.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#4B5563", fontSize: 12, fontFamily: "Courier New", padding: "20px 0" }}>
-                  No open side entries
-                </div>
-              ) : (
-                sideBets.map((bet) => (
-                  <div
-                    key={bet.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      background: "rgba(255,255,255,0.03)",
-                      borderRadius: 6,
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <span style={{ color: "#9CA3AF", fontSize: 11, fontFamily: "Courier New" }}>
-                        {bet.creator?.full_name?.split(" ")[0] || "?"}
-                      </span>
-                      <span style={{ color: "#6B7280", fontSize: 10, fontFamily: "Courier New" }}>
-                        {" "}
-                        → {bet.bet_type.replace("_", " ")}
-                      </span>
-                    </div>
-                    <div style={{ color: "#F5C842", fontSize: 11, fontFamily: "Courier New", fontWeight: 700 }}>{bet.amount_sc} GPC</div>
-                    {bet.creator_id !== myUserId && !bet.acceptor_id ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleAcceptSideBet(bet.id)}
-                        style={{
-                          background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                          border: "none",
-                          borderRadius: 5,
-                          color: "#0A0A0F",
-                          fontSize: 10,
-                          padding: "4px 8px",
-                          cursor: "pointer",
-                          fontFamily: "Courier New",
-                          fontWeight: 700,
-                        }}
-                      >
-                        TAKE
-                      </button>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
+        <button
+          type="button"
+          aria-label="Close panel"
+          onClick={() => setMobilePanelOpen(false)}
+          style={{
+            height: 14,
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          <span
+            style={{
+              width: 32,
+              height: 4,
+              borderRadius: 999,
+              background: "rgba(156,163,175,0.45)",
+              display: "block",
+            }}
+          />
+        </button>
+        <div style={{ height: "calc(100% - 14px)", overflow: "hidden" }}>
+          {activeTab === "side" ? sidePanelInner : chatPanelInner}
+        </div>
+      </div>
+        </>
+      ) : null}
 
-        {activeTab === "chat" ? (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    display: msg.is_system ? "block" : "flex",
-                    gap: 8,
-                    textAlign: msg.is_system ? "center" : "left",
-                  }}
-                >
-                  {msg.is_system ? (
-                    <div style={{ fontSize: 11, color: "#F5C842", fontFamily: "Courier New", letterSpacing: "0.03em" }}>{msg.message}</div>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: "50%",
-                          background: "linear-gradient(135deg, #4C1D95, #7C3AED)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          color: "#fff",
-                          flexShrink: 0,
-                          marginTop: 1,
-                        }}
-                      >
-                        {getInitial(msg.user)}
-                      </div>
-                      <div>
-                        <span style={{ fontSize: 11, color: "#A855F7", fontFamily: "Courier New", marginRight: 6 }}>
-                          {getName(msg.user).split(" ")[0]}
-                        </span>
-                        <span style={{ fontSize: 12, color: "#D1D5DB" }}>{msg.message}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
-            <div style={{ padding: "6px 12px", borderTop: "1px solid rgba(124,58,237,0.1)", display: "flex", gap: 6, flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 4, marginRight: 4 }}>
-                {["🔥", "😂", "💀", "🎲", "💰"].map((e) => (
-                  <button
-                    type="button"
-                    key={e}
-                    onClick={async () => {
-                      await supabase.from("celo_chat").insert({
-                        room_id: roomId,
-                        user_id: myUserId,
-                        message: e,
-                        is_system: false,
-                      });
-                    }}
-                    style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", padding: "2px" }}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value.slice(0, 200))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSendChat();
-                }}
-                placeholder="Say something..."
-                style={{
-                  flex: 1,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(124,58,237,0.2)",
-                  borderRadius: 8,
-                  color: "#fff",
-                  padding: "8px 10px",
-                  fontSize: 13,
-                  outline: "none",
-                  fontFamily: "DM Sans",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => void handleSendChat()}
-                style={{
-                  background: "linear-gradient(135deg, #7C3AED, #A855F7)",
-                  border: "none",
-                  borderRadius: 8,
-                  color: "#fff",
-                  padding: "8px 14px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontFamily: "Courier New",
-                }}
-              >
-                SEND
-              </button>
-            </div>
-          </div>
-        ) : null}
+      </div>
 
-        {activeTab === "voice" ? (
+      {isDesktop ? (
+        <div
+          style={{
+            flex: "0 0 35%",
+            minWidth: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            borderLeft: "1px solid rgba(124,58,237,0.2)",
+            background: "rgba(5,1,15,0.5)",
+          }}
+        >
+          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>{sidePanelInner}</div>
           <div
             style={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "stretch",
-              justifyContent: "flex-start",
-              gap: 12,
-              padding: 16,
-              paddingBottom: "max(7rem, calc(16px + env(safe-area-inset-bottom, 0px)))",
-              overflowY: "auto",
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+              borderTop: "1px solid rgba(124,58,237,0.12)",
             }}
           >
-            <VoiceChat
-              roomId={roomId}
-              userId={myUserId || undefined}
-              userName={getName(myPlayer?.user)}
-              isSpectator={myRole === "spectator"}
-            />
+            {chatPanelInner}
           </div>
-        ) : null}
+        </div>
+      ) : null}
+
       </div>
 
       {showLowerBank ? (

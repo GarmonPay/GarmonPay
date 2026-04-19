@@ -8,6 +8,9 @@ import { normalizeCeloRoomRow, mergeCeloRoomUpdate } from "@/lib/celo-room-schem
 import { CELO_ROLL_ANIMATION_DURATION_MS } from "@/lib/celo-roll-sync-constants";
 import { buildCeloRollStartedPayload, broadcastCeloRoomEvent } from "@/lib/celo-roll-broadcast";
 import { celoAcquireRoundRollLock, celoReleaseRoundRollLock } from "@/lib/celo-round-roll-lock";
+import { CELO_ROLL } from "@/lib/celo-roll-names";
+import { localeInt } from "@/lib/format-number";
+import { celoDisplayName, insertCeloSystemChat } from "@/lib/celo-system-chat";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdBearerOrCookie(req);
@@ -173,6 +176,21 @@ export async function POST(req: Request) {
 
     console.info("[celo/roll] banker saved", { round_id, dice });
 
+    void (async () => {
+      try {
+        const rollerName = await celoDisplayName(supabase, bankerId);
+        if (roll.rollName === CELO_ROLL.celo) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "gold", `🎲 ${rollerName} rolled C-LO!`);
+        } else if (roll.rollName === CELO_ROLL.shit) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "red", `💩 ${rollerName} rolled SHIT!`);
+        } else if (roll.rollName === CELO_ROLL.handCrack) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "gold", `💥 ${rollerName} rolled HAND CRACK!`);
+        }
+      } catch (e) {
+        console.warn("[celo/roll] system chat (banker roll)", e);
+      }
+    })();
+
     const bankerRollPayload = buildCeloRollStartedPayload({
       roomId: room_id,
       roundId: round_id,
@@ -244,6 +262,20 @@ export async function POST(req: Request) {
         )
         .eq("id", room_id);
 
+      void (async () => {
+        try {
+          await insertCeloSystemChat(
+            supabase,
+            room_id,
+            bankerId,
+            "gold",
+            `🏦 Banker wins! Bank grows to ${localeInt(newBank)} GPC`
+          );
+        } catch (e) {
+          console.warn("[celo/roll] system chat (banker instant win)", e);
+        }
+      })();
+
       return NextResponse.json({
         dice,
         rollName: roll.rollName,
@@ -285,6 +317,21 @@ export async function POST(req: Request) {
           });
         }
         totalPaidOut += payoutSC;
+
+        void (async () => {
+          try {
+            const nm = await celoDisplayName(supabase, player.user_id);
+            await insertCeloSystemChat(
+              supabase,
+              room_id,
+              bankerId,
+              "green",
+              `✅ ${nm} earned ${localeInt(payoutSC)} GPC`
+            );
+          } catch (e) {
+            console.warn("[celo/roll] system chat (player win)", e);
+          }
+        })();
       }
 
       /* Bank display amount does not shrink on player wins — only grows on banker wins or voluntary lower after C-Lo. */
@@ -480,6 +527,10 @@ export async function POST(req: Request) {
         .eq("id", room_id);
     }
 
+    const bankAfterPoint = playerWins
+      ? rm.current_bank_cents
+      : rm.current_bank_cents + Math.floor((playerEntry * (100 - feePct)) / 100);
+
     const { data: prResolving, error: prResErr } = await supabase
       .from("celo_player_rolls")
       .insert({
@@ -528,6 +579,32 @@ export async function POST(req: Request) {
       const b3 = await broadcastCeloRoomEvent(supabase, room_id, "roll_started", resolvingAnimation);
       if (!b3) console.warn("[celo/roll] roll_started broadcast failed (player resolving)");
     }
+
+    void (async () => {
+      try {
+        const nm = await celoDisplayName(supabase, userId);
+        if (roll.rollName === CELO_ROLL.celo) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "gold", `🎲 ${nm} rolled C-LO!`);
+        } else if (roll.rollName === CELO_ROLL.shit) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "red", `💩 ${nm} rolled SHIT!`);
+        } else if (roll.rollName === CELO_ROLL.handCrack) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "gold", `💥 ${nm} rolled HAND CRACK!`);
+        }
+        if (playerWins && payoutSC > 0) {
+          await insertCeloSystemChat(supabase, room_id, bankerId, "green", `✅ ${nm} earned ${localeInt(payoutSC)} GPC`);
+        } else if (!playerWins) {
+          await insertCeloSystemChat(
+            supabase,
+            room_id,
+            bankerId,
+            "gold",
+            `🏦 Banker wins! Bank grows to ${localeInt(bankAfterPoint)} GPC`
+          );
+        }
+      } catch (e) {
+        console.warn("[celo/roll] system chat (player point)", e);
+      }
+    })();
 
     const currentIdx = players.findIndex((p) => Number(p.seat_number ?? 0) === currentSeat);
     const nextPlayer = players[currentIdx + 1];

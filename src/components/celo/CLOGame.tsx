@@ -1,137 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import VoiceChat from "@/components/celo/VoiceChat";
 import { localeInt } from "@/lib/format-number";
 
 export type CLOGameProps = {
-  /** When set, shows VoiceChat below the voice bar (same column as the preview table). */
   roomId?: string;
 };
-
-type Speaker = { uid: string; name: string };
-
-// ─── Voice Bar (stubbed for preview — Agora wired in real project) ────────
-function VoiceBar({ maxWidth = 440 }: { maxWidth?: number }) {
-  const [joined, setJoined] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [speakers, setSpeakers] = useState<Speaker[]>([]);
-
-  const join = () => {
-    setSpeakers([{ uid: "you", name: "You" }]);
-    setJoined(true);
-  };
-  const leave = () => {
-    setJoined(false);
-    setSpeakers([]);
-    setMuted(false);
-  };
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth,
-        background: "#0a001a",
-        borderRadius: 14,
-        border: `1px solid ${joined ? "#7c3aed50" : "#7c3aed20"}`,
-        padding: "10px 14px",
-        marginBottom: 14,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        transition: "border 0.3s",
-      }}
-    >
-      <span style={{ fontSize: 14 }}>🎤</span>
-      <span
-        style={{
-          fontSize: 9,
-          color: "#ffffff40",
-          fontFamily: "'DM Mono',monospace",
-          letterSpacing: "0.2em",
-          flexShrink: 0,
-        }}
-      >
-        VOICE
-      </span>
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          gap: 6,
-          overflowX: "auto",
-          scrollbarWidth: "none",
-        }}
-      >
-        {joined ? (
-          speakers.map((s, i) => (
-            <div
-              key={i}
-              style={{
-                fontSize: 10,
-                color: "#a78bfa",
-                fontFamily: "'DM Mono',monospace",
-                background: "#7c3aed18",
-                borderRadius: 20,
-                padding: "2px 8px",
-                border: "1px solid #7c3aed30",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {muted ? "🔇" : "🎤"} {s.name}
-            </div>
-          ))
-        ) : (
-          <span style={{ fontSize: 10, color: "#ffffff20", fontFamily: "'DM Mono',monospace" }}>
-            No one in voice
-          </span>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        {joined && (
-          <button
-            type="button"
-            onClick={() => setMuted((m) => !m)}
-            style={{
-              padding: "5px 10px",
-              borderRadius: 8,
-              border: "none",
-              background: muted ? "#ef444420" : "#7c3aed30",
-              color: muted ? "#ef4444" : "#a78bfa",
-              fontSize: 11,
-              fontFamily: "'DM Mono',monospace",
-              cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-          >
-            {muted ? "UNMUTE" : "MUTE"}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={joined ? leave : join}
-          style={{
-            padding: "5px 12px",
-            borderRadius: 8,
-            border: "none",
-            background: joined ? "#ef444420" : "linear-gradient(135deg,#7c3aed,#9333ea)",
-            color: joined ? "#ef4444" : "#fff",
-            fontSize: 11,
-            fontFamily: "'DM Mono',monospace",
-            fontWeight: 700,
-            cursor: "pointer",
-            letterSpacing: "0.05em",
-            transition: "all 0.2s",
-          }}
-        >
-          {joined ? "LEAVE" : "JOIN"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─── Dice faces & data ────────────────────────────────────────────────────
 const DOTS = {
@@ -342,7 +216,7 @@ function Die({
 }
 
 // ─── Main Game ────────────────────────────────────────────────────────────
-export default function CLOGame({ roomId }: CLOGameProps) {
+export default function CLOGame(_props: CLOGameProps) {
   const [finalDice, setFinalDice] = useState([1, 2, 3]);
   const [rollState, setRollState] = useState("idle");
   const [outcome, setOutcome] = useState<OutcomeDef | null>(null);
@@ -687,14 +561,6 @@ export default function CLOGame({ roomId }: CLOGameProps) {
           </div>
         </div>
       )}
-
-      {/* Voice Chat */}
-      <VoiceBar maxWidth={440} />
-      {roomId ? (
-        <div style={{ width: "100%", maxWidth: 440, marginBottom: 14 }}>
-          <VoiceChat roomId={roomId} />
-        </div>
-      ) : null}
 
       {/* Live feed */}
       <div

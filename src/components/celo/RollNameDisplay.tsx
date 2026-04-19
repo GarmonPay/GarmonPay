@@ -210,9 +210,7 @@ export default function RollNameDisplay({
         <div
           style={{
             fontFamily: '"Cinzel Decorative", serif',
-            fontSize: isMobile
-              ? rollStyle.mobileFontSize
-              : rollStyle.fontSize,
+            fontSize: isMobile ? `clamp(24px, 8vw, 52px)` : rollStyle.fontSize,
             fontWeight: 900,
             color: rollStyle.color,
             textAlign: "center",
