@@ -4,7 +4,7 @@ import {
   requestWithdrawal,
   listWithdrawalsByUser,
   MIN_WITHDRAWAL_CENTS,
-  type WithdrawalMethod,
+  normalizeWithdrawalMethod,
 } from "@/lib/withdrawals-db";
 import { recordActivity } from "@/lib/viral-db";
 import { createAdminClient } from "@/lib/supabase";
@@ -56,9 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 });
   }
   const amountCents = typeof body.amount === "number" ? Math.round(body.amount) : null;
-  const method = ["crypto", "paypal", "bank"].includes(body.method ?? "")
-    ? (body.method as WithdrawalMethod)
-    : null;
+  const method = normalizeWithdrawalMethod(body.method);
   const walletAddress = sanitizeWalletAddress(body.wallet_address);
 
   const admin = createAdminClient();

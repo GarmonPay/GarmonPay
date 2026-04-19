@@ -3,6 +3,7 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
+import { normalizeWithdrawalMethod } from "@/lib/withdrawal-methods";
 
 const MIN_BY_PLAN_CENTS: Record<string, number> = {
   free: 2000,
@@ -37,8 +38,8 @@ export async function POST(req: Request) {
         ? Math.round(body.amount * 100)
         : 0;
 
-  const method = (body.method ?? "crypto") as "crypto" | "paypal" | "bank";
-  if (!["crypto", "paypal", "bank"].includes(method)) {
+  const method = normalizeWithdrawalMethod(body.method ?? "gpay_tokens");
+  if (!method) {
     return NextResponse.json({ error: "Invalid method" }, { status: 400 });
   }
 

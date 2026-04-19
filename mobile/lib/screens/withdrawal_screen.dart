@@ -12,7 +12,7 @@ class WithdrawalScreen extends StatefulWidget {
 class _WithdrawalScreenState extends State<WithdrawalScreen> {
   final _amount = TextEditingController();
   final _wallet = TextEditingController();
-  String _method = 'crypto';
+  String _method = 'gpay_tokens';
   String? _error;
   bool _loading = false;
 
@@ -36,7 +36,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
     final result = await context.read<ApiClient>().requestWithdrawal(
           context,
           amountCents: amountCents.round(),
-          paymentMethod: _method,
+          method: _method,
           walletAddress: _wallet.text.trim(),
         );
     if (!mounted) return;
@@ -66,16 +66,19 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
             DropdownButton<String>(
               value: _method,
               items: const [
-                DropdownMenuItem(value: 'crypto', child: Text('Crypto')),
+                DropdownMenuItem(value: 'gpay_tokens', child: Text(r'$GPAY (Solana)')),
+                DropdownMenuItem(value: 'bank_transfer', child: Text('Bank transfer')),
+                DropdownMenuItem(value: 'cashapp', child: Text('Cash App')),
                 DropdownMenuItem(value: 'paypal', child: Text('PayPal')),
-                DropdownMenuItem(value: 'bank', child: Text('Bank')),
               ],
-              onChanged: (v) => setState(() => _method = v ?? 'crypto'),
+              onChanged: (v) => setState(() => _method = v ?? 'gpay_tokens'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _wallet,
-              decoration: const InputDecoration(labelText: 'Wallet / PayPal / Account'),
+              decoration: const InputDecoration(
+                labelText: 'Solana wallet or payout details',
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

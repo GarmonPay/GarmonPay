@@ -3,11 +3,18 @@
  */
 
 import { createAdminClient } from "@/lib/supabase";
+import {
+  normalizeWithdrawalMethod,
+  type WithdrawalMethod,
+  WITHDRAWAL_METHOD_VALUES,
+} from "@/lib/withdrawal-methods";
 
 export const MIN_WITHDRAWAL_CENTS = 1000; // $10 minimum
 
 export type WithdrawalStatus = "pending" | "approved" | "rejected" | "paid";
-export type WithdrawalMethod = "crypto" | "paypal" | "bank";
+
+export type { WithdrawalMethod };
+export { WITHDRAWAL_METHOD_VALUES, normalizeWithdrawalMethod };
 
 export interface WithdrawalRow {
   id: string;
@@ -44,7 +51,7 @@ export async function requestWithdrawal(
     p_user_id: userId,
     p_amount_cents: amountCents,
     p_method: method,
-    p_wallet_address: walletAddress.trim(),
+    p_wallet_address: walletAddress.trim() || "",
     p_ip_address: ipAddress ?? null,
   });
   if (error) return { success: false, message: error.message };
