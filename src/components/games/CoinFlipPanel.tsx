@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getSessionAsync } from "@/lib/session";
+import { createBrowserClient } from "@/lib/supabase";
 import { CoinFlip3D } from "@/components/games/CoinFlip3D";
 import { useCoins } from "@/hooks/useCoins";
 
@@ -83,7 +83,10 @@ export function CoinFlipPanel() {
 
   const loadHistory = useCallback(async () => {
     if (!token) return;
-    const r = await fetch(`${API}/history`, { headers: authHeaders(false) });
+    const r = await fetch(`${API}/history`, {
+      credentials: "include",
+      headers: authHeaders(false),
+    });
     if (r.ok) {
       const d = await r.json();
       setHistory(Array.isArray(d.games) ? d.games : []);
@@ -92,7 +95,10 @@ export function CoinFlipPanel() {
 
   const loadOpen = useCallback(async () => {
     if (!token) return;
-    const r = await fetch(`${API}/open`, { headers: authHeaders(false) });
+    const r = await fetch(`${API}/open`, {
+      credentials: "include",
+      headers: authHeaders(false),
+    });
     if (r.ok) {
       const d = await r.json();
       setOpenGames(Array.isArray(d.games) ? d.games : []);
@@ -100,10 +106,34 @@ export function CoinFlipPanel() {
   }, [token, authHeaders]);
 
   useEffect(() => {
-    getSessionAsync().then((s) => {
-      setToken(s?.accessToken ?? null);
+    const supabase = createBrowserClient();
+    if (!supabase) {
       setLoadingSession(false);
+      return;
+    }
+
+    const syncFromSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const u = session?.user as { email_confirmed_at?: string | null } | undefined;
+      if (!session?.user || u?.email_confirmed_at == null || u?.email_confirmed_at === "") {
+        setToken(null);
+      } else {
+        setToken(session.access_token);
+      }
+      setLoadingSession(false);
+    };
+
+    void syncFromSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void syncFromSession();
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -155,6 +185,7 @@ export function CoinFlipPanel() {
         (async () => {
           const r = await fetch(`${API}/create`, {
             method: "POST",
+            credentials: "include",
             headers: authHeaders(),
             body: JSON.stringify({ betAmountMinor: betAmountMinor, side: sideHouse, mode: "vs_house" }),
           });
@@ -219,6 +250,7 @@ export function CoinFlipPanel() {
     try {
       const r = await fetch(`${API}/create`, {
         method: "POST",
+        credentials: "include",
         headers: authHeaders(),
         body: JSON.stringify({ betAmountMinor: betAmountMinor, side: sideCreate, mode: "vs_player" }),
       });
@@ -260,6 +292,7 @@ export function CoinFlipPanel() {
         (async () => {
           const r = await fetch(`${API}/join`, {
             method: "POST",
+            credentials: "include",
             headers: authHeaders(),
             body: JSON.stringify({ gameId }),
           });

@@ -238,6 +238,21 @@ export default function CeloRoomPage() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !cancelled) {
+        void fetchAll();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (sess?.access_token) {
+        supabase.realtime.setAuth(sess.access_token);
+      }
+    });
+
     const init = async () => {
       const {
         data: { session },
@@ -247,6 +262,8 @@ export default function CeloRoomPage() {
         return;
       }
       if (cancelled) return;
+      // Realtime postgres_changes + RLS: JWT must be set on the Realtime socket or events are not delivered.
+      supabase.realtime.setAuth(session.access_token);
       setMyUserId(session.user.id);
       const { data: user } = await supabase
         .from("users")
@@ -262,8 +279,8 @@ export default function CeloRoomPage() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
-          (p) => {
-            if (p.new) setRoom(p.new as Room);
+          () => {
+            void fetchAll();
           }
         )
         .on(
@@ -325,8 +342,12 @@ export default function CeloRoomPage() {
           }
         )
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") setConnectionStatus("live");
-          else if (status === "CLOSED" || status === "CHANNEL_ERROR") setConnectionStatus("offline");
+          if (status === "SUBSCRIBED") {
+            setConnectionStatus("live");
+            void fetchAll();
+          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+            setConnectionStatus("offline");
+          }
         });
     };
 
@@ -334,6 +355,8 @@ export default function CeloRoomPage() {
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      authSubscription.unsubscribe();
       if (channel) void supabase.removeChannel(channel);
       setDice(null);
       setRollName(null);
@@ -345,7 +368,7 @@ export default function CeloRoomPage() {
     const me = players.find((p) => p.user_id === myUserId);
     if (me) {
       setMyRole(me.role);
-      setMyEntry(me.entry_sc || 0);
+      setMyEntry(celoPlayerStakeCents(me));
       setMyDiceType((me.dice_type || "standard") as DiceType);
     }
   }, [players, myUserId]);

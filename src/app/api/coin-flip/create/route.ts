@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { COIN_FLIP_MIN_BET_SC, computePayoutAndHouseCut, flipCoin, type CoinSide } from "@/lib/coin-flip";
 import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
-  const userId = await getAuthUserIdStrict(request);
+  const userId = await getAuthUserIdBearerOrCookie(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
