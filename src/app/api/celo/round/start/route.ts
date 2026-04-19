@@ -6,29 +6,29 @@ import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 import { assertSumStakesWithinReserve } from "@/lib/celo-banker-reserve";
 import { celoQaLog } from "@/lib/celo-qa-log";
-import { countPlayersWithPositiveStake } from "@/lib/celo-room-rules";
+import { celoSameAuthUserId, countPlayersWithPositiveStake } from "@/lib/celo-room-rules";
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
   const supabase = createAdminClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ ok: false, error: "Service unavailable" }, { status: 503 });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
   const { room_id } = body as { room_id?: string };
   if (!room_id) {
-    return NextResponse.json({ error: "room_id required" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "room_id required" }, { status: 400 });
   }
 
   const { data: roomRows, error: roomFetchErr } = await supabase
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     .limit(1);
   const room = celoFirstRow(roomRows);
   if (roomFetchErr || !room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Room not found" }, { status: 404 });
   }
 
   const roomRecord = normalizeCeloRoomRow(room as Record<string, unknown>) as {
@@ -50,8 +50,15 @@ export async function POST(req: Request) {
     banker_reserve_cents: number;
   };
 
-  // Only the banker may start a round
-  if (roomRecord.banker_id !== userId) {
+  console.log("[celo/round/start] request", {
+    room_id,
+    userId,
+    roomStatus: roomRecord.status,
+    banker_id: roomRecord.banker_id,
+  });
+
+  // Only the banker may start a round (UUID formatting may differ between JWT and DB)
+  if (!celoSameAuthUserId(String(roomRecord.banker_id ?? ""), userId)) {
     celoQaLog("banker_start_rejected", {
       room_id,
       reason: "not_banker",
@@ -59,18 +66,28 @@ export async function POST(req: Request) {
       banker_id: roomRecord.banker_id,
       roomStatus: roomRecord.status,
     });
-    return NextResponse.json({ error: "Only the banker can start a round" }, { status: 403 });
+    console.warn("[celo/round/start] banker mismatch", {
+      room_id,
+      userId,
+      banker_id: roomRecord.banker_id,
+    });
+    return NextResponse.json({ ok: false, error: "Only banker can start round" }, { status: 403 });
   }
 
   const roomStatus = String(roomRecord.status ?? "");
   if (roomStatus !== "active" && roomStatus !== "waiting") {
+    const errMsg =
+      roomStatus === "rolling"
+        ? "Room is already rolling"
+        : `Room status does not allow starting (${roomStatus})`;
     celoQaLog("banker_start_rejected", {
       room_id,
       reason: "room_not_open",
       userId,
       roomStatus: roomRecord.status,
     });
-    return NextResponse.json({ error: "Room is not open to start a round" }, { status: 400 });
+    console.warn("[celo/round/start] room not startable", { room_id, roomStatus });
+    return NextResponse.json({ ok: false, error: errMsg }, { status: 400 });
   }
 
   if (roomStatus === "waiting") {
@@ -86,7 +103,11 @@ export async function POST(req: Request) {
     .neq("status", "completed");
 
   if (ipErr) {
-    return NextResponse.json({ error: ipErr.message }, { status: 500 });
+    console.error("[celo/round/start] active round count failed", { room_id, message: ipErr.message });
+    return NextResponse.json(
+      { ok: false, error: "Failed to verify active rounds", details: ipErr.message },
+      { status: 500 }
+    );
   }
   if ((incompleteRoundCount ?? 0) > 0) {
     celoQaLog("banker_start_rejected", {
@@ -96,10 +117,15 @@ export async function POST(req: Request) {
       incompleteRounds: incompleteRoundCount ?? 0,
       roomStatus: roomRecord.status,
     });
-    return NextResponse.json({ error: "A round is already in progress" }, { status: 400 });
+    console.warn("[celo/round/start] incomplete round exists", {
+      room_id,
+      incompleteRoundCount,
+    });
+    return NextResponse.json({ ok: false, error: "Active round already exists" }, { status: 400 });
   }
 
   const withStake = await countPlayersWithPositiveStake(supabase, room_id);
+  console.log("[celo/round/start] players_with_stake", { room_id, withStake });
   if (withStake < 1) {
     celoQaLog("banker_start_rejected", {
       room_id,
@@ -109,7 +135,10 @@ export async function POST(req: Request) {
       roomStatus: roomRecord.status,
     });
     return NextResponse.json(
-      { error: "At least one non-banker player with an entry is required to start a round" },
+      {
+        ok: false,
+        error: "Cannot start round without at least 1 seated player with an entry",
+      },
       { status: 400 }
     );
   }
@@ -135,7 +164,10 @@ export async function POST(req: Request) {
       roomStatus: roomRecord.status,
     });
     return NextResponse.json(
-      { error: "At least one player with an entry is required to start a round" },
+      {
+        ok: false,
+        error: "Cannot start round without at least 1 seated player with an entry",
+      },
       { status: 400 }
     );
   }
@@ -156,7 +188,7 @@ export async function POST(req: Request) {
       totalPotCents,
       reserve: roomRecord.banker_reserve_cents,
     });
-    return NextResponse.json({ error: reserveOk.message }, { status: 409 });
+    return NextResponse.json({ ok: false, error: reserveOk.message }, { status: 409 });
   }
 
   const platformFeeCents = Math.floor(
@@ -187,9 +219,15 @@ export async function POST(req: Request) {
 
   const newRound = celoFirstRow(newRoundRows);
   if (roundErr || !newRound) {
+    console.error("[celo/round/start] insert failed", {
+      room_id,
+      message: roundErr?.message,
+      code: roundErr?.code,
+    });
     return NextResponse.json(
       {
-        error: "Failed to start round",
+        ok: false,
+        error: "Failed to create round row",
         details: roundErr?.message ?? null,
         code: roundErr?.code ?? null,
       },
@@ -198,14 +236,32 @@ export async function POST(req: Request) {
   }
 
   // Update room status
-  await supabase
+  const { error: roomUpdErr } = await supabase
     .from("celo_rooms")
     .update({ status: "rolling", last_activity: new Date().toISOString(), last_round_was_celo: false })
     .eq("id", room_id);
 
+  if (roomUpdErr) {
+    console.error("[celo/round/start] room update failed after round insert", {
+      room_id,
+      round_id: (newRound as { id: string }).id,
+      message: roomUpdErr.message,
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Failed to update room status",
+        details: roomUpdErr.message,
+      },
+      { status: 500 }
+    );
+  }
+
   console.log("[celo/round/start] round_started", {
     room_id,
+    userId,
     round_id: (newRound as { id: string }).id,
+    playersWithStake: players.length,
     status: "banker_rolling",
   });
 
@@ -222,5 +278,5 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json({ round: newRound });
+  return NextResponse.json({ ok: true, round: newRound });
 }

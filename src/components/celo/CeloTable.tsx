@@ -8,6 +8,8 @@ import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollName
 import type { CeloPlayer, CeloRoom, CeloRound } from "@/types/celo";
 import { DICE_TYPES } from "@/lib/celo-engine";
 import { localeInt, safeFiniteInt } from "@/lib/format-number";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
+import { getCeloStartRoundBlockReason } from "@/lib/celo-start-round-eligibility";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -155,7 +157,19 @@ export default function CeloTable({
   }, [currentRound, room.banker_id, tablePlayers]);
 
   const myTurn = Boolean(turnUserId && turnUserId === currentUserId && !spectator);
-  const canStart = isBanker && !currentRound && tablePlayers.some((p) => p.entry_sc > 0);
+  const myRoleResolved: "banker" | "player" | "spectator" = isBanker
+    ? "banker"
+    : spectator
+      ? "spectator"
+      : "player";
+  const startRoundBlockReason = getCeloStartRoundBlockReason({
+    room: { status: room.status, banker_id: room.banker_id },
+    myUserId: currentUserId,
+    myRole: myRoleResolved,
+    currentRound,
+    players,
+  });
+  const canStart = startRoundBlockReason === null;
   const rollBusy = rolling || rollSubmitting;
 
   const rollResultKind: RollResultKind = useMemo(() => {
@@ -328,7 +342,7 @@ export default function CeloTable({
         </button>
       );
     }
-    const waitingPlayers = !tablePlayers.some((p) => p.entry_sc > 0);
+    const waitingPlayers = !tablePlayers.some((p) => celoPlayerStakeCents(p) > 0);
     return (
       <div style={{ textAlign: "center", width: "100%" }}>
         <div
@@ -341,11 +355,13 @@ export default function CeloTable({
             fontWeight: 700,
           }}
         >
-          {waitingPlayers
-            ? "Waiting for players…"
-            : turnUserId
-              ? `${players.find((p) => p.user_id === turnUserId)?.user?.full_name ?? "Player"} rolling…`
-              : "Waiting…"}
+          {isBanker && !currentRound && !canStart
+            ? startRoundBlockReason ?? "Cannot start round"
+            : waitingPlayers
+              ? "Waiting for players…"
+              : turnUserId
+                ? `${players.find((p) => p.user_id === turnUserId)?.user?.full_name ?? "Player"} rolling…`
+                : "Waiting…"}
         </div>
       </div>
     );

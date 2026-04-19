@@ -7,6 +7,8 @@ import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay, { type RollResultKind } from "@/components/celo/RollNameDisplay";
 import { localeInt } from "@/lib/format-number";
 import { parseCeloSystemChatMessage } from "@/lib/celo-system-chat";
+import { getCeloStartRoundBlockReason } from "@/lib/celo-start-round-eligibility";
+import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 interface Player {
   id: string;
@@ -14,6 +16,8 @@ interface Player {
   role: "banker" | "player" | "spectator";
   seat_number: number;
   entry_sc: number;
+  /** Present on some rows; stake may live here when `entry_sc` is 0 (see celoPlayerStakeCents). */
+  bet_cents?: number;
   dice_type: string;
   user?: { full_name: string; email: string };
 }
@@ -144,6 +148,8 @@ export default function CeloRoomPage() {
     amount_sc: 100,
     specific_point: 5,
   });
+  const [startRoundBusy, setStartRoundBusy] = useState(false);
+  const [startRoundError, setStartRoundError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -443,14 +449,92 @@ export default function CeloRoomPage() {
     }
   };
 
-  const handleStartRound = async () => {
-    const res = await fetch("/api/celo/round/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ room_id: roomId }),
+  const startRoundBlockReason = useMemo(() => {
+    if (!room || !myUserId) return "Loading…";
+    return getCeloStartRoundBlockReason({
+      room,
+      myUserId,
+      myRole,
+      currentRound: round,
+      players,
+      startRoundBusy,
     });
-    if (res.ok) await fetchAll();
+  }, [room, myUserId, myRole, round, players, startRoundBusy]);
+
+  useEffect(() => {
+    setStartRoundError(null);
+  }, [round?.id, room?.status]);
+
+  const roomAllowsNewRound =
+    room != null && (room.status === "waiting" || room.status === "active");
+
+  const handleStartRound = async () => {
+    if (!room || !roomId || startRoundBusy) return;
+
+    const preBlock = getCeloStartRoundBlockReason({
+      room,
+      myUserId,
+      myRole,
+      currentRound: round,
+      players,
+      startRoundBusy: false,
+    });
+    if (preBlock) {
+      setStartRoundError(preBlock);
+      console.warn("[celo/start-round client] blocked before fetch", { preBlock, roomId });
+      return;
+    }
+
+    const seatedWithStake = players.filter(
+      (p) => p.role === "player" && celoPlayerStakeCents(p) > 0,
+    );
+    console.info("[celo/start-round client] START ROUND CLICKED", {
+      roomId,
+      myUserId,
+      bankerId: room.banker_id,
+      roomStatus: room.status,
+      roundStatus: round?.status ?? null,
+      seatedWithStakeCount: seatedWithStake.length,
+      canStartRound: true,
+    });
+
+    setStartRoundBusy(true);
+    setStartRoundError(null);
+    try {
+      const res = await fetch("/api/celo/round/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ room_id: roomId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        details?: string;
+        round?: unknown;
+      };
+      console.info("[celo/start-round client] API response", {
+        ok: res.ok,
+        status: res.status,
+        body: data,
+      });
+      if (!res.ok) {
+        const msg =
+          typeof data.error === "string" && data.error.length > 0
+            ? data.error
+            : `Request failed (${res.status})`;
+        setStartRoundError(data.details ? `${msg}: ${data.details}` : msg);
+        return;
+      }
+      await fetchAll();
+      setStartRoundError(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Network error";
+      console.error("[celo/start-round client] fetch error", e);
+      setStartRoundError(msg);
+    } finally {
+      setStartRoundBusy(false);
+    }
   };
 
   const handleJoinRound = async () => {
@@ -1438,7 +1522,7 @@ export default function CeloRoomPage() {
                       {getName(player.user).slice(0, 6)}
                     </div>
                     <div style={{ fontSize: 9, color: "#F5C842", fontFamily: "Courier New" }}>
-                      {player.entry_sc > 0 ? `${player.entry_sc}G` : "—"}
+                      {celoPlayerStakeCents(player) > 0 ? `${celoPlayerStakeCents(player)}G` : "—"}
                     </div>
                   </>
                 ) : (
@@ -1506,30 +1590,70 @@ export default function CeloRoomPage() {
         </div>
 
         <div style={{ flex: 1 }}>
-          {myRole === "banker" && !round ? (
-            <button
-              type="button"
-              onClick={() => void handleStartRound()}
-              disabled={activePlayers.filter((p) => p.entry_sc > 0).length === 0}
+          {myRole === "banker" && !round && roomAllowsNewRound ? (
+            <div style={{ width: "100%" }}>
+              <button
+                type="button"
+                onClick={() => void handleStartRound()}
+                disabled={startRoundBusy || startRoundBlockReason !== null}
+                style={{
+                  width: "100%",
+                  height: 40,
+                  background:
+                    startRoundBusy || startRoundBlockReason !== null
+                      ? "rgba(255,255,255,0.08)"
+                      : "linear-gradient(135deg, #F5C842, #D4A017)",
+                  border: "none",
+                  borderRadius: 10,
+                  color: startRoundBusy || startRoundBlockReason !== null ? "#6B7280" : "#0A0A0F",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor:
+                    startRoundBusy || startRoundBlockReason !== null ? "not-allowed" : "pointer",
+                  fontFamily: '"Cinzel Decorative", serif',
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {startRoundBusy ? "STARTING…" : "🎲 START ROUND"}
+              </button>
+              {startRoundError || (startRoundBlockReason && startRoundBlockReason !== "Loading…") ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 10,
+                    color: "#F87171",
+                    fontFamily: "Courier New",
+                    textAlign: "center",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {startRoundError ?? startRoundBlockReason}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {myRole === "banker" && !round && !roomAllowsNewRound && room ? (
+            <div
               style={{
                 width: "100%",
-                height: 40,
-                background:
-                  activePlayers.filter((p) => p.entry_sc > 0).length === 0
-                    ? "rgba(255,255,255,0.08)"
-                    : "linear-gradient(135deg, #F5C842, #D4A017)",
-                border: "none",
+                minHeight: 40,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 8px",
                 borderRadius: 10,
-                color: activePlayers.filter((p) => p.entry_sc > 0).length === 0 ? "#6B7280" : "#0A0A0F",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontFamily: '"Cinzel Decorative", serif',
-                letterSpacing: "0.03em",
+                background: "rgba(255,255,255,0.04)",
+                color: "#9CA3AF",
+                fontSize: 11,
+                fontFamily: "Courier New",
+                textAlign: "center",
               }}
             >
-              🎲 START ROUND
-            </button>
+              {room.status === "rolling"
+                ? "Round in progress (syncing…)"
+                : `Cannot start — room is ${room.status}`}
+            </div>
           ) : null}
 
           {canRoll() ? (
