@@ -5,12 +5,13 @@ export type CoinSide = "heads" | "tails";
 /** Coin flip stakes use GPay Coins; minimum bet (GPC). */
 export const COIN_FLIP_MIN_BET_SC = 100;
 
-/** Total pot is 2× bet; winner receives 90%; house keeps 10%. */
+/** Total pot is 2× bet; platform fee is 10% of gross; winner receives gross − fee. */
 export function computePayoutAndHouseCut(betMinor: number): { payoutWinnerMinor: number; houseCutMinor: number } {
   const bet = Math.floor(Number(betMinor));
-  const totalPot = bet * 2;
-  const payoutWinnerMinor = Math.floor((totalPot * 90) / 100);
-  const houseCutMinor = totalPot - payoutWinnerMinor;
+  const gross = bet * 2;
+  const platformFee = Math.floor(gross * 0.1);
+  const payoutWinnerMinor = gross - platformFee;
+  const houseCutMinor = platformFee;
   return { payoutWinnerMinor, houseCutMinor };
 }
 

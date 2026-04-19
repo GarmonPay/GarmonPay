@@ -61,7 +61,13 @@ export async function POST(request: Request) {
 
     const gameId = (inserted as { id: string }).id;
     const debitRef = `coin_flip_create_${gameId}`;
-    const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (create) ${gameId}`, debitRef);
+    const debit = await debitGpayCoins(
+      userId,
+      betAmountSc,
+      `Coin flip stake (create) ${gameId}`,
+      debitRef,
+      "coin_flip_stake"
+    );
 
     if (!debit.success) {
       await supabase.from("coin_flip_games").update({ status: "cancelled" }).eq("id", gameId);
@@ -99,7 +105,13 @@ export async function POST(request: Request) {
 
   const gameId = (inserted as { id: string }).id;
   const debitRef = `coin_flip_create_${gameId}`;
-  const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (vs house) ${gameId}`, debitRef);
+  const debit = await debitGpayCoins(
+    userId,
+    betAmountSc,
+    `Coin flip stake (vs house) ${gameId}`,
+    debitRef,
+    "coin_flip_stake"
+  );
 
   if (!debit.success) {
     await supabase.from("coin_flip_games").update({ status: "cancelled" }).eq("id", gameId);
@@ -156,6 +168,7 @@ export async function POST(request: Request) {
     gameId,
     status: "completed",
     mode: "vs_house",
+    outcome: creatorWins ? "win" : "loss",
     result,
     creatorSide: side,
     winnerId,
@@ -164,6 +177,9 @@ export async function POST(request: Request) {
     payoutWinnerMinor: creatorWins ? payoutWinnerMinor : 0,
     houseCutMinor,
     netMinor,
+    amount_won: creatorWins ? payoutWinnerMinor : 0,
+    amount_lost: creatorWins ? 0 : betAmountSc,
+    new_balance: gpayAfter,
     gpayCoins: gpayAfter,
     gpayBalanceMinor: 0,
   });

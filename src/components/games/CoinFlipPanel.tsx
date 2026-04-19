@@ -8,6 +8,10 @@ import { useCoins } from "@/hooks/useCoins";
 const MIN_BET = 100;
 const BET_PRESETS = [100, 500, 1000, 2500] as const;
 const API = "/api/coin-flip";
+/** Minimum spin duration before revealing server result (matches product spec). */
+const FLIP_ANIM_MS = 3000;
+/** Pause after coin lands before showing win/loss copy. */
+const RESULT_SETTLE_MS = 400;
 const BG = "#0e0118";
 const GOLD = "#f5c842";
 
@@ -110,19 +114,22 @@ export function CoinFlipPanel() {
   }, [token, refresh, loadHistory, loadOpen]);
 
   const handleCoinResult = useCallback(
-    (result: "heads" | "tails") => {
+    (resultFace: "heads" | "tails") => {
       const p = pendingRef.current;
-      setIsFlipping(false);
-      setLastResult({
-        result,
-        youWon: p?.youWon ?? false,
-        netMinor: typeof p?.netMinor === "number" ? p.netMinor : 0,
-        mode: p?.mode ?? "vs_house",
-      });
-      pendingRef.current = null;
-      void refresh();
-      loadHistory();
-      loadOpen();
+      window.setTimeout(() => {
+        setIsFlipping(false);
+        setLastResult({
+          result: resultFace,
+          youWon: p?.youWon ?? false,
+          netMinor: typeof p?.netMinor === "number" ? p.netMinor : 0,
+          mode: p?.mode ?? "vs_house",
+        });
+        pendingRef.current = null;
+        setBusy(false);
+        void refresh();
+        loadHistory();
+        loadOpen();
+      }, RESULT_SETTLE_MS);
     },
     [refresh, loadHistory, loadOpen]
   );
@@ -131,24 +138,41 @@ export function CoinFlipPanel() {
   const canAfford = sweepsCoins >= betAmountMinor;
   const betValid = Number.isFinite(bet) && betAmountMinor >= MIN_BET;
   const flipDisabled = busy || isFlipping || !betValid || !canAfford;
+  const joinDisabled = busy || isFlipping;
 
   async function handleVsHouse() {
-    if (!token || flipDisabled) return;
+    if (!token || busy || isFlipping || !betValid || !canAfford) return;
     setError(null);
     setLastResult(null);
     setWon(null);
+    setTargetFace(null);
+    setIsFlipping(true);
+    setFlipGeneration((g) => g + 1);
     setBusy(true);
     try {
-      const r = await fetch(`${API}/create`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ betAmountMinor: betAmountMinor, side: sideHouse, mode: "vs_house" }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setError(typeof d.message === "string" ? d.message : "Flip failed");
-        return;
-      }
+      const d = await Promise.all([
+        (async () => {
+          const r = await fetch(`${API}/create`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ betAmountMinor: betAmountMinor, side: sideHouse, mode: "vs_house" }),
+          });
+          const j = (await r.json().catch(() => ({}))) as {
+            message?: string;
+            result?: string;
+            youWon?: boolean;
+            netMinor?: number;
+            new_balance?: number;
+            gpayCoins?: number;
+          };
+          if (!r.ok) {
+            throw new Error(typeof j.message === "string" ? j.message : "Flip failed");
+          }
+          return j;
+        })(),
+        new Promise<void>((resolve) => setTimeout(resolve, FLIP_ANIM_MS)),
+      ]).then(([data]) => data);
+
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
         youWon: !!d.youWon,
@@ -157,10 +181,10 @@ export function CoinFlipPanel() {
       };
       setWon(!!d.youWon);
       setTargetFace(res);
-      setFlipGeneration((g) => g + 1);
-      setIsFlipping(true);
-      void refresh();
-    } finally {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Flip failed");
+      setIsFlipping(false);
+      setTargetFace(null);
       setBusy(false);
     }
   }
@@ -197,19 +221,27 @@ export function CoinFlipPanel() {
     setError(null);
     setLastResult(null);
     setWon(null);
+    setTargetFace(null);
+    setIsFlipping(true);
+    setFlipGeneration((g) => g + 1);
     setBusy(true);
     try {
-      const r = await fetch(`${API}/join`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ gameId }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setError(typeof d.message === "string" ? d.message : "Join failed");
-        loadOpen();
-        return;
-      }
+      const d = await Promise.all([
+        (async () => {
+          const r = await fetch(`${API}/join`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ gameId }),
+          });
+          const j = (await r.json().catch(() => ({}))) as { message?: string; result?: string; youWon?: boolean; netMinor?: number };
+          if (!r.ok) {
+            throw new Error(typeof j.message === "string" ? j.message : "Join failed");
+          }
+          return j;
+        })(),
+        new Promise<void>((resolve) => setTimeout(resolve, FLIP_ANIM_MS)),
+      ]).then(([data]) => data);
+
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
         youWon: !!d.youWon,
@@ -218,12 +250,14 @@ export function CoinFlipPanel() {
       };
       setWon(!!d.youWon);
       setTargetFace(res);
-      setFlipGeneration((g) => g + 1);
-      setIsFlipping(true);
       void refresh();
       loadOpen();
-    } finally {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Join failed");
+      setIsFlipping(false);
+      setTargetFace(null);
       setBusy(false);
+      loadOpen();
     }
   }
 
@@ -280,9 +314,11 @@ export function CoinFlipPanel() {
           <p className="text-lg font-semibold" style={{ color: GOLD }}>
             {lastResult.youWon ? "You won" : "You lost"} — {lastResult.result.toUpperCase()}
           </p>
-          <p className={`text-sm mt-1 ${lastResult.netMinor >= 0 ? "text-emerald-400" : "text-red-300"}`}>
-            {lastResult.netMinor >= 0 ? "+" : ""}
-            {formatGPC(lastResult.netMinor)} net
+          <p
+            className={`text-sm mt-1 font-semibold tabular-nums ${lastResult.netMinor >= 0 ? "text-emerald-400" : "text-red-400"}`}
+          >
+            {lastResult.netMinor >= 0 ? "+" : "−"}
+            {Math.abs(Math.floor(lastResult.netMinor)).toLocaleString()} GPC
           </p>
         </div>
       )}
@@ -447,7 +483,7 @@ export function CoinFlipPanel() {
                     </div>
                     <button
                       type="button"
-                      disabled={busy || isFlipping}
+                      disabled={joinDisabled}
                       onClick={() => handleJoin(g.id)}
                       className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
                     >
@@ -489,8 +525,17 @@ export function CoinFlipPanel() {
                     <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
                     <td className="py-2 pr-3">{formatGPC(h.betAmountMinor)}</td>
                     <td className="py-2 pr-3">{h.result ?? "—"}</td>
-                    <td className={`py-2 ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-300" : ""}`}>
-                      {h.status === "completed" ? `${h.netMinor >= 0 ? "+" : ""}${formatGPC(h.netMinor)}` : "—"}
+                    <td
+                      className={`py-2 tabular-nums ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-400" : ""}`}
+                    >
+                      {h.status === "completed" ? (
+                        <>
+                          {h.netMinor >= 0 ? "+" : "−"}
+                          {Math.abs(Math.floor(h.netMinor)).toLocaleString()} GPC
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

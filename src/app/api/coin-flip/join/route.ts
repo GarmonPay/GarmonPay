@@ -66,7 +66,13 @@ export async function POST(request: Request) {
   }
 
   const debitRef = `coin_flip_join_${gameId}`;
-  const debit = await debitGpayCoins(userId, betAmountSc, `Coin flip stake (join) ${gameId}`, debitRef);
+  const debit = await debitGpayCoins(
+    userId,
+    betAmountSc,
+    `Coin flip stake (join) ${gameId}`,
+    debitRef,
+    "coin_flip_stake"
+  );
 
   if (!debit.success) {
     return NextResponse.json({ message: debit.message }, { status: 400 });
@@ -123,6 +129,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     gameId,
     status: "completed",
+    outcome: youWon ? "win" : "loss",
     result,
     winnerId,
     youWon,
@@ -130,6 +137,9 @@ export async function POST(request: Request) {
     payoutWinnerMinor,
     houseCutMinor,
     netMinor,
+    amount_won: youWon ? payoutWinnerMinor : 0,
+    amount_lost: youWon ? 0 : betAmountSc,
+    new_balance: after.gpayCoins,
     gpayCoins: after.gpayCoins,
     gpayBalanceMinor: 0,
   });

@@ -161,7 +161,8 @@ export async function debitGpayCoins(
   userId: string,
   amount: number,
   description: string,
-  reference: string
+  reference: string,
+  ledgerType = "debit"
 ): Promise<{ success: boolean; message?: string }> {
   const supabase = createAdminClient();
   if (!supabase) return { success: false, message: "Service unavailable" };
@@ -205,7 +206,7 @@ export async function debitGpayCoins(
 
   const { error: insErr } = await supabase.from("coin_transactions").insert({
     user_id: userId,
-    type: "debit",
+    type: ledgerType,
     gold_coins: 0,
     gpay_coins: -amt,
     description,
