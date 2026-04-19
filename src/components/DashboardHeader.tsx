@@ -10,7 +10,7 @@ export function DashboardHeader() {
 
   return (
     <header
-      className={`glass-bar relative z-20 shrink-0 border-b shadow-soft ${
+      className={`glass-bar w-full shrink-0 border-b shadow-soft ${
         isCeloLobby ? "border-violet-500/15 bg-[#050008]/90" : "border-white/[0.06]"
       }`}
     >

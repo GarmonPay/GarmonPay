@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import MobileNav from "@/components/mobile-nav";
@@ -18,6 +18,27 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [referralNotice, setReferralNotice] = useState<string | null>(null);
+  const topStackRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = topStackRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty(
+        "--dashboard-top-stack-height",
+        `${h}px`,
+      );
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--dashboard-top-stack-height");
+    };
+  }, [referralNotice]);
 
   useEffect(() => {
     try {
@@ -59,29 +80,36 @@ export default function DashboardLayout({
           </div>
         }
       >
-        {referralNotice ? (
-          <div
-            className="fixed left-0 right-0 top-0 z-[100] flex justify-center px-3 py-2"
-            style={{
-              background: "rgba(180, 83, 9, 0.25)",
-              borderBottom: "1px solid rgba(251, 191, 36, 0.35)",
-              color: "#fde68a",
-            }}
-            role="status"
-          >
-            <p className="max-w-2xl text-center text-xs sm:text-sm">{referralNotice}</p>
-            <button
-              type="button"
-              className="ml-3 shrink-0 text-amber-200/90 underline"
-              onClick={() => setReferralNotice(null)}
+        {/* Viewport-locked: not inside overflow/transform wrappers; height drives main offset */}
+        <div
+          ref={topStackRef}
+          className="fixed top-0 left-0 right-0 z-[9999] flex w-full flex-col pt-[env(safe-area-inset-top,0px)]"
+        >
+          {referralNotice ? (
+            <div
+              className="flex w-full shrink-0 justify-center px-3 py-2"
+              style={{
+                background: "rgba(180, 83, 9, 0.25)",
+                borderBottom: "1px solid rgba(251, 191, 36, 0.35)",
+                color: "#fde68a",
+              }}
+              role="status"
             >
-              Dismiss
-            </button>
-          </div>
-        ) : null}
+              <p className="max-w-2xl text-center text-xs sm:text-sm">{referralNotice}</p>
+              <button
+                type="button"
+                className="ml-3 shrink-0 text-amber-200/90 underline"
+                onClick={() => setReferralNotice(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          <DashboardHeader />
+        </div>
 
         <div
-          className="flex max-h-none min-h-[100dvh] max-w-[100vw] overflow-hidden bg-[#0e0118]"
+          className="flex max-h-none min-h-[100dvh] min-w-0 w-full max-w-full overflow-x-hidden bg-[#0e0118] pt-[var(--dashboard-top-stack-height,4rem)]"
           style={{ minHeight: "100vh" }}
         >
           <aside
@@ -92,7 +120,6 @@ export default function DashboardLayout({
           </aside>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden pb-[calc(5rem+env(safe-area-inset-bottom,0px))] tablet:pb-0">
-            <DashboardHeader />
             <main className="min-w-0 flex-1 px-4 py-4 text-[14px] max-w-full leading-normal tablet:px-6 tablet:py-6 tablet:text-base">
               <div className="mx-auto mb-4 max-w-2xl tablet:mb-6">
                 <BannerRotator placement="dashboard-top" />
