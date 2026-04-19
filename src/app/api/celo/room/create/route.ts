@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { creditGpayIdempotent } from "@/lib/coins";
-import { creditGPay, deductGPay, getGPayBalance } from "@/lib/gpay-balance";
+import { creditGpayIdempotent, getUserCoins } from "@/lib/coins";
+import { creditGPay, deductGPay } from "@/lib/gpay-balance";
 import { celoQaLog } from "@/lib/celo-qa-log";
 
 /**
@@ -18,6 +18,14 @@ const MIN_BET_CENTS = 500;
 
 type PgLike = { message: string; code?: string; details?: string | null; hint?: string | null };
 
+type DbFailureCtx = {
+  userId: string;
+  gpay_coins: number;
+  gold_coins: number;
+  starting_bank_cents: number;
+  minimum_entry_cents: number;
+};
+
 function serializeErr(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
     return { message: err.message, name: err.name, stack: err.stack };
@@ -25,19 +33,53 @@ function serializeErr(err: unknown): Record<string, unknown> {
   return { value: String(err) };
 }
 
-function jsonDbFailure(label: string, err: PgLike | null | undefined): NextResponse {
+function pgErrorToClientMessage(label: string, err: PgLike | null | undefined): string {
+  const msg = err?.message ?? "";
+  const code = err?.code;
+  if (code === "23505" || /duplicate key/i.test(msg)) {
+    return "Could not create this room: duplicate value (try a different room name or join code).";
+  }
+  if (code === "23503" || /foreign key/i.test(msg)) {
+    return "Database error: a related record is missing. Try again or contact support.";
+  }
+  if (code === "42703" || (/column/i.test(msg) && /does not exist/i.test(msg))) {
+    return `Database schema mismatch while ${label}. Contact support if this persists.`;
+  }
+  if (code === "23514" || /violates check constraint/i.test(msg)) {
+    return `Invalid room settings: ${msg || "check constraint failed"}`;
+  }
+  if (code === "42501" || /permission denied|rls/i.test(msg)) {
+    return `Database permission error while ${label}.`;
+  }
+  return msg ? `Database error (${label}): ${msg}` : `Database error (${label}).`;
+}
+
+function jsonDbFailure(label: string, err: PgLike | null | undefined, ctx: DbFailureCtx): NextResponse {
   celoQaLog("room_create_failure", {
     step: label,
     kind: "db",
     code: err?.code ?? null,
     message: err?.message ?? null,
   });
-  console.error(`[celo/room/create] ${label}`, err);
+  console.error(`[celo/room/create] ${label}`, {
+    fullError: err,
+    code: err?.code,
+    message: err?.message,
+    details: err?.details,
+    hint: err?.hint,
+    userId: ctx.userId,
+    gpay_coins: ctx.gpay_coins,
+    gold_coins: ctx.gold_coins,
+    starting_bank_cents: ctx.starting_bank_cents,
+    minimum_entry_cents: ctx.minimum_entry_cents,
+  });
+  const clientMsg = pgErrorToClientMessage(label, err);
   return NextResponse.json(
     {
-      error: "Failed to create room",
+      error: clientMsg,
       details: err?.message ?? "Unknown database error",
       code: err?.code ?? null,
+      step: label,
     },
     { status: 500 }
   );
@@ -149,18 +191,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const sweepsCoins = await getGPayBalance(userId);
-    console.error("[celo/room/create] step: sweepsCoins=", sweepsCoins, "starting_bank_cents=", starting_bank_cents);
+    const { goldCoins, gpayCoins } = await getUserCoins(userId);
+    const dbCtx: DbFailureCtx = {
+      userId,
+      gpay_coins: gpayCoins,
+      gold_coins: goldCoins,
+      starting_bank_cents,
+      minimum_entry_cents,
+    };
+    console.error("[celo/room/create] step: balances", {
+      gpay_coins: gpayCoins,
+      gold_coins: goldCoins,
+      starting_bank_cents,
+      minimum_entry_cents,
+    });
 
-    if (sweepsCoins < starting_bank_cents) {
+    if (gpayCoins < starting_bank_cents) {
       celoQaLog("room_create_failure", {
         kind: "insufficient_starting_bank_gpay",
         httpStatus: 400,
-        sweepsCoins,
+        gpayCoins,
+        goldCoins,
         startingBankSc: starting_bank_cents,
       });
+      console.error("[celo/room/create] insufficient GPay Coins (gpay_coins) for starting bank", dbCtx);
+      const hint =
+        goldCoins > 0 && gpayCoins < starting_bank_cents
+          ? " Convert Gold Coins to GPay Coins (GPC) in Coins, or add GPay Coins."
+          : "";
       return NextResponse.json(
-        { error: "Insufficient $GPAY balance to cover the starting bank" },
+        {
+          error: `Insufficient GPay Coins (GPC) for the starting bank. You have ${gpayCoins} GPC but need ${starting_bank_cents} GPC.${hint}`,
+          details: { gpay_coins: gpayCoins, gold_coins: goldCoins, required_gpc: starting_bank_cents },
+        },
         { status: 400 }
       );
     }
@@ -202,16 +265,18 @@ export async function POST(req: Request) {
       const roomData = celoFirstRow(roomDataRows);
       if (roomError) {
         console.error("[celo/room/create] Exact error (celo_rooms):", roomError);
-        return jsonDbFailure("celo_rooms insert", roomError as PgLike);
+        return jsonDbFailure("celo_rooms insert", roomError as PgLike, dbCtx);
       }
 
       if (!roomData) {
-        console.error("[celo/room/create] celo_rooms insert returned no row");
+        console.error("[celo/room/create] celo_rooms insert returned no row", dbCtx);
         return NextResponse.json(
           {
-            error: "Failed to create room",
+            error:
+              "Room insert did not return a row (database or permissions). Check that celo_rooms exists and the service role can read inserted rows.",
             details: "Insert succeeded but no row returned",
             code: null,
+            step: "celo_rooms insert select",
           },
           { status: 500 }
         );
@@ -239,7 +304,7 @@ export async function POST(req: Request) {
       if (playerError) {
         console.error("[celo/room/create] Exact error (celo_room_players):", playerError);
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        return jsonDbFailure("celo_room_players insert", playerError as PgLike);
+        return jsonDbFailure("celo_room_players insert", playerError as PgLike, dbCtx);
       }
     } catch (err: unknown) {
       console.error("[celo/room/create] celo_room_players insert threw:", err);
@@ -273,7 +338,7 @@ export async function POST(req: Request) {
         console.error("[celo/room/create] Exact error (celo_audit_log):", auditError);
         await supabase.from("celo_room_players").delete().eq("room_id", room.id);
         await supabase.from("celo_rooms").delete().eq("id", room.id);
-        return jsonDbFailure("celo_audit_log insert", auditError as PgLike);
+        return jsonDbFailure("celo_audit_log insert", auditError as PgLike, dbCtx);
       }
     } catch (err: unknown) {
       console.error("[celo/room/create] celo_audit_log insert threw:", err);
@@ -293,7 +358,7 @@ export async function POST(req: Request) {
     console.error("[celo/room/create] step: deductGPay (after room persisted)");
     let deductResult: Awaited<ReturnType<typeof deductGPay>>;
     try {
-      deductResult = await deductGPay(userId, starting_bank_cents, sweepsCoins, {
+      deductResult = await deductGPay(userId, starting_bank_cents, gpayCoins, {
         description: "C-Lo bank reserve",
         reference: `celo_bank_deposit_${room.id}`,
       });

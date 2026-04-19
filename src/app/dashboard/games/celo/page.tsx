@@ -301,9 +301,23 @@ export default function CeloLobbyPage() {
           join_code: null,
         }),
       });
-      const data = (await res.json()) as { error?: string; room?: { id: string } };
+      const data = (await res.json()) as {
+        error?: string;
+        details?: string | Record<string, unknown>;
+        room?: { id: string };
+      };
       if (!res.ok) {
-        setCreateError(data.error || "Failed to create room");
+        const detailLine =
+          typeof data.details === "string"
+            ? data.details
+            : data.details && typeof data.details === "object"
+              ? JSON.stringify(data.details)
+              : "";
+        setCreateError(
+          data.error ||
+            detailLine ||
+            "Failed to create room"
+        );
         return;
       }
       if (data.room?.id) {
@@ -715,12 +729,12 @@ export default function CeloLobbyPage() {
 
       {showCreate ? (
         <div
-          className="celo-modal-overlay"
+          className="celo-modal-overlay z-[110]"
           style={{
             position: "fixed",
             inset: 0,
             background: "rgba(0,0,0,0.85)",
-            zIndex: 100,
+            zIndex: 110,
             padding: 0,
           }}
           role="presentation"
@@ -730,11 +744,12 @@ export default function CeloLobbyPage() {
           }}
         >
           <div
-            className="celo-modal-panel"
+            className="celo-modal-panel relative z-[110] overflow-y-auto"
             style={{
               background: "#0D0520",
               borderTop: "2px solid #F5C842",
               padding: "24px 20px",
+              paddingBottom: "max(8rem, env(safe-area-inset-bottom, 0px))",
               overflowY: "auto",
               boxSizing: "border-box",
             }}
