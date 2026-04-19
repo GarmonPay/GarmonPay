@@ -645,7 +645,7 @@ export default function CeloRoomPage() {
   };
 
   const tabBarHeight = 40;
-  const actionBarHeight = 56;
+  const actionBarHeight = isDesktop ? 52 : 56;
   const panelMax = 180;
 
   if (loading) {
@@ -752,9 +752,29 @@ export default function CeloRoomPage() {
   });
 
   const sidePanelInner = (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: "10px 12px", gap: 8, overflowY: "auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-        <div style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "Courier New", letterSpacing: "0.08em" }}>SIDE ENTRIES</div>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        padding: "8px 10px",
+        gap: 6,
+        overflowY: "auto",
+        minHeight: 0,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 8 }}>
+        <div
+          style={{
+            fontSize: 10,
+            color: "#A78BFA",
+            fontFamily: "Courier New",
+            letterSpacing: "0.12em",
+            fontWeight: 700,
+          }}
+        >
+          SIDE MARKETS
+        </div>
         <button
           type="button"
           onClick={() => void handlePostSideBet()}
@@ -824,10 +844,25 @@ export default function CeloRoomPage() {
           }}
         />
       </div>
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, minHeight: 0 }}>
         {sideBets.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#4B5563", fontSize: 12, fontFamily: "Courier New", padding: "20px 0" }}>
-            No open side entries
+          <div
+            style={{
+              textAlign: "center",
+              color: "#6B7280",
+              fontSize: 11,
+              fontFamily: "Courier New",
+              padding: "12px 10px",
+              borderRadius: 10,
+              border: "1px dashed rgba(124,58,237,0.28)",
+              background: "rgba(124,58,237,0.06)",
+              lineHeight: 1.45,
+            }}
+          >
+            <span style={{ display: "block", color: "#9CA3AF", fontSize: 10, letterSpacing: "0.06em", marginBottom: 4 }}>
+              NO OPEN OFFERS
+            </span>
+            Post a side entry — other players can take the other side of your bet.
           </div>
         ) : (
           sideBets.map((bet) => (
@@ -880,14 +915,30 @@ export default function CeloRoomPage() {
 
   const chatPanelInner = (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {isDesktop ? (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "6px 10px 4px",
+            borderBottom: "1px solid rgba(124,58,237,0.12)",
+            fontSize: 10,
+            color: "#A78BFA",
+            fontFamily: "Courier New",
+            letterSpacing: "0.12em",
+            fontWeight: 700,
+          }}
+        >
+          TABLE CHAT
+        </div>
+      ) : null}
       <div
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "8px 12px",
+          padding: "6px 10px",
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: 5,
           minHeight: 0,
         }}
       >
@@ -896,13 +947,14 @@ export default function CeloRoomPage() {
       </div>
       <div
         style={{
-          padding: "6px 12px",
-          borderTop: "1px solid rgba(124,58,237,0.1)",
+          padding: "6px 10px",
+          borderTop: "1px solid rgba(124,58,237,0.14)",
           display: "flex",
           gap: 6,
           flexShrink: 0,
           flexWrap: "wrap",
           alignItems: "center",
+          background: "rgba(5,1,15,0.5)",
         }}
       >
         <div style={{ display: "flex", gap: 4, marginRight: 4, flexWrap: "wrap" }}>
@@ -974,10 +1026,10 @@ export default function CeloRoomPage() {
   const dieSize =
     typeof window !== "undefined" && !isDesktop
       ? Math.min(68, Math.max(48, Math.round(window.innerWidth * 0.12)))
-      : 68;
+      : 76;
 
-  const headerH = isDesktop ? 56 : 48;
-  const bankH = isDesktop ? 72 : 56;
+  const headerH = isDesktop ? 48 : 48;
+  const bankH = isDesktop ? 58 : 56;
 
   return (
     <div
@@ -1002,19 +1054,37 @@ export default function CeloRoomPage() {
           flexDirection: isDesktop ? "row" : "column",
           minHeight: 0,
           width: "100%",
-          maxWidth: isDesktop ? 1200 : undefined,
+          maxWidth: isDesktop ? "min(100%, 1360px)" : undefined,
           margin: isDesktop ? "0 auto" : undefined,
+          padding: isDesktop ? "8px 12px 10px" : 0,
+          gap: isDesktop ? 12 : 0,
+          boxSizing: "border-box",
         }}
       >
         <div
           style={{
-            flex: isDesktop ? "0 0 65%" : 1,
+            flex: isDesktop ? "1 1 70%" : 1,
             minWidth: 0,
             minHeight: 0,
             display: "flex",
             flexDirection: "column",
           }}
         >
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: isDesktop ? 14 : 0,
+          border: isDesktop ? "1px solid rgba(124,58,237,0.28)" : "none",
+          background: isDesktop
+            ? "linear-gradient(165deg, rgba(18,8,42,0.97) 0%, rgba(5,1,15,0.99) 45%, rgba(8,4,22,1) 100%)"
+            : "transparent",
+          boxShadow: isDesktop ? "0 12px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)" : "none",
+          overflow: "hidden",
+        }}
+      >
       <div
         style={{
           height: headerH,
@@ -1024,8 +1094,8 @@ export default function CeloRoomPage() {
           borderBottom: "1px solid rgba(124,58,237,0.2)",
           display: "flex",
           alignItems: "center",
-          padding: "0 12px",
-          gap: 8,
+          padding: "0 10px",
+          gap: 6,
           zIndex: 60,
         }}
       >
@@ -1093,11 +1163,11 @@ export default function CeloRoomPage() {
           borderBottom: "1px solid rgba(245,200,66,0.12)",
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
+          padding: "0 12px",
           gap: 0,
         }}
       >
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
           <div style={{ fontSize: 9, color: "#6B7280", fontFamily: "Courier New", letterSpacing: "0.08em" }}>BANKER</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div
@@ -1201,13 +1271,14 @@ export default function CeloRoomPage() {
       <div
         style={{
           flex: 1,
-          minHeight: 200,
+          minHeight: isDesktop ? 240 : 200,
           position: "relative",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          padding: isDesktop ? "4px 8px 0" : 0,
         }}
       >
         <div style={{ position: "absolute", inset: 0, background: "#05010F", overflow: "hidden" }}>
@@ -1285,8 +1356,8 @@ export default function CeloRoomPage() {
           style={{
             position: "relative",
             zIndex: 2,
-            width: "min(280px, 85vw)",
-            height: "min(180px, 30vh)",
+            width: isDesktop ? "min(400px, 92%)" : "min(280px, 85vw)",
+            height: isDesktop ? "min(220px, 36vh)" : "min(180px, 30vh)",
             borderRadius: "50%",
             background: `
             repeating-linear-gradient(
@@ -1413,7 +1484,7 @@ export default function CeloRoomPage() {
           <div
             style={{
               position: "absolute",
-              top: 8,
+              top: isDesktop ? 4 : 8,
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 3,
@@ -1461,14 +1532,14 @@ export default function CeloRoomPage() {
         <div
           style={{
             position: "absolute",
-            bottom: 8,
+            bottom: isDesktop ? 6 : 8,
             left: 0,
             right: 0,
             zIndex: 3,
             display: "flex",
             justifyContent: "center",
-            gap: 8,
-            padding: "0 12px",
+            gap: isDesktop ? 6 : 8,
+            padding: "0 10px",
             flexWrap: "wrap",
           }}
         >
@@ -1568,13 +1639,14 @@ export default function CeloRoomPage() {
         style={{
           height: actionBarHeight,
           flexShrink: 0,
-          background: "rgba(5,1,15,0.97)",
+          background: "linear-gradient(180deg, rgba(8,4,24,0.98) 0%, rgba(5,1,15,0.99) 100%)",
           backdropFilter: "blur(16px)",
-          borderTop: "1px solid rgba(124,58,237,0.2)",
+          borderTop: "1px solid rgba(124,58,237,0.22)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           display: "flex",
           alignItems: "center",
-          padding: "0 12px",
-          gap: 10,
+          padding: isDesktop ? "6px 10px" : "0 12px",
+          gap: isDesktop ? 8 : 10,
           zIndex: 55,
         }}
       >
@@ -1589,7 +1661,7 @@ export default function CeloRoomPage() {
           ) : null}
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
           {myRole === "banker" && !round && roomAllowsNewRound ? (
             <div style={{ width: "100%" }}>
               <button
@@ -1598,7 +1670,7 @@ export default function CeloRoomPage() {
                 disabled={startRoundBusy || startRoundBlockReason !== null}
                 style={{
                   width: "100%",
-                  height: 40,
+                  height: isDesktop ? 44 : 40,
                   background:
                     startRoundBusy || startRoundBlockReason !== null
                       ? "rgba(255,255,255,0.08)"
@@ -1606,12 +1678,16 @@ export default function CeloRoomPage() {
                   border: "none",
                   borderRadius: 10,
                   color: startRoundBusy || startRoundBlockReason !== null ? "#6B7280" : "#0A0A0F",
-                  fontSize: 13,
+                  fontSize: isDesktop ? 14 : 13,
                   fontWeight: 700,
                   cursor:
                     startRoundBusy || startRoundBlockReason !== null ? "not-allowed" : "pointer",
                   fontFamily: '"Cinzel Decorative", serif',
                   letterSpacing: "0.03em",
+                  boxShadow:
+                    startRoundBusy || startRoundBlockReason !== null
+                      ? "none"
+                      : "0 0 0 1px rgba(245,200,66,0.35), 0 6px 20px rgba(245,200,66,0.18)",
                 }}
               >
                 {startRoundBusy ? "STARTING…" : "🎲 START ROUND"}
@@ -1663,7 +1739,7 @@ export default function CeloRoomPage() {
               disabled={rollingAction}
               style={{
                 width: "100%",
-                height: 40,
+                height: isDesktop ? 44 : 40,
                 background: rollingAction ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #F5C842, #D4A017)",
                 border: "none",
                 borderRadius: 10,
@@ -1823,6 +1899,7 @@ export default function CeloRoomPage() {
           🎲
         </button>
       </div>
+      </div>
 
       {!isDesktop ? (
         <>
@@ -1916,22 +1993,39 @@ export default function CeloRoomPage() {
       {isDesktop ? (
         <div
           style={{
-            flex: "0 0 35%",
+            flex: "0 0 clamp(280px, 30%, 380px)",
             minWidth: 0,
             minHeight: 0,
+            maxWidth: 400,
             display: "flex",
             flexDirection: "column",
-            borderLeft: "1px solid rgba(124,58,237,0.2)",
-            background: "rgba(5,1,15,0.5)",
+            borderRadius: 14,
+            border: "1px solid rgba(124,58,237,0.28)",
+            background: "linear-gradient(180deg, rgba(14,6,36,0.98) 0%, rgba(5,1,15,0.99) 100%)",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
+            overflow: "hidden",
           }}
         >
-          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>{sidePanelInner}</div>
           <div
             style={{
-              flex: 1,
-              minHeight: 0,
+              flex: "0 1 38%",
+              minHeight: 118,
+              maxHeight: 280,
               overflow: "hidden",
-              borderTop: "1px solid rgba(124,58,237,0.12)",
+              display: "flex",
+              flexDirection: "column",
+              borderBottom: "1px solid rgba(124,58,237,0.15)",
+            }}
+          >
+            {sidePanelInner}
+          </div>
+          <div
+            style={{
+              flex: "1 1 62%",
+              minHeight: 160,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             {chatPanelInner}
