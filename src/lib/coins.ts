@@ -178,20 +178,27 @@ export async function debitGpayCoins(
     };
   }
 
-  // Single RPC: debit + coin_transactions row in one transaction (DEFINER); avoids RLS blocking the insert after debit_gpay_coins.
-  const { data, error } = await supabase.rpc("debit_gpay_coins_with_ledger", {
+  // Atomic GPC debit + coin_transactions via process_game_loss (single DB transaction).
+  const { data, error } = await supabase.rpc("process_game_loss", {
     p_user_id: userId,
-    p_amount: amt,
-    p_type: ledgerType,
-    p_description: description,
+    p_amount_cents: amt,
     p_reference: reference,
+    p_description: description,
+    p_ledger_type: ledgerType,
   });
 
   if (error) {
+    console.error("[debitGpayCoins] process_game_loss RPC failed", {
+      message: error.message,
+      code: (error as { code?: string }).code,
+      details: (error as { details?: string }).details,
+      hint: (error as { hint?: string }).hint,
+      userId,
+      reference,
+      amount: amt,
+      ledgerType,
+    });
     const msg = error.message ?? "";
-    if (/debit_gpay_coins_with_ledger|function.*does not exist|PGRST202/i.test(msg)) {
-      return debitGpayCoinsLegacySplit(supabase, userId, amt, description, reference, ledgerType);
-    }
     const friendly =
       /insufficient.*gpay/i.test(msg) || /gpay coins/i.test(msg)
         ? "Insufficient GPay Coins"
@@ -202,6 +209,13 @@ export async function debitGpayCoins(
   const row = data as { success?: boolean; message?: string } | null;
   if (!row || row.success !== true) {
     const m = row?.message ?? "";
+    console.error("[debitGpayCoins] process_game_loss returned failure", {
+      message: m,
+      userId,
+      reference,
+      amount: amt,
+      ledgerType,
+    });
     const friendly =
       /duplicate/i.test(m)
         ? "Duplicate transaction"
@@ -209,75 +223,6 @@ export async function debitGpayCoins(
           ? "Insufficient GPay Coins"
           : m || "Debit failed";
     return { success: false, message: friendly };
-  }
-
-  return { success: true };
-}
-
-/** Fallback if migration not applied yet (split RPC + insert). */
-async function debitGpayCoinsLegacySplit(
-  supabase: SupabaseClient,
-  userId: string,
-  amt: number,
-  description: string,
-  reference: string,
-  ledgerType: string
-): Promise<{ success: boolean; message?: string }> {
-  const { data: existing } = await supabase
-    .from("coin_transactions")
-    .select("id")
-    .eq("reference", reference)
-    .maybeSingle();
-  if (existing) return { success: false, message: "Duplicate transaction" };
-
-  const { error } = await supabase.rpc("debit_gpay_coins", {
-    p_user_id: userId,
-    p_amount: amt,
-  });
-  if (error) {
-    const msg = error.message ?? "";
-    const friendly =
-      /insufficient.*gpay/i.test(msg) || /gpay coins/i.test(msg)
-        ? "Insufficient GPay Coins"
-        : msg;
-    return { success: false, message: friendly };
-  }
-
-  const { error: insErr } = await supabase.from("coin_transactions").insert({
-    user_id: userId,
-    type: ledgerType,
-    gold_coins: 0,
-    gpay_coins: -amt,
-    description,
-    reference,
-  });
-  if (insErr) {
-    console.error("[debitGpayCoins] legacy ledger insert failed after debit — reversing", {
-      userId,
-      reference,
-      amount: amt,
-      message: insErr.message,
-    });
-    const repairRef = `${reference}_repair_${Date.now()}`;
-    const repair = await creditCoins(
-      userId,
-      0,
-      amt,
-      "Repair: ledger insert failed after debit_gpay_coins RPC",
-      repairRef,
-      "debit_repair"
-    );
-    if (!repair.success) {
-      console.error("[debitGpayCoins] CRITICAL: repair credit failed after ledger failure", {
-        userId,
-        reference,
-        repairMessage: repair.message,
-      });
-    }
-    return {
-      success: false,
-      message: "Loss transaction insert failed; authoritative balance was restored",
-    };
   }
 
   return { success: true };

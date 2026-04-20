@@ -15,7 +15,7 @@ export async function getGPayBalance(userId: string): Promise<number> {
 type GPayMeta = { description?: string; reference?: string };
 
 /**
- * Debit `users.gpay_coins` via `debit_gpay_coins` RPC + ledger (atomic).
+ * Debit `users.gpay_coins` via `process_game_loss` RPC (atomic debit + coin_transactions).
  */
 export async function deductGPay(
   userId: string,
