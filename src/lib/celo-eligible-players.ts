@@ -3,11 +3,11 @@ import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 export type EligibleStakedPlayer = {
   user_id: string;
-  bet_cents: number;
+  entry_sc: number;
   seat_number: number | null;
 };
 
-function playerBetCents(row: { bet_cents?: number; entry_sc?: number }): number {
+function stakeAmount(row: { entry_sc?: number | null }): number {
   return celoPlayerStakeCents(row);
 }
 
@@ -19,7 +19,7 @@ export async function getEligibleStakedPlayers(
 ): Promise<EligibleStakedPlayer[]> {
   let q = supabase
     .from("celo_room_players")
-    .select("user_id, bet_cents, entry_sc, seat_number")
+    .select("user_id, entry_sc, seat_number")
     .eq("room_id", roomId)
     .eq("role", "player")
     .order("seat_number", { ascending: true });
@@ -31,15 +31,14 @@ export async function getEligibleStakedPlayers(
   const { data: players } = await q;
   const rows = (players ?? []) as {
     user_id: string;
-    bet_cents?: number;
-    entry_sc?: number;
+    entry_sc?: number | null;
     seat_number: number | null;
   }[];
   return rows
-    .filter((p) => playerBetCents(p) > 0)
+    .filter((p) => stakeAmount(p) > 0)
     .map((p) => ({
       user_id: p.user_id,
-      bet_cents: playerBetCents(p),
+      entry_sc: stakeAmount(p),
       seat_number: p.seat_number,
     }));
 }

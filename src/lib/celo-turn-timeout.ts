@@ -60,14 +60,13 @@ async function handleBankerTurnTimeout(
 
   const { data: playerRows } = await admin
     .from("celo_room_players")
-    .select("user_id, role, entry_sc, bet_cents")
+    .select("user_id, role, entry_sc")
     .eq("room_id", roomId);
 
   for (const p of (playerRows ?? []) as Array<{
     user_id: string;
     role: string;
     entry_sc?: number;
-    bet_cents?: number;
   }>) {
     if (p.role !== "player") continue;
     const cents = celoPlayerStakeCents(p);
@@ -85,7 +84,7 @@ async function handleBankerTurnTimeout(
     }
     await admin
       .from("celo_room_players")
-      .update({ entry_sc: 0, bet_cents: 0 })
+      .update({ entry_sc: 0 })
       .eq("room_id", roomId)
       .eq("user_id", p.user_id);
   }
@@ -99,7 +98,7 @@ async function handleBankerTurnTimeout(
   await admin
     .from("celo_rooms")
     .update(
-      mergeCeloRoomUpdate(rm.current_bank_cents, {
+      mergeCeloRoomUpdate(rm.current_bank_sc, {
         status: "active",
         last_activity: now,
       })
@@ -159,7 +158,7 @@ async function handlePlayerTurnTimeout(
   const idx = eligible.findIndex((p) => celoSameAuthUserId(p.user_id, current.user_id));
   const next = idx >= 0 ? eligible[idx + 1] : null;
 
-  const playerBet = current.bet_cents;
+  const playerBet = current.entry_sc;
   const feePct = rm.platform_fee_pct;
   const bankerFee = Math.floor((playerBet * feePct) / 100);
   const bankerNet = playerBet - bankerFee;
@@ -179,7 +178,7 @@ async function handlePlayerTurnTimeout(
   await admin
     .from("celo_rooms")
     .update(
-      mergeCeloRoomUpdate(rm.current_bank_cents + bankerNet, {
+      mergeCeloRoomUpdate(rm.current_bank_sc + bankerNet, {
         last_activity: now,
       })
     )
@@ -187,7 +186,7 @@ async function handlePlayerTurnTimeout(
 
   await admin
     .from("celo_room_players")
-    .update({ entry_sc: 0, bet_cents: 0 })
+    .update({ entry_sc: 0 })
     .eq("room_id", roomId)
     .eq("user_id", forfeitUserId);
 

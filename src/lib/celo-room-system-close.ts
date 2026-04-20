@@ -50,7 +50,7 @@ export async function systemCloseCeloRoomWithRefunds(
 
   const { data: playerRows, error: playersErr } = await admin
     .from("celo_room_players")
-    .select("user_id, role, entry_sc, bet_cents")
+    .select("user_id, role, entry_sc")
     .eq("room_id", roomId);
 
   if (playersErr) {
@@ -61,7 +61,6 @@ export async function systemCloseCeloRoomWithRefunds(
     user_id: string;
     role: string;
     entry_sc?: number | null;
-    bet_cents?: number | null;
   }>;
 
   for (const p of rows) {
@@ -84,7 +83,7 @@ export async function systemCloseCeloRoomWithRefunds(
   const bankerId = String(raw.banker_id ?? normalized.banker_id ?? "");
   const bankCents = Math.max(
     0,
-    Math.round(Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0))
+    Math.round(Number(raw.current_bank_sc ?? normalized.current_bank_sc ?? 0))
   );
   /** Bank reserve is debited in GPC (`debit_gpay_coins` on create); refund GPC, not USD wallet ledger. */
   if (bankCents > 0 && bankerId) {

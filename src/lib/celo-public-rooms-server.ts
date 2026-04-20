@@ -9,7 +9,7 @@ const WAITING_STALE_MS = 15 * 60 * 1000;
 const ACTIVE_STALE_MS = 30 * 60 * 1000;
 
 function sumPlayerStakesCents(
-  rows: Array<{ role?: string; entry_sc?: number | null; bet_cents?: number | null }>
+  rows: Array<{ role?: string; entry_sc?: number | null }>
 ): number {
   let t = 0;
   for (const p of rows) {
@@ -87,7 +87,7 @@ export async function cleanupStalePublicLobbyRooms(admin: Admin): Promise<{
 
     const { data: prow, error: prErr } = await admin
       .from("celo_room_players")
-      .select("role, entry_sc, bet_cents")
+      .select("role, entry_sc")
       .eq("room_id", roomId);
 
     if (prErr) {

@@ -3,7 +3,7 @@ import { celoPlayerStakeCents } from "@/lib/celo-player-stake";
 
 export type EligiblePlayerRow = {
   user_id: string;
-  bet_cents: number;
+  entry_sc: number;
   seat_number: number | null;
 };
 
@@ -54,10 +54,10 @@ export async function countPlayersWithPositiveStake(
 ): Promise<number> {
   const { data: rows } = await supabase
     .from("celo_room_players")
-    .select("bet_cents, entry_sc")
+    .select("entry_sc")
     .eq("room_id", roomId)
     .eq("role", "player");
-  const list = (rows ?? []) as Array<{ bet_cents?: number; entry_sc?: number }>;
+  const list = (rows ?? []) as Array<{ entry_sc?: number | null }>;
   return list.filter((p) => celoPlayerStakeCents(p) > 0).length;
 }
 

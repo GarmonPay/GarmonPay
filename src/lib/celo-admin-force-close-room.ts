@@ -63,7 +63,7 @@ export async function adminForceCloseCeloRoom(
 
   const { data: playerRows, error: playersErr } = await supabase
     .from("celo_room_players")
-    .select("user_id, role, entry_sc, bet_cents")
+    .select("user_id, role, entry_sc")
     .eq("room_id", roomId);
 
   if (playersErr) {
@@ -75,7 +75,6 @@ export async function adminForceCloseCeloRoom(
     user_id: string;
     role: string;
     entry_sc?: number | null;
-    bet_cents?: number | null;
   }>) {
     if (p.role !== "player") continue;
     const cents = celoPlayerStakeCents(p);
@@ -100,9 +99,7 @@ export async function adminForceCloseCeloRoom(
 
   const bankCents = Math.max(
     0,
-    Math.round(
-      Number(raw.current_bank_sc ?? raw.current_bank_cents ?? normalized.current_bank_cents ?? 0)
-    )
+    Math.round(Number(raw.current_bank_sc ?? normalized.current_bank_sc ?? 0))
   );
   if (bankCents > 0 && bankerId) {
     const bankRef = celoBankRefundReference(roomId);

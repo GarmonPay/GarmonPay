@@ -6,10 +6,10 @@ import {
 } from "@/lib/celo-banker-reserve";
 
 describe("sumPlayerTableStakesCents", () => {
-  it("uses entry_sc || bet_cents semantics", () => {
-    expect(sumPlayerTableStakesCents([{ entry_sc: 0, bet_cents: 1500 }])).toBe(1500);
-    expect(sumPlayerTableStakesCents([{ entry_sc: 2000, bet_cents: 1500 }])).toBe(2000);
-    expect(sumPlayerTableStakesCents([{ bet_cents: 500 }, { bet_cents: 500 }])).toBe(1000);
+  it("sums entry_sc for players", () => {
+    expect(sumPlayerTableStakesCents([{ entry_sc: 1500 }])).toBe(1500);
+    expect(sumPlayerTableStakesCents([{ entry_sc: 2000 }, { entry_sc: 500 }])).toBe(2500);
+    expect(sumPlayerTableStakesCents([{ entry_sc: 500 }, { entry_sc: 500 }])).toBe(1000);
   });
 });
 

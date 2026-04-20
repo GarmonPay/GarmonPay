@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       banker_id: bankerId,
       banker_email: bankerId ? emailMap.get(bankerId) ?? null : null,
       player_count: countMap.get(id) ?? 0,
-      bank_amount_cents: norm?.current_bank_cents ?? 0,
+      current_bank_sc: norm?.current_bank_sc ?? 0,
       created_at: row.created_at ?? null,
     };
   });

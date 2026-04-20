@@ -46,8 +46,8 @@ export default function CeloLobbyPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState<2 | 4 | 6 | 10>(6);
-  const [minEntryChoice, setMinEntryChoice] = useState(500);
-  const [startingBank, setStartingBank] = useState(500);
+  const [minimumEntrySc, setMinimumEntrySc] = useState(500);
+  const [currentBankSc, setCurrentBankSc] = useState(500);
   const [creating, setCreating] = useState(false);
 
   const loadRooms = useCallback(async () => {
@@ -154,8 +154,8 @@ export default function CeloLobbyPage() {
         body: JSON.stringify({
           name: roomName.trim(),
           max_players: maxPlayers,
-          minimum_entry_sc: minEntryChoice,
-          starting_bank_sc: startingBank,
+          minimum_entry_sc: minimumEntrySc,
+          current_bank_sc: currentBankSc,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -366,11 +366,11 @@ export default function CeloLobbyPage() {
                   key={n}
                   type="button"
                   onClick={() => {
-                    setMinEntryChoice(n);
-                    setStartingBank((b) => (b < n ? n : b));
+                    setMinimumEntrySc(n);
+                    setCurrentBankSc((b) => (b < n ? n : b));
                   }}
                   className={`rounded-full px-3 py-2 text-xs font-semibold border ${
-                    minEntryChoice === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
+                    minimumEntrySc === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
                   }`}
                 >
                   ${(n / 100).toFixed(0)}
@@ -381,13 +381,13 @@ export default function CeloLobbyPage() {
             <input
               type="number"
               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2.5 text-white mb-2"
-              value={startingBank}
-              min={minEntryChoice}
-              step={minEntryChoice}
-              onChange={(e) => setStartingBank(Math.max(minEntryChoice, parseInt(e.target.value, 10) || 0))}
+              value={currentBankSc}
+              min={minimumEntrySc}
+              step={minimumEntrySc}
+              onChange={(e) => setCurrentBankSc(Math.max(minimumEntrySc, parseInt(e.target.value, 10) || 0))}
             />
             <p className="text-xs text-white/40 mb-4">Available: {formatGPC(gpayCoins)}</p>
-            {startingBank > gpayCoins && <p className="text-xs text-red-400 mb-2">Insufficient GPC for this bank.</p>}
+            {currentBankSc > gpayCoins && <p className="text-xs text-red-400 mb-2">Insufficient GPC for this bank.</p>}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -398,7 +398,7 @@ export default function CeloLobbyPage() {
               </button>
               <button
                 type="button"
-                disabled={!roomName.trim() || startingBank > gpayCoins || creating || startingBank % minEntryChoice !== 0}
+                disabled={!roomName.trim() || currentBankSc > gpayCoins || creating || currentBankSc % minimumEntrySc !== 0}
                 className="flex-1 rounded-xl py-3 font-semibold text-black disabled:opacity-40"
                 style={{ backgroundColor: "#F5C842" }}
                 onClick={() => void handleCreate()}

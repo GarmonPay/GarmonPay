@@ -16,6 +16,8 @@ export async function POST(req: Request) {
     name?: unknown;
     max_players?: unknown;
     minimum_entry_sc?: unknown;
+    current_bank_sc?: unknown;
+    /** @deprecated use current_bank_sc */
     starting_bank_sc?: unknown;
   };
   try {
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const maxPlayers = Number(body.max_players);
   const minEntry = Math.floor(Number(body.minimum_entry_sc));
-  const startingBank = Math.floor(Number(body.starting_bank_sc));
+  const currentBankSc = Math.floor(Number(body.current_bank_sc ?? body.starting_bank_sc));
 
   if (!name || name.length > 80) {
     return NextResponse.json({ message: "Room name required" }, { status: 400 });
@@ -41,12 +43,12 @@ export async function POST(req: Request) {
   const v = validateEntry(minEntry, MIN_MINIMUM);
   if (!v.valid) return NextResponse.json({ message: v.error }, { status: 400 });
 
-  if (!Number.isFinite(startingBank) || startingBank < minEntry || startingBank % minEntry !== 0) {
-    return NextResponse.json({ message: "starting_bank_sc must be ≥ minimum and a multiple of minimum" }, { status: 400 });
+  if (!Number.isFinite(currentBankSc) || currentBankSc < minEntry || currentBankSc % minEntry !== 0) {
+    return NextResponse.json({ message: "current_bank_sc must be ≥ minimum and a multiple of minimum" }, { status: 400 });
   }
 
   const { gpayCoins } = await getUserCoins(userId);
-  if (gpayCoins < startingBank) {
+  if (gpayCoins < currentBankSc) {
     return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
   if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
 
   const debitRef = `celo_create_bank_${userId}_${Date.now()}`;
-  const debit = await debitGpayCoins(userId, startingBank, "C-Lo table bank (create room)", debitRef, "celo_bank_stake");
+  const debit = await debitGpayCoins(userId, currentBankSc, "C-Lo table bank (create room)", debitRef, "celo_bank_stake");
   if (!debit.success) {
     return NextResponse.json({ message: debit.message ?? "Debit failed" }, { status: 400 });
   }
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
     room_type: "public",
     max_players: maxPlayers,
     minimum_entry_sc: minEntry,
-    current_bank_sc: startingBank,
+    current_bank_sc: currentBankSc,
     platform_fee_pct: 10,
     speed: "regular",
     last_activity: new Date().toISOString(),
@@ -76,7 +78,7 @@ export async function POST(req: Request) {
   const { data: roomRow, error: insErr } = await supabase.from("celo_rooms").insert(insertPayload).select("*").single();
 
   if (insErr || !roomRow) {
-    await creditGpayIdempotent(userId, startingBank, "C-Lo create refund (room insert failed)", `celo_create_refund_${debitRef}`, "celo_refund");
+    await creditGpayIdempotent(userId, currentBankSc, "C-Lo create refund (room insert failed)", `celo_create_refund_${debitRef}`, "celo_refund");
     return NextResponse.json({ message: insErr?.message ?? "Failed to create room" }, { status: 500 });
   }
 
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
 
   if (pErr) {
     await supabase.from("celo_rooms").delete().eq("id", roomId);
-    await creditGpayIdempotent(userId, startingBank, "C-Lo create refund (player insert failed)", `celo_create_refund_${roomId}`, "celo_refund");
+    await creditGpayIdempotent(userId, currentBankSc, "C-Lo create refund (player insert failed)", `celo_create_refund_${roomId}`, "celo_refund");
     return NextResponse.json({ message: pErr.message }, { status: 500 });
   }
 

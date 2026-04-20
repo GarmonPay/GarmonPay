@@ -4,7 +4,6 @@ import { celoSameAuthUserId } from "@/lib/celo-room-rules";
 export type CeloStartRoundPlayerRow = {
   role: string;
   entry_sc?: number | null;
-  bet_cents?: number | null;
 };
 
 /**
@@ -54,7 +53,7 @@ export function getCeloStartRoundBlockReason(params: {
   return null;
 }
 
-/** Table UI: at least one player row has a positive stake (entry_sc and/or bet_cents). */
+/** Table UI: at least one player row has a positive stake (`entry_sc`). */
 export function celoHasPlayerWithStake(players: CeloStartRoundPlayerRow[]): boolean {
   return players.some((p) => p.role === "player" && celoPlayerStakeCents(p) > 0);
 }

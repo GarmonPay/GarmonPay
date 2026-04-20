@@ -80,7 +80,7 @@ async function runCeloCleanup(request: Request) {
 
       const { data: playerRows, error: playersErr } = await admin
         .from("celo_room_players")
-        .select("user_id, role, entry_sc, bet_cents")
+        .select("user_id, role, entry_sc")
         .eq("room_id", roomId);
 
       if (playersErr) {
@@ -92,7 +92,6 @@ async function runCeloCleanup(request: Request) {
         user_id: string;
         role: string;
         entry_sc?: number | null;
-        bet_cents?: number | null;
       }>;
 
       let playerRefunds = 0;
@@ -124,10 +123,7 @@ async function runCeloCleanup(request: Request) {
         0,
         Math.round(
           Number(
-            (room as { current_bank_sc?: unknown }).current_bank_sc ??
-              (room as { current_bank_cents?: unknown }).current_bank_cents ??
-              normalized?.current_bank_cents ??
-              0
+            (room as { current_bank_sc?: unknown }).current_bank_sc ?? normalized?.current_bank_sc ?? 0
           )
         )
       );

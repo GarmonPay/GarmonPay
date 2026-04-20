@@ -14,7 +14,7 @@ type CeloRoomRow = {
   banker_id: string;
   banker_email: string | null;
   player_count: number;
-  bank_amount_cents: number;
+  current_bank_sc: number;
   created_at: string | null;
 };
 
@@ -173,7 +173,7 @@ export default function AdminCeloRoomsPage() {
                   <td className="p-3 text-white text-sm">{r.status}</td>
                   <td className="p-3 text-fintech-muted text-sm">{r.banker_email ?? r.banker_id.slice(0, 8)}</td>
                   <td className="p-3 text-white text-sm">{r.player_count}</td>
-                  <td className="p-3 text-white text-sm">{formatCents(r.bank_amount_cents)}</td>
+                  <td className="p-3 text-white text-sm">{formatCents(r.current_bank_sc)}</td>
                   <td className="p-3 text-fintech-muted text-sm">
                     {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
                   </td>
