@@ -41,8 +41,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Lower bank window has expired" }, { status: 400 });
   }
 
-  const minimum = Math.floor(Number(room.minimum_entry_sc ?? room.min_bet_cents ?? 500));
-  const current = Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0));
+  const minimum = Math.floor(Number(room.minimum_entry_sc ?? 500));
+  const current = Math.floor(Number(room.current_bank_sc ?? 0));
 
   const v = validateEntry(newBank, minimum);
   if (!v.valid) return NextResponse.json({ message: v.error }, { status: 400 });

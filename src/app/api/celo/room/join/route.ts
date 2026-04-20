@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   const maxPlayers = Number(room.max_players ?? 6);
-  const minimumEntry = Math.floor(Number(room.minimum_entry_sc ?? room.min_bet_cents ?? 500));
+  const minimumEntry = Math.floor(Number(room.minimum_entry_sc ?? 500));
 
   const { data: existing } = await supabase.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
   if (existing) {
@@ -60,7 +60,6 @@ export async function POST(req: Request) {
       role: "spectator",
       seat_number: null,
       entry_sc: 0,
-      bet_cents: 0,
       dice_type: "standard",
     });
     if (jErr) return NextResponse.json({ message: jErr.message }, { status: 500 });
@@ -95,7 +94,6 @@ export async function POST(req: Request) {
       role: "player",
       seat_number: seat,
       entry_sc: entrySc,
-      bet_cents: entrySc,
       dice_type: "standard",
     });
     if (jErr) {

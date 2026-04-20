@@ -66,10 +66,7 @@ export async function POST(req: Request) {
     status: "waiting",
     room_type: "public",
     max_players: maxPlayers,
-    min_bet_cents: minEntry,
     minimum_entry_sc: minEntry,
-    max_bet_cents: Math.max(minEntry * 100, 10000),
-    current_bank_cents: startingBank,
     current_bank_sc: startingBank,
     platform_fee_pct: 10,
     speed: "regular",
@@ -92,7 +89,6 @@ export async function POST(req: Request) {
     role: "banker",
     seat_number: 0,
     entry_sc: 0,
-    bet_cents: 0,
     dice_type: "standard",
   });
 

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (rErr || !roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
 
   const room = roomRaw as Record<string, unknown>;
-  const bank = Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0));
+  const bank = Math.floor(Number(room.current_bank_sc ?? 0));
   if (bank <= 0) return NextResponse.json({ message: "Invalid bank" }, { status: 400 });
 
   const { data: mem } = await supabase
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
 
   const { error: pErr } = await supabase
     .from("celo_room_players")
-    .update({ entry_sc: bank, bet_cents: bank })
+    .update({ entry_sc: bank })
     .eq("room_id", roomId)
     .eq("user_id", userId);
 

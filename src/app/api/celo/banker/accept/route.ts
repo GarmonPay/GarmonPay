@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   if (!roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
 
   const room = roomRaw as Record<string, unknown>;
-  const bank = Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0));
+  const bank = Math.floor(Number(room.current_bank_sc ?? 0));
   const oldBankerId = String(room.banker_id ?? "");
 
   if (oldBankerId === userId) {

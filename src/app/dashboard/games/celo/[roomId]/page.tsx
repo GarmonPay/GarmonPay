@@ -138,8 +138,8 @@ export default function CeloRoomPage() {
   const [sideBetAmount, setSideBetAmount] = useState(100);
   const [sideBetPoint, setSideBetPoint] = useState(4);
 
-  const minEntry = Math.floor(Number(room?.minimum_entry_sc ?? room?.min_bet_cents ?? 500));
-  const bank = Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0));
+  const minEntry = Math.floor(Number(room?.minimum_entry_sc ?? 500));
+  const bank = Math.floor(Number(room?.current_bank_sc ?? 0));
 
   const loadAll = useCallback(async () => {
     if (!supabase || !roomId) return;

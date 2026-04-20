@@ -11,7 +11,7 @@ import {
 } from "@/lib/celo-engine";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
-type RoomRow = Record<string, unknown> & { id: string; banker_id?: string; current_bank_sc?: number; current_bank_cents?: number };
+type RoomRow = Record<string, unknown> & { id: string; banker_id?: string; current_bank_sc?: number };
 type RoundRow = Record<string, unknown> & {
   id: string;
   room_id: string;
@@ -28,7 +28,7 @@ type RoundRow = Record<string, unknown> & {
 };
 
 function bankAmount(room: RoomRow): number {
-  return Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0));
+  return Math.floor(Number(room.current_bank_sc ?? 0));
 }
 
 type SideBetRoundResult = {

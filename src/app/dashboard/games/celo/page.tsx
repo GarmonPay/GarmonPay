@@ -19,18 +19,16 @@ type RoomRow = {
   banker_id: string | null;
   max_players: number;
   minimum_entry_sc?: number | null;
-  min_bet_cents?: number | null;
   current_bank_sc?: number | null;
-  current_bank_cents?: number | null;
   created_at?: string | null;
 };
 
 function minEntry(r: RoomRow) {
-  return Math.floor(Number(r.minimum_entry_sc ?? r.min_bet_cents ?? 0));
+  return Math.floor(Number(r.minimum_entry_sc ?? 0));
 }
 
 function bankAmt(r: RoomRow) {
-  return Math.floor(Number(r.current_bank_sc ?? r.current_bank_cents ?? 0));
+  return Math.floor(Number(r.current_bank_sc ?? 0));
 }
 
 export default function CeloLobbyPage() {
@@ -61,7 +59,7 @@ export default function CeloLobbyPage() {
     const { data, error: qErr } = await supabase
       .from("celo_rooms")
       .select(
-        "id,name,status,banker_id,max_players,minimum_entry_sc,min_bet_cents,current_bank_sc,current_bank_cents,created_at"
+        "id,name,status,banker_id,max_players,minimum_entry_sc,current_bank_sc,created_at"
       )
       .eq("room_type", "public")
       .in("status", ["waiting", "active", "rolling"])
