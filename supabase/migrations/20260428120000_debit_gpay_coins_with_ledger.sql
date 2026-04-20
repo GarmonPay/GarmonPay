@@ -13,8 +13,6 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  v_bal integer;
 BEGIN
   IF p_user_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'message', 'user_id required');
@@ -30,17 +28,19 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');
   END IF;
 
-  SELECT gpay_coins INTO v_bal FROM public.users WHERE id = p_user_id FOR UPDATE;
-  IF v_bal IS NULL THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_user_id) THEN
     RETURN jsonb_build_object('success', false, 'message', 'User not found');
   END IF;
-  IF v_bal < p_amount THEN
+
+  -- No SELECT ... INTO (avoids tools/plain SQL misparsing PL/pgSQL variables as relations).
+  UPDATE public.users u
+  SET gpay_coins = u.gpay_coins - p_amount
+  WHERE u.id = p_user_id
+    AND u.gpay_coins >= p_amount;
+
+  IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'message', 'Insufficient gpay coins');
   END IF;
-
-  UPDATE public.users SET
-    gpay_coins = gpay_coins - p_amount
-  WHERE id = p_user_id;
 
   INSERT INTO public.coin_transactions (user_id, type, gold_coins, gpay_coins, description, reference)
   VALUES (
