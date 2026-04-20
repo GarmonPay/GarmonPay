@@ -1,185 +1,101 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { celoFirstRow } from "@/lib/celo-first-row";
 import { createAdminClient } from "@/lib/supabase";
-import { deductGPay, creditGPay, getGPayBalance } from "@/lib/gpay-balance";
+import { debitGpayCoins, getUserCoins } from "@/lib/coins";
 
-// Side bet payout odds (multiplier on wager)
-const SIDE_BET_ODDS: Record<string, number> = {
-  celo: 8,
-  shit: 8,
+const ODDS: Record<string, number> = {
+  celo: 8.0,
+  shit: 8.0,
   hand_crack: 4.5,
-  trips: 8,
+  trips: 8.0,
   banker_wins: 1.8,
   player_wins: 1.8,
-  specific_point: 6,
+  specific_point: 6.0,
 };
-
-const MIN_SIDEBET_CENTS = 100;
-const MAX_OPEN_BETS_PER_USER = 5;
-// Side bets expire if not accepted within 5 minutes
-const SIDEBET_EXPIRY_MS = 5 * 60 * 1000;
 
 export async function POST(req: Request) {
   const userId = await getAuthUserIdBearerOrCookie(req);
-  if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
-  }
-
-  let body: unknown;
+  let body: { room_id?: unknown; round_id?: unknown; bet_type?: unknown; amount_sc?: unknown };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
   }
 
-  const { room_id, round_id, bet_type, amount_cents, specific_point } = body as {
-    room_id?: string;
-    round_id?: string;
-    bet_type?: string;
-    amount_cents?: number;
-    specific_point?: number;
-  };
+  const roomId = typeof body.room_id === "string" ? body.room_id : null;
+  const roundId = typeof body.round_id === "string" ? body.round_id : null;
+  const betType = typeof body.bet_type === "string" ? body.bet_type : "";
+  const amount = Math.floor(Number(body.amount_sc));
 
-  if (!room_id || !round_id) {
-    return NextResponse.json({ error: "room_id and round_id required" }, { status: 400 });
+  if (!roomId || !roundId || !betType) {
+    return NextResponse.json({ message: "room_id, round_id, and bet_type required" }, { status: 400 });
   }
 
-  if (!bet_type || !(bet_type in SIDE_BET_ODDS)) {
-    return NextResponse.json(
-      {
-        error: `bet_type must be one of: ${Object.keys(SIDE_BET_ODDS).join(", ")}`,
-      },
-      { status: 400 }
-    );
+  if (!ODDS[betType]) {
+    return NextResponse.json({ message: "Invalid bet_type" }, { status: 400 });
   }
 
-  if (bet_type === "specific_point") {
-    if (
-      typeof specific_point !== "number" ||
-      specific_point < 2 ||
-      specific_point > 5
-    ) {
-      return NextResponse.json(
-        { error: "specific_point must be 2, 3, 4, or 5 for specific_point bets" },
-        { status: 400 }
-      );
-    }
+  if (!Number.isFinite(amount) || amount < 100 || amount % 100 !== 0) {
+    return NextResponse.json({ message: "amount_sc must be ≥ 100 and a multiple of 100 GPC" }, { status: 400 });
   }
 
-  if (typeof amount_cents !== "number" || amount_cents < MIN_SIDEBET_CENTS) {
-    return NextResponse.json(
-      { error: `Minimum side bet is ${MIN_SIDEBET_CENTS} cents` },
-      { status: 400 }
-    );
+  const supabase = createAdminClient();
+  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+
+  const { data: mem } = await supabase.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
+  if (!mem) return NextResponse.json({ message: "Join the room first" }, { status: 403 });
+
+  const { data: round } = await supabase.from("celo_rounds").select("status").eq("id", roundId).maybeSingle();
+  if (!round || (round as { status: string }).status === "completed") {
+    return NextResponse.json({ message: "Round is not active" }, { status: 400 });
   }
 
-  // Verify user is in this room
-  const { data: playerRows } = await supabase
-    .from("celo_room_players")
-    .select("role")
-    .eq("room_id", room_id)
-    .eq("user_id", userId)
-    .limit(1);
-
-  if (!celoFirstRow(playerRows)) {
-    return NextResponse.json({ error: "Not in this room" }, { status: 403 });
-  }
-
-  // Verify round exists and is active
-  const { data: roundRows } = await supabase
-    .from("celo_rounds")
-    .select("id, status")
-    .eq("id", round_id)
-    .eq("room_id", room_id)
-    .limit(1);
-
-  const round = celoFirstRow(roundRows);
-  if (!round) {
-    return NextResponse.json({ error: "Round not found" }, { status: 404 });
-  }
-
-  const rnd = round as { id: string; status: string };
-  if (rnd.status === "completed") {
-    return NextResponse.json({ error: "Round is already completed" }, { status: 400 });
-  }
-
-  // Enforce max open bets per user per round
-  const { count: openBetCount } = await supabase
+  const { count } = await supabase
     .from("celo_side_bets")
     .select("id", { count: "exact", head: true })
-    .eq("round_id", round_id)
+    .eq("room_id", roomId)
     .eq("creator_id", userId)
     .eq("status", "open");
 
-  if ((openBetCount ?? 0) >= MAX_OPEN_BETS_PER_USER) {
-    return NextResponse.json(
-      { error: `Maximum ${MAX_OPEN_BETS_PER_USER} open side bets per round` },
-      { status: 400 }
-    );
+  if ((count ?? 0) >= 5) {
+    return NextResponse.json({ message: "Maximum open side entries reached" }, { status: 400 });
   }
 
-  const balanceGpay = await getGPayBalance(userId);
-  if (balanceGpay < amount_cents) {
-    return NextResponse.json({ error: "Insufficient $GPAY balance" }, { status: 400 });
+  const { gpayCoins } = await getUserCoins(userId);
+  if (gpayCoins < amount) {
+    return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
-  const deductResult = await deductGPay(userId, amount_cents, balanceGpay, {
-    description: "C-Lo side bet create",
-    reference: `celo_sidebet_create_${round_id}_${Date.now()}`,
+  const debitRef = `celo_side_create_${roomId}_${roundId}_${userId}_${Date.now()}`;
+  const debit = await debitGpayCoins(userId, amount, "C-Lo side entry (post)", debitRef, "celo_sidebet");
+  if (!debit.success) {
+    return NextResponse.json({ message: debit.message ?? "Debit failed" }, { status: 400 });
+  }
+
+  const expires = new Date(Date.now() + 60_000).toISOString();
+
+  const insertPayload: Record<string, unknown> = {
+    room_id: roomId,
+    round_id: roundId,
+    creator_id: userId,
+    bet_type: betType,
+    amount_cents: amount,
+    odds_multiplier: ODDS[betType],
+    status: "open",
+    expires_at: expires,
+  };
+
+  const { data: bet, error: insErr } = await supabase.from("celo_side_bets").insert(insertPayload).select("*").single();
+
+  if (insErr || !bet) {
+    return NextResponse.json({ message: insErr?.message ?? "Failed to post side entry" }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    sideBet: bet,
+    gpayCoins: (await getUserCoins(userId)).gpayCoins,
   });
-
-  if (!deductResult.ok) {
-    return NextResponse.json(
-      { error: deductResult.message ?? "Failed to deduct bet amount" },
-      { status: 400 }
-    );
-  }
-
-  const expiresAt = new Date(Date.now() + SIDEBET_EXPIRY_MS).toISOString();
-
-  const { data: newBetRows, error: insertErr } = await supabase
-    .from("celo_side_bets")
-    .insert({
-      room_id,
-      round_id,
-      creator_id: userId,
-      bet_type,
-      amount_cents,
-      odds_multiplier: SIDE_BET_ODDS[bet_type],
-      specific_point: bet_type === "specific_point" ? specific_point : null,
-      status: "open",
-      expires_at: expiresAt,
-    })
-    .select()
-    .limit(1);
-
-  const newBet = celoFirstRow(newBetRows);
-  if (insertErr || !newBet) {
-    await creditGPay(userId, amount_cents, {
-      description: "C-Lo side bet create refund",
-      reference: `celo_sidebet_refund_create_${round_id}_${Date.now()}`,
-    });
-    return NextResponse.json({ error: "Failed to create side bet" }, { status: 500 });
-  }
-
-  await supabase.from("celo_audit_log").insert({
-    room_id,
-    round_id,
-    user_id: userId,
-    action: "sidebet_created",
-    details: {
-      bet_type,
-      amount_cents,
-      odds_multiplier: SIDE_BET_ODDS[bet_type],
-      specific_point: specific_point ?? null,
-    },
-  });
-
-  return NextResponse.json({ bet: newBet });
 }

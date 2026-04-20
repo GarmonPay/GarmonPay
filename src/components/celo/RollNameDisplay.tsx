@@ -1,237 +1,100 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export type RollResultKind =
-  | "instant_win"
-  | "instant_loss"
-  | "point"
-  | "no_count"
-  | null;
+export type RollResultKind = string | null;
 
-interface RollNameDisplayProps {
+export type RollNameDisplayProps = {
   rollName: string | null;
-  result: RollResultKind;
+  result: string | null;
   onComplete?: () => void;
-}
-
-const ROLL_STYLES: Record<
-  string,
-  {
-    color: string;
-    fontSize: number;
-    mobileFontSize: number;
-    glow?: string;
-    shake?: boolean;
-  }
-> = {
-  "C-LO! 🎲": {
-    color: "#F5C842",
-    fontSize: 72,
-    mobileFontSize: 48,
-    glow: "#F5C842",
-  },
-  "HAND CRACK! 💥": {
-    color: "#F5C842",
-    fontSize: 64,
-    mobileFontSize: 42,
-    glow: "#F5C842",
-  },
-  "TRIP SIXES - THE BOSS! 👑": {
-    color: "#F5C842",
-    fontSize: 52,
-    mobileFontSize: 36,
-    glow: "#F5C842",
-  },
-  "ACE OUT! 🎲": {
-    color: "#F5C842",
-    fontSize: 64,
-    mobileFontSize: 42,
-    glow: "#F5C842",
-  },
-  "TRIP FIVES! 🎲": {
-    color: "#F5C842",
-    fontSize: 56,
-    mobileFontSize: 38,
-  },
-  "TRIP FOURS! 🎲": {
-    color: "#F5C842",
-    fontSize: 56,
-    mobileFontSize: 38,
-  },
-  "TRIP THREES! 🎲": {
-    color: "#F5C842",
-    fontSize: 56,
-    mobileFontSize: 38,
-  },
-  "TRIP DEUCES! 🎲": {
-    color: "#F5C842",
-    fontSize: 56,
-    mobileFontSize: 38,
-  },
-  "SHIT! 💩": {
-    color: "#EF4444",
-    fontSize: 72,
-    mobileFontSize: 48,
-    glow: "#EF4444",
-    shake: true,
-  },
-  "DICK! 😂": {
-    color: "#EF4444",
-    fontSize: 64,
-    mobileFontSize: 42,
-    glow: "#EF4444",
-  },
-  "POUND! 🔵": {
-    color: "#3B82F6",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "POLICE! 🚔": {
-    color: "#3B82F6",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "ZOE! 🇭🇹": {
-    color: "#10B981",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "HAITIAN! 🇭🇹": {
-    color: "#10B981",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "GIRL! 👧": {
-    color: "#EC4899",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "HOE! 😅": {
-    color: "#EC4899",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "SHORTLY! 👶": {
-    color: "#A855F7",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
-  "JIT! 👶": {
-    color: "#A855F7",
-    fontSize: 64,
-    mobileFontSize: 42,
-  },
 };
 
-export default function RollNameDisplay({
-  rollName,
-  result,
-  onComplete,
-}: RollNameDisplayProps) {
-  const [visible, setVisible] = useState(false);
-  const [opacity, setOpacity] = useState(0);
-  const [scale, setScale] = useState(0.5);
+function styleFor(name: string): { color: string; fontSize: number; extra?: Record<string, string | number> } {
+  if (name.includes("C-LO")) return { color: "#F5C842", fontSize: 52, extra: { textShadow: "0 0 24px rgba(245,200,66,0.55)" } };
+  if (name.includes("HAND CRACK")) return { color: "#F5C842", fontSize: 46 };
+  if (name.includes("TRIP SIXES")) {
+    return {
+      color: "#F5C842",
+      fontSize: 40,
+      extra: {
+        background: "linear-gradient(90deg,#ef4444,#f59e0b,#22c55e,#3b82f6,#a855f7)",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+      },
+    };
+  }
+  if (name.includes("ACE OUT")) return { color: "#F5C842", fontSize: 46 };
+  if (name.includes("SHIT")) return { color: "#EF4444", fontSize: 52, extra: { animation: "rnShake 0.35s ease-in-out" } };
+  if (name.includes("DICK")) return { color: "#EF4444", fontSize: 46 };
+  if (name.includes("POUND") || name.includes("POLICE")) return { color: "#3B82F6", fontSize: 44 };
+  if (name.includes("ZOE") || name.includes("HAITIAN")) return { color: "#10B981", fontSize: 44 };
+  if (name.includes("GIRL") || name.includes("HOE")) return { color: "#EC4899", fontSize: 44 };
+  if (name.includes("SHORTLY") || name.includes("JIT")) return { color: "#A855F7", fontSize: 44 };
+  if (name.includes("No Count")) return { color: "#6B7280", fontSize: 28 };
+  return { color: "#F5C842", fontSize: 44 };
+}
+
+export default function RollNameDisplay({ rollName, result: _result, onComplete }: RollNameDisplayProps) {
+  const [phase, setPhase] = useState<"idle" | "in" | "hold" | "out">("idle");
+
+  const holdMs = useMemo(() => {
+    if (!rollName) return 2500;
+    return rollName.includes("No Count") ? 1200 : 2500;
+  }, [rollName]);
 
   useEffect(() => {
     if (!rollName) {
-      setVisible(false);
-      setOpacity(0);
-      setScale(0.5);
+      setPhase("idle");
       return;
     }
+    setPhase("in");
+    const t1 = window.setTimeout(() => setPhase("hold"), 320);
+    const t2 = window.setTimeout(() => setPhase("out"), 320 + holdMs);
+    const t3 = window.setTimeout(() => {
+      onComplete?.();
+    }, 320 + holdMs + 420);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [rollName, holdMs, onComplete]);
 
-    setVisible(true);
-    setOpacity(0);
-    setScale(0.5);
+  if (!rollName || phase === "idle") return null;
 
-    const isNoCount = rollName.includes("No Count");
-    const holdTime = isNoCount ? 1200 : 2500;
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setOpacity(1);
-        setScale(1.1);
-        setTimeout(() => setScale(1), 200);
-      });
-    });
-
-    const timer = setTimeout(() => {
-      setOpacity(0);
-      setScale(0.8);
-      setTimeout(() => {
-        setVisible(false);
-        onComplete?.();
-      }, 300);
-    }, holdTime);
-
-    return () => clearTimeout(timer);
-  }, [rollName, onComplete]);
-
-  if (!visible || !rollName) return null;
-
-  const rollStyle = ROLL_STYLES[rollName] || {
-    color: rollName.includes("No Count")
-      ? "#6B7280"
-      : result === "instant_win"
-        ? "#F5C842"
-        : "#EF4444",
-    fontSize: rollName.includes("No Count") ? 28 : 56,
-    mobileFontSize: rollName.includes("No Count") ? 22 : 38,
-  };
-
-  const isMobile =
-    typeof window !== "undefined" && window.innerWidth < 640;
+  const st = styleFor(rollName);
+  const opacity = phase === "in" ? 1 : phase === "hold" ? 1 : 0;
+  const scale = phase === "in" ? 1 : phase === "hold" ? 1 : 0.92;
 
   return (
-    <>
+    <div
+      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-4 text-center"
+      style={{
+        opacity,
+        transform: `scale(${phase === "in" ? 1 : 0.5})`,
+        transition: "opacity 0.35s ease, transform 0.35s ease",
+      }}
+    >
       <style>{`
-        @keyframes rollNameShake {
-          0%, 100% { transform: translateX(0) scale(${scale}) }
-          20% { transform: translateX(-8px) scale(${scale}) }
-          40% { transform: translateX(8px) scale(${scale}) }
-          60% { transform: translateX(-4px) scale(${scale}) }
-          80% { transform: translateX(4px) scale(${scale}) }
+        @keyframes rnShake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
         }
       `}</style>
-      <div
+      <p
+        className="font-bold leading-tight px-2"
         style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 20,
-          pointerEvents: "none",
-          opacity,
-          transition: "opacity 0.3s ease",
+          color: st.color,
+          fontSize: Math.min(st.fontSize, 44),
+          ...st.extra,
+          transform: `scale(${scale})`,
+          transition: "transform 0.25s ease-out",
         }}
       >
-        <div
-          style={{
-            fontFamily: '"Cinzel Decorative", serif',
-            fontSize: isMobile ? `clamp(24px, 8vw, 52px)` : rollStyle.fontSize,
-            fontWeight: 900,
-            color: rollStyle.color,
-            textAlign: "center",
-            textShadow: rollStyle.glow
-              ? `0 0 20px ${rollStyle.glow},
-               0 0 40px ${rollStyle.glow}80,
-               0 0 60px ${rollStyle.glow}40`
-              : "none",
-            transform: `scale(${scale})`,
-            transition: "transform 0.2s ease",
-            animation: rollStyle.shake
-              ? "rollNameShake 0.5s ease-in-out"
-              : "none",
-            padding: "0 16px",
-            lineHeight: 1.2,
-            letterSpacing: "0.02em",
-          }}
-        >
-          {rollName}
-        </div>
-      </div>
-    </>
+        {rollName}
+      </p>
+    </div>
   );
 }
