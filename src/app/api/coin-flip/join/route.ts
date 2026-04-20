@@ -3,6 +3,7 @@ import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { computePayoutAndHouseCut, flipCoin } from "@/lib/coin-flip";
 import { COIN_FLIP_MIN_BET_SC } from "@/lib/coin-flip";
+import { insertCoinFlipPlatformFee } from "@/lib/coin-flip-ledger";
 import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
@@ -133,6 +134,8 @@ export async function POST(request: Request) {
   if (!win.success) {
     return NextResponse.json({ message: win.message ?? "Payout failed" }, { status: 500 });
   }
+
+  await insertCoinFlipPlatformFee(supabase, gameId, houseCutMinor, { userId: winnerId });
 
   const youWon = winnerId === userId;
   const netMinor = youWon ? payoutWinnerMinor - betAmountSc : -betAmountSc;

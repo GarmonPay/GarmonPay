@@ -91,25 +91,12 @@ export async function getAuthUserIdStrict(request: Request): Promise<string | nu
 }
 
 /**
- * Bearer JWT first, then Supabase cookie session — no x-user-id (prevents spoofing).
- * Use for wallet/coin routes where the client may send an expired Authorization header
- * while the browser still has a valid session cookie.
+ * Supabase cookie session first, then Bearer JWT — no x-user-id (prevents spoofing).
+ * Cookie-first avoids 401 when the browser still has a valid session but the client
+ * sends a stale Authorization header. Clients without cookies (e.g. some native flows)
+ * can still authenticate with Bearer.
  */
 export async function getAuthUserIdBearerOrCookie(request: Request): Promise<string | null> {
-  const authHeader = request.headers.get("authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (bearerToken) {
-    const supabase = createServerClient(bearerToken);
-    if (supabase) {
-      const { data, error } = await supabase.auth.getUser(bearerToken);
-      const user = data?.user ?? null;
-      if (!error && user?.id) {
-        if (await isUserBanned(user.id)) return null;
-        return user.id;
-      }
-    }
-  }
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (url && anon) {
@@ -131,6 +118,20 @@ export async function getAuthUserIdBearerOrCookie(request: Request): Promise<str
       }
     } catch {
       // not in request context
+    }
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (bearerToken) {
+    const supabase = createServerClient(bearerToken);
+    if (supabase) {
+      const { data, error } = await supabase.auth.getUser(bearerToken);
+      const user = data?.user ?? null;
+      if (!error && user?.id) {
+        if (await isUserBanned(user.id)) return null;
+        return user.id;
+      }
     }
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { COIN_FLIP_MIN_BET_SC, computePayoutAndHouseCut, flipCoin, type CoinSide } from "@/lib/coin-flip";
+import { insertCoinFlipPlatformFee } from "@/lib/coin-flip-ledger";
 import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
@@ -173,6 +174,8 @@ export async function POST(request: Request) {
       resolved_at: resolvedAt,
     })
     .eq("id", gameId);
+
+  await insertCoinFlipPlatformFee(supabase, gameId, houseCutMinor, { userId });
 
   const netMinor = creatorWins ? payoutWinnerMinor - betAmountSc : -betAmountSc;
 
