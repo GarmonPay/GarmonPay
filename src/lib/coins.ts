@@ -178,6 +178,51 @@ export async function debitGpayCoins(
     };
   }
 
+  // Single RPC: debit + coin_transactions row in one transaction (DEFINER); avoids RLS blocking the insert after debit_gpay_coins.
+  const { data, error } = await supabase.rpc("debit_gpay_coins_with_ledger", {
+    p_user_id: userId,
+    p_amount: amt,
+    p_type: ledgerType,
+    p_description: description,
+    p_reference: reference,
+  });
+
+  if (error) {
+    const msg = error.message ?? "";
+    if (/debit_gpay_coins_with_ledger|function.*does not exist|PGRST202/i.test(msg)) {
+      return debitGpayCoinsLegacySplit(supabase, userId, amt, description, reference, ledgerType);
+    }
+    const friendly =
+      /insufficient.*gpay/i.test(msg) || /gpay coins/i.test(msg)
+        ? "Insufficient GPay Coins"
+        : msg;
+    return { success: false, message: friendly };
+  }
+
+  const row = data as { success?: boolean; message?: string } | null;
+  if (!row || row.success !== true) {
+    const m = row?.message ?? "";
+    const friendly =
+      /duplicate/i.test(m)
+        ? "Duplicate transaction"
+        : /insufficient/i.test(m)
+          ? "Insufficient GPay Coins"
+          : m || "Debit failed";
+    return { success: false, message: friendly };
+  }
+
+  return { success: true };
+}
+
+/** Fallback if migration not applied yet (split RPC + insert). */
+async function debitGpayCoinsLegacySplit(
+  supabase: SupabaseClient,
+  userId: string,
+  amt: number,
+  description: string,
+  reference: string,
+  ledgerType: string
+): Promise<{ success: boolean; message?: string }> {
   const { data: existing } = await supabase
     .from("coin_transactions")
     .select("id")
@@ -185,16 +230,10 @@ export async function debitGpayCoins(
     .maybeSingle();
   if (existing) return { success: false, message: "Duplicate transaction" };
 
-  // DB: debit_gpay_coins(p_user_id uuid, p_amount integer) — never debit_sweeps_coins.
-  const { data, error } = await supabase.rpc(
-    "debit_gpay_coins",
-    {
-      p_user_id: userId,
-      p_amount: amt,
-    }
-  );
-  void data;
-
+  const { error } = await supabase.rpc("debit_gpay_coins", {
+    p_user_id: userId,
+    p_amount: amt,
+  });
   if (error) {
     const msg = error.message ?? "";
     const friendly =
@@ -213,7 +252,7 @@ export async function debitGpayCoins(
     reference,
   });
   if (insErr) {
-    console.error("[debitGpayCoins] ledger insert failed after RPC debit — reversing", {
+    console.error("[debitGpayCoins] legacy ledger insert failed after debit — reversing", {
       userId,
       reference,
       amount: amt,
@@ -235,7 +274,6 @@ export async function debitGpayCoins(
         repairMessage: repair.message,
       });
     }
-    // Do not return success: games must not show a settled loss/win when no durable ledger row exists.
     return {
       success: false,
       message: "Loss transaction insert failed; authoritative balance was restored",
