@@ -139,7 +139,9 @@ export async function POST(request: Request) {
 
   const youWon = winnerId === userId;
   const netMinor = youWon ? payoutWinnerMinor - betAmountSc : -betAmountSc;
+  const netMinorInt = Math.trunc(netMinor);
   const after = await getUserCoins(userId);
+  const afterInt = Math.max(0, Math.trunc(after.gpayCoins));
 
   console.info("[coin-flip/join] complete", {
     gameId,
@@ -160,11 +162,11 @@ export async function POST(request: Request) {
     betAmountMinor: betAmountSc,
     payoutWinnerMinor,
     houseCutMinor,
-    netMinor,
-    amount_won: youWon ? payoutWinnerMinor : 0,
-    amount_lost: youWon ? 0 : betAmountSc,
-    new_balance: after.gpayCoins,
-    gpayCoins: after.gpayCoins,
+    netMinor: netMinorInt,
+    amount_won: youWon ? Math.trunc(payoutWinnerMinor) : 0,
+    amount_lost: youWon ? 0 : Math.trunc(betAmountSc),
+    new_balance: afterInt,
+    gpayCoins: afterInt,
     gpayBalanceMinor: 0,
   });
 }

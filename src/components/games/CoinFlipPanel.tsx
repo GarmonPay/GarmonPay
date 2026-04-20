@@ -15,6 +15,33 @@ const RESULT_SETTLE_MS = 400;
 const BG = "#0e0118";
 const GOLD = "#f5c842";
 
+/** Derive net GPC change when API fields are present; avoids showing 0 on loss if netMinor is missing. */
+function netMinorFromCoinFlipApi(
+  d: {
+    netMinor?: unknown;
+    youWon?: unknown;
+    payoutWinnerMinor?: unknown;
+    betAmountMinor?: unknown;
+    amount_lost?: unknown;
+    amount_won?: unknown;
+  },
+  fallbackBet: number
+): number {
+  const raw = d.netMinor;
+  if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw);
+  if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) {
+    return Math.trunc(Number(raw));
+  }
+  const bet = Math.max(0, Math.floor(Number(d.betAmountMinor ?? fallbackBet)));
+  if (d.youWon === true) {
+    const payout = Math.floor(
+      Number(d.payoutWinnerMinor ?? d.amount_won ?? 0)
+    );
+    return payout - bet;
+  }
+  return -Math.abs(bet || Math.floor(fallbackBet));
+}
+
 type Tab = "house" | "player";
 
 type OpenGame = {
@@ -42,6 +69,9 @@ type PendingFlip = {
   mode: string;
 };
 
+/** Server balance to apply only after coin animation + settle (never before landing completes). */
+type BalancePayload = { gpayCoins: number };
+
 export function CoinFlipPanel() {
   const { sweepsCoins, formatGPC, refresh, applyServerGpayBalance } = useCoins();
   const [token, setToken] = useState<string | null>(null);
@@ -60,6 +90,7 @@ export function CoinFlipPanel() {
   const [isFlipping, setIsFlipping] = useState(false);
   const [won, setWon] = useState<boolean | null>(null);
   const pendingRef = useRef<PendingFlip | null>(null);
+  const balanceAfterFlipRef = useRef<BalancePayload | null>(null);
 
   const [lastResult, setLastResult] = useState<{
     result: "heads" | "tails";
@@ -146,8 +177,15 @@ export function CoinFlipPanel() {
   const handleCoinResult = useCallback(
     (resultFace: "heads" | "tails") => {
       const p = pendingRef.current;
+      const bal = balanceAfterFlipRef.current;
       window.setTimeout(() => {
+        if (bal && Number.isFinite(bal.gpayCoins)) {
+          applyServerGpayBalance(bal.gpayCoins);
+        }
+        balanceAfterFlipRef.current = null;
+        void refresh();
         setIsFlipping(false);
+        setWon(p?.youWon ?? false);
         setLastResult({
           result: resultFace,
           youWon: p?.youWon ?? false,
@@ -156,12 +194,11 @@ export function CoinFlipPanel() {
         });
         pendingRef.current = null;
         setBusy(false);
-        void refresh();
         loadHistory();
         loadOpen();
       }, RESULT_SETTLE_MS);
     },
-    [refresh, loadHistory, loadOpen]
+    [refresh, loadHistory, loadOpen, applyServerGpayBalance]
   );
 
   const betAmountMinor = Math.floor(bet);
@@ -175,6 +212,7 @@ export function CoinFlipPanel() {
     setError(null);
     setLastResult(null);
     setWon(null);
+    balanceAfterFlipRef.current = null;
     setTargetFace(null);
     setIsFlipping(true);
     setFlipGeneration((g) => g + 1);
@@ -196,6 +234,10 @@ export function CoinFlipPanel() {
             netMinor?: number;
             new_balance?: number;
             gpayCoins?: number;
+            betAmountMinor?: number;
+            payoutWinnerMinor?: number;
+            amount_lost?: number;
+            amount_won?: number;
           };
           if (!r.ok) {
             throw new Error(typeof j.message === "string" ? j.message : "Flip failed");
@@ -211,27 +253,27 @@ export function CoinFlipPanel() {
           : typeof d.new_balance === "number"
             ? d.new_balance
             : null;
-      if (authoritative != null) {
-        applyServerGpayBalance(authoritative);
+      if (authoritative != null && Number.isFinite(authoritative)) {
+        balanceAfterFlipRef.current = { gpayCoins: Math.max(0, Math.floor(authoritative)) };
       }
-      const refreshed = await refresh();
+
+      const netMinor = netMinorFromCoinFlipApi(d, betAmountMinor);
       console.info("[coin-flip client] vs_house settled", {
         youWon: d.youWon,
-        netMinor: d.netMinor,
+        netMinor,
         serverGpayCoins: authoritative,
         balanceBefore,
-        balanceAfterRefresh: refreshed?.gpayCoins,
       });
 
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
         youWon: !!d.youWon,
-        netMinor: typeof d.netMinor === "number" ? d.netMinor : 0,
+        netMinor,
         mode: "vs_house",
       };
-      setWon(!!d.youWon);
       setTargetFace(res);
     } catch (e) {
+      balanceAfterFlipRef.current = null;
       setError(e instanceof Error ? e.message : "Flip failed");
       setIsFlipping(false);
       setTargetFace(null);
@@ -282,6 +324,7 @@ export function CoinFlipPanel() {
     setError(null);
     setLastResult(null);
     setWon(null);
+    balanceAfterFlipRef.current = null;
     setTargetFace(null);
     setIsFlipping(true);
     setFlipGeneration((g) => g + 1);
@@ -303,6 +346,10 @@ export function CoinFlipPanel() {
             netMinor?: number;
             gpayCoins?: number;
             new_balance?: number;
+            betAmountMinor?: number;
+            payoutWinnerMinor?: number;
+            amount_lost?: number;
+            amount_won?: number;
           };
           if (!r.ok) {
             throw new Error(typeof j.message === "string" ? j.message : "Join failed");
@@ -318,28 +365,28 @@ export function CoinFlipPanel() {
           : typeof d.new_balance === "number"
             ? d.new_balance
             : null;
-      if (authoritative != null) {
-        applyServerGpayBalance(authoritative);
+      if (authoritative != null && Number.isFinite(authoritative)) {
+        balanceAfterFlipRef.current = { gpayCoins: Math.max(0, Math.floor(authoritative)) };
       }
-      const refreshed = await refresh();
+
+      const netMinor = netMinorFromCoinFlipApi(d, Math.floor(Number(d.betAmountMinor ?? 0)) || betAmountMinor);
       console.info("[coin-flip client] vs_player join settled", {
         youWon: d.youWon,
-        netMinor: d.netMinor,
+        netMinor,
         serverGpayCoins: authoritative,
         balanceBefore,
-        balanceAfterRefresh: refreshed?.gpayCoins,
       });
 
       const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
       pendingRef.current = {
         youWon: !!d.youWon,
-        netMinor: typeof d.netMinor === "number" ? d.netMinor : 0,
+        netMinor,
         mode: "vs_player",
       };
-      setWon(!!d.youWon);
       setTargetFace(res);
       loadOpen();
     } catch (e) {
+      balanceAfterFlipRef.current = null;
       setError(e instanceof Error ? e.message : "Join failed");
       setIsFlipping(false);
       setTargetFace(null);

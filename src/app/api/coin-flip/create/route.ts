@@ -178,6 +178,8 @@ export async function POST(request: Request) {
   await insertCoinFlipPlatformFee(supabase, gameId, houseCutMinor, { userId });
 
   const netMinor = creatorWins ? payoutWinnerMinor - betAmountSc : -betAmountSc;
+  const netMinorInt = Math.trunc(netMinor);
+  const gpayAfterInt = Math.max(0, Math.trunc(gpayAfter));
 
   console.info("[coin-flip/create] vs_house complete", {
     gameId,
@@ -200,11 +202,11 @@ export async function POST(request: Request) {
     betAmountMinor: betAmountSc,
     payoutWinnerMinor: creatorWins ? payoutWinnerMinor : 0,
     houseCutMinor,
-    netMinor,
-    amount_won: creatorWins ? payoutWinnerMinor : 0,
-    amount_lost: creatorWins ? 0 : betAmountSc,
-    new_balance: gpayAfter,
-    gpayCoins: gpayAfter,
+    netMinor: netMinorInt,
+    amount_won: creatorWins ? Math.trunc(payoutWinnerMinor) : 0,
+    amount_lost: creatorWins ? 0 : Math.trunc(betAmountSc),
+    new_balance: gpayAfterInt,
+    gpayCoins: gpayAfterInt,
     gpayBalanceMinor: 0,
   });
 }
