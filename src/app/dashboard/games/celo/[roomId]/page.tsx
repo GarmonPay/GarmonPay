@@ -116,8 +116,25 @@ export default function CeloRoomPage() {
   const [rollName, setRollName] = useState<string | null>(null);
   const [rolling, setRolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"side" | "chat">("chat");
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<"side" | "chat">("chat");
+  const [tabOpen, setTabOpen] = useState(false);
+  const handleTabClick = (t: "side" | "chat") => {
+    if (activeTab === t && tabOpen) setTabOpen(false);
+    else {
+      setActiveTab(t);
+      setTabOpen(true);
+    }
+  };
+  const [diceSize, setDiceSize] = useState(48);
+  useEffect(() => {
+    const u = () =>
+      setDiceSize(
+        Math.min(60, Math.max(40, Math.round(window.innerWidth * 0.1)))
+      );
+    u();
+    window.addEventListener("resize", u);
+    return () => window.removeEventListener("resize", u);
+  }, []);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatRow[]>([]);
 
@@ -612,6 +629,18 @@ export default function CeloRoomPage() {
     (b) => (b.status === "won" || b.status === "lost") && b.round_id === round?.id
   );
 
+  const bankerPlayer = useMemo(
+    () => players.find((p) => p.role === "banker"),
+    [players]
+  );
+  const seatPlayers = useMemo(
+    () =>
+      [...players]
+        .filter((p) => p.role === "player")
+        .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0)),
+    [players]
+  );
+
   const sideBetOdds = SIDE_ODDS[sideBetType] ?? 2;
   const potentialWin = Math.floor(sideBetAmount * sideBetOdds);
 
@@ -792,7 +821,7 @@ export default function CeloRoomPage() {
 
   if (!room && !error) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white" style={{ backgroundColor: "#05010F" }}>
+      <div className="flex h-full w-full items-center justify-center text-white" style={{ background: "#05010F" }}>
         <p className={dmSans.className}>Loading…</p>
       </div>
     );
@@ -800,9 +829,9 @@ export default function CeloRoomPage() {
 
   if (!room) {
     return (
-      <div className="min-h-screen p-6 text-white" style={{ backgroundColor: "#05010F" }}>
+      <div className="flex h-full w-full flex-col p-6 text-white" style={{ background: "#05010F" }}>
         <p>{error ?? "Not found"}</p>
-        <Link href="/dashboard/games/celo" className="text-[#7C3AED] underline mt-4 inline-block">
+        <Link href="/dashboard/games/celo" className="mt-4 inline-block text-[#7C3AED] underline">
           Back to lobby
         </Link>
       </div>
@@ -811,84 +840,138 @@ export default function CeloRoomPage() {
 
   return (
     <div
-      className={`${dmSans.className} min-h-screen md:h-screen flex flex-col md:flex-row text-white md:overflow-hidden`}
-      style={{ backgroundColor: "#05010F", paddingBottom: 72 }}
+      className={`${dmSans.className} flex flex-col overflow-hidden text-white md:flex-row`}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "#05010F",
+      }}
     >
-      <div className="flex flex-col flex-1 md:w-[65%] md:min-h-0 md:min-w-0 max-w-[1200px] mx-auto w-full">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-[65%] md:flex-[0_0_65%]">
         <header
-          className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-white/10"
-          style={{ backgroundColor: "#0D0520" }}
+          className="relative z-10 flex h-12 shrink-0 items-center justify-between gap-2.5 border-b px-3"
+          style={{
+            background: "rgba(5,1,15,0.97)",
+            borderBottom: "1px solid rgba(124,58,237,0.2)",
+          }}
         >
-          <button type="button" onClick={() => router.push("/dashboard/games/celo")} className="text-[#F5C842] text-sm">
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard/games/celo")}
+            className="relative z-10 text-sm text-[#F5C842]"
+          >
             ←
           </button>
-          <span className={`${cinzel.className} text-sm truncate max-w-[40vw]`} style={{ color: "#F5C842" }}>
+          <span className={`${cinzel.className} max-w-[40vw] truncate text-sm`} style={{ color: "#F5C842" }}>
             {(room.name ?? "Table").slice(0, 16)}
           </span>
-          <span className="text-xs text-emerald-400">●</span>
+          <span className="relative z-10 text-xs text-emerald-400">●</span>
         </header>
 
         <div
-          className="h-[52px] shrink-0 grid grid-cols-3 border-b border-white/10 text-[10px] md:text-xs"
-          style={{ backgroundColor: "#0a0518" }}
+          className="grid h-[52px] shrink-0 grid-cols-3 border-b text-[10px] md:text-xs"
+          style={{
+            background: "rgba(13,5,32,0.95)",
+            borderBottom: "1px solid rgba(245,200,66,0.1)",
+          }}
         >
-          <div className="flex flex-col justify-center px-2 truncate">
+          <div className="flex flex-col justify-center truncate px-2">
             <span className="text-white/40">Banker</span>
-            <span className="text-white font-medium truncate">
+            <span className="truncate font-medium text-white">
               {displayNames[String(room.banker_id ?? "")] ?? "—"}
             </span>
           </div>
-          <div className="flex flex-col justify-center items-center">
+          <div className="flex flex-col items-center justify-center">
             <span className="text-white/40">Prize pool</span>
             <span style={{ color: "#F5C842" }}>{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
           </div>
-          <div className="flex flex-col justify-center items-end px-2">
+          <div className="flex flex-col items-end justify-center px-2">
             <span className="text-white/40">Bank</span>
             <span style={{ color: "#F5C842" }}>{bank.toLocaleString()} GPC</span>
           </div>
         </div>
 
-        <div className="flex-1 min-h-[200px] md:min-h-0 relative flex flex-col items-center justify-center px-3 py-4">
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
           <div
-            className="absolute inset-0 pointer-events-none opacity-90"
+            className="pointer-events-none absolute inset-0 z-0 opacity-90"
             style={{
               background:
                 "linear-gradient(90deg, rgba(124,58,237,0.12), transparent 30%), linear-gradient(270deg, rgba(245,200,66,0.1), transparent 30%)",
             }}
           />
+          {bankerPlayer && (
+            <div className="pointer-events-none absolute left-1/2 top-2 z-[3] flex -translate-x-1/2 flex-col items-center gap-0.5 text-[10px] text-white/90">
+              <span className="text-white/50">BANKER</span>
+              <span className="max-w-[120px] truncate font-medium">
+                {displayNames[bankerPlayer.user_id] ?? "—"}
+              </span>
+            </div>
+          )}
           <div
-            className="relative flex flex-col items-center justify-center rounded-[50%] border-[10px] border-[#5C3A1A]"
+            className="relative z-[2] flex shrink-0 flex-col items-center justify-center"
             style={{
-              backgroundColor: "#0D2B0D",
-              width: "min(280px, 85vw)",
-              height: "clamp(160px, 28vh, 220px)",
-              boxShadow: "inset 0 0 80px rgba(0,0,0,0.45)",
+              width: "min(260px, 80vw)",
+              height: "min(170px, 26vh)",
+              borderRadius: "50%",
+              background: "#0D2B0D",
+              border: "8px solid #5C3A1A",
+              boxShadow: "inset 0 0 60px rgba(0,0,0,0.45)",
             }}
           >
             <span
-              className="absolute pointer-events-none text-[80px] font-black select-none"
+              className="pointer-events-none absolute select-none text-[72px] font-black"
               style={{ color: "rgba(255,255,255,0.06)" }}
             >
               GP
             </span>
             {dice ? (
-              <div className="relative z-[1] flex gap-2">
-                <DiceFace value={dice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6} size={52} rolling={rolling} delay={0} />
-                <DiceFace value={dice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6} size={52} rolling={rolling} delay={133} />
-                <DiceFace value={dice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6} size={52} rolling={rolling} delay={266} />
+              <div className="relative z-[1] flex items-center justify-center gap-2">
+                <DiceFace
+                  value={dice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  size={diceSize}
+                  rolling={rolling}
+                  delay={0}
+                />
+                <DiceFace
+                  value={dice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  size={diceSize}
+                  rolling={rolling}
+                  delay={133}
+                />
+                <DiceFace
+                  value={dice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  size={diceSize}
+                  rolling={rolling}
+                  delay={266}
+                />
               </div>
             ) : (
-              <p className="text-white/40 text-sm z-[1]">Waiting for roll…</p>
+              <p className="relative z-[1] text-sm text-white/40">Waiting for roll…</p>
             )}
             <RollNameDisplay rollName={rollName} result={null} />
           </div>
 
+          <div className="absolute bottom-2 left-0 right-0 z-[3] flex flex-wrap justify-center gap-2 px-2">
+            {seatPlayers.map((p) => (
+              <div
+                key={p.user_id}
+                className="pointer-events-none max-w-[80px] text-center text-[10px] text-white/80"
+              >
+                <div>Seat {p.seat_number ?? "?"}</div>
+                <div className="truncate">{displayNames[p.user_id] ?? "?"}</div>
+              </div>
+            ))}
+          </div>
+
           {!inRoom && (
-            <div className="mt-6 w-full max-w-sm space-y-2 z-[2]">
+            <div className="relative z-[5] mt-3 w-full max-w-sm space-y-2 px-3">
               <p className="text-sm text-white/70">Join this table with an entry (multiplier of {minEntry} GPC).</p>
               <input
                 type="number"
-                className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2"
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2"
                 value={joinEntry}
                 min={minEntry}
                 step={minEntry}
@@ -897,7 +980,7 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 disabled={busy || joinEntry < minEntry || joinEntry % minEntry !== 0}
-                className="w-full rounded-xl py-3 font-semibold text-black disabled:opacity-40"
+                className="relative z-10 w-full rounded-xl py-3 font-semibold text-black disabled:opacity-40"
                 style={{ backgroundColor: "#F5C842" }}
                 onClick={() => void handleJoin()}
               >
@@ -908,21 +991,24 @@ export default function CeloRoomPage() {
         </div>
 
         <div
-          className="h-[52px] shrink-0 flex items-center justify-between px-3 border-t border-white/10 gap-2"
-          style={{ backgroundColor: "#0D0520" }}
+          className="relative z-10 flex h-[52px] shrink-0 items-center gap-2 border-t px-2.5"
+          style={{
+            background: "rgba(5,1,15,0.97)",
+            borderTop: "1px solid rgba(124,58,237,0.2)",
+          }}
         >
-          <span className="text-xs font-mono" style={{ color: "#F5C842" }}>
+          <span className="relative z-10 shrink-0 text-xs font-mono" style={{ color: "#F5C842" }}>
             {formatGPC(gpayCoins)}
           </span>
-          {inRoom && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-1">
-              <div className="flex justify-center w-full">
+          {inRoom ? (
+            <div className="relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center gap-1">
+              <div className="flex w-full justify-center">
                 {canStart && (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void handleStartRound()}
-                    className="rounded-xl px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+                    className="relative z-10 h-10 rounded-xl px-4 text-sm font-semibold text-black disabled:opacity-40"
                     style={{ backgroundColor: "#7C3AED" }}
                   >
                     START ROUND
@@ -933,7 +1019,7 @@ export default function CeloRoomPage() {
                     type="button"
                     disabled={rolling || busy}
                     onClick={() => void handleRoll()}
-                    className="rounded-xl px-5 py-2 text-sm font-semibold text-black animate-pulse disabled:opacity-40"
+                    className="relative z-10 h-10 animate-pulse rounded-xl px-5 text-sm font-semibold text-black disabled:opacity-40"
                     style={{ backgroundColor: "#F5C842" }}
                   >
                     ROLL DICE
@@ -948,55 +1034,96 @@ export default function CeloRoomPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => setShowCoverConfirm(true)}
-                  className="text-[10px] px-2 py-1 rounded-lg border font-semibold"
+                  className="relative z-10 rounded-lg border px-2 py-1 text-[10px] font-semibold"
                   style={{ borderColor: "#F5C842", color: "#F5C842" }}
                 >
                   COVER THE BANK ({bank.toLocaleString()} GPC)
                 </button>
               )}
             </div>
+          ) : (
+            <div className="relative z-10 min-w-0 flex-1" />
+          )}
+          <Link
+            href="/dashboard/coins/buy"
+            className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 text-lg leading-none"
+            aria-label="Dice shop"
+          >
+            🛒
+          </Link>
+        </div>
+
+        <div
+          className="relative z-10 flex h-10 shrink-0 md:hidden"
+          style={{
+            background: "rgba(5,1,15,0.97)",
+            borderTop: "1px solid rgba(124,58,237,0.1)",
+          }}
+        >
+          <button
+            type="button"
+            className="relative z-10 flex h-full flex-1 items-center justify-center text-xs font-semibold"
+            style={{
+              color: activeTab === "side" ? "#F5C842" : "rgba(255,255,255,0.45)",
+              borderBottom:
+                activeTab === "side" && tabOpen ? "2px solid #F5C842" : "2px solid transparent",
+            }}
+            onClick={() => handleTabClick("side")}
+          >
+            SIDE
+          </button>
+          <button
+            type="button"
+            className="relative z-10 flex h-full flex-1 items-center justify-center text-xs font-semibold"
+            style={{
+              color: activeTab === "chat" ? "#F5C842" : "rgba(255,255,255,0.45)",
+              borderBottom:
+                activeTab === "chat" && tabOpen ? "2px solid #F5C842" : "2px solid transparent",
+            }}
+            onClick={() => handleTabClick("chat")}
+          >
+            CHAT
+          </button>
+        </div>
+
+        <div
+          className="flex-shrink-0 overflow-hidden transition-[height] duration-200 ease-out md:hidden"
+          style={{
+            height: tabOpen ? 160 : 0,
+            background: "rgba(13,5,32,0.98)",
+          }}
+        >
+          {tabOpen && (
+            <div className="flex h-[160px] flex-col overflow-hidden">
+              {activeTab === "chat" ? (
+                <div className="flex h-full min-h-0 flex-col">{chatBlock}</div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto px-2">{sidePanelInner}</div>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="h-10 shrink-0 flex border-t border-white/10 md:hidden">
-          {(["side", "chat"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              className="flex-1 text-xs font-semibold"
-              style={{
-                color: tab === t ? "#F5C842" : "rgba(255,255,255,0.45)",
-                borderBottom: tab === t ? "2px solid #F5C842" : undefined,
-              }}
-              onClick={() => {
-                if (tab === t) setPanelOpen((o) => !o);
-                else {
-                  setTab(t);
-                  setPanelOpen(true);
-                }
-              }}
-            >
-              {t === "side" ? "SIDE" : "CHAT"}
-            </button>
-          ))}
-        </div>
-
-        {panelOpen && (
-          <div
-            className="md:hidden max-h-[160px] overflow-y-auto border-t border-white/10 px-0 py-2 text-sm flex flex-col min-h-0"
-            style={{ backgroundColor: "#0a0518" }}
-          >
-            {tab === "chat" ? chatBlock : <div className="px-2 overflow-y-auto flex-1 min-h-0">{sidePanelInner}</div>}
-          </div>
-        )}
+        <div
+          className="shrink-0 md:hidden"
+          style={{
+            height: "env(safe-area-inset-bottom, 0px)",
+            background: "rgba(5,1,15,0.97)",
+          }}
+        />
       </div>
 
       <aside
-        className="hidden md:flex md:w-[35%] md:flex-col md:min-h-0 md:min-w-0 border-l border-[rgba(124,58,237,0.2)]"
-        style={{ backgroundColor: "#0D0520" }}
+        className="hidden min-h-0 flex-[0_0_35%] flex-col border-l md:flex md:max-w-[35%]"
+        style={{
+          borderLeft: "1px solid rgba(124,58,237,0.2)",
+          background: "rgba(5,1,15,0.97)",
+        }}
       >
-        <div className="flex-1 flex flex-col min-h-0 border-b border-white/10 overflow-hidden">{sidePanelInner}</div>
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-t border-white/5">{chatBlock}</div>
+        <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden border-b border-white/10">
+          {sidePanelInner}
+        </div>
+        <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden">{chatBlock}</div>
       </aside>
 
       {showLowerBank && isBanker && (
@@ -1115,7 +1242,7 @@ export default function CeloRoomPage() {
       )}
 
       {error && (
-        <div className="fixed bottom-20 left-3 right-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200 z-[300]">
+        <div className="fixed bottom-4 left-3 right-3 z-[300] rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           {error}
         </div>
       )}

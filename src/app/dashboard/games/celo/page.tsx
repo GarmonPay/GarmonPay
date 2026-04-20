@@ -44,10 +44,13 @@ export default function CeloLobbyPage() {
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({});
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [roomName, setRoomName] = useState("");
-  const [maxPlayers, setMaxPlayers] = useState<2 | 4 | 6 | 10>(6);
-  const [minimumEntrySc, setMinimumEntrySc] = useState(500);
-  const [currentBankSc, setCurrentBankSc] = useState(500);
+  const [form, setForm] = useState({
+    name: "",
+    max_players: 6 as 2 | 4 | 6 | 10,
+    minimum_entry_sc: 500,
+    starting_bank_sc: 500,
+  });
+  const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
 
   const loadRooms = useCallback(async () => {
@@ -143,29 +146,35 @@ export default function CeloLobbyPage() {
   const liveCount = filtered.length;
 
   async function handleCreate() {
-    if (!roomName.trim() || creating) return;
+    if (!form.name.trim()) {
+      setCreateError("Enter a room name");
+      return;
+    }
     setCreating(true);
-    setError(null);
+    setCreateError("");
     try {
       const res = await fetch("/api/celo/room/create", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
-          name: roomName.trim(),
-          max_players: maxPlayers,
-          minimum_entry_sc: minimumEntrySc,
-          current_bank_sc: currentBankSc,
+          name: form.name.trim(),
+          max_players: form.max_players,
+          minimum_entry_sc: form.minimum_entry_sc,
+          starting_bank_sc: form.starting_bank_sc,
         }),
       });
-      const j = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof j.message === "string" ? j.message : "Could not create room");
+        setCreateError(typeof data.error === "string" ? data.error : "Failed to create room");
         return;
       }
-      const id = typeof j.room_id === "string" ? j.room_id : (j.room as { id?: string })?.id;
-      setModalOpen(false);
-      if (id) router.push(`/dashboard/games/celo/${id}`);
+      if (data.room?.id) {
+        setModalOpen(false);
+        router.push(`/dashboard/games/celo/${data.room.id}`);
+      }
+    } catch {
+      setCreateError("Connection error. Try again.");
     } finally {
       setCreating(false);
       void refresh();
@@ -340,8 +349,8 @@ export default function CeloLobbyPage() {
             <label className="block text-xs text-white/50 mb-1">Table name</label>
             <input
               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2.5 text-white mb-4"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Name your table"
             />
             <p className="text-xs text-white/50 mb-2">Max players</p>
@@ -350,9 +359,9 @@ export default function CeloLobbyPage() {
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setMaxPlayers(n)}
+                  onClick={() => setForm((f) => ({ ...f, max_players: n }))}
                   className={`rounded-full px-4 py-2 text-sm font-semibold border ${
-                    maxPlayers === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
+                    form.max_players === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
                   }`}
                 >
                   {n}
@@ -365,12 +374,15 @@ export default function CeloLobbyPage() {
                 <button
                   key={n}
                   type="button"
-                  onClick={() => {
-                    setMinimumEntrySc(n);
-                    setCurrentBankSc((b) => (b < n ? n : b));
-                  }}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      minimum_entry_sc: n,
+                      starting_bank_sc: Math.max(n, f.starting_bank_sc),
+                    }))
+                  }
                   className={`rounded-full px-3 py-2 text-xs font-semibold border ${
-                    minimumEntrySc === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
+                    form.minimum_entry_sc === n ? "border-[#F5C842] text-[#F5C842]" : "border-white/10 text-white/60"
                   }`}
                 >
                   ${(n / 100).toFixed(0)}
@@ -381,24 +393,40 @@ export default function CeloLobbyPage() {
             <input
               type="number"
               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2.5 text-white mb-2"
-              value={currentBankSc}
-              min={minimumEntrySc}
-              step={minimumEntrySc}
-              onChange={(e) => setCurrentBankSc(Math.max(minimumEntrySc, parseInt(e.target.value, 10) || 0))}
+              value={form.starting_bank_sc}
+              min={form.minimum_entry_sc}
+              step={form.minimum_entry_sc}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  starting_bank_sc: Number(e.target.value),
+                }))
+              }
             />
-            <p className="text-xs text-white/40 mb-4">Available: {formatGPC(gpayCoins)}</p>
-            {currentBankSc > gpayCoins && <p className="text-xs text-red-400 mb-2">Insufficient GPC for this bank.</p>}
+            <p className="text-xs text-white/40 mb-2">Available: {formatGPC(gpayCoins)}</p>
+            {createError && <p className="text-xs text-red-400 mb-2">{createError}</p>}
+            {form.starting_bank_sc > gpayCoins && (
+              <p className="text-xs text-red-400 mb-2">Insufficient GPC for this bank.</p>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
                 className="flex-1 rounded-xl py-3 border border-white/10 text-white/70"
-                onClick={() => setModalOpen(false)}
+                onClick={() => {
+                  setModalOpen(false);
+                  setCreateError("");
+                }}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={!roomName.trim() || currentBankSc > gpayCoins || creating || currentBankSc % minimumEntrySc !== 0}
+                disabled={
+                  !form.name.trim() ||
+                  form.starting_bank_sc > gpayCoins ||
+                  creating ||
+                  form.starting_bank_sc % form.minimum_entry_sc !== 0
+                }
                 className="flex-1 rounded-xl py-3 font-semibold text-black disabled:opacity-40"
                 style={{ backgroundColor: "#F5C842" }}
                 onClick={() => void handleCreate()}
