@@ -8,6 +8,7 @@ import { BannerRotator } from "@/components/banners/BannerRotator";
 import { getSessionAsync } from "@/lib/session";
 import { attachReferralByReferrerIdSession } from "@/lib/api";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { MembershipWelcomeBanner } from "@/components/dashboard/MembershipWelcomeBanner";
 
 const REF_STORAGE_KEY = "garmonpay_ref";
 const REFERRAL_NOTICE_SESSION_KEY = "garmonpay_referral_notice";
@@ -123,6 +124,9 @@ export default function DashboardLayout({
             <main className="min-w-0 flex-1 px-4 py-4 text-[14px] max-w-full leading-normal tablet:px-6 tablet:py-6 tablet:text-base">
               <div className="mx-auto mb-4 max-w-2xl tablet:mb-6">
                 <BannerRotator placement="dashboard-top" />
+              </div>
+              <div className="mx-auto w-full max-w-2xl">
+                <MembershipWelcomeBanner />
               </div>
               <div className="dashboard-main animate-fade-in flex min-w-0 flex-col gap-4">
                 {children}

@@ -16,7 +16,7 @@ import {
   type MarketingPlanId,
 } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
-import { getMonthlyGpcBonusForPlan } from "@/lib/membership-monthly-gpc-bonus";
+import { getMonthlyGpcBonusForPlan, getFirstMonthTotalGpcForPlan } from "@/lib/membership-monthly-gpc-bonus";
 import { localeInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({
@@ -68,6 +68,17 @@ function cardChrome(id: string): {
       return { border: "border-white/15", badge: null, extraClass: "" };
   }
 }
+
+const TIER_EXTRA: Record<
+  string,
+  { convertPct: number; tasks: string }
+> = {
+  free: { convertPct: 80, tasks: "3 tasks per day" },
+  starter: { convertPct: 85, tasks: "10 tasks per day" },
+  growth: { convertPct: 90, tasks: "25 tasks per day" },
+  pro: { convertPct: 95, tasks: "50 tasks per day" },
+  elite: { convertPct: 100, tasks: "Unlimited tasks per day" },
+};
 
 const ROI = [
   {
@@ -443,18 +454,32 @@ export default function PricingPage() {
                   </div>
                   {(() => {
                     const monthlyGpc = getMonthlyGpcBonusForPlan(p.id);
+                    const firstMonth = getFirstMonthTotalGpcForPlan(p.id);
+                    const extra = TIER_EXTRA[p.id];
                     return (
                       <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/25 px-3 py-2.5 text-center">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400/95">
-                          Monthly GPay Coins bonus
+                          GPay Coins (GPC) membership bonus
                         </p>
-                        <p className="mt-1 text-lg font-bold tabular-nums text-emerald-300">
-                          {monthlyGpc === 0 ? "—" : `+${localeInt(monthlyGpc)} GPC`}
-                        </p>
-                        {monthlyGpc > 0 ? (
-                          <p className="mt-0.5 text-[10px] text-violet-300/75">Included each billing month</p>
+                        {p.id === "free" ? (
+                          <div className="mt-2 space-y-1 text-sm text-violet-300/90">
+                            <p>No GPC membership bonus</p>
+                            <p className="text-[11px] text-violet-400/80">Basic access</p>
+                          </div>
                         ) : (
-                          <p className="mt-0.5 text-[10px] text-violet-400/60">Upgrade for monthly GPC</p>
+                          <>
+                            <p className="mt-1 text-lg font-bold tabular-nums text-emerald-300">
+                              First month: {localeInt(firstMonth)} GPC
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-emerald-200/90">
+                              Then {localeInt(monthlyGpc)} GPC every month
+                            </p>
+                          </>
+                        )}
+                        {extra && (
+                          <p className="mt-2 text-[10px] leading-snug text-violet-300/80">
+                            Convert GC at {extra.convertPct}% rate · {extra.tasks}
+                          </p>
                         )}
                       </div>
                     );

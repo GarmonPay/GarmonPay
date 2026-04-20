@@ -10,6 +10,7 @@ import { useCoins } from "@/hooks/useCoins";
 import { GOLD_COIN_PACKAGES, type GoldCoinPackageId } from "@/lib/gold-coin-packages";
 import { createBrowserClient } from "@/lib/supabase";
 import { localeInt } from "@/lib/format-number";
+import { MONTHLY_BONUSES, normalizeMembershipTierKey } from "@/lib/membership-bonus";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -44,6 +45,10 @@ function WalletDashboardContent() {
   const [tierRaw, setTierRaw] = useState<string>("free");
   const [coinHistory, setCoinHistory] = useState<CoinEntry[]>([]);
   const [gpayUsd, setGpayUsd] = useState<number | null>(null);
+  const [membershipBonusRows, setMembershipBonusRows] = useState<
+    { id: string; bonus_type: string; to_tier: string; gpc_amount: number; credited_at: string }[]
+  >([]);
+  const [lastMonthlyBonusAt, setLastMonthlyBonusAt] = useState<string | null>(null);
 
   const [showBuy, setShowBuy] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
@@ -63,6 +68,22 @@ function WalletDashboardContent() {
   const { rate: tierRate, label: tierLabel } = tierToRateLabel(tierRaw);
   const previewGpc = Math.floor(convertGc * tierRate);
 
+  const tierKey = normalizeMembershipTierKey(tierRaw);
+  const monthlyBonusAmount =
+    tierKey === "starter" || tierKey === "growth" || tierKey === "pro" || tierKey === "elite"
+      ? MONTHLY_BONUSES[tierKey]
+      : 0;
+  const nextMonthlyEta = (() => {
+    if (monthlyBonusAmount <= 0 || !lastMonthlyBonusAt) return null;
+    const next = new Date(lastMonthlyBonusAt);
+    next.setDate(next.getDate() + 30);
+    const ms = next.getTime() - Date.now();
+    if (ms <= 0) return { days: 0, pct: 100 };
+    const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+    const pct = Math.min(100, Math.max(0, 100 - (days / 30) * 100));
+    return { days, pct };
+  })();
+
   useEffect(() => {
     getSessionAsync().then((session) => {
       if (session) setUser({ id: session.userId, accessToken: session.accessToken });
@@ -74,13 +95,35 @@ function WalletDashboardContent() {
     if (!supabase || !user?.id) return;
     void supabase
       .from("users")
-      .select("membership_tier, membership")
+      .select("membership_tier, membership, last_monthly_bonus_at")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
-        const r = data as { membership_tier?: string; membership?: string } | null;
+        const r = data as {
+          membership_tier?: string;
+          membership?: string;
+          last_monthly_bonus_at?: string | null;
+        } | null;
         const tr = (r?.membership_tier ?? r?.membership ?? "free").trim();
         setTierRaw(tr || "free");
+        setLastMonthlyBonusAt(r?.last_monthly_bonus_at ?? null);
+      });
+    void supabase
+      .from("membership_bonuses")
+      .select("id, bonus_type, to_tier, gpc_amount, credited_at")
+      .eq("user_id", user.id)
+      .order("credited_at", { ascending: false })
+      .limit(40)
+      .then(({ data }) => {
+        setMembershipBonusRows(
+          (data ?? []) as {
+            id: string;
+            bonus_type: string;
+            to_tier: string;
+            gpc_amount: number;
+            credited_at: string;
+          }[]
+        );
       });
   }, [user?.id]);
 
@@ -293,6 +336,66 @@ function WalletDashboardContent() {
           >
             REDEEM FOR $GPAY
           </button>
+        </div>
+      </section>
+
+      {/* Membership GPC bonuses */}
+      <section className="rounded-xl border border-amber-500/35 bg-amber-950/20 p-6 space-y-3">
+        <h2 className={`${cinzel.className} text-lg text-amber-200`}>Membership GPC bonuses</h2>
+        {monthlyBonusAmount > 0 && (
+          <div>
+            <p className="text-sm text-amber-100/90">
+              Next monthly bonus:{" "}
+              <span className="font-semibold tabular-nums">
+                {nextMonthlyEta
+                  ? nextMonthlyEta.days <= 0
+                    ? `Eligible now — ${localeInt(monthlyBonusAmount)} GPC`
+                    : `Your next ${localeInt(monthlyBonusAmount)} GPC bonus in ~${nextMonthlyEta.days} day${nextMonthlyEta.days === 1 ? "" : "s"}`
+                  : `Your next ${localeInt(monthlyBonusAmount)} GPC with your next billing cycle`}
+              </span>
+            </p>
+            {nextMonthlyEta && nextMonthlyEta.days > 0 && (
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/40">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-amber-600 to-yellow-400 transition-all"
+                  style={{ width: `${nextMonthlyEta.pct}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {monthlyBonusAmount <= 0 && (
+          <p className="text-sm text-violet-200/75">
+            Upgrade membership for monthly GPay Coins (GPC) bonuses. See{" "}
+            <Link href="/pricing" className="text-amber-300 underline">
+              Pricing
+            </Link>
+            .
+          </p>
+        )}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-400/90">Bonus history</p>
+          {membershipBonusRows.length === 0 ? (
+            <p className="mt-2 text-sm text-violet-300/70">No membership bonuses yet.</p>
+          ) : (
+            <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto text-sm">
+              {membershipBonusRows.map((b) => {
+                const d = b.credited_at ? new Date(b.credited_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+                const kind =
+                  b.bonus_type === "upgrade_bonus"
+                    ? `${b.to_tier.charAt(0).toUpperCase() + b.to_tier.slice(1)} upgrade`
+                    : "Monthly bonus";
+                return (
+                  <li key={b.id} className="flex justify-between gap-2 border-b border-white/5 pb-2 text-violet-100/90">
+                    <span>
+                      {d} · {kind}
+                    </span>
+                    <span className="shrink-0 font-medium text-emerald-400 tabular-nums">+{localeInt(b.gpc_amount)} GPC</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </section>
 

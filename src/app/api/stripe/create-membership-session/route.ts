@@ -85,6 +85,14 @@ export async function POST(req: Request) {
         membership_tier: tierId,
         tier: tierId,
       },
+      subscription_data: {
+        metadata: {
+          user_id: userId,
+          product_type: "membership_upgrade",
+          membership_tier: tierId,
+          tier: tierId,
+        },
+      },
       line_items: [
         {
           price: priceId,

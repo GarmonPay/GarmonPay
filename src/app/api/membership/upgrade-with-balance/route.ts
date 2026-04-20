@@ -9,7 +9,7 @@ import {
 } from "@/lib/wallet-ledger";
 import { normalizeUserMembershipTier, membershipTierRank, type MarketingPlanId } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
-import { grantMembershipUpgradeBonusGpc } from "@/lib/gpay-bonus-credits";
+import { applyMembershipUpgradeAndFirstMonthly, creditMonthlyBonus } from "@/lib/membership-bonus";
 
 export const runtime = "nodejs";
 
@@ -166,10 +166,13 @@ export async function POST(req: Request) {
     });
 
   let gpcBonus = 0;
-  if (!renew) {
-    const bonusRef = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    const bonusResult = await grantMembershipUpgradeBonusGpc(userId, tier, bonusRef);
-    if (bonusResult.granted) gpcBonus = bonusResult.amount;
+  if (renew) {
+    const mo = await creditMonthlyBonus(admin, userId, tier, ref);
+    if (mo.success) gpcBonus = mo.gpcCredited ?? 0;
+  } else {
+    const prev = currentTier;
+    const totals = await applyMembershipUpgradeAndFirstMonthly(admin, userId, prev, tier, ref);
+    gpcBonus = totals.upgradeGpc + totals.monthlyGpc;
   }
 
   const newBalance = await getCanonicalBalanceCents(userId);

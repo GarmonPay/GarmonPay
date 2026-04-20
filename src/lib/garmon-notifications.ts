@@ -12,7 +12,9 @@ export type GarmonNotificationType =
   | "membership_renewed_balance"
   | "membership_expiring_soon"
   | "membership_expired"
-  | "membership_renew_failed";
+  | "membership_renew_failed"
+  | "membership_gpc_upgrade"
+  | "membership_gpc_monthly";
 
 export async function createGarmonNotification(
   userId: string,

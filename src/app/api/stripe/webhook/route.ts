@@ -4,7 +4,11 @@ import { createAdminClient } from "@/lib/supabase";
 import { recordRevenue } from "@/lib/platform-balance";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
 import { creditCoins } from "@/lib/coins";
-import { grantMembershipUpgradeBonusGpc } from "@/lib/gpay-bonus-credits";
+import {
+  applyMembershipUpgradeAndFirstMonthly,
+  creditMonthlyBonus,
+  normalizeMembershipTierKey,
+} from "@/lib/membership-bonus";
 import { creditReferralUpgradeCommission } from "@/lib/adTracker";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import Stripe from "stripe";
@@ -210,6 +214,38 @@ export async function POST(req: Request) {
   const eventId = event.id;
   const eventType = event.type;
 
+  const supabaseInvoice = createAdminClient();
+
+  if (eventType === "invoice.paid" && supabaseInvoice) {
+    const invoice = event.data.object as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
+    const billingReason = invoice.billing_reason;
+    if (billingReason === "subscription_cycle") {
+      const subRef = invoice.subscription;
+      const subId = typeof subRef === "string" ? subRef : subRef?.id ?? null;
+      if (subId) {
+        try {
+          if (!isStripeConfigured()) return new Response("OK", { status: 200 });
+          const stripe = getStripe();
+          const sub = await stripe.subscriptions.retrieve(subId);
+          const productType = (sub.metadata?.product_type as string) || "";
+          if (productType === "membership_upgrade") {
+            const userId = (sub.metadata?.user_id as string) || null;
+            const tierRaw = ((sub.metadata?.membership_tier as string) || (sub.metadata?.tier as string) || "starter").toLowerCase();
+            if (userId && ["starter", "growth", "pro", "elite"].includes(tierRaw)) {
+              const r = await creditMonthlyBonus(supabaseInvoice, userId, tierRaw, `inv_${invoice.id}`);
+              if (!r.success) {
+                console.warn("[Stripe webhook] invoice monthly bonus", { userId, tierRaw, reason: r.reason });
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[Stripe webhook] invoice.paid membership monthly", e);
+        }
+      }
+    }
+    return new Response("OK", { status: 200 });
+  }
+
   if (eventType === "payment_intent.payment_failed") {
     const pi = event.data.object as Stripe.PaymentIntent;
     console.warn("[Stripe webhook] payment_intent.payment_failed", {
@@ -349,6 +385,17 @@ export async function POST(req: Request) {
         ? session.subscription
         : ((session.subscription as Stripe.Subscription | null)?.id ?? null);
 
+    const { data: userBefore } = await supabase
+      .from("users")
+      .select("membership_tier, membership")
+      .eq("id", user_id)
+      .maybeSingle();
+    const previousTier = normalizeMembershipTierKey(
+      (userBefore as { membership_tier?: string | null; membership?: string | null } | null)?.membership_tier ??
+        (userBefore as { membership?: string | null })?.membership ??
+        "free"
+    );
+
     await safeMembershipUpdate(supabase, user_id, {
       membership: targetTier,
       membership_tier: targetTier,
@@ -358,10 +405,22 @@ export async function POST(req: Request) {
       membership_payment_source: "stripe",
     });
 
-    const bonusRes = await grantMembershipUpgradeBonusGpc(user_id, targetTier, session_id);
-    if (!bonusRes.ok) {
-      console.error("[Stripe webhook] membership upgrade GPC bonus failed", { user_id, targetTier, session_id });
+    const bonusTotals = await applyMembershipUpgradeAndFirstMonthly(
+      supabase,
+      user_id,
+      previousTier,
+      targetTier,
+      session_id
+    );
+    if (bonusTotals.upgradeGpc + bonusTotals.monthlyGpc <= 0) {
+      console.warn("[Stripe webhook] membership GPC bonuses may be skipped or duplicate", {
+        user_id,
+        previousTier,
+        targetTier,
+        session_id,
+      });
     }
+
 
     await supabase.from("transactions").insert({
       user_id,
