@@ -1,8 +1,38 @@
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -16,10 +46,7 @@ export async function POST(req: Request) {
   const roomId = typeof body.room_id === "string" ? body.room_id : null;
   if (!roomId) return NextResponse.json({ message: "room_id required" }, { status: 400 });
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: roomRaw, error: rErr } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRaw, error: rErr } = await adminClient.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
   if (rErr || !roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
 
   const room = roomRaw as Record<string, unknown>;
@@ -27,7 +54,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Only the banker can start a round" }, { status: 403 });
   }
 
-  const { data: players } = await supabase
+  const { data: players } = await adminClient
     .from("celo_room_players")
     .select("user_id, entry_sc, seat_number, role")
     .eq("room_id", roomId)
@@ -38,7 +65,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "At least one player with an entry is required" }, { status: 400 });
   }
 
-  const { data: openRows } = await supabase
+  const { data: openRows } = await adminClient
     .from("celo_rounds")
     .select("id")
     .eq("room_id", roomId)
@@ -52,7 +79,7 @@ export async function POST(req: Request) {
   const prizePool = withEntry.reduce((s, p) => s + Math.floor(Number((p as { entry_sc?: number }).entry_sc ?? 0)), 0);
   const platformFee = Math.floor((prizePool * 10) / 100);
 
-  const { data: lastNum } = await supabase
+  const { data: lastNum } = await adminClient
     .from("celo_rounds")
     .select("round_number")
     .eq("room_id", roomId)
@@ -65,7 +92,7 @@ export async function POST(req: Request) {
   const seats = withEntry.map((p) => Number((p as { seat_number?: number }).seat_number)).filter((n) => Number.isFinite(n));
   const currentSeat = seats.length ? Math.min(...seats) : 1;
 
-  const { data: inserted, error: insErr } = await supabase
+  const { data: inserted, error: insErr } = await adminClient
     .from("celo_rounds")
     .insert({
       room_id: roomId,
@@ -89,7 +116,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: insErr?.message ?? "Failed to start round" }, { status: 500 });
   }
 
-  await supabase.from("celo_rooms").update({ status: "rolling", last_activity: new Date().toISOString() }).eq("id", roomId);
+  await adminClient.from("celo_rooms").update({ status: "rolling", last_activity: new Date().toISOString() }).eq("id", roomId);
 
   return NextResponse.json({ ok: true, round: inserted });
 }

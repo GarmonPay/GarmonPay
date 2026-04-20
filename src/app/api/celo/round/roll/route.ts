@@ -1,6 +1,9 @@
+import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 import { creditCoins, getUserCoins } from "@/lib/coins";
 import {
   rollThreeDice,
@@ -40,21 +43,21 @@ type SideBetRoundResult = {
 };
 
 async function getUserDisplayName(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  adminClient: SupabaseClient,
   uid: string
 ): Promise<string> {
-  const { data } = await supabase.from("users").select("full_name,email").eq("id", uid).maybeSingle();
+  const { data } = await adminClient.from("users").select("full_name,email").eq("id", uid).maybeSingle();
   const row = data as { full_name?: string | null; email?: string | null } | null;
   return row?.full_name?.trim() || row?.email?.split("@")[0] || "Player";
 }
 
 async function insertCeloSystemChat(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  adminClient: SupabaseClient,
   roomId: string,
   actorUserId: string,
   message: string
 ) {
-  const { error } = await supabase.from("celo_chat").insert({
+  const { error } = await adminClient.from("celo_chat").insert({
     room_id: roomId,
     user_id: actorUserId,
     message,
@@ -64,12 +67,12 @@ async function insertCeloSystemChat(
 }
 
 async function settleSideBets(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  adminClient: SupabaseClient,
   roomId: string,
   roundId: string,
   roundResult: SideBetRoundResult
 ) {
-  const { data: sideBets } = await supabase
+  const { data: sideBets } = await adminClient
     .from("celo_side_bets")
     .select("*")
     .eq("room_id", roomId)
@@ -136,7 +139,7 @@ async function settleSideBets(
         continue;
       }
 
-      await supabase
+      await adminClient
         .from("celo_side_bets")
         .update({
           status: creatorWins ? "won" : "lost",
@@ -149,7 +152,7 @@ async function settleSideBets(
     }
   }
 
-  await supabase
+  await adminClient
     .from("celo_side_bets")
     .update({ status: "expired" })
     .eq("room_id", roomId)
@@ -158,27 +161,27 @@ async function settleSideBets(
 }
 
 async function announceRollExtras(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  adminClient: SupabaseClient,
   roomId: string,
   rollerId: string,
   rollName: string
 ) {
-  const nm = await getUserDisplayName(supabase, rollerId);
+  const nm = await getUserDisplayName(adminClient, rollerId);
   const u = rollName.toUpperCase();
   if (u.includes("HAND CRACK")) {
-    await insertCeloSystemChat(supabase, roomId, rollerId, `💥 ${nm} rolled HAND CRACK!`);
+    await insertCeloSystemChat(adminClient, roomId, rollerId, `💥 ${nm} rolled HAND CRACK!`);
   } else if (u.includes("SHIT")) {
-    await insertCeloSystemChat(supabase, roomId, rollerId, `💩 ${nm} rolled SHIT! Players win!`);
+    await insertCeloSystemChat(adminClient, roomId, rollerId, `💩 ${nm} rolled SHIT! Players win!`);
   }
 }
 
 async function completeRound(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  adminClient: SupabaseClient,
   roundId: string,
   roomId: string,
   feeSc: number
 ) {
-  await supabase
+  await adminClient
     .from("celo_rounds")
     .update({
       status: "completed",
@@ -189,13 +192,41 @@ async function completeRound(
     })
     .eq("id", roundId);
 
-  await supabase
+  await adminClient
     .from("celo_rooms")
     .update({ status: "active", last_activity: new Date().toISOString() })
     .eq("id", roomId);
 }
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -210,10 +241,7 @@ export async function POST(req: Request) {
   const roundId = typeof body.round_id === "string" ? body.round_id : null;
   if (!roomId || !roundId) return NextResponse.json({ message: "room_id and round_id required" }, { status: 400 });
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: roundRaw, error: roundErr } = await supabase.from("celo_rounds").select("*").eq("id", roundId).maybeSingle();
+  const { data: roundRaw, error: roundErr } = await adminClient.from("celo_rounds").select("*").eq("id", roundId).maybeSingle();
   if (roundErr || !roundRaw) return NextResponse.json({ message: "Round not found" }, { status: 404 });
 
   const round = roundRaw as RoundRow;
@@ -221,11 +249,11 @@ export async function POST(req: Request) {
   if (round.status === "completed") return NextResponse.json({ message: "Round already completed" }, { status: 400 });
   if (round.roll_processing) return NextResponse.json({ message: "Roll in progress" }, { status: 409 });
 
-  const { data: roomRaw } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRaw } = await adminClient.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
   if (!roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
   const room = roomRaw as RoomRow;
 
-  const { data: membership } = await supabase
+  const { data: membership } = await adminClient
     .from("celo_room_players")
     .select("role, seat_number, entry_sc")
     .eq("room_id", roomId)
@@ -234,7 +262,7 @@ export async function POST(req: Request) {
 
   if (!membership) return NextResponse.json({ message: "Not in this room" }, { status: 403 });
 
-  await supabase
+  await adminClient
     .from("celo_rounds")
     .update({ roll_processing: true, roller_user_id: userId, updated_at: new Date().toISOString() })
     .eq("id", roundId);
@@ -244,7 +272,7 @@ export async function POST(req: Request) {
   try {
     if (round.status === "banker_rolling") {
       if (String(room.banker_id) !== userId) {
-        await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+        await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
         return NextResponse.json({ message: "Banker's turn to roll" }, { status: 403 });
       }
 
@@ -254,7 +282,7 @@ export async function POST(req: Request) {
 
       const rerolls = ev.result === "no_count" ? Math.floor(Number(round.banker_rerolls ?? 0)) + 1 : Math.floor(Number(round.banker_rerolls ?? 0));
 
-      await supabase
+      await adminClient
         .from("celo_rounds")
         .update({
           banker_dice: diceArr,
@@ -266,7 +294,7 @@ export async function POST(req: Request) {
         .eq("id", roundId);
 
       if (ev.result === "no_count") {
-        await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+        await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
         const bal = await getUserCoins(userId);
         return NextResponse.json({
           ok: true,
@@ -292,7 +320,7 @@ export async function POST(req: Request) {
           "celo_payout"
         );
         if (!credit.success) {
-          await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+          await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
           return NextResponse.json({ message: credit.message ?? "Credit failed" }, { status: 500 });
         }
 
@@ -303,11 +331,11 @@ export async function POST(req: Request) {
           banker_celo_at: ev.isCelo ? new Date().toISOString() : room.banker_celo_at,
         });
 
-        await supabase.from("celo_rooms").update(roomPatch).eq("id", roomId);
-        await completeRound(supabase, roundId, roomId, fee);
+        await adminClient.from("celo_rooms").update(roomPatch).eq("id", roomId);
+        await completeRound(adminClient, roundId, roomId, fee);
 
-        const nm = await getUserDisplayName(supabase, userId);
-        await settleSideBets(supabase, roomId, roundId, {
+        const nm = await getUserDisplayName(adminClient, userId);
+        await settleSideBets(adminClient, roomId, roundId, {
           bankerWon: true,
           playersWon: false,
           lastRollName: ev.rollName,
@@ -315,11 +343,11 @@ export async function POST(req: Request) {
           lastPoint: null,
         });
         if (ev.isCelo) {
-          await insertCeloSystemChat(supabase, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
+          await insertCeloSystemChat(adminClient, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
         }
-        await announceRollExtras(supabase, roomId, userId, ev.rollName);
+        await announceRollExtras(adminClient, roomId, userId, ev.rollName);
         await insertCeloSystemChat(
-          supabase,
+          adminClient,
           roomId,
           userId,
           `🏦 Banker wins! Bank: ${newBank.toLocaleString()} GPC`
@@ -335,12 +363,12 @@ export async function POST(req: Request) {
           outcome: "banker_table",
           isCelo: ev.isCelo,
           gpayCoins: bal.gpayCoins,
-          room: normalizeCeloRoomRow((await supabase.from("celo_rooms").select("*").eq("id", roomId).single()).data as Record<string, unknown>),
+          room: normalizeCeloRoomRow((await adminClient.from("celo_rooms").select("*").eq("id", roomId).single()).data as Record<string, unknown>),
         });
       }
 
       if (ev.result === "instant_loss") {
-        const { data: players } = await supabase
+        const { data: players } = await adminClient
           .from("celo_room_players")
           .select("user_id, entry_sc")
           .eq("room_id", roomId)
@@ -354,16 +382,16 @@ export async function POST(req: Request) {
           await creditCoins(uid, 0, net, `C-Lo round ${roundId} (player earns)`, `celo_round_player_earn_${roundId}_${uid}`, "celo_payout");
         }
 
-        await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+        await completeRound(adminClient, roundId, roomId, Math.floor((prizePool * 10) / 100));
 
-        await settleSideBets(supabase, roomId, roundId, {
+        await settleSideBets(adminClient, roomId, roundId, {
           bankerWon: false,
           playersWon: true,
           lastRollName: ev.rollName,
           lastRollResult: ev.result,
           lastPoint: null,
         });
-        await announceRollExtras(supabase, roomId, userId, ev.rollName);
+        await announceRollExtras(adminClient, roomId, userId, ev.rollName);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -378,7 +406,7 @@ export async function POST(req: Request) {
       }
 
       if (ev.result === "point") {
-        await supabase
+        await adminClient
           .from("celo_rounds")
           .update({
             status: "player_rolling",
@@ -402,7 +430,7 @@ export async function POST(req: Request) {
 
     if (round.status === "player_rolling") {
       const seatNeed = Math.floor(Number(round.current_player_seat ?? 0));
-      const { data: turnPlayer } = await supabase
+      const { data: turnPlayer } = await adminClient
         .from("celo_room_players")
         .select("user_id, entry_sc, seat_number")
         .eq("room_id", roomId)
@@ -411,7 +439,7 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (!turnPlayer || String((turnPlayer as { user_id: string }).user_id) !== userId) {
-        await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+        await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
         return NextResponse.json({ message: "Not your turn to roll" }, { status: 403 });
       }
 
@@ -426,7 +454,7 @@ export async function POST(req: Request) {
       let payout = 0;
 
       if (ev.result === "no_count") {
-        await supabase.from("celo_player_rolls").insert({
+        await adminClient.from("celo_player_rolls").insert({
           round_id: roundId,
           room_id: roomId,
           user_id: userId,
@@ -440,7 +468,7 @@ export async function POST(req: Request) {
           platform_fee_sc: 0,
           reroll_count: 1,
         });
-        await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+        await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
         const bal = await getUserCoins(userId);
         return NextResponse.json({
           ok: true,
@@ -460,7 +488,7 @@ export async function POST(req: Request) {
         outcome = "win";
 
         const expires = new Date(Date.now() + 30_000).toISOString();
-        await supabase.from("celo_player_rolls").insert({
+        await adminClient.from("celo_player_rolls").insert({
           round_id: roundId,
           room_id: roomId,
           user_id: userId,
@@ -481,7 +509,7 @@ export async function POST(req: Request) {
           roundPatch.player_celo_expires_at = expires;
         }
 
-        const { data: others } = await supabase
+        const { data: others } = await adminClient
           .from("celo_room_players")
           .select("seat_number")
           .eq("room_id", roomId)
@@ -496,15 +524,15 @@ export async function POST(req: Request) {
         const next = seats.filter((s) => s > seatNeed)[0];
         const completedLast = next === undefined;
         if (next !== undefined) {
-          await supabase.from("celo_rounds").update({ ...roundPatch, current_player_seat: next }).eq("id", roundId);
+          await adminClient.from("celo_rounds").update({ ...roundPatch, current_player_seat: next }).eq("id", roundId);
         } else {
-          await supabase.from("celo_rounds").update(roundPatch).eq("id", roundId);
-          await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+          await adminClient.from("celo_rounds").update(roundPatch).eq("id", roundId);
+          await completeRound(adminClient, roundId, roomId, Math.floor((prizePool * 10) / 100));
         }
 
-        const nm = await getUserDisplayName(supabase, userId);
+        const nm = await getUserDisplayName(adminClient, userId);
         if (completedLast) {
-          await settleSideBets(supabase, roomId, roundId, {
+          await settleSideBets(adminClient, roomId, roundId, {
             bankerWon: false,
             playersWon: true,
             lastRollName: ev.rollName,
@@ -513,10 +541,10 @@ export async function POST(req: Request) {
           });
         }
         if (ev.isCelo) {
-          await insertCeloSystemChat(supabase, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
+          await insertCeloSystemChat(adminClient, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
         }
-        await announceRollExtras(supabase, roomId, userId, ev.rollName);
-        await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nm} earned ${payout.toLocaleString()} GPC`);
+        await announceRollExtras(adminClient, roomId, userId, ev.rollName);
+        await insertCeloSystemChat(adminClient, roomId, userId, `✅ ${nm} earned ${payout.toLocaleString()} GPC`);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -535,9 +563,9 @@ export async function POST(req: Request) {
       if (ev.result === "instant_loss") {
         outcome = "loss";
         const nb = bankAmount(room) + entry;
-        await supabase.from("celo_rooms").update(mergeCeloRoomUpdate(nb, { last_activity: new Date().toISOString() })).eq("id", roomId);
+        await adminClient.from("celo_rooms").update(mergeCeloRoomUpdate(nb, { last_activity: new Date().toISOString() })).eq("id", roomId);
 
-        await supabase.from("celo_player_rolls").insert({
+        await adminClient.from("celo_player_rolls").insert({
           round_id: roundId,
           room_id: roomId,
           user_id: userId,
@@ -552,7 +580,7 @@ export async function POST(req: Request) {
           reroll_count: 0,
         });
 
-        const { data: others } = await supabase
+        const { data: others } = await adminClient
           .from("celo_room_players")
           .select("seat_number")
           .eq("room_id", roomId)
@@ -567,23 +595,23 @@ export async function POST(req: Request) {
         const next = seats.filter((s) => s > seatNeed)[0];
         const completedLoss = next === undefined;
         if (next !== undefined) {
-          await supabase.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
+          await adminClient.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
         } else {
-          await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+          await completeRound(adminClient, roundId, roomId, Math.floor((prizePool * 10) / 100));
         }
 
-        const nm = await getUserDisplayName(supabase, userId);
+        const nm = await getUserDisplayName(adminClient, userId);
         if (completedLoss) {
-          await settleSideBets(supabase, roomId, roundId, {
+          await settleSideBets(adminClient, roomId, roundId, {
             bankerWon: true,
             playersWon: false,
             lastRollName: ev.rollName,
             lastRollResult: ev.result,
             lastPoint: null,
           });
-          await insertCeloSystemChat(supabase, roomId, userId, `🏦 Banker wins! Bank: ${nb.toLocaleString()} GPC`);
+          await insertCeloSystemChat(adminClient, roomId, userId, `🏦 Banker wins! Bank: ${nb.toLocaleString()} GPC`);
         }
-        await announceRollExtras(supabase, roomId, userId, ev.rollName);
+        await announceRollExtras(adminClient, roomId, userId, ev.rollName);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -605,7 +633,7 @@ export async function POST(req: Request) {
           await creditCoins(userId, 0, net, `C-Lo round ${roundId} (player earns)`, `celo_player_point_${roundId}_${userId}`, "celo_payout");
           payout = net;
           outcome = "win";
-          await supabase.from("celo_player_rolls").insert({
+          await adminClient.from("celo_player_rolls").insert({
             round_id: roundId,
             room_id: roomId,
             user_id: userId,
@@ -622,8 +650,8 @@ export async function POST(req: Request) {
         } else {
           outcome = "loss";
           const nb = bankAmount(room) + entry;
-          await supabase.from("celo_rooms").update(mergeCeloRoomUpdate(nb, { last_activity: new Date().toISOString() })).eq("id", roomId);
-          await supabase.from("celo_player_rolls").insert({
+          await adminClient.from("celo_rooms").update(mergeCeloRoomUpdate(nb, { last_activity: new Date().toISOString() })).eq("id", roomId);
+          await adminClient.from("celo_player_rolls").insert({
             round_id: roundId,
             room_id: roomId,
             user_id: userId,
@@ -639,7 +667,7 @@ export async function POST(req: Request) {
           });
         }
 
-        const { data: others } = await supabase
+        const { data: others } = await adminClient
           .from("celo_room_players")
           .select("seat_number")
           .eq("room_id", roomId)
@@ -654,15 +682,15 @@ export async function POST(req: Request) {
         const next = seats.filter((s) => s > seatNeed)[0];
         const completedPoint = next === undefined;
         if (next !== undefined) {
-          await supabase.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
+          await adminClient.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
         } else {
-          await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+          await completeRound(adminClient, roundId, roomId, Math.floor((prizePool * 10) / 100));
         }
 
-        const nmPt = await getUserDisplayName(supabase, userId);
+        const nmPt = await getUserDisplayName(adminClient, userId);
         if (completedPoint) {
           const bankerWonRound = cmp !== "player";
-          await settleSideBets(supabase, roomId, roundId, {
+          await settleSideBets(adminClient, roomId, roundId, {
             bankerWon: bankerWonRound,
             playersWon: !bankerWonRound,
             lastRollName: ev.rollName,
@@ -670,18 +698,18 @@ export async function POST(req: Request) {
             lastPoint: pPoint,
           });
           if (cmp === "player") {
-            await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
+            await insertCeloSystemChat(adminClient, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
           } else {
             const nbPt = bankAmount(room) + entry;
             await insertCeloSystemChat(
-              supabase,
+              adminClient,
               roomId,
               userId,
               `🏦 Banker wins! Bank: ${nbPt.toLocaleString()} GPC`
             );
           }
         } else if (cmp === "player") {
-          await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
+          await insertCeloSystemChat(adminClient, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
         }
 
         const bal = await getUserCoins(userId);
@@ -698,10 +726,10 @@ export async function POST(req: Request) {
       }
     }
 
-    await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+    await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
     return NextResponse.json({ message: "Unhandled round state" }, { status: 500 });
   } catch (e) {
-    await supabase.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
+    await adminClient.from("celo_rounds").update({ roll_processing: false }).eq("id", roundId);
     console.error("[celo roll]", e);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }

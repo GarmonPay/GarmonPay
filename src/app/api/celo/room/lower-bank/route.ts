@@ -1,10 +1,40 @@
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 import { validateEntry } from "@/lib/celo-engine";
 import { mergeCeloRoomUpdate, normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -22,10 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "room_id and new_bank_sc required" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: roomRaw, error } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRaw, error } = await adminClient.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
   if (error || !roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
 
   const room = roomRaw as Record<string, unknown>;
@@ -51,7 +78,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "New bank must be less than current bank" }, { status: 400 });
   }
 
-  const { data: updated, error: uErr } = await supabase
+  const { data: updated, error: uErr } = await adminClient
     .from("celo_rooms")
     .update(
       mergeCeloRoomUpdate(newBank, {

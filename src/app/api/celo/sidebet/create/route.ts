@@ -1,6 +1,8 @@
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 import { debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 const ODDS: Record<string, number> = {
@@ -14,6 +16,34 @@ const ODDS: Record<string, number> = {
 };
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -55,18 +85,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "amount_sc must be ≥ 100 and a multiple of 100 GPC" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: mem } = await supabase.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
+  const { data: mem } = await adminClient.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
   if (!mem) return NextResponse.json({ message: "Join the room first" }, { status: 403 });
 
-  const { data: round } = await supabase.from("celo_rounds").select("status").eq("id", roundId).maybeSingle();
+  const { data: round } = await adminClient.from("celo_rounds").select("status").eq("id", roundId).maybeSingle();
   if (!round || (round as { status: string }).status === "completed") {
     return NextResponse.json({ message: "Round is not active" }, { status: 400 });
   }
 
-  const { count } = await supabase
+  const { count } = await adminClient
     .from("celo_side_bets")
     .select("id", { count: "exact", head: true })
     .eq("room_id", roomId)
@@ -104,7 +131,7 @@ export async function POST(req: Request) {
     insertPayload.specific_point = specificPoint;
   }
 
-  const { data: bet, error: insErr } = await supabase.from("celo_side_bets").insert(insertPayload).select("*").single();
+  const { data: bet, error: insErr } = await adminClient.from("celo_side_bets").insert(insertPayload).select("*").single();
 
   if (insErr || !bet) {
     return NextResponse.json({ message: insErr?.message ?? "Failed to post side entry" }, { status: 500 });

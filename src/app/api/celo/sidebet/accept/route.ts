@@ -1,9 +1,39 @@
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 import { debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -17,10 +47,7 @@ export async function POST(req: Request) {
   const betId = typeof body.bet_id === "string" ? body.bet_id : null;
   if (!betId) return NextResponse.json({ message: "bet_id required" }, { status: 400 });
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: betRaw, error: bErr } = await supabase.from("celo_side_bets").select("*").eq("id", betId).maybeSingle();
+  const { data: betRaw, error: bErr } = await adminClient.from("celo_side_bets").select("*").eq("id", betId).maybeSingle();
   if (bErr || !betRaw) return NextResponse.json({ message: "Entry not found" }, { status: 404 });
 
   const bet = betRaw as Record<string, unknown>;
@@ -37,7 +64,7 @@ export async function POST(req: Request) {
   }
 
   const roomId = String(bet.room_id);
-  const { data: mem } = await supabase.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
+  const { data: mem } = await adminClient.from("celo_room_players").select("id").eq("room_id", roomId).eq("user_id", userId).maybeSingle();
   if (!mem) return NextResponse.json({ message: "Join the room first" }, { status: 403 });
 
   const amount = Math.floor(Number(bet.amount_cents ?? 0));
@@ -52,7 +79,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: debit.message ?? "Debit failed" }, { status: 400 });
   }
 
-  const { data: updated, error: uErr } = await supabase
+  const { data: updated, error: uErr } = await adminClient
     .from("celo_side_bets")
     .update({
       acceptor_id: userId,

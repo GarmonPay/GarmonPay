@@ -1,10 +1,40 @@
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
 import { debitGpayCoins, getUserCoins } from "@/lib/coins";
 import { normalizeCeloRoomRow } from "@/lib/celo-room-schema";
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    }
+  );
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+  }
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  await sessionClient.auth.getSession();
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -19,10 +49,7 @@ export async function POST(req: Request) {
   const roundId = typeof body.round_id === "string" ? body.round_id : null;
   if (!roomId || !roundId) return NextResponse.json({ message: "room_id and round_id required" }, { status: 400 });
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
-
-  const { data: roundRaw } = await supabase.from("celo_rounds").select("*").eq("id", roundId).maybeSingle();
+  const { data: roundRaw } = await adminClient.from("celo_rounds").select("*").eq("id", roundId).maybeSingle();
   if (!roundRaw) return NextResponse.json({ message: "Round not found" }, { status: 404 });
 
   const round = roundRaw as Record<string, unknown>;
@@ -37,7 +64,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Offer expired" }, { status: 400 });
   }
 
-  const { data: roomRaw } = await supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data: roomRaw } = await adminClient.from("celo_rooms").select("*").eq("id", roomId).maybeSingle();
   if (!roomRaw) return NextResponse.json({ message: "Room not found" }, { status: 404 });
 
   const room = roomRaw as Record<string, unknown>;
@@ -59,11 +86,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: debit.message ?? "Debit failed" }, { status: 400 });
   }
 
-  await supabase.from("celo_room_players").update({ role: "player" }).eq("room_id", roomId).eq("user_id", oldBankerId);
+  await adminClient.from("celo_room_players").update({ role: "player" }).eq("room_id", roomId).eq("user_id", oldBankerId);
 
-  await supabase.from("celo_room_players").update({ role: "banker", seat_number: 0 }).eq("room_id", roomId).eq("user_id", userId);
+  await adminClient.from("celo_room_players").update({ role: "banker", seat_number: 0 }).eq("room_id", roomId).eq("user_id", userId);
 
-  await supabase
+  await adminClient
     .from("celo_rooms")
     .update({
       banker_id: userId,
@@ -71,7 +98,7 @@ export async function POST(req: Request) {
     })
     .eq("id", roomId);
 
-  await supabase
+  await adminClient
     .from("celo_rounds")
     .update({
       player_celo_offer: false,
@@ -79,7 +106,7 @@ export async function POST(req: Request) {
     })
     .eq("id", roundId);
 
-  const { data: roomAfter } = await supabase.from("celo_rooms").select("*").eq("id", roomId).single();
+  const { data: roomAfter } = await adminClient.from("celo_rooms").select("*").eq("id", roomId).single();
 
   return NextResponse.json({
     ok: true,

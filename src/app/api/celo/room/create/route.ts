@@ -1,23 +1,23 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();
-    const supabase = createServerClient(
+
+    const sessionClient = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
+          getAll: () => cookieStore.getAll(),
+          setAll: (cookiesToSet) => {
             try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              );
+              cookiesToSet.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              });
             } catch {
               // Cookie updates may be unavailable in some contexts
             }
@@ -26,9 +26,14 @@ export async function POST(req: Request) {
       }
     );
 
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const {
       data: { session },
-    } = await supabase.auth.getSession();
+    } = await sessionClient.auth.getSession();
 
     if (!session) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -37,7 +42,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, max_players, minimum_entry_sc, starting_bank_sc } = body;
 
-    console.log("Create room request:", {
+    console.log("Create room:", {
       name,
       max_players,
       minimum_entry_sc,
@@ -68,7 +73,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Starting bank must be a multiple of minimum entry" }, { status: 400 });
     }
 
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await adminClient
       .from("users")
       .select("gpay_coins")
       .eq("id", session.user.id)
@@ -79,22 +84,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Could not fetch balance" }, { status: 500 });
     }
 
-    const balance = Number((user as { gpay_coins?: number }).gpay_coins ?? 0);
-    console.log("User balance:", balance, "Need:", startBank);
+    const coins = (user as { gpay_coins?: number }).gpay_coins ?? 0;
+    console.log("Balance check:", { has: coins, needs: startBank });
 
-    if (balance < startBank) {
+    if (coins < startBank) {
       return NextResponse.json(
         {
-          error: `Insufficient GPay Coins. You have ${balance} GPC but need ${startBank} GPC`,
+          error: `Insufficient GPay Coins. You have ${coins} GPC but need ${startBank} GPC`,
         },
         { status: 400 }
       );
     }
 
-    const { error: deductError } = await supabase
+    const { error: deductError } = await adminClient
       .from("users")
       .update({
-        gpay_coins: balance - startBank,
+        gpay_coins: coins - startBank,
       })
       .eq("id", session.user.id);
 
@@ -103,7 +108,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to reserve funds" }, { status: 500 });
     }
 
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await adminClient
       .from("celo_rooms")
       .insert({
         name: String(name).trim(),
@@ -123,14 +128,9 @@ export async function POST(req: Request) {
       .single();
 
     if (roomError || !room) {
-      console.error("Room insert error:", roomError);
+      console.error("Room create error:", roomError);
 
-      await supabase
-        .from("users")
-        .update({
-          gpay_coins: balance,
-        })
-        .eq("id", session.user.id);
+      await adminClient.from("users").update({ gpay_coins: coins }).eq("id", session.user.id);
 
       return NextResponse.json(
         {
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
       );
     }
 
-    await supabase.from("celo_room_players").insert({
+    const { error: playerError } = await adminClient.from("celo_room_players").insert({
       room_id: (room as { id: string }).id,
       user_id: session.user.id,
       role: "banker",
@@ -149,7 +149,11 @@ export async function POST(req: Request) {
       dice_type: "standard",
     });
 
-    console.log("Room created:", (room as { id: string }).id);
+    if (playerError) {
+      console.error("Player insert error:", playerError);
+    }
+
+    console.log("Room created successfully:", (room as { id: string }).id);
 
     return NextResponse.json({
       room,
