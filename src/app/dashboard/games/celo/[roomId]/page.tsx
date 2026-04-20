@@ -15,7 +15,45 @@ const dmSans = DM_Sans({ subsets: ["latin"] });
 const ROLL_ANIM_MS = 2500;
 const API = "/api/celo";
 
-type Room = Record<string, unknown> & { id: string; name?: string; banker_id?: string; status?: string };
+const SIDE_ODDS: Record<string, number> = {
+  celo: 8,
+  shit: 8,
+  hand_crack: 4.5,
+  trips: 8,
+  banker_wins: 1.8,
+  player_wins: 1.8,
+  specific_point: 6,
+};
+
+function betPredictionText(betType: string, specificPoint?: number | null): string {
+  switch (betType) {
+    case "celo":
+      return "Next roll is C-LO";
+    case "shit":
+      return "Next roll is SHIT";
+    case "hand_crack":
+      return "Next roll is HAND CRACK";
+    case "trips":
+      return "Next roll is TRIPS";
+    case "banker_wins":
+      return "Banker wins round";
+    case "player_wins":
+      return "Players win round";
+    case "specific_point":
+      return specificPoint != null ? `Point ${specificPoint} wins` : "Specific point";
+    default:
+      return betType;
+  }
+}
+
+type Room = Record<string, unknown> & {
+  id: string;
+  name?: string;
+  banker_id?: string;
+  status?: string;
+  last_round_was_celo?: boolean;
+  banker_celo_at?: string | null;
+};
 type Player = {
   user_id: string;
   role: string;
@@ -30,6 +68,34 @@ type Round = {
   prize_pool_sc?: number;
   current_player_seat?: number | null;
   player_celo_offer?: boolean;
+  player_celo_expires_at?: string | null;
+  bank_covered?: boolean;
+  roll_processing?: boolean;
+};
+
+type SideBetRow = {
+  id: string;
+  room_id: string;
+  round_id: string | null;
+  creator_id: string;
+  acceptor_id: string | null;
+  bet_type: string;
+  specific_point?: number | null;
+  amount_cents: number;
+  odds_multiplier: number;
+  status: string;
+  expires_at?: string | null;
+  payout_cents?: number;
+  winner_id?: string | null;
+  settled_at?: string | null;
+};
+
+type ChatRow = {
+  id: string;
+  message: string;
+  user_id: string;
+  created_at: string;
+  is_system?: boolean;
 };
 
 export default function CeloRoomPage() {
@@ -53,10 +119,24 @@ export default function CeloRoomPage() {
   const [tab, setTab] = useState<"side" | "chat">("chat");
   const [panelOpen, setPanelOpen] = useState(true);
   const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState<{ id: string; message: string; user_id: string; created_at: string }[]>([]);
+  const [messages, setMessages] = useState<ChatRow[]>([]);
 
   const [joinEntry, setJoinEntry] = useState(500);
   const [busy, setBusy] = useState(false);
+
+  const [showLowerBank, setShowLowerBank] = useState(false);
+  const [lowerBankCountdown, setLowerBankCountdown] = useState(60);
+  const [lowerBankSelected, setLowerBankSelected] = useState<number | null>(null);
+
+  const [showBecomeBanker, setShowBecomeBanker] = useState(false);
+  const [bankerCountdown, setBankerCountdown] = useState(30);
+  const [bankerOfferExpiry, setBankerOfferExpiry] = useState<Date | null>(null);
+
+  const [showCoverConfirm, setShowCoverConfirm] = useState(false);
+  const [sideBets, setSideBets] = useState<SideBetRow[]>([]);
+  const [sideBetType, setSideBetType] = useState<string>("celo");
+  const [sideBetAmount, setSideBetAmount] = useState(100);
+  const [sideBetPoint, setSideBetPoint] = useState(4);
 
   const minEntry = Math.floor(Number(room?.minimum_entry_sc ?? room?.min_bet_cents ?? 500));
   const bank = Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0));
@@ -80,11 +160,19 @@ export default function CeloRoomPage() {
 
     const { data: ch } = await supabase
       .from("celo_chat")
-      .select("id,message,user_id,created_at")
+      .select("id,message,user_id,created_at,is_system")
       .eq("room_id", roomId)
       .order("created_at", { ascending: false })
-      .limit(15);
-    setMessages((ch ?? []).reverse());
+      .limit(50);
+    setMessages(((ch ?? []) as ChatRow[]).reverse());
+
+    const { data: sb } = await supabase
+      .from("celo_side_bets")
+      .select("*")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setSideBets((sb ?? []) as SideBetRow[]);
 
     const uids = Array.from(new Set((p ?? []).map((x) => (x as Player).user_id)));
     if (uids.length) {
@@ -99,6 +187,10 @@ export default function CeloRoomPage() {
   }, [supabase, roomId]);
 
   useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
@@ -111,10 +203,6 @@ export default function CeloRoomPage() {
       cancelled = true;
     };
   }, [supabase]);
-
-  useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
 
   useEffect(() => {
     if (!supabase || !roomId) return;
@@ -137,6 +225,11 @@ export default function CeloRoomPage() {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
+        () => void loadAll()
+      )
+      .on(
+        "postgres_changes",
         { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
         () => void loadAll()
       )
@@ -151,7 +244,58 @@ export default function CeloRoomPage() {
     [players, userId]
   );
   const isBanker = mePlayer?.role === "banker";
+  const myRole = mePlayer?.role ?? "spectator";
+  const myEntry = Math.floor(Number(mePlayer?.entry_sc ?? 0));
   const inRoom = Boolean(mePlayer);
+
+  const lowerBankPills = useMemo(() => {
+    const out: number[] = [];
+    if (!room || minEntry <= 0 || bank <= minEntry) return out;
+    for (let n = minEntry; n < bank && out.length < 6; n += minEntry) {
+      out.push(n);
+    }
+    return out;
+  }, [room, minEntry, bank]);
+
+  useEffect(() => {
+    if (showLowerBank && lowerBankPills.length > 0) {
+      setLowerBankSelected((s) => (s == null ? lowerBankPills[0] : s));
+    }
+  }, [showLowerBank, lowerBankPills]);
+
+  useEffect(() => {
+    if (!room?.last_round_was_celo || !room.banker_celo_at || !isBanker) {
+      setShowLowerBank(false);
+      return;
+    }
+    const celoTime = new Date(String(room.banker_celo_at)).getTime();
+    const timer = setInterval(() => {
+      const elapsed = (Date.now() - celoTime) / 1000;
+      const remaining = Math.max(0, 60 - elapsed);
+      setLowerBankCountdown(Math.ceil(remaining));
+      if (remaining > 0) {
+        setShowLowerBank(true);
+      } else {
+        setShowLowerBank(false);
+        clearInterval(timer);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [room?.last_round_was_celo, room?.banker_celo_at, isBanker]);
+
+  useEffect(() => {
+    if (!showBecomeBanker || !bankerOfferExpiry) return;
+    const timer = setInterval(() => {
+      const remaining = (bankerOfferExpiry.getTime() - Date.now()) / 1000;
+      if (remaining <= 0) {
+        setShowBecomeBanker(false);
+        clearInterval(timer);
+      } else {
+        setBankerCountdown(Math.ceil(remaining));
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showBecomeBanker, bankerOfferExpiry]);
 
   async function handleJoin() {
     if (!userId || busy) return;
@@ -167,6 +311,18 @@ export default function CeloRoomPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Join failed");
       if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      await loadAll();
+      if (supabase) {
+        const { data: uRow } = await supabase.from("users").select("full_name,email").eq("id", userId).maybeSingle();
+        const u = uRow as { full_name?: string | null; email?: string | null } | null;
+        const nm = u?.full_name?.trim() || u?.email?.split("@")[0] || "Player";
+        await supabase.from("celo_chat").insert({
+          room_id: roomId,
+          user_id: userId,
+          message: `👤 ${nm} joined the table`,
+          is_system: true,
+        });
+      }
       await loadAll();
       await refresh();
     } catch (e) {
@@ -220,6 +376,8 @@ export default function CeloRoomPage() {
             dice?: number[];
             rollName?: string;
             gpayCoins?: number;
+            player_can_become_banker?: boolean;
+            room?: Room;
           };
         }),
         new Promise<void>((r) => setTimeout(r, ROLL_ANIM_MS)),
@@ -231,6 +389,12 @@ export default function CeloRoomPage() {
       await new Promise((r) => setTimeout(r, 400));
       if (apiResult.rollName) setRollName(apiResult.rollName);
       if (typeof apiResult.gpayCoins === "number") applyServerGpayBalance(apiResult.gpayCoins);
+      if (apiResult.player_can_become_banker) {
+        setBankerOfferExpiry(new Date(Date.now() + 30_000));
+        setBankerCountdown(30);
+        setShowBecomeBanker(true);
+      }
+      if (apiResult.room) setRoom(apiResult.room as Room);
       await new Promise((r) => setTimeout(r, 2200));
       setRollName(null);
       await loadAll();
@@ -248,12 +412,383 @@ export default function CeloRoomPage() {
       room_id: roomId,
       user_id: userId,
       message: chatInput.trim(),
+      is_system: false,
     });
     if (!sErr) {
       setChatInput("");
       void loadAll();
     }
   }
+
+  async function postSideBet() {
+    if (!round?.id || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        room_id: roomId,
+        round_id: round.id,
+        bet_type: sideBetType,
+        amount_sc: sideBetAmount,
+      };
+      if (sideBetType === "specific_point") body.specific_point = sideBetPoint;
+      const res = await fetch(`${API}/sidebet/create`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      await loadAll();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Side entry failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function takeSideBet(betId: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/sidebet/accept`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bet_id: betId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      await loadAll();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Match failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelSideBet(betId: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/sidebet/cancel`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bet_id: betId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      await loadAll();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cancel failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmLowerBank(amount: number) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/room/lower-bank`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_id: roomId, new_bank_sc: amount }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (j.room) setRoom(j.room as Room);
+      setShowLowerBank(false);
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lower bank failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptBanker() {
+    if (!round?.id || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/banker/accept`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_id: roomId, round_id: round.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      const nm = displayNames[userId ?? ""] || "Player";
+      await supabase?.from("celo_chat").insert({
+        room_id: roomId,
+        user_id: userId ?? "",
+        message: `👑 ${nm} is now the Banker`,
+        is_system: true,
+      });
+      setShowBecomeBanker(false);
+      await loadAll();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not become banker");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmCoverBank() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/room/cover-bank`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_id: roomId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Failed");
+      if (typeof j.gpayCoins === "number") applyServerGpayBalance(j.gpayCoins);
+      if (j.round) setRound(j.round as Round);
+      setShowCoverConfirm(false);
+      await loadAll();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cover failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const roundOpen = round && round.status !== "completed";
+  const canStart = isBanker && !roundOpen && players.some((p) => p.role === "player" && (p.entry_sc ?? 0) > 0);
+  const myTurn =
+    round &&
+    ((round.status === "banker_rolling" && isBanker) ||
+      (round.status === "player_rolling" &&
+        mePlayer?.role === "player" &&
+        mePlayer.seat_number === round.current_player_seat));
+
+  const otherPlayersHaveStake = players.some(
+    (p) => p.role === "player" && p.user_id !== userId && (p.entry_sc ?? 0) > 0
+  );
+  const canCoverBank =
+    myRole === "player" &&
+    myEntry === 0 &&
+    bank > 0 &&
+    gpayCoins >= bank &&
+    round &&
+    round.status === "banker_rolling" &&
+    !round.bank_covered &&
+    !round.roll_processing &&
+    !otherPlayersHaveStake;
+
+  const roundSideBets = useMemo(
+    () => sideBets.filter((b) => b.round_id === round?.id),
+    [sideBets, round?.id]
+  );
+
+  const openSideFromOthers = roundSideBets.filter(
+    (b) => b.status === "open" && b.creator_id !== userId
+  );
+  const myOpenSide = roundSideBets.filter((b) => b.creator_id === userId && b.status === "open");
+  const myMatched = roundSideBets.filter((b) => b.creator_id === userId && b.status === "matched");
+  const settledThisRound = roundSideBets.filter(
+    (b) => (b.status === "won" || b.status === "lost") && b.round_id === round?.id
+  );
+
+  const sideBetOdds = SIDE_ODDS[sideBetType] ?? 2;
+  const potentialWin = Math.floor(sideBetAmount * sideBetOdds);
+
+  const chatBlock = (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className={`${cinzel.className} text-xs px-2 py-2 shrink-0`} style={{ color: "#F5C842" }}>
+        💬 CHAT
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 space-y-2 min-h-0">
+        {messages.map((m) =>
+          m.is_system ? (
+            <div
+              key={m.id}
+              className="w-full text-center text-[11px] px-1 py-1"
+              style={{
+                color: "#F5C842",
+                fontFamily: "Courier New, monospace",
+              }}
+            >
+              {m.message}
+            </div>
+          ) : (
+            <div key={m.id} className="text-xs text-white/80">
+              <span className="text-[#7C3AED]">{displayNames[m.user_id] ?? "?"}:</span> {m.message}
+            </div>
+          )
+        )}
+      </div>
+      <div className="flex gap-2 p-2 border-t border-white/10 shrink-0">
+        <input
+          className="flex-1 rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          placeholder="Message…"
+        />
+        <button type="button" className="text-xs px-3 py-1 rounded-lg bg-[#7C3AED]" onClick={() => void sendChat()}>
+          SEND
+        </button>
+      </div>
+    </div>
+  );
+
+  const sidePanelInner = (
+    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      <div className={`${cinzel.className} text-xs px-2 py-2 shrink-0`} style={{ color: "#F5C842" }}>
+        🎰 SIDE ENTRIES
+      </div>
+
+      <div className="px-2 space-y-3 pb-3">
+        <div>
+          <p className="text-[10px] text-white/50 mb-1">Open from others</p>
+          {openSideFromOthers.length === 0 ? (
+            <p className="text-xs text-white/40">No open entries</p>
+          ) : (
+            openSideFromOthers.map((b) => {
+              const odds = Number(b.odds_multiplier ?? SIDE_ODDS[b.bet_type] ?? 2);
+              const pot = Math.floor(b.amount_cents * odds);
+              const exp = b.expires_at ? new Date(b.expires_at).getTime() : 0;
+              const left = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 1000)) : 0;
+              const creatorLabel = (displayNames[b.creator_id] ?? "?").slice(0, 12);
+              return (
+                <div
+                  key={b.id}
+                  className="rounded-lg border border-white/10 bg-black/20 p-2 mb-2 text-[11px] space-y-1"
+                >
+                  <div className="text-white/90 font-medium truncate">{creatorLabel}</div>
+                  <div className="text-white/70">{betPredictionText(b.bet_type, b.specific_point)}</div>
+                  <div>
+                    {b.amount_cents.toLocaleString()} GPC · ×{odds.toFixed(1)} · Win {pot.toLocaleString()} GPC
+                  </div>
+                  <div className="text-[#F5C842]">{left}s</div>
+                  <button
+                    type="button"
+                    disabled={busy || !userId || b.creator_id === userId}
+                    className="w-full rounded-lg py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+                    style={{ backgroundColor: "#F5C842" }}
+                    onClick={() => void takeSideBet(b.id)}
+                  >
+                    TAKE IT
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t border-white/10 pt-2">
+          <p className="text-[10px] text-white/50 mb-1">Post a side entry</p>
+          <select
+            className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-2"
+            value={sideBetType}
+            onChange={(e) => setSideBetType(e.target.value)}
+          >
+            {Object.keys(SIDE_ODDS).map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+          {sideBetType === "specific_point" && (
+            <input
+              type="number"
+              min={2}
+              max={6}
+              className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-2"
+              value={sideBetPoint}
+              onChange={(e) => setSideBetPoint(parseInt(e.target.value, 10) || 4)}
+            />
+          )}
+          <input
+            type="number"
+            step={100}
+            min={100}
+            className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-1"
+            value={sideBetAmount}
+            onChange={(e) => setSideBetAmount(parseInt(e.target.value, 10) || 100)}
+          />
+          <p className="text-[10px] text-white/50 mb-2">
+            Potential win: {potentialWin.toLocaleString()} GPC at ×{sideBetOdds.toFixed(1)}
+          </p>
+          <button
+            type="button"
+            disabled={busy || !round?.id}
+            className="w-full rounded-lg py-2 text-xs font-semibold text-white disabled:opacity-40"
+            style={{ backgroundColor: "#7C3AED" }}
+            onClick={() => void postSideBet()}
+          >
+            POST
+          </button>
+        </div>
+
+        <div className="border-t border-white/10 pt-2">
+          <p className="text-[10px] text-white/50 mb-1">My open</p>
+          {myOpenSide.map((b) => (
+            <div key={b.id} className="flex justify-between items-center text-xs py-1">
+              <span className="text-white/80 truncate">
+                {betPredictionText(b.bet_type, b.specific_point)} · {b.amount_cents} GPC · OPEN
+              </span>
+              <button type="button" className="text-red-400 shrink-0 ml-2" onClick={() => void cancelSideBet(b.id)}>
+                CANCEL
+              </button>
+            </div>
+          ))}
+          {myOpenSide.length === 0 && <p className="text-xs text-white/35">None</p>}
+        </div>
+
+        <div>
+          <p className="text-[10px] text-white/50 mb-1">Matched</p>
+          {myMatched.map((b) => (
+            <div key={b.id} className="text-xs text-white/70 py-0.5">
+              {betPredictionText(b.bet_type, b.specific_point)} · MATCHED
+            </div>
+          ))}
+          {myMatched.length === 0 && <p className="text-xs text-white/35">None</p>}
+        </div>
+
+        <div>
+          <p className="text-[10px] text-white/50 mb-1">Settled (this round)</p>
+          {settledThisRound
+            .filter((b) => b.creator_id === userId || b.acceptor_id === userId)
+            .map((b) => {
+              const iWon = b.winner_id === userId;
+              const stake = b.amount_cents ?? 0;
+              const pay = b.payout_cents ?? 0;
+              return (
+                <div
+                  key={b.id}
+                  className={`text-xs py-0.5 ${iWon ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {iWon ? `+${pay.toLocaleString()} GPC` : `-${stake.toLocaleString()} GPC`}
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  );
 
   if (!room && !error) {
     return (
@@ -274,21 +809,12 @@ export default function CeloRoomPage() {
     );
   }
 
-  const roundOpen = round && round.status !== "completed";
-  const canStart = isBanker && !roundOpen && players.some((p) => p.role === "player" && (p.entry_sc ?? 0) > 0);
-  const myTurn =
-    round &&
-    ((round.status === "banker_rolling" && isBanker) ||
-      (round.status === "player_rolling" &&
-        mePlayer?.role === "player" &&
-        mePlayer.seat_number === round.current_player_seat));
-
   return (
     <div
-      className={`${dmSans.className} min-h-screen flex flex-col md:flex-row text-white overflow-hidden`}
+      className={`${dmSans.className} min-h-screen md:h-screen flex flex-col md:flex-row text-white md:overflow-hidden`}
       style={{ backgroundColor: "#05010F", paddingBottom: 72 }}
     >
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 max-w-[1200px] mx-auto w-full">
+      <div className="flex flex-col flex-1 md:w-[65%] md:min-h-0 md:min-w-0 max-w-[1200px] mx-auto w-full">
         <header
           className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-white/10"
           style={{ backgroundColor: "#0D0520" }}
@@ -322,7 +848,7 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-[200px] relative flex flex-col items-center justify-center px-3 py-4">
+        <div className="flex-1 min-h-[200px] md:min-h-0 relative flex flex-col items-center justify-center px-3 py-4">
           <div
             className="absolute inset-0 pointer-events-none opacity-90"
             style={{
@@ -389,37 +915,50 @@ export default function CeloRoomPage() {
             {formatGPC(gpayCoins)}
           </span>
           {inRoom && (
-            <div className="flex-1 flex justify-center">
-              {canStart && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-1">
+              <div className="flex justify-center w-full">
+                {canStart && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleStartRound()}
+                    className="rounded-xl px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+                    style={{ backgroundColor: "#7C3AED" }}
+                  >
+                    START ROUND
+                  </button>
+                )}
+                {roundOpen && myTurn && (
+                  <button
+                    type="button"
+                    disabled={rolling || busy}
+                    onClick={() => void handleRoll()}
+                    className="rounded-xl px-5 py-2 text-sm font-semibold text-black animate-pulse disabled:opacity-40"
+                    style={{ backgroundColor: "#F5C842" }}
+                  >
+                    ROLL DICE
+                  </button>
+                )}
+                {roundOpen && !myTurn && (
+                  <span className="text-xs text-white/40">Waiting for roll…</span>
+                )}
+              </div>
+              {canCoverBank && (
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void handleStartRound()}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
-                  style={{ backgroundColor: "#7C3AED" }}
+                  onClick={() => setShowCoverConfirm(true)}
+                  className="text-[10px] px-2 py-1 rounded-lg border font-semibold"
+                  style={{ borderColor: "#F5C842", color: "#F5C842" }}
                 >
-                  START ROUND
+                  COVER THE BANK ({bank.toLocaleString()} GPC)
                 </button>
-              )}
-              {roundOpen && myTurn && (
-                <button
-                  type="button"
-                  disabled={rolling || busy}
-                  onClick={() => void handleRoll()}
-                  className="rounded-xl px-5 py-2 text-sm font-semibold text-black animate-pulse disabled:opacity-40"
-                  style={{ backgroundColor: "#F5C842" }}
-                >
-                  ROLL DICE
-                </button>
-              )}
-              {roundOpen && !myTurn && (
-                <span className="text-xs text-white/40">Waiting for roll…</span>
               )}
             </div>
           )}
         </div>
 
-        <div className="h-10 shrink-0 flex border-t border-white/10">
+        <div className="h-10 shrink-0 flex border-t border-white/10 md:hidden">
           {(["side", "chat"] as const).map((t) => (
             <button
               key={t}
@@ -443,35 +982,140 @@ export default function CeloRoomPage() {
         </div>
 
         {panelOpen && (
-          <div className="max-h-[160px] overflow-y-auto border-t border-white/10 px-3 py-2 text-sm" style={{ backgroundColor: "#0a0518" }}>
-            {tab === "chat" ? (
-              <div className="space-y-2">
-                {messages.map((m) => (
-                  <div key={m.id} className="text-xs text-white/80">
-                    <span className="text-[#7C3AED]">{displayNames[m.user_id] ?? "?"}:</span> {m.message}
-                  </div>
-                ))}
-                <div className="flex gap-2 mt-2">
-                  <input
-                    className="flex-1 rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Message…"
-                  />
-                  <button type="button" className="text-xs px-3 py-1 rounded-lg bg-[#7C3AED]" onClick={() => void sendChat()}>
-                    SEND
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-white/50">Side entries: use table actions after joining a round.</p>
-            )}
+          <div
+            className="md:hidden max-h-[160px] overflow-y-auto border-t border-white/10 px-0 py-2 text-sm flex flex-col min-h-0"
+            style={{ backgroundColor: "#0a0518" }}
+          >
+            {tab === "chat" ? chatBlock : <div className="px-2 overflow-y-auto flex-1 min-h-0">{sidePanelInner}</div>}
           </div>
         )}
       </div>
 
+      <aside
+        className="hidden md:flex md:w-[35%] md:flex-col md:min-h-0 md:min-w-0 border-l border-[rgba(124,58,237,0.2)]"
+        style={{ backgroundColor: "#0D0520" }}
+      >
+        <div className="flex-1 flex flex-col min-h-0 border-b border-white/10 overflow-hidden">{sidePanelInner}</div>
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-t border-white/5">{chatBlock}</div>
+      </aside>
+
+      {showLowerBank && isBanker && (
+        <div
+          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2"
+          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
+        >
+          <h3 className={`${cinzel.className} text-lg mb-2 text-center`} style={{ color: "#F5C842" }}>
+            Lower Your Bank?
+          </h3>
+          <p className="text-center text-sm text-white/80 mb-1">{lowerBankCountdown}s remaining</p>
+          <div className="h-2 w-full bg-white/10 rounded-full mb-4 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${(lowerBankCountdown / 60) * 100}%`, backgroundColor: "#F5C842" }}
+            />
+          </div>
+          <p className="text-center text-sm mb-3">Current bank: {bank.toLocaleString()} GPC</p>
+          <div className="flex flex-wrap gap-2 justify-center mb-4">
+            {lowerBankPills.map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => setLowerBankSelected(amt)}
+                disabled={busy}
+                className="px-3 py-1 rounded-full text-xs border text-white/90"
+                style={{
+                  borderColor: lowerBankSelected === amt ? "#F5C842" : "rgba(255,255,255,0.2)",
+                  backgroundColor: lowerBankSelected === amt ? "rgba(245,200,66,0.15)" : undefined,
+                }}
+              >
+                {amt.toLocaleString()}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={busy || lowerBankSelected == null}
+            className="w-full rounded-xl py-3 font-semibold text-black mb-2 disabled:opacity-40"
+            style={{ backgroundColor: "#F5C842" }}
+            onClick={() => {
+              if (lowerBankSelected != null) void confirmLowerBank(lowerBankSelected);
+            }}
+          >
+            CONFIRM LOWER BANK
+          </button>
+          <button
+            type="button"
+            className="w-full py-2 text-sm text-white/50"
+            onClick={() => setShowLowerBank(false)}
+          >
+            KEEP SAME
+          </button>
+        </div>
+      )}
+
+      {showBecomeBanker && (
+        <div
+          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2 text-center"
+          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
+        >
+          <div className="text-5xl mb-2">🎲</div>
+          <h3 className={`${cinzel.className} text-2xl mb-2`} style={{ color: "#F5C842" }}>
+            YOU ROLLED C-LO!
+          </h3>
+          <p className="text-sm text-white/85 mb-2">Do you want to become the Banker?</p>
+          <p className="text-sm mb-2">You need {bank.toLocaleString()} GPC</p>
+          <p className={`text-sm mb-2 ${gpayCoins >= bank ? "text-emerald-400" : "text-red-400"}`}>
+            You have: {gpayCoins.toLocaleString()} GPC {gpayCoins >= bank ? "✓" : "✗"}
+          </p>
+          <div className="h-2 w-full bg-white/10 rounded-full mb-2 overflow-hidden max-w-xs mx-auto">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${(bankerCountdown / 30) * 100}%`, backgroundColor: "#F5C842" }}
+            />
+          </div>
+          <p className="text-xs text-white/60 mb-4">{bankerCountdown} seconds to decide</p>
+          <button
+            type="button"
+            disabled={busy || gpayCoins < bank}
+            className="w-full rounded-xl py-3 font-semibold text-black mb-2 disabled:opacity-40"
+            style={{ backgroundColor: "#F5C842" }}
+            onClick={() => void acceptBanker()}
+          >
+            BECOME BANKER
+          </button>
+          <button type="button" className="text-sm text-white/50" onClick={() => setShowBecomeBanker(false)}>
+            NO THANKS
+          </button>
+        </div>
+      )}
+
+      {showCoverConfirm && (
+        <div
+          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2"
+          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
+        >
+          <h3 className={`${cinzel.className} text-lg mb-2 text-center`} style={{ color: "#F5C842" }}>
+            Cover the Entire Bank
+          </h3>
+          <p className="text-sm text-white/80 text-center mb-1">You will enter {bank.toLocaleString()} GPC</p>
+          <p className="text-sm text-white/60 text-center mb-4">Other players locked out this round. Side entries stay open.</p>
+          <button
+            type="button"
+            disabled={busy}
+            className="w-full rounded-xl py-3 font-semibold text-black mb-2"
+            style={{ backgroundColor: "#F5C842" }}
+            onClick={() => void confirmCoverBank()}
+          >
+            CONFIRM
+          </button>
+          <button type="button" className="w-full py-2 text-sm text-white/50" onClick={() => setShowCoverConfirm(false)}>
+            CANCEL
+          </button>
+        </div>
+      )}
+
       {error && (
-        <div className="fixed bottom-20 left-3 right-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200 z-50">
+        <div className="fixed bottom-20 left-3 right-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200 z-[300]">
           {error}
         </div>
       )}

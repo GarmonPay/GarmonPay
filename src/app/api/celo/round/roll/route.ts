@@ -31,6 +31,147 @@ function bankAmount(room: RoomRow): number {
   return Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0));
 }
 
+type SideBetRoundResult = {
+  bankerWon: boolean;
+  playersWon: boolean;
+  lastRollName: string;
+  lastRollResult: string;
+  lastPoint?: number | null;
+};
+
+async function getUserDisplayName(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  uid: string
+): Promise<string> {
+  const { data } = await supabase.from("users").select("full_name,email").eq("id", uid).maybeSingle();
+  const row = data as { full_name?: string | null; email?: string | null } | null;
+  return row?.full_name?.trim() || row?.email?.split("@")[0] || "Player";
+}
+
+async function insertCeloSystemChat(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  roomId: string,
+  actorUserId: string,
+  message: string
+) {
+  const { error } = await supabase.from("celo_chat").insert({
+    room_id: roomId,
+    user_id: actorUserId,
+    message,
+    is_system: true,
+  });
+  if (error) console.error("[celo roll] system chat insert", error.message);
+}
+
+async function settleSideBets(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  roomId: string,
+  roundId: string,
+  roundResult: SideBetRoundResult
+) {
+  const { data: sideBets } = await supabase
+    .from("celo_side_bets")
+    .select("*")
+    .eq("room_id", roomId)
+    .eq("round_id", roundId)
+    .eq("status", "matched");
+
+  if (sideBets && sideBets.length > 0) {
+    for (const betRaw of sideBets) {
+      const bet = betRaw as Record<string, unknown>;
+      const betType = String(bet.bet_type ?? "");
+      let creatorWins = false;
+      const upperName = roundResult.lastRollName.toUpperCase();
+      switch (betType) {
+        case "celo":
+          creatorWins = upperName.includes("C-LO") || roundResult.lastRollName.includes("C-Lo");
+          break;
+        case "shit":
+          creatorWins = upperName.includes("SHIT");
+          break;
+        case "hand_crack":
+          creatorWins = upperName.includes("HAND CRACK");
+          break;
+        case "trips":
+          creatorWins = upperName.includes("TRIP");
+          break;
+        case "banker_wins":
+          creatorWins = roundResult.bankerWon;
+          break;
+        case "player_wins":
+          creatorWins = roundResult.playersWon;
+          break;
+        case "specific_point": {
+          const sp = bet.specific_point != null ? Math.floor(Number(bet.specific_point)) : null;
+          if (sp != null && roundResult.lastRollResult === "point" && roundResult.lastPoint != null) {
+            creatorWins = roundResult.lastPoint === sp;
+          } else {
+            creatorWins = sp != null && roundResult.lastRollName.includes(String(sp));
+          }
+          break;
+        }
+        default:
+          creatorWins = false;
+      }
+
+      const acceptorId = bet.acceptor_id != null ? String(bet.acceptor_id) : "";
+      const winnerId = creatorWins ? String(bet.creator_id) : acceptorId;
+      if (!winnerId || !acceptorId) continue;
+
+      const amount = Math.floor(Number(bet.amount_cents ?? 0));
+      const gross = amount * 2;
+      const fee = Math.floor(gross * 0.1);
+      const payout = gross - fee;
+
+      const credit = await creditCoins(
+        winnerId,
+        0,
+        payout,
+        `C-Lo side bet settlement (${roundId})`,
+        `celo_side_settle_${String(bet.id)}`,
+        "celo_payout"
+      );
+      if (!credit.success) {
+        console.error("[celo roll] settleSideBets credit failed", String(bet.id), credit.message);
+        continue;
+      }
+
+      await supabase
+        .from("celo_side_bets")
+        .update({
+          status: creatorWins ? "won" : "lost",
+          winner_id: winnerId,
+          payout_cents: payout,
+          platform_fee_cents: fee,
+          settled_at: new Date().toISOString(),
+        })
+        .eq("id", String(bet.id));
+    }
+  }
+
+  await supabase
+    .from("celo_side_bets")
+    .update({ status: "expired" })
+    .eq("room_id", roomId)
+    .eq("round_id", roundId)
+    .eq("status", "open");
+}
+
+async function announceRollExtras(
+  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
+  roomId: string,
+  rollerId: string,
+  rollName: string
+) {
+  const nm = await getUserDisplayName(supabase, rollerId);
+  const u = rollName.toUpperCase();
+  if (u.includes("HAND CRACK")) {
+    await insertCeloSystemChat(supabase, roomId, rollerId, `💥 ${nm} rolled HAND CRACK!`);
+  } else if (u.includes("SHIT")) {
+    await insertCeloSystemChat(supabase, roomId, rollerId, `💩 ${nm} rolled SHIT! Players win!`);
+  }
+}
+
 async function completeRound(
   supabase: NonNullable<ReturnType<typeof createAdminClient>>,
   roundId: string,
@@ -165,6 +306,25 @@ export async function POST(req: Request) {
         await supabase.from("celo_rooms").update(roomPatch).eq("id", roomId);
         await completeRound(supabase, roundId, roomId, fee);
 
+        const nm = await getUserDisplayName(supabase, userId);
+        await settleSideBets(supabase, roomId, roundId, {
+          bankerWon: true,
+          playersWon: false,
+          lastRollName: ev.rollName,
+          lastRollResult: ev.result,
+          lastPoint: null,
+        });
+        if (ev.isCelo) {
+          await insertCeloSystemChat(supabase, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
+        }
+        await announceRollExtras(supabase, roomId, userId, ev.rollName);
+        await insertCeloSystemChat(
+          supabase,
+          roomId,
+          userId,
+          `🏦 Banker wins! Bank: ${newBank.toLocaleString()} GPC`
+        );
+
         const bal = await getUserCoins(userId);
         return NextResponse.json({
           ok: true,
@@ -195,6 +355,15 @@ export async function POST(req: Request) {
         }
 
         await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+
+        await settleSideBets(supabase, roomId, roundId, {
+          bankerWon: false,
+          playersWon: true,
+          lastRollName: ev.rollName,
+          lastRollResult: ev.result,
+          lastPoint: null,
+        });
+        await announceRollExtras(supabase, roomId, userId, ev.rollName);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -325,12 +494,29 @@ export async function POST(req: Request) {
           .sort((a, b) => a - b);
 
         const next = seats.filter((s) => s > seatNeed)[0];
+        const completedLast = next === undefined;
         if (next !== undefined) {
           await supabase.from("celo_rounds").update({ ...roundPatch, current_player_seat: next }).eq("id", roundId);
         } else {
           await supabase.from("celo_rounds").update(roundPatch).eq("id", roundId);
           await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
         }
+
+        const nm = await getUserDisplayName(supabase, userId);
+        if (completedLast) {
+          await settleSideBets(supabase, roomId, roundId, {
+            bankerWon: false,
+            playersWon: true,
+            lastRollName: ev.rollName,
+            lastRollResult: ev.result,
+            lastPoint: null,
+          });
+        }
+        if (ev.isCelo) {
+          await insertCeloSystemChat(supabase, roomId, userId, `🎲 ${nm} rolled C-LO! Bank grows!`);
+        }
+        await announceRollExtras(supabase, roomId, userId, ev.rollName);
+        await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nm} earned ${payout.toLocaleString()} GPC`);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -379,11 +565,25 @@ export async function POST(req: Request) {
           .sort((a, b) => a - b);
 
         const next = seats.filter((s) => s > seatNeed)[0];
+        const completedLoss = next === undefined;
         if (next !== undefined) {
           await supabase.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
         } else {
           await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
         }
+
+        const nm = await getUserDisplayName(supabase, userId);
+        if (completedLoss) {
+          await settleSideBets(supabase, roomId, roundId, {
+            bankerWon: true,
+            playersWon: false,
+            lastRollName: ev.rollName,
+            lastRollResult: ev.result,
+            lastPoint: null,
+          });
+          await insertCeloSystemChat(supabase, roomId, userId, `🏦 Banker wins! Bank: ${nb.toLocaleString()} GPC`);
+        }
+        await announceRollExtras(supabase, roomId, userId, ev.rollName);
 
         const bal = await getUserCoins(userId);
         return NextResponse.json({
@@ -452,10 +652,36 @@ export async function POST(req: Request) {
           .sort((a, b) => a - b);
 
         const next = seats.filter((s) => s > seatNeed)[0];
+        const completedPoint = next === undefined;
         if (next !== undefined) {
           await supabase.from("celo_rounds").update({ current_player_seat: next, roll_processing: false }).eq("id", roundId);
         } else {
           await completeRound(supabase, roundId, roomId, Math.floor((prizePool * 10) / 100));
+        }
+
+        const nmPt = await getUserDisplayName(supabase, userId);
+        if (completedPoint) {
+          const bankerWonRound = cmp !== "player";
+          await settleSideBets(supabase, roomId, roundId, {
+            bankerWon: bankerWonRound,
+            playersWon: !bankerWonRound,
+            lastRollName: ev.rollName,
+            lastRollResult: ev.result,
+            lastPoint: pPoint,
+          });
+          if (cmp === "player") {
+            await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
+          } else {
+            const nbPt = bankAmount(room) + entry;
+            await insertCeloSystemChat(
+              supabase,
+              roomId,
+              userId,
+              `🏦 Banker wins! Bank: ${nbPt.toLocaleString()} GPC`
+            );
+          }
+        } else if (cmp === "player") {
+          await insertCeloSystemChat(supabase, roomId, userId, `✅ ${nmPt} earned ${payout.toLocaleString()} GPC`);
         }
 
         const bal = await getUserCoins(userId);

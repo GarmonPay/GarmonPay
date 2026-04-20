@@ -17,7 +17,13 @@ export async function POST(req: Request) {
   const userId = await getAuthUserIdBearerOrCookie(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  let body: { room_id?: unknown; round_id?: unknown; bet_type?: unknown; amount_sc?: unknown };
+  let body: {
+    room_id?: unknown;
+    round_id?: unknown;
+    bet_type?: unknown;
+    amount_sc?: unknown;
+    specific_point?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -28,6 +34,8 @@ export async function POST(req: Request) {
   const roundId = typeof body.round_id === "string" ? body.round_id : null;
   const betType = typeof body.bet_type === "string" ? body.bet_type : "";
   const amount = Math.floor(Number(body.amount_sc));
+  const specificPoint =
+    body.specific_point != null ? Math.floor(Number(body.specific_point)) : null;
 
   if (!roomId || !roundId || !betType) {
     return NextResponse.json({ message: "room_id, round_id, and bet_type required" }, { status: 400 });
@@ -35,6 +43,12 @@ export async function POST(req: Request) {
 
   if (!ODDS[betType]) {
     return NextResponse.json({ message: "Invalid bet_type" }, { status: 400 });
+  }
+
+  if (betType === "specific_point") {
+    if (specificPoint == null || Number.isNaN(specificPoint) || specificPoint < 2 || specificPoint > 6) {
+      return NextResponse.json({ message: "specific_point (2–6) required for this bet type" }, { status: 400 });
+    }
   }
 
   if (!Number.isFinite(amount) || amount < 100 || amount % 100 !== 0) {
@@ -86,6 +100,9 @@ export async function POST(req: Request) {
     status: "open",
     expires_at: expires,
   };
+  if (betType === "specific_point" && specificPoint != null) {
+    insertPayload.specific_point = specificPoint;
+  }
 
   const { data: bet, error: insErr } = await supabase.from("celo_side_bets").insert(insertPayload).select("*").single();
 
