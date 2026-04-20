@@ -97,6 +97,12 @@ export async function creditCoins(
   const supabase = createAdminClient();
   if (!supabase) return { success: false, message: "Service unavailable" };
 
+  const g = Math.floor(goldCoins);
+  const s = Math.floor(gpayCoins);
+  if (g === 0 && s === 0) {
+    return { success: false, message: "Amount cannot be zero" };
+  }
+
   const { data: existing } = await supabase
     .from("coin_transactions")
     .select("id")
@@ -107,20 +113,78 @@ export async function creditCoins(
     return { success: false, message: "Duplicate transaction" };
   }
 
-  const { error } = await rpcCreditCoins(supabase, userId, goldCoins, gpayCoins);
+  const { data, error } = await supabase.rpc("credit_coins_with_ledger", {
+    p_user_id: userId,
+    p_gold_coins: g,
+    p_gpay_coins: s,
+    p_type: type,
+    p_description: description,
+    p_reference: reference,
+  });
 
+  if (error) {
+    const msg = error.message ?? "";
+    if (/credit_coins_with_ledger|does not exist|PGRST202/i.test(msg)) {
+      return creditCoinsLegacy(supabase, userId, g, s, description, reference, type);
+    }
+    console.error("[creditCoins] credit_coins_with_ledger RPC failed", {
+      message: msg,
+      code: (error as { code?: string }).code,
+      userId,
+      reference,
+      goldCoins: g,
+      gpayCoins: s,
+    });
+    return { success: false, message: msg };
+  }
+
+  const row = data as { success?: boolean; message?: string } | null;
+  if (!row || row.success !== true) {
+    const m = row?.message ?? "";
+    console.error("[creditCoins] credit_coins_with_ledger returned failure", {
+      message: m,
+      userId,
+      reference,
+    });
+    return { success: false, message: m || "Credit failed" };
+  }
+
+  return { success: true };
+}
+
+/** Fallback when credit_coins_with_ledger migration is not applied. Never reports success if ledger insert fails. */
+async function creditCoinsLegacy(
+  supabase: SupabaseClient,
+  userId: string,
+  g: number,
+  s: number,
+  description: string,
+  reference: string,
+  type: string
+): Promise<{ success: boolean; message?: string }> {
+  const { error } = await rpcCreditCoins(supabase, userId, g, s);
   if (error) return { success: false, message: error.message };
 
   const { error: insErr } = await supabase.from("coin_transactions").insert({
     user_id: userId,
     type,
-    gold_coins: Math.floor(goldCoins),
-    gpay_coins: Math.floor(gpayCoins),
+    gold_coins: g,
+    gpay_coins: s,
     description,
     reference,
   });
   if (insErr) {
-    console.error("[creditCoins] ledger insert failed after RPC:", insErr.message);
+    console.error("[creditCoins] LEGACY: ledger insert failed after credit_coins — user balance may not match ledger", {
+      message: insErr.message,
+      userId,
+      reference,
+      goldCoins: g,
+      gpayCoins: s,
+    });
+    return {
+      success: false,
+      message: "Ledger sync failed after credit. Contact support if this persists.",
+    };
   }
 
   return { success: true };
