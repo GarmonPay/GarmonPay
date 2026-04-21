@@ -6,7 +6,14 @@ import { getSessionAsync } from "@/lib/session";
 import { useCoins } from "@/hooks/useCoins";
 import { localeInt } from "@/lib/format-number";
 
-export function DashboardCoinBalances({ compact = false }: { compact?: boolean }) {
+export function DashboardCoinBalances({
+  compact = false,
+  /** When set with `compact`, hides Buy/Convert/Redeem on small screens (e.g. C-Lo room — use modal instead). */
+  hideCompactActionsOnMobile = false,
+}: {
+  compact?: boolean;
+  hideCompactActionsOnMobile?: boolean;
+}) {
   const [hasToken, setHasToken] = useState(false);
   const { goldCoins, gpayCoins, gpayTokens, loading } = useCoins();
 
@@ -62,7 +69,13 @@ export function DashboardCoinBalances({ compact = false }: { compact?: boolean }
                 </span>
               </div>
             </div>
-            <div className="grid w-full grid-cols-3 gap-1 tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1">
+            <div
+              className={
+                hideCompactActionsOnMobile
+                  ? "hidden tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1"
+                  : "grid w-full grid-cols-3 gap-1 tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1"
+              }
+            >
               <Link
                 href="/dashboard/wallet"
                 className="inline-flex min-h-[32px] items-center justify-center rounded-md bg-gradient-to-b from-amber-100 to-amber-600 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-[#0a0610] shadow-sm ring-1 ring-amber-300/40 transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-amber-400/50 tablet:min-h-[36px] tablet:rounded-lg tablet:px-2.5 tablet:py-1.5 tablet:text-[10px]"

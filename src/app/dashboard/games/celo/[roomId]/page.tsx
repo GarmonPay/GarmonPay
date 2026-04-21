@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { useCoins } from "@/hooks/useCoins";
-import { localeInt } from "@/lib/format-number";
 import { deriveCeloUiPhase, getCurrentRollerUserId } from "@/lib/celo-room-ui";
 import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
@@ -132,7 +131,7 @@ export default function CeloRoomPage() {
   const roomId = typeof params?.roomId === "string" ? params.roomId : "";
 
   const supabase = useMemo(() => createBrowserClient(), []);
-  const { gpayCoins, goldCoins, gpayTokens, formatGPC, refresh, applyServerGpayBalance } = useCoins();
+  const { gpayCoins, formatGPC, refresh, applyServerGpayBalance } = useCoins();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -989,46 +988,33 @@ export default function CeloRoomPage() {
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col tablet:min-h-0 tablet:overflow-hidden">
         <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-6xl flex-col">
-        <div className="shrink-0 space-y-2 border-b border-purple-800/40 px-2 py-2 tablet:hidden">
+        <div className="shrink-0 space-y-2 border-b border-purple-800/40 px-3 py-2 tablet:hidden">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => router.push("/dashboard/games/celo")}
-              className="rounded-lg px-2 py-1 text-sm text-[#F5C842] transition hover:bg-white/5"
+              className={`${cinzel.className} text-sm text-[#f5c842] transition hover:opacity-90`}
             >
               ← Lobby
             </button>
-            <span className="font-mono text-xs text-[#f5c842]">{formatGPC(gpayCoins)}</span>
-            <button
-              type="button"
-              onClick={() => setWalletOpen(true)}
-              className="rounded-lg border border-purple-600/50 px-2 py-1 text-[10px] font-semibold text-purple-200"
-            >
-              Wallet
-            </button>
-            <span
-              className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                isLive ? "border-emerald-500 text-emerald-400" : "border-gray-600 text-gray-500"
-              }`}
-            >
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWalletOpen(true)}
+                className="rounded-lg border border-purple-600 px-3 py-1 text-xs text-purple-300"
+              >
+                Wallet
+              </button>
               <span
-                className={`h-1.5 w-1.5 rounded-full ${isLive ? "animate-pulse bg-emerald-400" : "bg-gray-500"}`}
-              />
-              {isLive ? "LIVE" : "CONNECTING…"}
-            </span>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="w-32 shrink-0 rounded-lg border border-amber-500/20 bg-black/50 px-2 py-1.5">
-              <div className="text-[8px] font-bold uppercase tracking-wider text-amber-200/70">Gold</div>
-              <div className="font-mono text-[11px] font-semibold tabular-nums text-amber-300">{localeInt(goldCoins)}</div>
-            </div>
-            <div className="w-32 shrink-0 rounded-lg border border-violet-500/25 bg-black/50 px-2 py-1.5">
-              <div className="text-[8px] font-bold uppercase tracking-wider text-violet-300/80">GPC</div>
-              <div className="font-mono text-[11px] font-semibold tabular-nums text-violet-200">{localeInt(gpayCoins)}</div>
-            </div>
-            <div className="w-32 shrink-0 rounded-lg border border-emerald-500/20 bg-black/50 px-2 py-1.5">
-              <div className="text-[8px] font-bold uppercase tracking-wider text-emerald-300/75">$GPAY</div>
-              <div className="font-mono text-[11px] font-semibold tabular-nums text-emerald-200">{localeInt(gpayTokens)}</div>
+                className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  isLive ? "border-emerald-500 text-emerald-400" : "border-gray-600 text-gray-500"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${isLive ? "animate-pulse bg-emerald-400" : "bg-gray-500"}`}
+                />
+                {isLive ? "LIVE" : "CONNECTING…"}
+              </span>
             </div>
           </div>
           <div className="flex gap-2 rounded-xl border border-purple-800/40 bg-purple-950/40 p-2">
@@ -1076,30 +1062,36 @@ export default function CeloRoomPage() {
         </header>
 
         <div
-          className={`mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 tablet:mx-3 tablet:p-6 ${
+          className={`mx-2 my-2 w-full min-w-0 max-w-full shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-3 tablet:mx-3 tablet:my-2 tablet:p-6 ${
             mobileMainTab !== "game" ? "hidden tablet:block" : ""
           }`}
         >
-          <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:gap-2 tablet:divide-x tablet:divide-[#f5c842]/20">
-            <div className="flex min-w-0 flex-col justify-center tablet:pr-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Banker</span>
-              <span className="break-words text-lg font-bold text-white tablet:text-xl">
+          <div className="grid w-full grid-cols-3 gap-2 tablet:gap-4">
+            <div className="min-w-0 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#f5c842] tablet:text-xs">Banker</p>
+              <p className="mt-1 truncate text-base font-bold text-white tablet:text-xl">
                 {displayNames[String(room.banker_id ?? "")] ?? "—"}
-              </span>
+              </p>
             </div>
-            <div className="flex min-w-0 flex-col items-start justify-center tablet:items-center tablet:px-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Prize pool</span>
-              <span className="text-lg font-bold text-white tablet:text-xl">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
+            <div className="min-w-0 border-x border-[#f5c842]/20 px-1 text-center tablet:px-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#f5c842] tablet:text-xs">Prize Pool</p>
+              <p className="mt-1 text-base font-bold text-white tablet:text-xl">
+                {(round?.prize_pool_sc ?? 0).toLocaleString()}
+                <span className="text-xs tablet:text-sm"> GPC</span>
+              </p>
             </div>
-            <div className="flex min-w-0 flex-col items-end justify-center tablet:pl-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Bank</span>
-              <span className="text-lg font-bold text-white tablet:text-xl">{bank.toLocaleString()} GPC</span>
+            <div className="min-w-0 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#f5c842] tablet:text-xs">Bank</p>
+              <p className="mt-1 text-base font-bold text-white tablet:text-xl">
+                {bank.toLocaleString()}
+                <span className="text-xs tablet:text-sm"> GPC</span>
+              </p>
             </div>
           </div>
         </div>
 
         <div
-          className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 tablet:overflow-hidden ${
+          className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-1 tablet:overflow-hidden tablet:px-3 tablet:py-2 ${
             mobileMainTab !== "game" ? "hidden tablet:flex" : "flex"
           }`}
         >
@@ -1110,32 +1102,24 @@ export default function CeloRoomPage() {
                 "radial-gradient(ellipse 80% 60% at 50% 45%, rgba(124,58,237,0.14), transparent 55%), linear-gradient(90deg, rgba(124,58,237,0.08), transparent 35%), linear-gradient(270deg, rgba(245,200,66,0.08), transparent 35%)",
             }}
           />
-          <div className="relative z-[2] mx-auto flex w-full max-w-md flex-col items-center py-2">
+          <div className="relative z-[2] mx-auto flex w-full max-w-md flex-col items-center py-1 tablet:py-2">
             {(bankerPlayer || room.banker_id) && (
-              <div className="mb-4 w-full text-center">
-                <div className={`${cinzel.className} text-lg tracking-wider text-[#f5c842]`}>BANKER</div>
-                <div className="mt-1 text-2xl font-bold text-white">
+              <div className="mb-2 w-full text-center tablet:mb-4">
+                <div className={`${cinzel.className} text-base tracking-wider text-[#f5c842] tablet:text-lg`}>BANKER</div>
+                <div className="mt-0.5 text-xl font-bold text-white tablet:mt-1 tablet:text-2xl">
                   {displayNames[bankerPlayer?.user_id ?? String(room.banker_id ?? "")] ?? "—"}
                 </div>
               </div>
             )}
 
-            <div
-              className="relative z-[2] mx-auto flex h-64 w-64 max-h-[70vw] max-w-[85vw] shrink-0 flex-col items-center justify-center rounded-full border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2)] tablet:h-[min(280px,28vh)] tablet:w-[min(280px,85vw)] tablet:max-w-none tablet:rounded-[50%]"
-              style={{
-                background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 55%, #0f172a 100%)",
-                boxShadow:
-                  "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55), 0 0 40px rgba(245,200,66,0.2)",
-              }}
-            >
+            <div className="relative z-[2] mx-auto flex h-44 w-44 shrink-0 flex-col items-center justify-center rounded-full border-4 border-[#f5c842]/60 bg-[radial-gradient(ellipse_at_center,#064e3b_0%,#022c22_55%,#0f172a_100%)] shadow-[inset_0_0_50px_rgba(0,0,0,0.45),inset_0_2px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.45),0_0_30px_rgba(245,200,66,0.2)] tablet:h-64 tablet:w-64 tablet:shadow-[inset_0_0_80px_rgba(0,0,0,0.5),inset_0_2px_0_rgba(255,255,255,0.06),0_12px_48px_rgba(0,0,0,0.55),0_0_40px_rgba(245,200,66,0.2)]">
               <span
-                className={`${cinzel.className} pointer-events-none absolute select-none text-8xl font-black tablet:text-[72px]`}
-                style={{ color: "rgba(245, 200, 66, 0.1)" }}
+                className={`${cinzel.className} pointer-events-none absolute inset-0 flex select-none items-center justify-center text-5xl font-black text-[#f5c842]/10 tablet:text-8xl`}
               >
                 GP
               </span>
               {displayDice ? (
-                <div className="relative z-[6] flex items-center justify-center gap-1.5 tablet:gap-2">
+                <div className="relative z-[6] flex origin-center scale-[0.88] items-center justify-center gap-0.5 tablet:scale-100 tablet:gap-2">
                   <DiceFace
                     value={displayDice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
                     size={Math.min(diceSize, 52)}
@@ -1157,7 +1141,7 @@ export default function CeloRoomPage() {
                 </div>
               ) : (
                 <p
-                  className={`${cinzel.className} relative z-[10] max-w-[12rem] px-4 text-center text-sm tracking-wide text-[#f5c842]/80 tablet:text-base`}
+                  className={`${cinzel.className} relative z-[10] max-w-[12rem] px-3 text-center text-sm tracking-wide text-[#f5c842]/80 tablet:text-base`}
                 >
                   Waiting for roll…
                 </p>
@@ -1165,13 +1149,13 @@ export default function CeloRoomPage() {
               <RollNameDisplay rollName={displayRollName} result={null} />
             </div>
 
-            <div className="mt-6 w-full max-w-md space-y-3 px-1">
+            <div className="mt-3 w-full max-w-md space-y-2 px-1 tablet:mt-6 tablet:space-y-3">
               {inRoom && canStart && (
                 <button
                   type="button"
                   disabled={Boolean(busy)}
                   onClick={() => void handleStartRound()}
-                  className={`w-full rounded-xl bg-gradient-to-r from-[#f5c842] to-[#d4a828] py-4 text-xl font-semibold text-black shadow-[0_0_30px_rgba(245,200,66,0.4)] transition hover:scale-[1.02] disabled:opacity-40 ${cinzel.className}`}
+                  className={`w-full rounded-xl bg-gradient-to-r from-[#f5c842] to-[#d4a828] py-3 text-lg font-semibold text-black shadow-[0_0_30px_rgba(245,200,66,0.4)] transition hover:scale-[1.02] disabled:opacity-40 tablet:py-4 tablet:text-xl ${cinzel.className}`}
                 >
                   START GAME
                 </button>
@@ -1181,7 +1165,7 @@ export default function CeloRoomPage() {
                   type="button"
                   disabled={Boolean(rolling) || Boolean(busy) || Boolean(round?.roll_processing)}
                   onClick={() => void handleRoll()}
-                  className={`w-full rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 py-4 text-xl font-semibold text-[#f5c842] shadow-[0_0_30px_rgba(124,58,237,0.4)] transition hover:scale-[1.02] disabled:opacity-40 ${cinzel.className}`}
+                  className={`w-full rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 py-3 text-lg font-semibold text-[#f5c842] shadow-[0_0_30px_rgba(124,58,237,0.4)] transition hover:scale-[1.02] disabled:opacity-40 tablet:py-4 tablet:text-xl ${cinzel.className}`}
                 >
                   ROLL DICE
                 </button>
@@ -1206,7 +1190,7 @@ export default function CeloRoomPage() {
               )}
             </div>
 
-            <div className="mt-4 flex w-full flex-wrap justify-center gap-2 px-2">
+            <div className="mt-2 flex w-full flex-wrap justify-center gap-2 px-2 tablet:mt-4">
               {seatPlayers.map((p) => (
                 <div key={p.user_id} className="max-w-[88px] text-center text-[10px] text-white/80">
                   <div>Seat {p.seat_number ?? "?"}</div>

@@ -8,6 +8,8 @@ export type RollNameDisplayProps = {
   rollName: string | null;
   result: string | null;
   onComplete?: () => void;
+  /** Optional wrapper classes (e.g. max-width on small screens). */
+  className?: string;
 };
 
 function styleFor(name: string): { color: string; fontSize: number; extra?: Record<string, string | number> } {
@@ -35,7 +37,12 @@ function styleFor(name: string): { color: string; fontSize: number; extra?: Reco
   return { color: "#F5C842", fontSize: 44 };
 }
 
-export default function RollNameDisplay({ rollName, result: _result, onComplete }: RollNameDisplayProps) {
+export default function RollNameDisplay({
+  rollName,
+  result: _result,
+  onComplete,
+  className,
+}: RollNameDisplayProps) {
   const [phase, setPhase] = useState<"idle" | "in" | "hold" | "out">("idle");
 
   const holdMs = useMemo(() => {
@@ -69,7 +76,7 @@ export default function RollNameDisplay({ rollName, result: _result, onComplete 
 
   return (
     <div
-      className="pointer-events-none relative z-[4] mt-2 flex w-full max-w-[min(100%,280px)] shrink-0 items-center justify-center px-2 text-center"
+      className={`pointer-events-none relative z-[4] mt-1 flex w-full max-w-[min(100%,200px)] shrink-0 items-center justify-center px-1 text-center tablet:mt-2 tablet:max-w-[min(100%,280px)] tablet:px-2 ${className ?? ""}`}
       style={{
         opacity,
         transform: `scale(${phase === "in" ? 1 : 0.5})`,
