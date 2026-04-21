@@ -57,6 +57,12 @@ export type DiceFaceProps = {
   delay?: number;
 };
 
+function clampDie(v: number): 1 | 2 | 3 | 4 | 5 | 6 {
+  const n = Math.floor(Number(v));
+  if (n >= 1 && n <= 6) return n as 1 | 2 | 3 | 4 | 5 | 6;
+  return 1;
+}
+
 export default function DiceFace({
   value,
   diceType = "standard",
@@ -64,10 +70,10 @@ export default function DiceFace({
   rolling = false,
   delay = 0,
 }: DiceFaceProps) {
-  if (!value || value < 1 || value > 6) return null;
+  const face = clampDie(typeof value === "number" ? value : 0);
 
   const { bg, dot } = PALETTES[diceType];
-  const pipList = PIPS[value];
+  const pipList = PIPS[face];
   const cell = size / 3;
 
   return (

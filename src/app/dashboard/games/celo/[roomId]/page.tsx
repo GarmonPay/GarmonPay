@@ -71,7 +71,33 @@ type Round = {
   player_celo_expires_at?: string | null;
   bank_covered?: boolean;
   roll_processing?: boolean;
+  banker_dice?: unknown;
+  banker_dice_name?: string | null;
+  banker_dice_result?: string | null;
+  banker_point?: number | null;
 };
+
+function clampDieNum(n: unknown): number {
+  const v = Math.floor(Number(n));
+  if (v >= 1 && v <= 6) return v;
+  return 1;
+}
+
+function parseDiceTuple(raw: unknown): [number, number, number] | null {
+  if (raw == null) return null;
+  let arr: unknown[] | null = null;
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw) as unknown;
+      if (Array.isArray(p)) arr = p;
+    } catch {
+      return null;
+    }
+  }
+  if (!arr || arr.length < 3) return null;
+  return [clampDieNum(arr[0]), clampDieNum(arr[1]), clampDieNum(arr[2])];
+}
 
 type SideBetRow = {
   id: string;
@@ -115,6 +141,11 @@ export default function CeloRoomPage() {
   const [dice, setDice] = useState<[number, number, number] | null>(null);
   const [rollName, setRollName] = useState<string | null>(null);
   const [rolling, setRolling] = useState(false);
+  /** Latest player roll in DB for current round (so spectators see player dice). */
+  const [lastPlayerRoll, setLastPlayerRoll] = useState<{
+    dice: [number, number, number];
+    rollName: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"side" | "chat">("chat");
   const [tabOpen, setTabOpen] = useState(false);
@@ -173,7 +204,27 @@ export default function CeloRoomPage() {
       .order("round_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    setRound(rnd ? (rnd as Round) : null);
+    const roundRow = rnd ? (rnd as Round) : null;
+    setRound(roundRow);
+
+    let playerRoll: { dice: [number, number, number]; rollName: string } | null = null;
+    if (roundRow?.status === "player_rolling") {
+      const { data: pr } = await supabase
+        .from("celo_player_rolls")
+        .select("dice, roll_name")
+        .eq("round_id", roundRow.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const d = parseDiceTuple((pr as { dice?: unknown } | null)?.dice);
+      if (d) {
+        playerRoll = {
+          dice: d,
+          rollName: String((pr as { roll_name?: string | null }).roll_name ?? ""),
+        };
+      }
+    }
+    setLastPlayerRoll(playerRoll);
 
     const { data: ch } = await supabase
       .from("celo_chat")
@@ -250,11 +301,35 @@ export default function CeloRoomPage() {
         { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
         () => void loadAll()
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        () => void loadAll()
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(ch);
     };
   }, [supabase, roomId, loadAll]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadAll();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const id = window.setInterval(() => void loadAll(), 16000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(id);
+    };
+  }, [loadAll]);
+
+  useEffect(() => {
+    if (room?.status === "rolling" && !round) {
+      const t = window.setTimeout(() => void loadAll(), 500);
+      return () => window.clearTimeout(t);
+    }
+  }, [room?.status, round, loadAll]);
 
   const mePlayer = useMemo(
     () => (userId ? players.find((p) => p.user_id === userId) : undefined),
@@ -361,7 +436,18 @@ export default function CeloRoomPage() {
         body: JSON.stringify({ room_id: roomId }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof j.message === "string" ? j.message : "Could not start");
+      if (!res.ok) {
+        const msg =
+          typeof j.message === "string"
+            ? j.message
+            : typeof (j as { error?: string }).error === "string"
+              ? (j as { error: string }).error
+              : "Could not start";
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[celo] start round failed", res.status, j);
+        }
+        throw new Error(msg);
+      }
       setDice(null);
       setRollName(null);
       if (j.round) setRound(j.round as Round);
@@ -417,7 +503,11 @@ export default function CeloRoomPage() {
       await loadAll();
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Roll failed");
+      const msg = e instanceof Error ? e.message : "Roll failed";
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[celo] roll failed", msg);
+      }
+      setError(msg);
     } finally {
       setRolling(false);
     }
@@ -641,6 +731,23 @@ export default function CeloRoomPage() {
     [players]
   );
 
+  const displayDice = useMemo((): [number, number, number] | null => {
+    if (Boolean(rolling) && dice) return dice;
+    if (round?.status === "player_rolling" && lastPlayerRoll?.dice) return lastPlayerRoll.dice;
+    const fromRound = parseDiceTuple(round?.banker_dice);
+    if (fromRound) return fromRound;
+    return dice;
+  }, [rolling, dice, round?.banker_dice, round?.status, lastPlayerRoll]);
+
+  const displayRollName = useMemo((): string | null => {
+    if (Boolean(rolling) && rollName) return rollName;
+    if (round?.status === "player_rolling" && lastPlayerRoll?.rollName) {
+      return lastPlayerRoll.rollName || null;
+    }
+    if (round?.banker_dice_name) return String(round.banker_dice_name);
+    return rollName;
+  }, [rolling, rollName, round?.banker_dice_name, round?.status, lastPlayerRoll]);
+
   const sideBetOdds = SIDE_ODDS[sideBetType] ?? 2;
   const potentialWin = Math.floor(sideBetAmount * sideBetOdds);
 
@@ -851,31 +958,42 @@ export default function CeloRoomPage() {
       }}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-[65%] md:flex-[0_0_65%]">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
         <header
-          className="relative z-10 flex h-12 shrink-0 items-center justify-between gap-2.5 border-b px-3"
+          className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4"
           style={{
             background: "rgba(5,1,15,0.97)",
-            borderBottom: "1px solid rgba(124,58,237,0.2)",
+            borderBottom: "1px solid rgba(124,58,237,0.25)",
           }}
         >
           <button
             type="button"
             onClick={() => router.push("/dashboard/games/celo")}
-            className="relative z-10 text-sm text-[#F5C842]"
+            className="relative z-10 rounded-lg px-2 py-1 text-sm text-[#F5C842] transition hover:bg-white/5"
           >
-            ←
+            ← Lobby
           </button>
-          <span className={`${cinzel.className} max-w-[40vw] truncate text-sm`} style={{ color: "#F5C842" }}>
-            {(room.name ?? "Table").slice(0, 16)}
+          <div className="min-w-0 flex-1 text-center">
+            <span className={`${cinzel.className} block truncate text-sm md:text-base`} style={{ color: "#F5C842" }}>
+              {room.name ?? "Table"}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider text-white/45">
+              {String(room.status ?? "—").replace(/_/g, " ")}
+            </span>
+          </div>
+          <span
+            className="relative z-10 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold text-emerald-300"
+            style={{ borderColor: "rgba(52,211,153,0.35)", background: "rgba(16,185,129,0.12)" }}
+          >
+            LIVE
           </span>
-          <span className="relative z-10 text-xs text-emerald-400">●</span>
         </header>
 
         <div
-          className="grid h-[52px] shrink-0 grid-cols-3 border-b text-[10px] md:text-xs"
+          className="grid h-[56px] shrink-0 grid-cols-3 border-b text-[10px] md:text-xs"
           style={{
             background: "rgba(13,5,32,0.95)",
-            borderBottom: "1px solid rgba(245,200,66,0.1)",
+            borderBottom: "1px solid rgba(245,200,66,0.12)",
           }}
         >
           <div className="flex flex-col justify-center truncate px-2">
@@ -894,12 +1012,12 @@ export default function CeloRoomPage() {
           </div>
         </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-3 py-2">
           <div
             className="pointer-events-none absolute inset-0 z-0 opacity-90"
             style={{
               background:
-                "linear-gradient(90deg, rgba(124,58,237,0.12), transparent 30%), linear-gradient(270deg, rgba(245,200,66,0.1), transparent 30%)",
+                "radial-gradient(ellipse 80% 60% at 50% 45%, rgba(124,58,237,0.14), transparent 55%), linear-gradient(90deg, rgba(124,58,237,0.08), transparent 35%), linear-gradient(270deg, rgba(245,200,66,0.08), transparent 35%)",
             }}
           />
           {bankerPlayer && (
@@ -911,14 +1029,13 @@ export default function CeloRoomPage() {
             </div>
           )}
           <div
-            className="relative z-[2] flex shrink-0 flex-col items-center justify-center"
+            className="relative z-[2] flex shrink-0 flex-col items-center justify-center rounded-[50%] border-[7px] border-[#6B4423] shadow-[0_12px_48px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,200,66,0.12)]"
             style={{
-              width: "min(260px, 80vw)",
-              height: "min(170px, 26vh)",
-              borderRadius: "50%",
-              background: "#0D2B0D",
-              border: "8px solid #5C3A1A",
-              boxShadow: "inset 0 0 60px rgba(0,0,0,0.45)",
+              width: "min(280px, 85vw)",
+              height: "min(180px, 28vh)",
+              background: "radial-gradient(ellipse at center, #0f3d0f 0%, #0a2a0a 55%, #051805 100%)",
+              boxShadow:
+                "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55)",
             }}
           >
             <span
@@ -927,31 +1044,31 @@ export default function CeloRoomPage() {
             >
               GP
             </span>
-            {dice ? (
-              <div className="relative z-[1] flex items-center justify-center gap-2">
+            {displayDice ? (
+              <div className="relative z-[6] flex items-center justify-center gap-2">
                 <DiceFace
-                  value={dice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  value={displayDice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
                   size={diceSize}
-                  rolling={rolling}
+                  rolling={Boolean(rolling)}
                   delay={0}
                 />
                 <DiceFace
-                  value={dice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  value={displayDice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
                   size={diceSize}
-                  rolling={rolling}
+                  rolling={Boolean(rolling)}
                   delay={133}
                 />
                 <DiceFace
-                  value={dice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                  value={displayDice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
                   size={diceSize}
-                  rolling={rolling}
+                  rolling={Boolean(rolling)}
                   delay={266}
                 />
               </div>
             ) : (
               <p className="relative z-[1] text-sm text-white/40">Waiting for roll…</p>
             )}
-            <RollNameDisplay rollName={rollName} result={null} />
+            <RollNameDisplay rollName={displayRollName} result={null} />
           </div>
 
           <div className="absolute bottom-2 left-0 right-0 z-[3] flex flex-wrap justify-center gap-2 px-2">
@@ -1006,18 +1123,22 @@ export default function CeloRoomPage() {
                 {canStart && (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={Boolean(busy)}
                     onClick={() => void handleStartRound()}
-                    className="relative z-10 h-10 rounded-xl px-4 text-sm font-semibold text-black disabled:opacity-40"
-                    style={{ backgroundColor: "#7C3AED" }}
+                    className="relative z-10 flex min-h-10 min-w-[140px] flex-col items-center justify-center rounded-xl px-5 py-1.5 text-sm font-bold text-white shadow-lg disabled:opacity-40"
+                    style={{
+                      background: "linear-gradient(180deg, #8B5CF6 0%, #6D28D9 55%, #5B21B6 100%)",
+                      boxShadow: "0 4px 24px rgba(124, 58, 237, 0.35)",
+                    }}
                   >
-                    START ROUND
+                    <span className="leading-tight tracking-wide">PLAY NOW</span>
+                    <span className="text-[10px] font-normal text-white/85">Start round</span>
                   </button>
                 )}
                 {roundOpen && myTurn && (
                   <button
                     type="button"
-                    disabled={rolling || busy}
+                    disabled={Boolean(rolling) || Boolean(busy)}
                     onClick={() => void handleRoll()}
                     className="relative z-10 h-10 animate-pulse rounded-xl px-5 text-sm font-semibold text-black disabled:opacity-40"
                     style={{ backgroundColor: "#F5C842" }}
@@ -1111,6 +1232,7 @@ export default function CeloRoomPage() {
             background: "rgba(5,1,15,0.97)",
           }}
         />
+        </div>
       </div>
 
       <aside

@@ -69,11 +69,12 @@ export default function RollNameDisplay({ rollName, result: _result, onComplete 
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-4 text-center"
+      className="pointer-events-none relative z-[4] mt-2 flex w-full max-w-[min(100%,280px)] shrink-0 items-center justify-center px-2 text-center"
       style={{
         opacity,
         transform: `scale(${phase === "in" ? 1 : 0.5})`,
         transition: "opacity 0.35s ease, transform 0.35s ease",
+        minHeight: "2.25rem",
       }}
     >
       <style>{`
