@@ -946,6 +946,24 @@ export default function CeloRoomPage() {
   }
 
   return (
+    <>
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          background: "red",
+          color: "white",
+          fontSize: "28px",
+          textAlign: "center",
+          padding: "20px",
+          fontWeight: "bold",
+          zIndex: 9999,
+        }}
+      >
+        LIVE BUILD TEST — CELO ROOM UPDATED
+      </div>
     <div
       className={`${dmSans.className} flex flex-col overflow-hidden text-white md:flex-row`}
       style={{
@@ -955,6 +973,7 @@ export default function CeloRoomPage() {
         right: 0,
         bottom: 0,
         background: "#05010F",
+        paddingTop: "76px",
       }}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-[65%] md:flex-[0_0_65%]">
@@ -1369,5 +1388,6 @@ export default function CeloRoomPage() {
         </div>
       )}
     </div>
+    </>
   );
 }
