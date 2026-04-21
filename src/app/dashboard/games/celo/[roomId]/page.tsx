@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { useCoins } from "@/hooks/useCoins";
+import { localeInt } from "@/lib/format-number";
+import { deriveCeloUiPhase, getCurrentRollerUserId } from "@/lib/celo-room-ui";
 import DiceFace from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 
@@ -130,7 +132,7 @@ export default function CeloRoomPage() {
   const roomId = typeof params?.roomId === "string" ? params.roomId : "";
 
   const supabase = useMemo(() => createBrowserClient(), []);
-  const { gpayCoins, formatGPC, refresh, applyServerGpayBalance } = useCoins();
+  const { gpayCoins, goldCoins, gpayTokens, formatGPC, refresh, applyServerGpayBalance } = useCoins();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -147,15 +149,9 @@ export default function CeloRoomPage() {
     rollName: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"side" | "chat">("chat");
-  const [tabOpen, setTabOpen] = useState(false);
-  const handleTabClick = (t: "side" | "chat") => {
-    if (activeTab === t && tabOpen) setTabOpen(false);
-    else {
-      setActiveTab(t);
-      setTabOpen(true);
-    }
-  };
+  const [mobileMainTab, setMobileMainTab] = useState<"game" | "side" | "chat">("game");
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [isLive, setIsLive] = useState(false);
   const [diceSize, setDiceSize] = useState(48);
   useEffect(() => {
     const u = () =>
@@ -196,6 +192,7 @@ export default function CeloRoomPage() {
 
     const { data: p } = await supabase.from("celo_room_players").select("*").eq("room_id", roomId);
     setPlayers((p ?? []) as Player[]);
+    const roomRow = r as Room | null;
 
     const { data: rnd } = await supabase
       .from("celo_rounds")
@@ -242,7 +239,10 @@ export default function CeloRoomPage() {
       .limit(100);
     setSideBets((sb ?? []) as SideBetRow[]);
 
-    const uids = Array.from(new Set((p ?? []).map((x) => (x as Player).user_id)));
+    const bankerUid = roomRow?.banker_id ? String(roomRow.banker_id) : "";
+    const uids = Array.from(
+      new Set([...(p ?? []).map((x) => (x as Player).user_id), bankerUid].filter(Boolean))
+    );
     if (uids.length) {
       const { data: users } = await supabase.from("users").select("id,full_name,email").in("id", uids);
       const nm: Record<string, string> = {};
@@ -274,12 +274,18 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     if (!supabase || !roomId) return;
+    setIsLive(false);
     const ch = supabase
-      .channel(`celo-room-${roomId}`)
+      .channel(`celo_room:${roomId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
-        () => void loadAll()
+        { event: "UPDATE", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
+        (payload) => {
+          if (payload.new && typeof payload.new === "object") {
+            setRoom((prev) => ({ ...(prev ?? {}), ...(payload.new as Room) } as Room));
+          }
+          void loadAll();
+        }
       )
       .on(
         "postgres_changes",
@@ -306,8 +312,11 @@ export default function CeloRoomPage() {
         { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
         () => void loadAll()
       )
-      .subscribe();
+      .subscribe((status) => {
+        setIsLive(status === "SUBSCRIBED");
+      });
     return () => {
+      setIsLive(false);
       void supabase.removeChannel(ch);
     };
   }, [supabase, roomId, loadAll]);
@@ -335,7 +344,7 @@ export default function CeloRoomPage() {
     () => (userId ? players.find((p) => p.user_id === userId) : undefined),
     [players, userId]
   );
-  const isBanker = mePlayer?.role === "banker";
+  const isBanker = Boolean(userId && room && String(room.banker_id ?? "") === userId);
   const myRole = mePlayer?.role ?? "spectator";
   const myEntry = Math.floor(Number(mePlayer?.entry_sc ?? 0));
   const inRoom = Boolean(mePlayer);
@@ -682,14 +691,26 @@ export default function CeloRoomPage() {
     }
   }
 
-  const roundOpen = round && round.status !== "completed";
-  const canStart = isBanker && !roundOpen && players.some((p) => p.role === "player" && (p.entry_sc ?? 0) > 0);
-  const myTurn =
+  const roundOpen = Boolean(round && round.status !== "completed");
+  const totalPlayerEntry = useMemo(
+    () =>
+      players
+        .filter((p) => p.role === "player")
+        .reduce((s, p) => s + Math.floor(Number(p.entry_sc ?? 0)), 0),
+    [players]
+  );
+  const minEntryMet = totalPlayerEntry >= minEntry;
+  const hasPlayerWithEntry = players.some((p) => p.role === "player" && Number(p.entry_sc ?? 0) > 0);
+  const canStart = isBanker && !roundOpen && hasPlayerWithEntry && minEntryMet;
+  const myTurn = Boolean(
     round &&
-    ((round.status === "banker_rolling" && isBanker) ||
-      (round.status === "player_rolling" &&
-        mePlayer?.role === "player" &&
-        mePlayer.seat_number === round.current_player_seat));
+      round.status !== "completed" &&
+      !round.roll_processing &&
+      ((round.status === "banker_rolling" && isBanker) ||
+        (round.status === "player_rolling" &&
+          mePlayer?.role === "player" &&
+          Number(mePlayer.seat_number ?? -1) === Number(round.current_player_seat ?? -2)))
+  );
 
   const otherPlayersHaveStake = players.some(
     (p) => p.role === "player" && p.user_id !== userId && (p.entry_sc ?? 0) > 0
@@ -729,6 +750,16 @@ export default function CeloRoomPage() {
         .filter((p) => p.role === "player")
         .sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0)),
     [players]
+  );
+
+  const currentRollerId = useMemo(
+    () => getCurrentRollerUserId(room, round, players),
+    [room, round, players]
+  );
+  const currentRollerName = currentRollerId ? displayNames[currentRollerId] ?? "Player" : "—";
+  const uiPhase = useMemo(
+    () => deriveCeloUiPhase(round, { canStartRound: canStart, localRolling: rolling }),
+    [round, canStart, rolling]
   );
 
   const displayDice = useMemo((): [number, number, number] | null => {
@@ -954,11 +985,71 @@ export default function CeloRoomPage() {
 
   return (
     <div
-      className={`${dmSans.className} flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#0e0118] text-white md:flex-row`}
+      className={`${dmSans.className} flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#0e0118] text-white md:grid md:min-h-0 md:grid-cols-[1fr_min(400px,42vw)] md:gap-4 md:overflow-hidden`}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-[65%] md:flex-[0_0_65%]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:min-h-0 md:overflow-hidden">
         <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
-        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-purple-800/40 bg-[#0e0118]/95 px-4 backdrop-blur-sm">
+        <div className="shrink-0 space-y-2 border-b border-purple-800/40 px-2 py-2 md:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/games/celo")}
+              className="rounded-lg px-2 py-1 text-sm text-[#F5C842] transition hover:bg-white/5"
+            >
+              ← Lobby
+            </button>
+            <span className="font-mono text-xs text-[#f5c842]">{formatGPC(gpayCoins)}</span>
+            <button
+              type="button"
+              onClick={() => setWalletOpen(true)}
+              className="rounded-lg border border-purple-600/50 px-2 py-1 text-[10px] font-semibold text-purple-200"
+            >
+              Wallet
+            </button>
+            <span
+              className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                isLive ? "border-emerald-500 text-emerald-400" : "border-gray-600 text-gray-500"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${isLive ? "animate-pulse bg-emerald-400" : "bg-gray-500"}`}
+              />
+              {isLive ? "LIVE" : "CONNECTING…"}
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="w-32 shrink-0 rounded-lg border border-amber-500/20 bg-black/50 px-2 py-1.5">
+              <div className="text-[8px] font-bold uppercase tracking-wider text-amber-200/70">Gold</div>
+              <div className="font-mono text-[11px] font-semibold tabular-nums text-amber-300">{localeInt(goldCoins)}</div>
+            </div>
+            <div className="w-32 shrink-0 rounded-lg border border-violet-500/25 bg-black/50 px-2 py-1.5">
+              <div className="text-[8px] font-bold uppercase tracking-wider text-violet-300/80">GPC</div>
+              <div className="font-mono text-[11px] font-semibold tabular-nums text-violet-200">{localeInt(gpayCoins)}</div>
+            </div>
+            <div className="w-32 shrink-0 rounded-lg border border-emerald-500/20 bg-black/50 px-2 py-1.5">
+              <div className="text-[8px] font-bold uppercase tracking-wider text-emerald-300/75">$GPAY</div>
+              <div className="font-mono text-[11px] font-semibold tabular-nums text-emerald-200">{localeInt(gpayTokens)}</div>
+            </div>
+          </div>
+          <div className="flex gap-2 rounded-xl border border-purple-800/40 bg-purple-950/40 p-2">
+            {(["game", "side", "chat"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setMobileMainTab(t)}
+                className={`flex-1 rounded-lg py-2 text-sm transition ${cinzel.className} ${
+                  mobileMainTab === t
+                    ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] font-semibold text-black"
+                    : "text-purple-200 hover:bg-purple-900/40"
+                }`}
+              >
+                {t === "game" ? "Game" : t === "side" ? "Side Entries" : "Chat"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <header className="relative z-10 hidden h-14 shrink-0 items-center justify-between gap-3 border-b border-purple-800/40 bg-[#0e0118]/95 px-4 backdrop-blur-sm md:flex">
           <button
             type="button"
             onClick={() => router.push("/dashboard/games/celo")}
@@ -971,37 +1062,47 @@ export default function CeloRoomPage() {
               {room.name ?? "Table"}
             </span>
             <span className="text-[10px] uppercase tracking-wider text-white/45">
-              {String(room.status ?? "—").replace(/_/g, " ")}
+              {String(room.status ?? "—").replace(/_/g, " ")} · {uiPhase}
             </span>
           </div>
           <span
-            className="relative z-10 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold text-emerald-300"
-            style={{ borderColor: "rgba(52,211,153,0.35)", background: "rgba(16,185,129,0.12)" }}
+            className={`relative z-10 flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+              isLive ? "border-emerald-500 text-emerald-400" : "border-gray-600 text-gray-500"
+            }`}
           >
-            LIVE
+            <span className={`h-1.5 w-1.5 rounded-full ${isLive ? "animate-pulse bg-emerald-400" : "bg-gray-500"}`} />
+            {isLive ? "LIVE" : "CONNECTING…"}
           </span>
         </header>
 
-        <div className="mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
-          <div className="grid grid-cols-3 gap-2 divide-x divide-[#f5c842]/20 text-[10px] md:text-xs">
-            <div className="flex flex-col justify-center truncate pr-2">
+        <div
+          className={`mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:mx-3 md:p-6 ${
+            mobileMainTab !== "game" ? "hidden md:block" : ""
+          }`}
+        >
+          <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:divide-x md:divide-[#f5c842]/20">
+            <div className="flex w-40 min-w-0 shrink-0 flex-col justify-center md:w-auto md:pr-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Banker</span>
-              <span className="truncate text-xl font-bold text-white">
+              <span className="truncate text-lg font-bold text-white md:text-xl">
                 {displayNames[String(room.banker_id ?? "")] ?? "—"}
               </span>
             </div>
-            <div className="flex flex-col items-center justify-center px-2">
+            <div className="flex w-40 shrink-0 flex-col items-center justify-center md:w-auto md:px-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Prize pool</span>
-              <span className="text-xl font-bold text-white">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
+              <span className="text-lg font-bold text-white md:text-xl">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
             </div>
-            <div className="flex flex-col items-end justify-center pl-2">
+            <div className="flex w-40 shrink-0 flex-col items-end justify-center md:w-auto md:pl-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Bank</span>
-              <span className="text-xl font-bold text-white">{bank.toLocaleString()} GPC</span>
+              <span className="text-lg font-bold text-white md:text-xl">{bank.toLocaleString()} GPC</span>
             </div>
           </div>
         </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-3 py-2">
+        <div
+          className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 md:overflow-hidden ${
+            mobileMainTab !== "game" ? "hidden md:flex" : "flex"
+          }`}
+        >
           <div
             className="pointer-events-none absolute inset-0 z-0 opacity-90"
             style={{
@@ -1009,196 +1110,162 @@ export default function CeloRoomPage() {
                 "radial-gradient(ellipse 80% 60% at 50% 45%, rgba(124,58,237,0.14), transparent 55%), linear-gradient(90deg, rgba(124,58,237,0.08), transparent 35%), linear-gradient(270deg, rgba(245,200,66,0.08), transparent 35%)",
             }}
           />
-          {bankerPlayer && (
-            <div
-              className={`${cinzel.className} pointer-events-none absolute left-1/2 top-2 z-[3] flex -translate-x-1/2 flex-col items-center gap-0.5 tracking-wider`}
-            >
-              <span className="text-sm text-[#f5c842] md:text-base">BANKER {displayNames[bankerPlayer.user_id] ?? "—"}</span>
-            </div>
-          )}
-          <div
-            className="relative z-[2] flex shrink-0 flex-col items-center justify-center rounded-[50%] border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2),0_12px_48px_rgba(0,0,0,0.55)]"
-            style={{
-              width: "min(280px, 85vw)",
-              height: "min(180px, 28vh)",
-              background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 55%, #0f172a 100%)",
-              boxShadow:
-                "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55), 0 0 40px rgba(245,200,66,0.2)",
-            }}
-          >
-            <span
-              className={`${cinzel.className} pointer-events-none absolute select-none text-[72px] font-black`}
-              style={{ color: "rgba(245, 200, 66, 0.1)" }}
-            >
-              GP
-            </span>
-            {displayDice ? (
-              <div className="relative z-[6] flex items-center justify-center gap-2">
-                <DiceFace
-                  value={displayDice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
-                  size={diceSize}
-                  rolling={Boolean(rolling)}
-                  delay={0}
-                />
-                <DiceFace
-                  value={displayDice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
-                  size={diceSize}
-                  rolling={Boolean(rolling)}
-                  delay={133}
-                />
-                <DiceFace
-                  value={displayDice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
-                  size={diceSize}
-                  rolling={Boolean(rolling)}
-                  delay={266}
-                />
+          <div className="relative z-[2] mx-auto flex w-full max-w-md flex-col items-center py-2">
+            {(bankerPlayer || room.banker_id) && (
+              <div className="mb-4 w-full text-center">
+                <div className={`${cinzel.className} text-lg tracking-wider text-[#f5c842]`}>BANKER</div>
+                <div className="mt-1 text-2xl font-bold text-white">
+                  {displayNames[bankerPlayer?.user_id ?? String(room.banker_id ?? "")] ?? "—"}
+                </div>
               </div>
-            ) : (
-              <p className={`${cinzel.className} relative z-[1] text-sm tracking-wide text-amber-200/80`}>
-                Waiting for roll…
-              </p>
             )}
-            <RollNameDisplay rollName={displayRollName} result={null} />
-          </div>
 
-          <div className="absolute bottom-2 left-0 right-0 z-[3] flex flex-wrap justify-center gap-2 px-2">
-            {seatPlayers.map((p) => (
-              <div
-                key={p.user_id}
-                className="pointer-events-none max-w-[80px] text-center text-[10px] text-white/80"
+            <div
+              className="relative z-[2] mx-auto flex h-64 w-64 max-h-[70vw] max-w-[85vw] shrink-0 flex-col items-center justify-center rounded-full border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2)] md:h-[min(280px,28vh)] md:w-[min(280px,85vw)] md:max-w-none md:rounded-[50%]"
+              style={{
+                background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 55%, #0f172a 100%)",
+                boxShadow:
+                  "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55), 0 0 40px rgba(245,200,66,0.2)",
+              }}
+            >
+              <span
+                className={`${cinzel.className} pointer-events-none absolute select-none text-8xl font-black md:text-[72px]`}
+                style={{ color: "rgba(245, 200, 66, 0.1)" }}
               >
-                <div>Seat {p.seat_number ?? "?"}</div>
-                <div className="truncate">{displayNames[p.user_id] ?? "?"}</div>
-              </div>
-            ))}
-          </div>
-
-          {!inRoom && (
-            <div className="relative z-[5] mt-3 w-full max-w-sm space-y-2 px-3">
-              <p className="text-sm text-white/70">Join this table with an entry (multiplier of {minEntry} GPC).</p>
-              <input
-                type="number"
-                className="w-full rounded-xl border border-purple-700/50 bg-purple-950/60 px-3 py-2 text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
-                value={joinEntry}
-                min={minEntry}
-                step={minEntry}
-                onChange={(e) => setJoinEntry(parseInt(e.target.value, 10) || minEntry)}
-              />
-              <button
-                type="button"
-                disabled={busy || joinEntry < minEntry || joinEntry % minEntry !== 0}
-                className="relative z-10 w-full rounded-xl py-3 font-semibold text-black disabled:opacity-40"
-                style={{ backgroundColor: "#F5C842" }}
-                onClick={() => void handleJoin()}
-              >
-                JOIN TABLE
-              </button>
+                GP
+              </span>
+              {displayDice ? (
+                <div className="relative z-[6] flex items-center justify-center gap-1.5 md:gap-2">
+                  <DiceFace
+                    value={displayDice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                    size={Math.min(diceSize, 52)}
+                    rolling={Boolean(rolling)}
+                    delay={0}
+                  />
+                  <DiceFace
+                    value={displayDice[1] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                    size={Math.min(diceSize, 52)}
+                    rolling={Boolean(rolling)}
+                    delay={133}
+                  />
+                  <DiceFace
+                    value={displayDice[2] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+                    size={Math.min(diceSize, 52)}
+                    rolling={Boolean(rolling)}
+                    delay={266}
+                  />
+                </div>
+              ) : (
+                <p
+                  className={`${cinzel.className} relative z-[10] max-w-[12rem] px-4 text-center text-sm tracking-wide text-[#f5c842]/80 md:text-base`}
+                >
+                  Waiting for roll…
+                </p>
+              )}
+              <RollNameDisplay rollName={displayRollName} result={null} />
             </div>
-          )}
-        </div>
 
-        <div className="relative z-10 flex h-[52px] shrink-0 items-center gap-2 border-t border-purple-800/40 bg-[#0e0118]/95 px-2.5 backdrop-blur-sm">
-          <span className="relative z-10 shrink-0 text-xs font-mono" style={{ color: "#F5C842" }}>
-            {formatGPC(gpayCoins)}
-          </span>
-          {inRoom ? (
-            <div className="relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center gap-1">
-              <div className="flex w-full justify-center">
-                {canStart && (
-                  <button
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => void handleStartRound()}
-                    className="relative z-10 flex min-h-10 min-w-[140px] flex-col items-center justify-center rounded-xl px-5 py-1.5 text-sm font-bold text-white shadow-lg disabled:opacity-40"
-                    style={{
-                      background: "linear-gradient(180deg, #8B5CF6 0%, #6D28D9 55%, #5B21B6 100%)",
-                      boxShadow: "0 4px 24px rgba(124, 58, 237, 0.35)",
-                    }}
-                  >
-                    <span className="leading-tight tracking-wide">PLAY NOW</span>
-                    <span className="text-[10px] font-normal text-white/85">Start round</span>
-                  </button>
-                )}
-                {roundOpen && myTurn && (
-                  <button
-                    type="button"
-                    disabled={Boolean(rolling) || Boolean(busy)}
-                    onClick={() => void handleRoll()}
-                    className="relative z-10 h-10 animate-pulse rounded-xl px-5 text-sm font-semibold text-black disabled:opacity-40"
-                    style={{ backgroundColor: "#F5C842" }}
-                  >
-                    ROLL DICE
-                  </button>
-                )}
-                {roundOpen && !myTurn && (
-                  <span className="text-xs text-white/40">Waiting for roll…</span>
-                )}
-              </div>
-              {canCoverBank && (
+            <div className="mt-6 w-full max-w-md space-y-3 px-1">
+              {inRoom && canStart && (
+                <button
+                  type="button"
+                  disabled={Boolean(busy)}
+                  onClick={() => void handleStartRound()}
+                  className={`w-full rounded-xl bg-gradient-to-r from-[#f5c842] to-[#d4a828] py-4 text-xl font-semibold text-black shadow-[0_0_30px_rgba(245,200,66,0.4)] transition hover:scale-[1.02] disabled:opacity-40 ${cinzel.className}`}
+                >
+                  START GAME
+                </button>
+              )}
+              {inRoom && roundOpen && myTurn && (
+                <button
+                  type="button"
+                  disabled={Boolean(rolling) || Boolean(busy) || Boolean(round?.roll_processing)}
+                  onClick={() => void handleRoll()}
+                  className={`w-full rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 py-4 text-xl font-semibold text-[#f5c842] shadow-[0_0_30px_rgba(124,58,237,0.4)] transition hover:scale-[1.02] disabled:opacity-40 ${cinzel.className}`}
+                >
+                  ROLL DICE
+                </button>
+              )}
+              {inRoom && roundOpen && !myTurn && !round?.roll_processing && (
+                <p className={`${cinzel.className} text-center text-sm tracking-wide text-purple-200/90`}>
+                  {currentRollerId ? `Waiting for ${currentRollerName} to roll…` : "Waiting for next roll…"}
+                </p>
+              )}
+              {inRoom && round?.roll_processing && (
+                <p className={`${cinzel.className} text-center text-sm text-amber-200/90`}>Resolving roll…</p>
+              )}
+              {inRoom && canCoverBank && (
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => setShowCoverConfirm(true)}
-                  className="relative z-10 rounded-lg border px-2 py-1 text-[10px] font-semibold"
-                  style={{ borderColor: "#F5C842", color: "#F5C842" }}
+                  className="w-full rounded-lg border border-[#f5c842] py-2 text-xs font-semibold text-[#f5c842]"
                 >
                   COVER THE BANK ({bank.toLocaleString()} GPC)
                 </button>
               )}
             </div>
-          ) : (
-            <div className="relative z-10 min-w-0 flex-1" />
-          )}
+
+            <div className="mt-4 flex w-full flex-wrap justify-center gap-2 px-2">
+              {seatPlayers.map((p) => (
+                <div key={p.user_id} className="max-w-[88px] text-center text-[10px] text-white/80">
+                  <div>Seat {p.seat_number ?? "?"}</div>
+                  <div className="truncate">{displayNames[p.user_id] ?? "?"}</div>
+                </div>
+              ))}
+            </div>
+
+            {!inRoom && (
+              <div className="relative z-[5] mt-4 w-full max-w-sm space-y-2">
+                <p className="text-center text-sm text-white/70">
+                  Join this table with an entry (multiplier of {minEntry} GPC).
+                </p>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-purple-700/50 bg-purple-950/60 px-3 py-2 text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
+                  value={joinEntry}
+                  min={minEntry}
+                  step={minEntry}
+                  onChange={(e) => setJoinEntry(parseInt(e.target.value, 10) || minEntry)}
+                />
+                <button
+                  type="button"
+                  disabled={busy || joinEntry < minEntry || joinEntry % minEntry !== 0}
+                  className="w-full rounded-xl py-3 font-semibold text-black disabled:opacity-40"
+                  style={{ backgroundColor: "#F5C842" }}
+                  onClick={() => void handleJoin()}
+                >
+                  JOIN TABLE
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 md:hidden ${
+            mobileMainTab === "side" ? "flex" : "hidden"
+          }`}
+        >
+          {sidePanelInner}
+        </div>
+        <div
+          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 md:hidden ${
+            mobileMainTab === "chat" ? "flex" : "hidden"
+          }`}
+        >
+          {chatBlock}
+        </div>
+
+        <div className="relative z-10 hidden h-[44px] shrink-0 items-center justify-end gap-2 border-t border-purple-800/40 bg-[#0e0118]/95 px-2.5 backdrop-blur-sm md:flex">
+          <span className="shrink-0 font-mono text-xs text-[#f5c842]">{formatGPC(gpayCoins)}</span>
           <Link
             href="/dashboard/coins/buy"
-            className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 text-lg leading-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 text-lg leading-none"
             aria-label="Dice shop"
           >
             🛒
           </Link>
-        </div>
-
-        <div className="relative z-10 flex h-10 shrink-0 border-t border-purple-800/30 bg-[#0e0118]/95 md:hidden">
-          <button
-            type="button"
-            className={`relative z-10 flex h-full flex-1 items-center justify-center border-b-2 text-xs font-semibold tracking-wide transition-colors ${
-              activeTab === "side" && tabOpen
-                ? "border-[#f5c842] text-[#f5c842]"
-                : "border-transparent text-white/45 hover:text-[#f5c842]/80"
-            }`}
-            onClick={() => handleTabClick("side")}
-          >
-            SIDE
-          </button>
-          <button
-            type="button"
-            className={`relative z-10 flex h-full flex-1 items-center justify-center border-b-2 text-xs font-semibold tracking-wide transition-colors ${
-              activeTab === "chat" && tabOpen
-                ? "border-[#f5c842] text-[#f5c842]"
-                : "border-transparent text-white/45 hover:border-purple-500/50 hover:text-[#f5c842]"
-            }`}
-            onClick={() => handleTabClick("chat")}
-          >
-            CHAT
-          </button>
-        </div>
-
-        <div
-          className="flex-shrink-0 overflow-hidden transition-[height] duration-200 ease-out md:hidden"
-          style={{
-            height: tabOpen ? 160 : 0,
-            background: "#0e0118",
-          }}
-        >
-          {tabOpen && (
-            <div className="flex h-[160px] flex-col overflow-hidden">
-              {activeTab === "chat" ? (
-                <div className="flex h-full min-h-0 flex-col">{chatBlock}</div>
-              ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto px-2">{sidePanelInner}</div>
-              )}
-            </div>
-          )}
         </div>
 
         <div className="shrink-0 bg-[#0e0118] md:hidden" style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
@@ -1313,6 +1380,51 @@ export default function CeloRoomPage() {
           <button type="button" className="w-full py-2 text-sm text-white/50" onClick={() => setShowCoverConfirm(false)}>
             CANCEL
           </button>
+        </div>
+      )}
+
+      {walletOpen && (
+        <div
+          className="fixed inset-0 z-[250] flex items-end justify-center bg-black/60 p-4 md:items-center"
+          role="dialog"
+          aria-modal
+        >
+          <div className="w-full max-w-md rounded-t-2xl border border-purple-800/40 bg-[#0e0118] p-5 md:rounded-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className={`${cinzel.className} text-lg text-[#f5c842]`}>Wallet</h3>
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1 text-sm text-white/60 hover:bg-white/10"
+                onClick={() => setWalletOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-white/55">Buy, convert, or redeem without leaving the table.</p>
+            <div className="grid grid-cols-1 gap-2">
+              <Link
+                href="/dashboard/wallet"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-gradient-to-b from-amber-100 to-amber-600 px-3 text-sm font-bold uppercase tracking-wide text-[#0a0610] shadow-sm ring-1 ring-amber-300/40"
+                onClick={() => setWalletOpen(false)}
+              >
+                Buy GC
+              </Link>
+              <Link
+                href="/dashboard/wallet#convert"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-violet-500/45 bg-violet-950/80 px-3 text-sm font-semibold uppercase tracking-wide text-violet-100"
+                onClick={() => setWalletOpen(false)}
+              >
+                Convert
+              </Link>
+              <Link
+                href="/dashboard/wallet#redeem"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-950/50 px-3 text-sm font-semibold uppercase tracking-wide text-emerald-100"
+                onClick={() => setWalletOpen(false)}
+              >
+                Redeem
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 

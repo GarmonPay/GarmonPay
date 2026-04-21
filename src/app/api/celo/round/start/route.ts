@@ -77,6 +77,13 @@ export async function POST(req: Request) {
   }
 
   const prizePool = withEntry.reduce((s, p) => s + Math.floor(Number((p as { entry_sc?: number }).entry_sc ?? 0)), 0);
+  const minimumEntry = Math.floor(Number(room.minimum_entry_sc ?? 500));
+  if (prizePool < minimumEntry) {
+    return NextResponse.json(
+      { message: `Prize pool must be at least ${minimumEntry} GPC (minimum entry)` },
+      { status: 400 }
+    );
+  }
   const platformFee = Math.floor((prizePool * 10) / 100);
 
   const { data: lastNum } = await adminClient
