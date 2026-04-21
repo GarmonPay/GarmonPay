@@ -167,10 +167,7 @@ export default function CeloLobbyPage() {
   }
 
   return (
-    <div
-      className={`${dmSans.className} min-h-screen text-white`}
-      style={{ backgroundColor: "#05010F", paddingBottom: 100 }}
-    >
+    <div className={`${dmSans.className} min-h-screen bg-[#0e0118] pb-[100px] text-white`}>
       <div className="max-w-5xl mx-auto px-4 pt-8 pb-4">
         <div
           className="rounded-2xl p-6 md:p-8 mb-8 relative overflow-hidden"
@@ -224,7 +221,7 @@ export default function CeloLobbyPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/35 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
             <span>{error}</span>
             <button type="button" className="underline" onClick={() => void loadRooms()}>
               Retry
@@ -364,9 +361,9 @@ export default function CeloLobbyPage() {
               }
             />
             <p className="text-xs text-white/40 mb-2">Available: {formatGPC(gpayCoins)}</p>
-            {createError && <p className="text-xs text-red-400 mb-2">{createError}</p>}
+            {createError && <p className="mb-2 text-xs text-orange-300/95">{createError}</p>}
             {form.starting_bank_sc > gpayCoins && (
-              <p className="text-xs text-red-400 mb-2">Insufficient GPC for this bank.</p>
+              <p className="mb-2 text-xs text-orange-300/95">Insufficient GPC for this bank.</p>
             )}
             <div className="flex gap-2">
               <button

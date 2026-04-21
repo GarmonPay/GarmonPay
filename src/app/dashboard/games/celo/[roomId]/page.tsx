@@ -752,11 +752,11 @@ export default function CeloRoomPage() {
   const potentialWin = Math.floor(sideBetAmount * sideBetOdds);
 
   const chatBlock = (
-    <div className="flex flex-col flex-1 min-h-0">
-      <div className={`${cinzel.className} text-xs px-2 py-2 shrink-0`} style={{ color: "#F5C842" }}>
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
+      <div className={`${cinzel.className} shrink-0 px-0 py-2 text-xs font-semibold uppercase tracking-wider text-[#f5c842]`}>
         💬 CHAT
       </div>
-      <div className="flex-1 overflow-y-auto px-2 space-y-2 min-h-0">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-0">
         {messages.map((m) =>
           m.is_system ? (
             <div
@@ -776,14 +776,18 @@ export default function CeloRoomPage() {
           )
         )}
       </div>
-      <div className="flex gap-2 p-2 border-t border-white/10 shrink-0">
+      <div className="mt-2 flex shrink-0 gap-2 border-t border-[#f5c842]/15 pt-3">
         <input
-          className="flex-1 rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs"
+          className="flex-1 rounded-lg border border-purple-700/50 bg-purple-950/60 px-2 py-2 text-xs text-white placeholder:text-white/35 focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
           placeholder="Message…"
         />
-        <button type="button" className="text-xs px-3 py-1 rounded-lg bg-[#7C3AED]" onClick={() => void sendChat()}>
+        <button
+          type="button"
+          className="rounded-lg border border-purple-600/60 bg-transparent px-3 py-2 text-xs font-semibold tracking-wide text-[#f5c842] transition hover:border-[#f5c842]/80 hover:bg-purple-950/40"
+          onClick={() => void sendChat()}
+        >
           SEND
         </button>
       </div>
@@ -791,16 +795,16 @@ export default function CeloRoomPage() {
   );
 
   const sidePanelInner = (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div className={`${cinzel.className} text-xs px-2 py-2 shrink-0`} style={{ color: "#F5C842" }}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
+      <div className={`${cinzel.className} shrink-0 px-0 py-2 text-xs font-semibold uppercase tracking-wider text-[#f5c842]`}>
         🎰 SIDE ENTRIES
       </div>
 
-      <div className="px-2 space-y-3 pb-3">
+      <div className="space-y-3 px-0 pb-3">
         <div>
-          <p className="text-[10px] text-white/50 mb-1">Open from others</p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#f5c842]">Open from others</p>
           {openSideFromOthers.length === 0 ? (
-            <p className="text-xs text-white/40">No open entries</p>
+            <p className="text-xs text-white/50">No open entries</p>
           ) : (
             openSideFromOthers.map((b) => {
               const odds = Number(b.odds_multiplier ?? SIDE_ODDS[b.bet_type] ?? 2);
@@ -811,7 +815,7 @@ export default function CeloRoomPage() {
               return (
                 <div
                   key={b.id}
-                  className="rounded-lg border border-white/10 bg-black/20 p-2 mb-2 text-[11px] space-y-1"
+                  className="mb-2 space-y-1 rounded-lg border border-purple-800/35 bg-purple-950/30 p-2 text-[11px]"
                 >
                   <div className="text-white/90 font-medium truncate">{creatorLabel}</div>
                   <div className="text-white/70">{betPredictionText(b.bet_type, b.specific_point)}</div>
@@ -834,10 +838,10 @@ export default function CeloRoomPage() {
           )}
         </div>
 
-        <div className="border-t border-white/10 pt-2">
-          <p className="text-[10px] text-white/50 mb-1">Post a side entry</p>
+        <div className="border-t border-[#f5c842]/15 pt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#f5c842]">Post a side entry</p>
           <select
-            className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-2"
+            className="mb-2 w-full rounded-lg border border-purple-700/50 bg-purple-950/60 px-2 py-2 text-xs text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
             value={sideBetType}
             onChange={(e) => setSideBetType(e.target.value)}
           >
@@ -852,7 +856,7 @@ export default function CeloRoomPage() {
               type="number"
               min={2}
               max={6}
-              className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-2"
+              className="mb-2 w-full rounded-lg border border-purple-700/50 bg-purple-950/60 px-2 py-2 text-xs text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
               value={sideBetPoint}
               onChange={(e) => setSideBetPoint(parseInt(e.target.value, 10) || 4)}
             />
@@ -861,32 +865,35 @@ export default function CeloRoomPage() {
             type="number"
             step={100}
             min={100}
-            className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs mb-1"
+            className="mb-1 w-full rounded-lg border border-purple-700/50 bg-purple-950/60 px-2 py-2 text-xs text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
             value={sideBetAmount}
             onChange={(e) => setSideBetAmount(parseInt(e.target.value, 10) || 100)}
           />
-          <p className="text-[10px] text-white/50 mb-2">
+          <p className="mb-2 text-sm text-purple-300">
             Potential win: {potentialWin.toLocaleString()} GPC at ×{sideBetOdds.toFixed(1)}
           </p>
           <button
             type="button"
             disabled={busy || !round?.id}
-            className="w-full rounded-lg py-2 text-xs font-semibold text-white disabled:opacity-40"
-            style={{ backgroundColor: "#7C3AED" }}
+            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 py-2.5 text-xs font-semibold tracking-wide text-[#f5c842] shadow-sm transition hover:from-purple-500 hover:to-purple-600 disabled:opacity-40"
             onClick={() => void postSideBet()}
           >
             POST
           </button>
         </div>
 
-        <div className="border-t border-white/10 pt-2">
-          <p className="text-[10px] text-white/50 mb-1">My open</p>
+        <div className="border-t border-[#f5c842]/15 pt-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#f5c842]">My open</p>
           {myOpenSide.map((b) => (
             <div key={b.id} className="flex justify-between items-center text-xs py-1">
               <span className="text-white/80 truncate">
                 {betPredictionText(b.bet_type, b.specific_point)} · {b.amount_cents} GPC · OPEN
               </span>
-              <button type="button" className="text-red-400 shrink-0 ml-2" onClick={() => void cancelSideBet(b.id)}>
+              <button
+                type="button"
+                className="ml-2 shrink-0 text-orange-300/90 hover:text-orange-200"
+                onClick={() => void cancelSideBet(b.id)}
+              >
                 CANCEL
               </button>
             </div>
@@ -895,7 +902,7 @@ export default function CeloRoomPage() {
         </div>
 
         <div>
-          <p className="text-[10px] text-white/50 mb-1">Matched</p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#f5c842]">Matched</p>
           {myMatched.map((b) => (
             <div key={b.id} className="text-xs text-white/70 py-0.5">
               {betPredictionText(b.bet_type, b.specific_point)} · MATCHED
@@ -905,7 +912,7 @@ export default function CeloRoomPage() {
         </div>
 
         <div>
-          <p className="text-[10px] text-white/50 mb-1">Settled (this round)</p>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#f5c842]">Settled (this round)</p>
           {settledThisRound
             .filter((b) => b.creator_id === userId || b.acceptor_id === userId)
             .map((b) => {
@@ -915,7 +922,7 @@ export default function CeloRoomPage() {
               return (
                 <div
                   key={b.id}
-                  className={`text-xs py-0.5 ${iWon ? "text-emerald-400" : "text-red-400"}`}
+                  className={`text-xs py-0.5 ${iWon ? "text-emerald-400" : "text-orange-300/90"}`}
                 >
                   {iWon ? `+${pay.toLocaleString()} GPC` : `-${stake.toLocaleString()} GPC`}
                 </div>
@@ -928,7 +935,7 @@ export default function CeloRoomPage() {
 
   if (!room && !error) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-white" style={{ background: "#05010F" }}>
+      <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center bg-[#0e0118] text-white">
         <p className={dmSans.className}>Loading…</p>
       </div>
     );
@@ -936,9 +943,9 @@ export default function CeloRoomPage() {
 
   if (!room) {
     return (
-      <div className="flex h-full w-full flex-col p-6 text-white" style={{ background: "#05010F" }}>
+      <div className={`flex h-full min-h-0 w-full flex-1 flex-col bg-[#0e0118] p-6 text-white ${dmSans.className}`}>
         <p>{error ?? "Not found"}</p>
-        <Link href="/dashboard/games/celo" className="mt-4 inline-block text-[#7C3AED] underline">
+        <Link href="/dashboard/games/celo" className="mt-4 inline-block text-violet-400 underline hover:text-violet-300">
           Back to lobby
         </Link>
       </div>
@@ -946,45 +953,12 @@ export default function CeloRoomPage() {
   }
 
   return (
-    <>
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          background: "red",
-          color: "white",
-          fontSize: "28px",
-          textAlign: "center",
-          padding: "20px",
-          fontWeight: "bold",
-          zIndex: 9999,
-        }}
-      >
-        LIVE BUILD TEST — CELO ROOM UPDATED
-      </div>
     <div
-      className={`${dmSans.className} flex flex-col overflow-hidden text-white md:flex-row`}
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "#05010F",
-        paddingTop: "76px",
-      }}
+      className={`${dmSans.className} flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#0e0118] text-white md:flex-row`}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-[65%] md:flex-[0_0_65%]">
         <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
-        <header
-          className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4"
-          style={{
-            background: "rgba(5,1,15,0.97)",
-            borderBottom: "1px solid rgba(124,58,237,0.25)",
-          }}
-        >
+        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-purple-800/40 bg-[#0e0118]/95 px-4 backdrop-blur-sm">
           <button
             type="button"
             onClick={() => router.push("/dashboard/games/celo")}
@@ -1008,26 +982,22 @@ export default function CeloRoomPage() {
           </span>
         </header>
 
-        <div
-          className="grid h-[56px] shrink-0 grid-cols-3 border-b text-[10px] md:text-xs"
-          style={{
-            background: "rgba(13,5,32,0.95)",
-            borderBottom: "1px solid rgba(245,200,66,0.12)",
-          }}
-        >
-          <div className="flex flex-col justify-center truncate px-2">
-            <span className="text-white/40">Banker</span>
-            <span className="truncate font-medium text-white">
-              {displayNames[String(room.banker_id ?? "")] ?? "—"}
-            </span>
-          </div>
-          <div className="flex flex-col items-center justify-center">
-            <span className="text-white/40">Prize pool</span>
-            <span style={{ color: "#F5C842" }}>{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
-          </div>
-          <div className="flex flex-col items-end justify-center px-2">
-            <span className="text-white/40">Bank</span>
-            <span style={{ color: "#F5C842" }}>{bank.toLocaleString()} GPC</span>
+        <div className="mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
+          <div className="grid grid-cols-3 gap-2 divide-x divide-[#f5c842]/20 text-[10px] md:text-xs">
+            <div className="flex flex-col justify-center truncate pr-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Banker</span>
+              <span className="truncate text-xl font-bold text-white">
+                {displayNames[String(room.banker_id ?? "")] ?? "—"}
+              </span>
+            </div>
+            <div className="flex flex-col items-center justify-center px-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Prize pool</span>
+              <span className="text-xl font-bold text-white">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
+            </div>
+            <div className="flex flex-col items-end justify-center pl-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Bank</span>
+              <span className="text-xl font-bold text-white">{bank.toLocaleString()} GPC</span>
+            </div>
           </div>
         </div>
 
@@ -1040,26 +1010,25 @@ export default function CeloRoomPage() {
             }}
           />
           {bankerPlayer && (
-            <div className="pointer-events-none absolute left-1/2 top-2 z-[3] flex -translate-x-1/2 flex-col items-center gap-0.5 text-[10px] text-white/90">
-              <span className="text-white/50">BANKER</span>
-              <span className="max-w-[120px] truncate font-medium">
-                {displayNames[bankerPlayer.user_id] ?? "—"}
-              </span>
+            <div
+              className={`${cinzel.className} pointer-events-none absolute left-1/2 top-2 z-[3] flex -translate-x-1/2 flex-col items-center gap-0.5 tracking-wider`}
+            >
+              <span className="text-sm text-[#f5c842] md:text-base">BANKER {displayNames[bankerPlayer.user_id] ?? "—"}</span>
             </div>
           )}
           <div
-            className="relative z-[2] flex shrink-0 flex-col items-center justify-center rounded-[50%] border-[7px] border-[#6B4423] shadow-[0_12px_48px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,200,66,0.12)]"
+            className="relative z-[2] flex shrink-0 flex-col items-center justify-center rounded-[50%] border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2),0_12px_48px_rgba(0,0,0,0.55)]"
             style={{
               width: "min(280px, 85vw)",
               height: "min(180px, 28vh)",
-              background: "radial-gradient(ellipse at center, #0f3d0f 0%, #0a2a0a 55%, #051805 100%)",
+              background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 55%, #0f172a 100%)",
               boxShadow:
-                "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55)",
+                "inset 0 0 80px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.06), 0 12px 48px rgba(0,0,0,0.55), 0 0 40px rgba(245,200,66,0.2)",
             }}
           >
             <span
-              className="pointer-events-none absolute select-none text-[72px] font-black"
-              style={{ color: "rgba(255,255,255,0.06)" }}
+              className={`${cinzel.className} pointer-events-none absolute select-none text-[72px] font-black`}
+              style={{ color: "rgba(245, 200, 66, 0.1)" }}
             >
               GP
             </span>
@@ -1085,7 +1054,9 @@ export default function CeloRoomPage() {
                 />
               </div>
             ) : (
-              <p className="relative z-[1] text-sm text-white/40">Waiting for roll…</p>
+              <p className={`${cinzel.className} relative z-[1] text-sm tracking-wide text-amber-200/80`}>
+                Waiting for roll…
+              </p>
             )}
             <RollNameDisplay rollName={displayRollName} result={null} />
           </div>
@@ -1107,7 +1078,7 @@ export default function CeloRoomPage() {
               <p className="text-sm text-white/70">Join this table with an entry (multiplier of {minEntry} GPC).</p>
               <input
                 type="number"
-                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2"
+                className="w-full rounded-xl border border-purple-700/50 bg-purple-950/60 px-3 py-2 text-white focus:border-[#f5c842] focus:outline-none focus:ring-1 focus:ring-[#f5c842]/40"
                 value={joinEntry}
                 min={minEntry}
                 step={minEntry}
@@ -1126,13 +1097,7 @@ export default function CeloRoomPage() {
           )}
         </div>
 
-        <div
-          className="relative z-10 flex h-[52px] shrink-0 items-center gap-2 border-t px-2.5"
-          style={{
-            background: "rgba(5,1,15,0.97)",
-            borderTop: "1px solid rgba(124,58,237,0.2)",
-          }}
-        >
+        <div className="relative z-10 flex h-[52px] shrink-0 items-center gap-2 border-t border-purple-800/40 bg-[#0e0118]/95 px-2.5 backdrop-blur-sm">
           <span className="relative z-10 shrink-0 text-xs font-mono" style={{ color: "#F5C842" }}>
             {formatGPC(gpayCoins)}
           </span>
@@ -1193,33 +1158,25 @@ export default function CeloRoomPage() {
           </Link>
         </div>
 
-        <div
-          className="relative z-10 flex h-10 shrink-0 md:hidden"
-          style={{
-            background: "rgba(5,1,15,0.97)",
-            borderTop: "1px solid rgba(124,58,237,0.1)",
-          }}
-        >
+        <div className="relative z-10 flex h-10 shrink-0 border-t border-purple-800/30 bg-[#0e0118]/95 md:hidden">
           <button
             type="button"
-            className="relative z-10 flex h-full flex-1 items-center justify-center text-xs font-semibold"
-            style={{
-              color: activeTab === "side" ? "#F5C842" : "rgba(255,255,255,0.45)",
-              borderBottom:
-                activeTab === "side" && tabOpen ? "2px solid #F5C842" : "2px solid transparent",
-            }}
+            className={`relative z-10 flex h-full flex-1 items-center justify-center border-b-2 text-xs font-semibold tracking-wide transition-colors ${
+              activeTab === "side" && tabOpen
+                ? "border-[#f5c842] text-[#f5c842]"
+                : "border-transparent text-white/45 hover:text-[#f5c842]/80"
+            }`}
             onClick={() => handleTabClick("side")}
           >
             SIDE
           </button>
           <button
             type="button"
-            className="relative z-10 flex h-full flex-1 items-center justify-center text-xs font-semibold"
-            style={{
-              color: activeTab === "chat" ? "#F5C842" : "rgba(255,255,255,0.45)",
-              borderBottom:
-                activeTab === "chat" && tabOpen ? "2px solid #F5C842" : "2px solid transparent",
-            }}
+            className={`relative z-10 flex h-full flex-1 items-center justify-center border-b-2 text-xs font-semibold tracking-wide transition-colors ${
+              activeTab === "chat" && tabOpen
+                ? "border-[#f5c842] text-[#f5c842]"
+                : "border-transparent text-white/45 hover:border-purple-500/50 hover:text-[#f5c842]"
+            }`}
             onClick={() => handleTabClick("chat")}
           >
             CHAT
@@ -1230,7 +1187,7 @@ export default function CeloRoomPage() {
           className="flex-shrink-0 overflow-hidden transition-[height] duration-200 ease-out md:hidden"
           style={{
             height: tabOpen ? 160 : 0,
-            background: "rgba(13,5,32,0.98)",
+            background: "#0e0118",
           }}
         >
           {tabOpen && (
@@ -1244,35 +1201,18 @@ export default function CeloRoomPage() {
           )}
         </div>
 
-        <div
-          className="shrink-0 md:hidden"
-          style={{
-            height: "env(safe-area-inset-bottom, 0px)",
-            background: "rgba(5,1,15,0.97)",
-          }}
-        />
+        <div className="shrink-0 bg-[#0e0118] md:hidden" style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
         </div>
       </div>
 
-      <aside
-        className="hidden min-h-0 flex-[0_0_35%] flex-col border-l md:flex md:max-w-[35%]"
-        style={{
-          borderLeft: "1px solid rgba(124,58,237,0.2)",
-          background: "rgba(5,1,15,0.97)",
-        }}
-      >
-        <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden border-b border-white/10">
-          {sidePanelInner}
-        </div>
+      <aside className="hidden min-h-0 flex-[0_0_35%] flex-col gap-3 border-l border-purple-800/40 bg-[#0e0118] p-3 md:flex md:max-w-[35%]">
+        <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden">{sidePanelInner}</div>
         <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden">{chatBlock}</div>
       </aside>
 
       {showLowerBank && isBanker && (
-        <div
-          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2"
-          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
-        >
-          <h3 className={`${cinzel.className} text-lg mb-2 text-center`} style={{ color: "#F5C842" }}>
+        <div className="fixed bottom-0 left-0 right-0 z-[200] rounded-t-[20px] border-t-2 border-[#f5c842] bg-[#0e0118] p-6">
+          <h3 className={`${cinzel.className} mb-2 text-center text-lg`} style={{ color: "#F5C842" }}>
             Lower Your Bank?
           </h3>
           <p className="text-center text-sm text-white/80 mb-1">{lowerBankCountdown}s remaining</p>
@@ -1322,17 +1262,14 @@ export default function CeloRoomPage() {
       )}
 
       {showBecomeBanker && (
-        <div
-          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2 text-center"
-          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
-        >
+        <div className="fixed bottom-0 left-0 right-0 z-[200] rounded-t-[20px] border-t-2 border-[#f5c842] bg-[#0e0118] p-6 text-center">
           <div className="text-5xl mb-2">🎲</div>
           <h3 className={`${cinzel.className} text-2xl mb-2`} style={{ color: "#F5C842" }}>
             YOU ROLLED C-LO!
           </h3>
           <p className="text-sm text-white/85 mb-2">Do you want to become the Banker?</p>
           <p className="text-sm mb-2">You need {bank.toLocaleString()} GPC</p>
-          <p className={`text-sm mb-2 ${gpayCoins >= bank ? "text-emerald-400" : "text-red-400"}`}>
+          <p className={`mb-2 text-sm ${gpayCoins >= bank ? "text-emerald-400" : "text-orange-300/95"}`}>
             You have: {gpayCoins.toLocaleString()} GPC {gpayCoins >= bank ? "✓" : "✗"}
           </p>
           <div className="h-2 w-full bg-white/10 rounded-full mb-2 overflow-hidden max-w-xs mx-auto">
@@ -1358,10 +1295,7 @@ export default function CeloRoomPage() {
       )}
 
       {showCoverConfirm && (
-        <div
-          className="fixed left-0 right-0 bottom-0 p-6 z-[200] rounded-t-[20px] border-t-2"
-          style={{ backgroundColor: "#0D0520", borderColor: "#F5C842" }}
-        >
+        <div className="fixed bottom-0 left-0 right-0 z-[200] rounded-t-[20px] border-t-2 border-[#f5c842] bg-[#0e0118] p-6">
           <h3 className={`${cinzel.className} text-lg mb-2 text-center`} style={{ color: "#F5C842" }}>
             Cover the Entire Bank
           </h3>
@@ -1383,11 +1317,10 @@ export default function CeloRoomPage() {
       )}
 
       {error && (
-        <div className="fixed bottom-4 left-3 right-3 z-[300] rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <div className="fixed bottom-4 left-3 right-3 z-[300] rounded-xl border border-amber-500/35 bg-amber-950/35 px-3 py-2 text-xs text-amber-100">
           {error}
         </div>
       )}
     </div>
-    </>
   );
 }
