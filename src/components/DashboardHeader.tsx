@@ -53,7 +53,18 @@ export function DashboardHeader() {
           </Link>
               <HeaderNavIcons />
             </div>
-            <DashboardCoinBalances compact />
+            {isCeloRoute ? (
+              <div className="flex justify-end pt-0.5">
+                <Link
+                  href="/dashboard/wallet"
+                  className="text-[11px] font-semibold text-[#f5c842] underline-offset-2 hover:underline"
+                >
+                  Wallet & balances
+                </Link>
+              </div>
+            ) : (
+              <DashboardCoinBalances compact />
+            )}
           </div>
         </div>
       </div>

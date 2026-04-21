@@ -783,7 +783,7 @@ export default function CeloRoomPage() {
   const potentialWin = Math.floor(sideBetAmount * sideBetOdds);
 
   const chatBlock = (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 tablet:p-6">
       <div className={`${cinzel.className} shrink-0 px-0 py-2 text-xs font-semibold uppercase tracking-wider text-[#f5c842]`}>
         💬 CHAT
       </div>
@@ -826,7 +826,7 @@ export default function CeloRoomPage() {
   );
 
   const sidePanelInner = (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:p-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 tablet:p-6">
       <div className={`${cinzel.className} shrink-0 px-0 py-2 text-xs font-semibold uppercase tracking-wider text-[#f5c842]`}>
         🎰 SIDE ENTRIES
       </div>
@@ -985,11 +985,11 @@ export default function CeloRoomPage() {
 
   return (
     <div
-      className={`${dmSans.className} flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#0e0118] text-white md:grid md:min-h-0 md:grid-cols-[1fr_min(400px,42vw)] md:gap-4 md:overflow-hidden`}
+      className={`${dmSans.className} flex h-full min-h-0 w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-x-hidden overflow-y-hidden bg-[#0e0118] text-white tablet:grid tablet:min-h-0 tablet:grid-cols-[1fr_min(400px,42vw)] tablet:gap-4 tablet:overflow-hidden`}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:min-h-0 md:overflow-hidden">
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
-        <div className="shrink-0 space-y-2 border-b border-purple-800/40 px-2 py-2 md:hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col tablet:min-h-0 tablet:overflow-hidden">
+        <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-6xl flex-col">
+        <div className="shrink-0 space-y-2 border-b border-purple-800/40 px-2 py-2 tablet:hidden">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -1037,19 +1037,19 @@ export default function CeloRoomPage() {
                 key={t}
                 type="button"
                 onClick={() => setMobileMainTab(t)}
-                className={`flex-1 rounded-lg py-2 text-sm transition ${cinzel.className} ${
+                className={`flex-1 rounded-lg py-2 text-xs transition tablet:text-sm ${cinzel.className} ${
                   mobileMainTab === t
                     ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] font-semibold text-black"
                     : "text-purple-200 hover:bg-purple-900/40"
                 }`}
               >
-                {t === "game" ? "Game" : t === "side" ? "Side Entries" : "Chat"}
+                {t === "game" ? "Game" : t === "side" ? "Side" : "Chat"}
               </button>
             ))}
           </div>
         </div>
 
-        <header className="relative z-10 hidden h-14 shrink-0 items-center justify-between gap-3 border-b border-purple-800/40 bg-[#0e0118]/95 px-4 backdrop-blur-sm md:flex">
+        <header className="relative z-10 hidden h-14 shrink-0 items-center justify-between gap-3 border-b border-purple-800/40 bg-[#0e0118]/95 px-4 backdrop-blur-sm tablet:flex">
           <button
             type="button"
             onClick={() => router.push("/dashboard/games/celo")}
@@ -1058,7 +1058,7 @@ export default function CeloRoomPage() {
             ← Lobby
           </button>
           <div className="min-w-0 flex-1 text-center">
-            <span className={`${cinzel.className} block truncate text-sm md:text-base`} style={{ color: "#F5C842" }}>
+            <span className={`${cinzel.className} block truncate text-sm tablet:text-base`} style={{ color: "#F5C842" }}>
               {room.name ?? "Table"}
             </span>
             <span className="text-[10px] uppercase tracking-wider text-white/45">
@@ -1076,31 +1076,31 @@ export default function CeloRoomPage() {
         </header>
 
         <div
-          className={`mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 md:mx-3 md:p-6 ${
-            mobileMainTab !== "game" ? "hidden md:block" : ""
+          className={`mx-3 my-2 shrink-0 rounded-2xl border border-purple-800/40 bg-gradient-to-br from-purple-950/40 to-black/60 p-4 tablet:mx-3 tablet:p-6 ${
+            mobileMainTab !== "game" ? "hidden tablet:block" : ""
           }`}
         >
-          <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:divide-x md:divide-[#f5c842]/20">
-            <div className="flex w-40 min-w-0 shrink-0 flex-col justify-center md:w-auto md:pr-2">
+          <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:gap-2 tablet:divide-x tablet:divide-[#f5c842]/20">
+            <div className="flex min-w-0 flex-col justify-center tablet:pr-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Banker</span>
-              <span className="truncate text-lg font-bold text-white md:text-xl">
+              <span className="break-words text-lg font-bold text-white tablet:text-xl">
                 {displayNames[String(room.banker_id ?? "")] ?? "—"}
               </span>
             </div>
-            <div className="flex w-40 shrink-0 flex-col items-center justify-center md:w-auto md:px-2">
+            <div className="flex min-w-0 flex-col items-start justify-center tablet:items-center tablet:px-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Prize pool</span>
-              <span className="text-lg font-bold text-white md:text-xl">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
+              <span className="text-lg font-bold text-white tablet:text-xl">{(round?.prize_pool_sc ?? 0).toLocaleString()} GPC</span>
             </div>
-            <div className="flex w-40 shrink-0 flex-col items-end justify-center md:w-auto md:pl-2">
+            <div className="flex min-w-0 flex-col items-end justify-center tablet:pl-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#f5c842]">Bank</span>
-              <span className="text-lg font-bold text-white md:text-xl">{bank.toLocaleString()} GPC</span>
+              <span className="text-lg font-bold text-white tablet:text-xl">{bank.toLocaleString()} GPC</span>
             </div>
           </div>
         </div>
 
         <div
-          className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 md:overflow-hidden ${
-            mobileMainTab !== "game" ? "hidden md:flex" : "flex"
+          className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 tablet:overflow-hidden ${
+            mobileMainTab !== "game" ? "hidden tablet:flex" : "flex"
           }`}
         >
           <div
@@ -1121,7 +1121,7 @@ export default function CeloRoomPage() {
             )}
 
             <div
-              className="relative z-[2] mx-auto flex h-64 w-64 max-h-[70vw] max-w-[85vw] shrink-0 flex-col items-center justify-center rounded-full border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2)] md:h-[min(280px,28vh)] md:w-[min(280px,85vw)] md:max-w-none md:rounded-[50%]"
+              className="relative z-[2] mx-auto flex h-64 w-64 max-h-[70vw] max-w-[85vw] shrink-0 flex-col items-center justify-center rounded-full border-4 border-[#f5c842]/60 shadow-[0_0_40px_rgba(245,200,66,0.2)] tablet:h-[min(280px,28vh)] tablet:w-[min(280px,85vw)] tablet:max-w-none tablet:rounded-[50%]"
               style={{
                 background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 55%, #0f172a 100%)",
                 boxShadow:
@@ -1129,13 +1129,13 @@ export default function CeloRoomPage() {
               }}
             >
               <span
-                className={`${cinzel.className} pointer-events-none absolute select-none text-8xl font-black md:text-[72px]`}
+                className={`${cinzel.className} pointer-events-none absolute select-none text-8xl font-black tablet:text-[72px]`}
                 style={{ color: "rgba(245, 200, 66, 0.1)" }}
               >
                 GP
               </span>
               {displayDice ? (
-                <div className="relative z-[6] flex items-center justify-center gap-1.5 md:gap-2">
+                <div className="relative z-[6] flex items-center justify-center gap-1.5 tablet:gap-2">
                   <DiceFace
                     value={displayDice[0] as 0 | 1 | 2 | 3 | 4 | 5 | 6}
                     size={Math.min(diceSize, 52)}
@@ -1157,7 +1157,7 @@ export default function CeloRoomPage() {
                 </div>
               ) : (
                 <p
-                  className={`${cinzel.className} relative z-[10] max-w-[12rem] px-4 text-center text-sm tracking-wide text-[#f5c842]/80 md:text-base`}
+                  className={`${cinzel.className} relative z-[10] max-w-[12rem] px-4 text-center text-sm tracking-wide text-[#f5c842]/80 tablet:text-base`}
                 >
                   Waiting for roll…
                 </p>
@@ -1243,21 +1243,21 @@ export default function CeloRoomPage() {
         </div>
 
         <div
-          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 md:hidden ${
+          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 tablet:hidden ${
             mobileMainTab === "side" ? "flex" : "hidden"
           }`}
         >
           {sidePanelInner}
         </div>
         <div
-          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 md:hidden ${
+          className={`min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 tablet:hidden ${
             mobileMainTab === "chat" ? "flex" : "hidden"
           }`}
         >
           {chatBlock}
         </div>
 
-        <div className="relative z-10 hidden h-[44px] shrink-0 items-center justify-end gap-2 border-t border-purple-800/40 bg-[#0e0118]/95 px-2.5 backdrop-blur-sm md:flex">
+        <div className="relative z-10 hidden h-[44px] shrink-0 items-center justify-end gap-2 border-t border-purple-800/40 bg-[#0e0118]/95 px-2.5 backdrop-blur-sm tablet:flex">
           <span className="shrink-0 font-mono text-xs text-[#f5c842]">{formatGPC(gpayCoins)}</span>
           <Link
             href="/dashboard/coins/buy"
@@ -1268,11 +1268,11 @@ export default function CeloRoomPage() {
           </Link>
         </div>
 
-        <div className="shrink-0 bg-[#0e0118] md:hidden" style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
+        <div className="shrink-0 bg-[#0e0118] tablet:hidden" style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
         </div>
       </div>
 
-      <aside className="hidden min-h-0 flex-[0_0_35%] flex-col gap-3 border-l border-purple-800/40 bg-[#0e0118] p-3 md:flex md:max-w-[35%]">
+      <aside className="hidden min-h-0 flex-[0_0_35%] flex-col gap-3 border-l border-purple-800/40 bg-[#0e0118] p-3 tablet:flex tablet:max-w-[35%]">
         <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden">{sidePanelInner}</div>
         <div className="flex min-h-0 flex-[1_1_50%] flex-col overflow-hidden">{chatBlock}</div>
       </aside>
@@ -1385,11 +1385,11 @@ export default function CeloRoomPage() {
 
       {walletOpen && (
         <div
-          className="fixed inset-0 z-[250] flex items-end justify-center bg-black/60 p-4 md:items-center"
+          className="fixed inset-0 z-[250] flex items-end justify-center bg-black/60 p-4 tablet:items-center"
           role="dialog"
           aria-modal
         >
-          <div className="w-full max-w-md rounded-t-2xl border border-purple-800/40 bg-[#0e0118] p-5 md:rounded-2xl">
+          <div className="w-full max-w-md rounded-t-2xl border border-purple-800/40 bg-[#0e0118] p-5 tablet:rounded-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className={`${cinzel.className} text-lg text-[#f5c842]`}>Wallet</h3>
               <button
