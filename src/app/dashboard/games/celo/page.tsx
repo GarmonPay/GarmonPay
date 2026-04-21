@@ -10,8 +10,6 @@ import { useCoins } from "@/hooks/useCoins";
 const cinzel = Cinzel_Decorative({ weight: "400", subsets: ["latin"] });
 const dmSans = DM_Sans({ subsets: ["latin"] });
 
-type Filter = "all" | "micro" | "standard" | "high" | "vip";
-
 type RoomRow = {
   id: string;
   name: string;
@@ -39,7 +37,6 @@ export default function CeloLobbyPage() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
   const [names, setNames] = useState<Record<string, string>>({});
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({});
 
@@ -130,20 +127,8 @@ export default function CeloLobbyPage() {
     };
   }, [supabase, loadRooms]);
 
-  const filtered = useMemo(() => {
-    return rooms.filter((r) => {
-      const m = minEntry(r);
-      if (filter === "all") return true;
-      if (filter === "micro") return m <= 1000;
-      if (filter === "standard") return m >= 1001 && m <= 5000;
-      if (filter === "high") return m >= 5001 && m <= 10000;
-      if (filter === "vip") return m > 10000;
-      return true;
-    });
-  }, [rooms, filter]);
-
-  const gpcInPlay = useMemo(() => filtered.reduce((s, r) => s + bankAmt(r), 0), [filtered]);
-  const liveCount = filtered.length;
+  const gpcInPlay = useMemo(() => rooms.reduce((s, r) => s + bankAmt(r), 0), [rooms]);
+  const liveCount = rooms.length;
 
   async function handleCreate() {
     if (!form.name.trim()) {
@@ -180,14 +165,6 @@ export default function CeloLobbyPage() {
       void refresh();
     }
   }
-
-  const filters: { id: Filter; label: string }[] = [
-    { id: "all", label: "ALL" },
-    { id: "micro", label: "MICRO" },
-    { id: "standard", label: "STANDARD" },
-    { id: "high", label: "HIGH ROLLER" },
-    { id: "vip", label: "VIP" },
-  ];
 
   return (
     <div
@@ -246,23 +223,6 @@ export default function CeloLobbyPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-thin">
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold border border-white/10"
-              style={{
-                color: filter === f.id ? "#F5C842" : "rgba(255,255,255,0.55)",
-                borderBottom: filter === f.id ? "2px solid #F5C842" : undefined,
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
         {error && (
           <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex flex-wrap items-center gap-3">
             <span>{error}</span>
@@ -274,7 +234,7 @@ export default function CeloLobbyPage() {
 
         {loading ? (
           <p style={{ color: "#F5C842" }}>Loading tables…</p>
-        ) : filtered.length === 0 ? (
+        ) : rooms.length === 0 ? (
           <div className="text-center py-16 rounded-2xl border border-white/10" style={{ backgroundColor: "#0D0520" }}>
             <div className="text-4xl mb-3">🎲</div>
             <p className={`${cinzel.className} text-xl`} style={{ color: "#F5C842" }}>
@@ -292,7 +252,7 @@ export default function CeloLobbyPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filtered.map((r) => {
+            {rooms.map((r) => {
               const bid = r.banker_id ?? "";
               const bankerLabel = bid ? names[bid] ?? "…" : "—";
               const atTable = playerCounts[r.id] ?? 0;
