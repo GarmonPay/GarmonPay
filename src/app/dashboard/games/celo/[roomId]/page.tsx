@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
@@ -65,7 +65,7 @@ export default function CeloRoomPage() {
   const params = useParams();
   const roomId = String(params.roomId ?? "");
   const router = useRouter();
-  const supabase = createBrowserClient();
+  const supabase = useMemo(() => createBrowserClient(), []);
   const [me, setMe] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);

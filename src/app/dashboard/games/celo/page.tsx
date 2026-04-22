@@ -31,7 +31,8 @@ export default function CeloLobbyPage() {
     starting_bank_sc: 2000,
   });
   const [playerCount, setPlayerCount] = useState(0);
-  const supabase = createBrowserClient();
+  // Single stable client; creating a new client every render retriggered effects and left loading stuck.
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   const loadRooms = useCallback(async () => {
     if (!supabase) return;
@@ -81,8 +82,11 @@ export default function CeloLobbyPage() {
         return;
       }
       setLoading(true);
-      await loadRooms();
-      if (!cancelled) setLoading(false);
+      try {
+        await loadRooms();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
