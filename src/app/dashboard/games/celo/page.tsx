@@ -12,26 +12,8 @@ import { CeloRoomCard, type CeloRoomCardData } from "@/components/celo/CeloRoomC
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
 
-const CLOSED_STATUSES = new Set(["completed", "cancelled"]);
-
-const FILTERS = ["ALL", "MICRO", "STANDARD", "HIGH_ROLLER", "VIP"] as const;
-type RoomFilter = (typeof FILTERS)[number];
-
 const ENTRY_PILLS = [500, 1000, 2000, 5000, 10_000] as const;
 const DOLLAR = [5, 10, 20, 50, 100] as const;
-
-function minForFilter(r: CeloRoomCardData) {
-  return r.minimum_entry_sc ?? r.min_bet_cents ?? 0;
-}
-
-function inTier(m: number, f: RoomFilter) {
-  if (f === "ALL") return true;
-  if (f === "MICRO") return m <= 500;
-  if (f === "STANDARD") return m > 500 && m <= 5000;
-  if (f === "HIGH_ROLLER") return m > 5000 && m <= 20_000;
-  if (f === "VIP") return m > 20_000;
-  return true;
-}
 
 export default function CeloLobbyPage() {
   const router = useRouter();
@@ -39,7 +21,6 @@ export default function CeloLobbyPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [myBalance, setMyBalance] = useState(0);
-  const [filter, setFilter] = useState<RoomFilter>("ALL");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -70,14 +51,7 @@ export default function CeloLobbyPage() {
     setRooms((data as CeloRoomCardData[]) ?? []);
   }, [supabase]);
 
-  const openRooms = useMemo(
-    () => rooms.filter((r) => !CLOSED_STATUSES.has(String(r.status))),
-    [rooms]
-  );
-
-  const filteredRooms = useMemo(() => {
-    return openRooms.filter((room) => inTier(minForFilter(room), filter));
-  }, [openRooms, filter]);
+  const filteredRooms = rooms || [];
 
   const loadUser = useCallback(async () => {
     if (!supabase) return;
@@ -134,27 +108,27 @@ export default function CeloLobbyPage() {
 
   const totalGpc = useMemo(
     () =>
-      openRooms.reduce(
+      rooms.reduce(
         (s, r) => s + Math.max(0, r.current_bank_sc ?? r.current_bank_cents ?? 0),
         0
       ),
-    [openRooms]
+    [rooms]
   );
 
   useEffect(() => {
-    if (!supabase || openRooms.length === 0) {
+    if (!supabase || rooms.length === 0) {
       setPlayerCount(0);
       return;
     }
     void (async () => {
-      const ids = openRooms.map((r) => r.id);
+      const ids = rooms.map((r) => r.id);
       const { data, error } = await supabase
         .from("celo_room_players")
         .select("id")
         .in("room_id", ids);
       if (!error) setPlayerCount((data ?? []).length);
     })();
-  }, [supabase, openRooms]);
+  }, [supabase, rooms]);
 
   async function handleCreate() {
     setCreateError("");
@@ -249,7 +223,7 @@ export default function CeloLobbyPage() {
         </section>
 
         <div className="mb-4 flex flex-wrap justify-center gap-3 pt-2 font-mono text-[12px] text-[#9CA3AF]">
-          <span>🎲 {openRooms.length} tables live</span>
+          <span>🎲 {rooms.length} tables live</span>
           <span>💰 {totalGpc.toLocaleString()} GPC in play</span>
           <span>👥 {playerCount} seats taken</span>
         </div>
@@ -283,25 +257,6 @@ export default function CeloLobbyPage() {
           >
             CREATE TABLE
           </button>
-        </div>
-
-        <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-sm sm:gap-4">
-          {FILTERS.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setFilter(type)}
-              className={`min-h-[36px] rounded px-3 py-1 ${
-                filter === type
-                  ? "bg-yellow-500 text-black"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {type === "ALL"
-                ? "ALL"
-                : type.replaceAll("_", " ")}
-            </button>
-          ))}
         </div>
 
         <div>
@@ -340,23 +295,13 @@ export default function CeloLobbyPage() {
             </div>
           )}
 
-          {!loading && !err && openRooms.length === 0 && (
+          {!loading && !err && filteredRooms.length === 0 && (
             <div className="mt-6 text-center text-gray-400">
               No tables available. Create one to start playing.
             </div>
           )}
 
-          {!loading &&
-            !err &&
-            openRooms.length > 0 &&
-            filteredRooms.length === 0 && (
-            <div className="mt-6 text-center text-gray-400">
-              No tables match this filter. Try <span className="text-yellow-500/80">ALL</span> or
-              another tier.
-            </div>
-          )}
-
-          {!loading && !err && openRooms.length > 0 && filteredRooms.length > 0 && (
+          {!loading && !err && filteredRooms.length > 0 && (
             <ul className="w-full list-none p-0">
               {filteredRooms.map((room) => (
                 <li key={room.id}>
