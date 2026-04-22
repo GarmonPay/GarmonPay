@@ -26,17 +26,8 @@ function HeaderNavIcons({ className }: { className?: string }) {
 }
 
 export function DashboardHeader() {
-  const pathname = usePathname();
-  const isCeloRoute = pathname?.startsWith("/dashboard/games/celo") ?? false;
-
   return (
-    <header
-      className={`w-full shrink-0 border-b shadow-soft ${
-        isCeloRoute
-          ? "border-purple-800/40 bg-[#0e0118] backdrop-blur-sm"
-          : "glass-bar border-white/[0.06]"
-      }`}
-    >
+    <header className="w-full shrink-0 border-b shadow-soft glass-bar border-white/[0.06]">
       {/* Mobile / small: tight rows — title + icons, then wallet (see DashboardCoinBalances) */}
       <div className="tablet:hidden">
         <div className="mx-auto max-w-7xl px-3 py-1.5">
@@ -44,20 +35,13 @@ export function DashboardHeader() {
             <div className="flex items-center justify-between gap-2">
           <Link
             href="/dashboard"
-            className={`shrink-0 text-base font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90 ${
-              isCeloRoute ? "font-serif" : ""
-            }`}
-            style={isCeloRoute ? { fontFamily: "var(--font-cinzel-decorative), ui-serif, Georgia, serif" } : undefined}
+            className="shrink-0 text-base font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90"
           >
             GarmonPay
           </Link>
               <HeaderNavIcons />
             </div>
-            {isCeloRoute ? (
-              <DashboardCoinBalances compact hideCompactActionsOnMobile />
-            ) : (
-              <DashboardCoinBalances compact />
-            )}
+            <DashboardCoinBalances compact />
           </div>
         </div>
       </div>
@@ -65,16 +49,11 @@ export function DashboardHeader() {
       {/* Desktop / tablet: original single-row layout */}
       <div className="hidden tablet:block">
         <div
-          className={`mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 ${
-            isCeloRoute ? "py-2.5" : "py-3"
-          }`}
+          className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-3"
         >
           <Link
             href="/dashboard"
-            className={`shrink-0 text-lg font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90 tablet:text-xl ${
-              isCeloRoute ? "font-serif" : ""
-            }`}
-            style={isCeloRoute ? { fontFamily: "var(--font-cinzel-decorative), ui-serif, Georgia, serif" } : undefined}
+            className="shrink-0 text-lg font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90 tablet:text-xl"
           >
             GarmonPay
           </Link>

@@ -87,7 +87,7 @@ export function AnimatedDice({ isRolling, result, size = 80 }: AnimatedDiceProps
         filter: "drop-shadow(0 0 12px rgba(245,200,66,0.6))",
       }}
     >
-      <div className={idleFloat ? "celo-dice-float-inner" : undefined} style={{ width: "100%", height: "100%" }}>
+      <div className={idleFloat ? "dice-float-inner" : undefined} style={{ width: "100%", height: "100%" }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- local static assets */}
         <img
           src={`/images/dice-${face}.png`}
@@ -104,7 +104,7 @@ export function AnimatedDice({ isRolling, result, size = 80 }: AnimatedDiceProps
         />
       </div>
       <style>{`
-        @keyframes celo-dice-float {
+        @keyframes dice-float {
           0%,
           100% {
             transform: translateY(0);
@@ -113,8 +113,8 @@ export function AnimatedDice({ isRolling, result, size = 80 }: AnimatedDiceProps
             transform: translateY(-5px);
           }
         }
-        .celo-dice-float-inner {
-          animation: celo-dice-float 2.4s ease-in-out infinite;
+        .dice-float-inner {
+          animation: dice-float 2.4s ease-in-out infinite;
         }
       `}</style>
     </div>

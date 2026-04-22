@@ -40,10 +40,10 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "GAMES",
     items: [
       {
-        href: L.celo,
-        label: "C-Lo",
-        icon: "🎲",
-        isActive: (p) => p.startsWith(L.celo),
+        href: L.gamesHub,
+        label: "Game center",
+        icon: "🎮",
+        isActive: (p) => p === L.gamesHub || p.startsWith(`${L.gamesHub}/`),
       },
       {
         href: L.coinFlip,

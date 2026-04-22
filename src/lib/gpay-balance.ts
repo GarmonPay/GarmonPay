@@ -25,7 +25,7 @@ export async function deductGPay(
 ): Promise<{ ok: boolean; message?: string }> {
   void currentBalance;
   const ref = meta?.reference ?? `gpay_deduct_${userId}_${Date.now()}`;
-  const desc = meta?.description ?? "C-Lo GPay Coins";
+  const desc = meta?.description ?? "GPay Games debit";
   const r = await debitGpayCoins(userId, amount, desc, ref);
   if (!r.success) {
     return { ok: false, message: r.message ?? "Insufficient GPay Coins" };
@@ -40,7 +40,7 @@ export async function creditGPay(
 ): Promise<{ ok: boolean; message?: string }> {
   const ref = meta?.reference ?? `gpay_credit_${userId}_${Date.now()}`;
   const desc = meta?.description ?? "GPay Coins credit";
-  const r = await creditCoins(userId, 0, Math.floor(amount), desc, ref, "celo_payout");
+  const r = await creditCoins(userId, 0, Math.floor(amount), desc, ref, "gpay_credit");
   if (!r.success) return { ok: false, message: r.message };
   return { ok: true };
 }

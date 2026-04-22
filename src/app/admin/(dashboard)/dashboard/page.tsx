@@ -9,7 +9,7 @@ import { localeInt } from "@/lib/format-number";
 const API_BASE = getApiRoot();
 
 type GameRevenuePayload = {
-  today: { total: number; celo: number; coinflip: number; ads: number; memberships: number };
+  today: { total: number; other: number; coinflip: number; ads: number; memberships: number };
   thisWeek: { total: number; breakdown: Record<string, number> };
   thisMonth: { total: number; breakdown: Record<string, number> };
   allTime: { total: number; breakdown: Record<string, number> };
@@ -20,20 +20,6 @@ type GameRevenuePayload = {
     description: string | null;
     created_at: string;
   }>;
-  celoActivity?: {
-    recentRounds: Array<{
-      id: string;
-      shortId: string;
-      status: string;
-      prize_pool_sc: number | null;
-      platform_fee_sc: number | null;
-      created_at: string | null;
-      completed_at: string | null;
-    }>;
-    roundsCompletedToday: number;
-    playerRollsToday: number;
-    avgPotCentsToday: number;
-  };
 };
 
 function RevenueCard({
@@ -188,7 +174,7 @@ export default function Dashboard() {
         setGameRevenue({
           today: data.today ?? {
             total: 0,
-            celo: 0,
+            other: 0,
             coinflip: 0,
             ads: 0,
             memberships: 0,
@@ -197,7 +183,6 @@ export default function Dashboard() {
           thisMonth: data.thisMonth ?? { total: 0, breakdown: {} },
           allTime: data.allTime ?? { total: 0, breakdown: {} },
           recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-          celoActivity: data.celoActivity,
         });
       })
       .catch((e) => {
@@ -418,7 +403,7 @@ export default function Dashboard() {
             Platform fees (games &amp; services)
           </h2>
           <p className="text-xs text-fintech-muted mb-4">
-            Aggregated from <code className="text-fintech-muted">platform_earnings</code> (C-Lo fees, etc.). Fight arena
+            Aggregated from <code className="text-fintech-muted">platform_earnings</code> (game fees, etc.). Fight arena
             fees remain on the <a className="text-emerald-400/90 underline" href="/admin/revenue">Revenue</a> page.
           </p>
           {gameRevenueError && (
@@ -433,7 +418,7 @@ export default function Dashboard() {
                 <RevenueCard title="All time" amountCents={gameRevenue.allTime.total} color="#F5C842" />
               </div>
               <p className="text-[11px] text-fintech-muted mb-4">
-                Today: C-Lo ${(gameRevenue.today.celo / 100).toFixed(2)} · Coin{" "}
+                Today: Other ${(gameRevenue.today.other / 100).toFixed(2)} · Coin{" "}
                 ${(gameRevenue.today.coinflip / 100).toFixed(2)} · Ads ${(gameRevenue.today.ads / 100).toFixed(2)} ·
                 Memberships ${(gameRevenue.today.memberships / 100).toFixed(2)}
               </p>
@@ -442,59 +427,6 @@ export default function Dashboard() {
             !gameRevenueError && <p className="text-fintech-muted text-sm">Loading fee revenue…</p>
           )}
 
-          {gameRevenue?.celoActivity && (
-            <div className="mt-6 border-t border-white/10 pt-5">
-              <h3 className="text-xs font-semibold text-[#F5C842]/90 uppercase tracking-wider mb-3">C-Lo activity</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
-                <div className="rounded-lg bg-black/30 border border-white/10 px-3 py-2">
-                  <p className="text-fintech-muted text-xs">Rounds completed today</p>
-                  <p className="text-lg font-bold text-white">{gameRevenue.celoActivity.roundsCompletedToday}</p>
-                </div>
-                <div className="rounded-lg bg-black/30 border border-white/10 px-3 py-2">
-                  <p className="text-fintech-muted text-xs">Player rolls today</p>
-                  <p className="text-lg font-bold text-white">{gameRevenue.celoActivity.playerRollsToday}</p>
-                </div>
-                <div className="rounded-lg bg-black/30 border border-white/10 px-3 py-2">
-                  <p className="text-fintech-muted text-xs">Avg pot today</p>
-                  <p className="text-lg font-bold text-emerald-300">
-                    ${(gameRevenue.celoActivity.avgPotCentsToday / 100).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-fintech-muted mb-2">Recent completed rounds</p>
-              <AdminScrollHint />
-              <AdminTableWrap>
-                <table className="w-full text-left text-sm min-w-[560px]">
-                  <thead>
-                    <tr className="border-b border-white/10 text-fintech-muted">
-                      <th className="pb-2 pr-3 font-medium">Round</th>
-                      <th className="pb-2 pr-3 font-medium">Completed</th>
-                      <th className="pb-2 pr-3 font-medium text-right">Prize pool</th>
-                      <th className="pb-2 pr-3 font-medium text-right">Platform fee</th>
-                      <th className="pb-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gameRevenue.celoActivity.recentRounds.map((r) => (
-                      <tr key={r.id} className="border-b border-white/5">
-                        <td className="py-2 pr-3 font-mono text-violet-200">{r.shortId}</td>
-                        <td className="py-2 pr-3 text-fintech-muted">
-                          {r.completed_at ? new Date(r.completed_at).toLocaleString() : "—"}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-white">
-                          ${((r.prize_pool_sc ?? 0) / 100).toFixed(2)}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-emerald-300/90">
-                          ${((r.platform_fee_sc ?? 0) / 100).toFixed(2)}
-                        </td>
-                        <td className="py-2 text-fintech-muted capitalize">{r.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </AdminTableWrap>
-            </div>
-          )}
         </section>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">

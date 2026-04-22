@@ -8,7 +8,7 @@ import { localeInt } from "@/lib/format-number";
 
 export function DashboardCoinBalances({
   compact = false,
-  /** When set with `compact`, hides Buy/Convert/Redeem on small screens (e.g. C-Lo room — use modal instead). */
+  /** When set with `compact`, hides Buy/Convert/Redeem on small screens. */
   hideCompactActionsOnMobile = false,
 }: {
   compact?: boolean;

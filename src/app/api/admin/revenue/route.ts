@@ -28,7 +28,7 @@ export interface AdminRevenueResponse {
   /** Platform fee lines (`platform_earnings`) — games, ads, etc. */
   today: {
     total: number;
-    celo: number;
+    other: number;
     coinflip: number;
     ads: number;
     memberships: number;
@@ -43,20 +43,6 @@ export interface AdminRevenueResponse {
     description: string | null;
     created_at: string;
   }>;
-  celoActivity?: {
-    recentRounds: Array<{
-      id: string;
-      shortId: string;
-      status: string;
-      prize_pool_sc: number | null;
-      platform_fee_sc: number | null;
-      created_at: string | null;
-      completed_at: string | null;
-    }>;
-    roundsCompletedToday: number;
-    playerRollsToday: number;
-    avgPotCentsToday: number;
-  };
   message?: string;
 }
 
@@ -83,9 +69,9 @@ function buildEmptyChartData(now: Date): RevenueChartPoint[] {
   return chartData;
 }
 
-function bucketPlatformSource(source: string): "celo" | "coinflip" | "ads" | "memberships" | "other" {
+function bucketPlatformSource(source: string): "coinflip" | "ads" | "memberships" | "other" {
   const s = (source || "").toLowerCase();
-  if (s === "celo_game" || s.includes("celo")) return "celo";
+  if (s === "celo_game" || s.includes("celo")) return "other";
   if (s.includes("coin") && s.includes("flip")) return "coinflip";
   if (s.includes("ad")) return "ads";
   if (s.includes("member") || s === "stripe" || s.includes("subscription")) return "memberships";
@@ -98,7 +84,6 @@ function aggregatePlatformEarnings(rows: PeRow[], since: Date | null) {
   const filtered = since ? rows.filter((r) => new Date(r.created_at) >= since) : rows;
   let total = 0;
   const breakdown: Record<string, number> = {
-    celo: 0,
     coinflip: 0,
     ads: 0,
     memberships: 0,
@@ -127,7 +112,7 @@ export async function GET(request: Request) {
 
   const emptyPe = (): AdminRevenueResponse["today"] => ({
     total: 0,
-    celo: 0,
+    other: 0,
     coinflip: 0,
     ads: 0,
     memberships: 0,
@@ -181,7 +166,7 @@ export async function GET(request: Request) {
     if (error) {
       console.error("Admin revenue fetch error:", error);
       const todayAgg = !peError ? aggregatePlatformEarnings(peRows, todayStart) : { total: 0, breakdown: {} };
-      const celo = todayAgg.breakdown.celo ?? 0;
+      const other = todayAgg.breakdown.other ?? 0;
       return NextResponse.json({
         totalFightRevenueCents: 0,
         dailyRevenueCents: 0,
@@ -192,7 +177,7 @@ export async function GET(request: Request) {
         userDepositsAllTimeCents: depositRevenue,
         today: {
           total: todayAgg.total,
-          celo,
+          other,
           coinflip: todayAgg.breakdown.coinflip ?? 0,
           ads: todayAgg.breakdown.ads ?? 0,
           memberships: todayAgg.breakdown.memberships ?? 0,
@@ -261,56 +246,6 @@ export async function GET(request: Request) {
     const monthAgg = !peError ? aggregatePlatformEarnings(peRows, monthStart) : { total: 0, breakdown: {} };
     const allAgg = !peError ? aggregatePlatformEarnings(peRows, null) : { total: 0, breakdown: {} };
 
-    let celoActivity: AdminRevenueResponse["celoActivity"] = undefined;
-    const cr = await admin
-      .from("celo_rounds")
-      .select("id, status, prize_pool_sc, platform_fee_sc, created_at, completed_at")
-      .eq("status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (!cr.error && cr.data) {
-      const rounds = cr.data as Array<{
-        id: string;
-        status: string;
-        prize_pool_sc?: number | null;
-        platform_fee_sc?: number | null;
-        created_at: string | null;
-        completed_at: string | null;
-      }>;
-      const recentRounds = rounds.map((r) => ({
-        id: r.id,
-        shortId: r.id.slice(0, 8),
-        status: r.status,
-        prize_pool_sc: r.prize_pool_sc ?? null,
-        platform_fee_sc: r.platform_fee_sc ?? null,
-        created_at: r.created_at,
-        completed_at: r.completed_at,
-      }));
-
-      const crToday = await admin
-        .from("celo_rounds")
-        .select("id, prize_pool_sc, completed_at")
-        .eq("status", "completed")
-        .gte("completed_at", todayStart.toISOString());
-
-      const todayRounds = (crToday.data ?? []) as Array<{ id: string; prize_pool_sc?: number | null }>;
-      const pots = todayRounds.map((x) => Number(x.prize_pool_sc ?? 0) || 0);
-      const avgPot = pots.length ? Math.round(pots.reduce((a, b) => a + b, 0) / pots.length) : 0;
-
-      const prToday = await admin
-        .from("celo_player_rolls")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", todayStart.toISOString());
-
-      celoActivity = {
-        recentRounds,
-        roundsCompletedToday: todayRounds.length,
-        playerRollsToday: typeof prToday.count === "number" ? prToday.count : 0,
-        avgPotCentsToday: avgPot,
-      };
-    }
-
     const body: AdminRevenueResponse = {
       totalFightRevenueCents,
       dailyRevenueCents,
@@ -321,7 +256,7 @@ export async function GET(request: Request) {
       userDepositsAllTimeCents: depositRevenue,
       today: {
         total: todayAgg.total,
-        celo: todayAgg.breakdown.celo ?? 0,
+        other: todayAgg.breakdown.other ?? 0,
         coinflip: todayAgg.breakdown.coinflip ?? 0,
         ads: todayAgg.breakdown.ads ?? 0,
         memberships: todayAgg.breakdown.memberships ?? 0,
@@ -338,7 +273,6 @@ export async function GET(request: Request) {
             created_at: r.created_at,
           }))
         : [],
-      celoActivity,
     };
 
     if (peError) {

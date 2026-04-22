@@ -5,7 +5,7 @@ import { getCanonicalBalanceCents } from "@/lib/wallet-ledger";
 /**
  * GET /api/wallet/get
  * Canonical USD balance in cents: latest `wallet_ledger.balance_after` via
- * `getCanonicalBalanceCents` (same as `/api/wallet` and C-Lo APIs).
+ * `getCanonicalBalanceCents` (same as `/api/wallet`).
  */
 export async function GET(req: Request) {
   const userId = await getAuthUserId(req);

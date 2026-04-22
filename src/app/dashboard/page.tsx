@@ -339,11 +339,11 @@ export default function DashboardPage() {
         </p>
         <div className="grid grid-cols-2 gap-3 tablet:grid-cols-4">
           <Link
-            href="/dashboard/games/celo"
+            href="/dashboard/games"
             className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
           >
-            <span className="mb-1 block text-xl">🎲</span>
-            Play C-Lo
+            <span className="mb-1 block text-xl">🎮</span>
+            Game center
           </Link>
           <Link
             href="/dashboard/earn"

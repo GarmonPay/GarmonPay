@@ -25,7 +25,6 @@ const links = [
   { href: "/admin/wallet-monitor", label: "Wallet" },
   { href: "/admin/balance-monitor", label: "Balance Monitor" },
   { href: "/admin/arena", label: "Arena" },
-  { href: "/admin/celo", label: "C-Lo Rooms" },
   { href: "/admin/security", label: "Security" },
   { href: "/admin/settings", label: "Settings" },
 ];
