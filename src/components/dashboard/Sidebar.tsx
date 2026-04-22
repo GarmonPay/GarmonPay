@@ -43,7 +43,15 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
         href: L.gamesHub,
         label: "Game center",
         icon: "🎮",
-        isActive: (p) => p === L.gamesHub || p.startsWith(`${L.gamesHub}/`),
+        isActive: (p) =>
+          (p === L.gamesHub || p.startsWith(`${L.gamesHub}/`)) &&
+          !p.startsWith(L.celo),
+      },
+      {
+        href: L.celo,
+        label: "C-Lo",
+        icon: "🎲",
+        isActive: (p) => p.startsWith(L.celo),
       },
       {
         href: L.coinFlip,

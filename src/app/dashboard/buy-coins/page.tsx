@@ -173,7 +173,7 @@ export default function BuyCoinsPage() {
         <h2 className="text-base font-semibold text-white pt-2">What are GPay Coins?</h2>
         <p>
           GPay Coins (GPC) are what you earn and play with on GarmonPay. Every GC purchase includes free GPC as a bonus.
-          GPC connects to the $GPAY token (redeem winnings — coming soon) and powers games like Coin Flip. Share wins
+          GPC connects to the $GPAY token (redeem winnings — coming soon) and powers games like C-Lo and Coin Flip. Share wins
           with <span className="text-violet-300">#GPayCoins</span>.
         </p>
         <h2 className="text-base font-semibold text-white pt-2">Free entry</h2>
