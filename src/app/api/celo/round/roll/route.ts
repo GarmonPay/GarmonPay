@@ -36,8 +36,11 @@ type RoundRow = {
   platform_fee_sc: number | null;
   banker_point: number | null;
   current_player_seat: number | null;
+  banker_dice?: unknown;
   player_celo_offer?: boolean;
   player_celo_expires_at?: string | null;
+  /** Server: true while this banker throw is being processed (realtime tumble). */
+  banker_roll_in_flight?: boolean;
 };
 
 type PlayerRow = {
@@ -171,6 +174,43 @@ export async function POST(request: Request) {
   return NextResponse.json({ error: "Cannot roll" }, { status: 400 });
 }
 
+async function markBankerRollInFlight(
+  admin: SupabaseClient,
+  roundId: string
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("celo_rounds")
+    .update({ banker_roll_in_flight: true })
+    .eq("id", roundId)
+    .eq("status", "banker_rolling")
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    celoAccountingLog("banker_roll_in_flight_set_error", {
+      roundId,
+      message: error.message,
+    });
+    return false;
+  }
+  if (!data?.id) return false;
+  celoAccountingLog("banker_roll_in_flight_set", { roundId });
+  celoAccountingAuditLog("banker_roll_in_flight_set", { roundId });
+  return true;
+}
+
+async function clearBankerRollInFlight(
+  admin: SupabaseClient,
+  roundId: string,
+  reason: string
+): Promise<void> {
+  await admin
+    .from("celo_rounds")
+    .update({ banker_roll_in_flight: false })
+    .eq("id", roundId);
+  celoAccountingLog("banker_roll_in_flight_cleared", { roundId, reason });
+  celoAccountingAuditLog("banker_roll_in_flight_cleared", { roundId, reason });
+}
+
 async function handleBankerRoll(
   admin: SupabaseClient,
   ctx: {
@@ -186,13 +226,39 @@ async function handleBankerRoll(
   const now = new Date().toISOString();
   const diceArr = [dice[0], dice[1], dice[2]];
 
+  const marked = await markBankerRollInFlight(admin, round.id);
+  if (!marked) {
+    const { data: cur } = await admin
+      .from("celo_rounds")
+      .select("id, status, banker_dice, banker_dice_name, banker_dice_result")
+      .eq("id", round.id)
+      .maybeSingle();
+    const st = (cur as { status?: string } | null)?.status;
+    if (st !== "banker_rolling") {
+      return NextResponse.json(
+        { error: "Round is not in banker rolling state" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { error: "Could not mark banker roll in flight" },
+      { status: 409 }
+    );
+  }
+
   if (roll.result === "no_count") {
+    celoAccountingLog("banker_no_count_throw", {
+      roundId: round.id,
+      priorBankerDice: round.banker_dice != null,
+    });
     const updated = await celoUpdateRoundIfStatus(admin, round.id, ["banker_rolling"], {
       banker_dice: diceArr,
       banker_dice_name: roll.rollName,
       banker_dice_result: roll.result,
+      banker_roll_in_flight: false,
     });
     if (!updated) {
+      await clearBankerRollInFlight(admin, round.id, "no_count_update_race");
       celoAccountingLog("banker_no_count_skip", { roundId: round.id });
       const { data: cur } = await admin
         .from("celo_rounds")
@@ -214,6 +280,14 @@ async function handleBankerRoll(
         { status: 409 }
       );
     }
+    celoAccountingLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "no_count",
+    });
+    celoAccountingAuditLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "no_count",
+    });
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -247,6 +321,7 @@ async function handleBankerRoll(
         roundId: round.id,
         message: cr.message,
       });
+      await clearBankerRollInFlight(admin, round.id, "instant_win_credit_failed");
       return NextResponse.json(
         { error: cr.message ?? "Credit failed" },
         { status: 500 }
@@ -259,6 +334,7 @@ async function handleBankerRoll(
         banker_dice: diceArr,
         banker_dice_name: roll.rollName,
         banker_dice_result: roll.result,
+        banker_roll_in_flight: false,
         status: "completed",
         platform_fee_sc: fee,
         completed_at: now,
@@ -273,6 +349,7 @@ async function handleBankerRoll(
         roundId: round.id,
         message: finErr.message,
       });
+      await clearBankerRollInFlight(admin, round.id, "instant_win_finalize_err");
       return NextResponse.json(
         { error: finErr.message ?? "Finalize failed" },
         { status: 500 }
@@ -327,11 +404,21 @@ async function handleBankerRoll(
           canLowerBank: roll.isCelo,
         });
       }
+      await clearBankerRollInFlight(admin, round.id, "instant_win_finalize_stuck_after_credit");
       return NextResponse.json(
         { error: "Could not finalize round after payout" },
         { status: 500 }
       );
     }
+
+    celoAccountingLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "instant_win",
+    });
+    celoAccountingAuditLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "instant_win",
+    });
 
     await insertCeloPlatformFee(
       admin,
@@ -403,6 +490,7 @@ async function handleBankerRoll(
           userId: p.user_id,
           message: c.message,
         });
+        await clearBankerRollInFlight(admin, round.id, "instant_loss_payout_failed");
         return NextResponse.json(
           { error: c.message ?? "Player payout failed" },
           { status: 500 }
@@ -426,6 +514,7 @@ async function handleBankerRoll(
         banker_dice: diceArr,
         banker_dice_name: roll.rollName,
         banker_dice_result: roll.result,
+        banker_roll_in_flight: false,
         status: "completed",
         completed_at: now,
       })
@@ -463,11 +552,21 @@ async function handleBankerRoll(
           outcome: "players_win",
         });
       }
+      await clearBankerRollInFlight(admin, round.id, "instant_loss_finalize_failed");
       return NextResponse.json(
         { error: "Could not finalize round after payouts" },
         { status: 500 }
       );
     }
+
+    celoAccountingLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "instant_loss",
+    });
+    celoAccountingAuditLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "instant_loss",
+    });
 
     await admin
       .from("celo_rooms")
@@ -495,10 +594,12 @@ async function handleBankerRoll(
       banker_dice_name: roll.rollName,
       banker_dice_result: roll.result,
       banker_point: roll.point,
+      banker_roll_in_flight: false,
       status: "player_rolling",
       current_player_seat: firstSeat,
     });
     if (!updated) {
+      await clearBankerRollInFlight(admin, round.id, "banker_point_transition_race");
       const { data: cur } = await admin
         .from("celo_rounds")
         .select(
@@ -527,6 +628,14 @@ async function handleBankerRoll(
         { status: 409 }
       );
     }
+    celoAccountingLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "point_transition",
+    });
+    celoAccountingAuditLog("banker_roll_in_flight_cleared", {
+      roundId: round.id,
+      reason: "point_transition",
+    });
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -535,6 +644,7 @@ async function handleBankerRoll(
       outcome: "players_must_roll",
     });
   }
+  await clearBankerRollInFlight(admin, round.id, "unexpected_banker_roll_branch");
   return NextResponse.json(
     { error: "Unexpected banker roll state" },
     { status: 500 }

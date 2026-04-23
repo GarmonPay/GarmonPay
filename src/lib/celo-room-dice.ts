@@ -52,6 +52,8 @@ export function computeCeloVisualDiceMode(input: {
   roundStatus: string | null | undefined;
   /** Banker has written dice to the round row (may be no_count reroll faces). */
   hasBankerTriplet: boolean;
+  /** Server: POST /roll is processing a banker throw (realtime). */
+  bankerRollInFlight?: boolean | null;
   /** Current seat's player already has a win/loss row this round (authoritative). */
   currentPlayerHasFinalRoll: boolean;
   /** Local client is mid handleRoll() animation window. */
@@ -60,7 +62,13 @@ export function computeCeloVisualDiceMode(input: {
   const s = input.roundStatus ?? "";
   if (!input.inProgress) return "idle";
   if (s === "banker_rolling") {
-    if (!input.hasBankerTriplet || input.localRolling) return "banker_tumble";
+    if (
+      input.bankerRollInFlight === true ||
+      input.localRolling ||
+      !input.hasBankerTriplet
+    ) {
+      return "banker_tumble";
+    }
     return "banker_settled";
   }
   if (s === "player_rolling") {

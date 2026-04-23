@@ -71,6 +71,7 @@ type Round = {
   /** Set when the banker has rolled; source of truth for their dice in this round. */
   banker_dice?: unknown;
   banker_dice_result?: string | null;
+  banker_roll_in_flight?: boolean | null;
 };
 
 function bankVal(r: Room) {
@@ -383,16 +384,25 @@ export default function CeloRoomPage() {
             if (n.status === "player_rolling") {
               setCurrentPlayerResolvedRoll(false);
             }
-            if (n.status === "banker_rolling" && n.banker_dice == null) {
-              setDice(null);
-            }
-            if (
-              n.status === "banker_rolling" &&
-              n.banker_dice != null &&
-              p.eventType === "UPDATE"
-            ) {
-              const trip = tripletFromDiceJson(n.banker_dice);
-              if (trip) setDice(trip);
+            if (n.status === "banker_rolling") {
+              if (n.banker_roll_in_flight === true) {
+                setDice(null);
+                if (CELO_DEBUG) {
+                  console.log(
+                    "[C-Lo room] realtime: banker_roll_in_flight=true → tumble until resolve"
+                  );
+                }
+              } else if (n.banker_dice == null) {
+                setDice(null);
+              }
+              if (
+                n.banker_dice != null &&
+                p.eventType === "UPDATE" &&
+                n.banker_roll_in_flight !== true
+              ) {
+                const trip = tripletFromDiceJson(n.banker_dice);
+                if (trip) setDice(trip);
+              }
             }
           }
           void fetchAll();
@@ -513,12 +523,15 @@ export default function CeloRoomPage() {
   );
   const hasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
 
+  const bankerRollInFlight = round?.banker_roll_in_flight === true;
+
   const visualDiceMode = useMemo(
     () =>
       computeCeloVisualDiceMode({
         inProgress,
         roundStatus: round?.status,
         hasBankerTriplet,
+        bankerRollInFlight,
         currentPlayerHasFinalRoll: currentPlayerResolvedRoll,
         localRolling: rolling,
       }),
@@ -526,6 +539,7 @@ export default function CeloRoomPage() {
       inProgress,
       round?.status,
       hasBankerTriplet,
+      bankerRollInFlight,
       currentPlayerResolvedRoll,
       rolling,
     ]
@@ -632,9 +646,17 @@ export default function CeloRoomPage() {
         : round?.banker_dice
           ? "banker_dice_pending_merge"
           : "none";
+    let tumbleWhy: string | null = null;
+    if (visualDiceMode === "banker_tumble") {
+      if (bankerRollInFlight) tumbleWhy = "server_banker_roll_in_flight";
+      else if (rolling) tumbleWhy = "local_rolling";
+      else if (!hasBankerTriplet) tumbleWhy = "no_banker_triplet_yet";
+    }
     console.log("[C-Lo room] felt (dev)", {
       visualDiceMode,
       diceSourceLogged: src,
+      banker_roll_in_flight: round?.banker_roll_in_flight,
+      bankerTumbleBecause: tumbleWhy,
       hasDice: dice != null,
       isRollingFaces,
       localRolling: rolling,
@@ -649,6 +671,8 @@ export default function CeloRoomPage() {
     rolling,
     round?.status,
     round?.banker_dice,
+    round?.banker_roll_in_flight,
+    bankerRollInFlight,
     currentPlayerResolvedRoll,
     hasBankerTriplet,
   ]);
