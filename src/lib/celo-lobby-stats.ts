@@ -11,6 +11,14 @@ export const CELO_LOBBY_LIVE_ROOM_STATUSES = new Set([
   "open",
 ]);
 
+/** Use with `.in("status", ...)` on `celo_rooms` so cancelled/completed rows never load in the lobby. */
+export const CELO_LOBBY_LIST_STATUSES: string[] = [
+  "waiting",
+  "active",
+  "rolling",
+  "open",
+];
+
 export function isPublicLiveCeloRoom(row: {
   status: string;
   room_type?: string | null;

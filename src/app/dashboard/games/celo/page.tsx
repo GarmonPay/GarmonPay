@@ -8,6 +8,7 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
 import {
+  CELO_LOBBY_LIST_STATUSES,
   countSeatedParticipants,
   isPublicLiveCeloRoom,
   safeBankGpcCents,
@@ -46,6 +47,7 @@ export default function CeloLobbyPage() {
     const { data, error } = await supabase
       .from("celo_rooms")
       .select("*")
+      .in("status", CELO_LOBBY_LIST_STATUSES)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -54,10 +56,10 @@ export default function CeloLobbyPage() {
       setSeatsTakenInLivePublicRooms(0);
       return;
     }
-    const list = (data as CeloRoomCardData[]) ?? [];
+    const list = ((data as CeloRoomCardData[]) ?? []).filter(isPublicLiveCeloRoom);
     setRooms(list);
 
-    const livePublic = list.filter(isPublicLiveCeloRoom);
+    const livePublic = list;
     const liveIds = livePublic.map((r) => r.id);
     if (liveIds.length === 0) {
       setSeatsTakenInLivePublicRooms(0);
@@ -74,17 +76,15 @@ export default function CeloLobbyPage() {
     setSeatsTakenInLivePublicRooms(countSeatedParticipants(participations as { role: string }[]));
   }, [supabase]);
 
-  const filteredRooms = rooms || [];
-
-  const livePublicRooms = useMemo(
-    () => rooms.filter(isPublicLiveCeloRoom),
+  const lobbyRooms = useMemo(
+    () => (rooms || []).filter(isPublicLiveCeloRoom),
     [rooms]
   );
 
-  const tablesLive = livePublicRooms.length;
+  const tablesLive = lobbyRooms.length;
   const gpcInPlay = useMemo(
-    () => livePublicRooms.reduce((s, r) => s + safeBankGpcCents(r), 0),
-    [livePublicRooms]
+    () => lobbyRooms.reduce((s, r) => s + safeBankGpcCents(r), 0),
+    [lobbyRooms]
   );
 
   const loadUser = useCallback(async () => {
@@ -323,15 +323,15 @@ export default function CeloLobbyPage() {
             </div>
           )}
 
-          {!loading && !err && filteredRooms.length === 0 && (
+          {!loading && !err && lobbyRooms.length === 0 && (
             <div className="mt-6 text-center text-gray-400">
               No tables available. Create one to start playing.
             </div>
           )}
 
-          {!loading && !err && filteredRooms.length > 0 && (
+          {!loading && !err && lobbyRooms.length > 0 && (
             <ul className="w-full list-none p-0">
-              {filteredRooms.map((room) => (
+              {lobbyRooms.map((room) => (
                 <li key={room.id}>
                   <CeloRoomCard room={room} />
                 </li>
