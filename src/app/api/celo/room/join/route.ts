@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCeloApiClients } from "@/lib/celo-api-clients";
+import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { getUserCoins } from "@/lib/coins";
 import { debitGpayCoins } from "@/lib/coins";
 import { validateEntry } from "@/lib/celo-engine";
@@ -12,14 +12,15 @@ export async function POST(request: Request) {
   if (!clients) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
-  const { sessionClient, adminClient } = clients;
-  const {
-    data: { user },
-  } = await sessionClient.auth.getUser();
-  if (!user) {
+  const auth = await getCeloAuth(request, clients);
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { user, adminClient } = auth;
   const userId = user.id;
+  if (process.env.NODE_ENV === "development") {
+    console.log("JOIN REQUEST USER:", userId);
+  }
   let body: { room_id?: string; role?: string; entry_sc?: number };
   try {
     body = await request.json();

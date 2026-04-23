@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { getCeloApiClients } from "@/lib/celo-api-clients";
+import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
   if (!clients) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
-  const { sessionClient, adminClient } = clients;
-  const {
-    data: { user },
-  } = await sessionClient.auth.getUser();
-  if (!user) {
+  const auth = await getCeloAuth(request, clients);
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { user, adminClient } = auth;
   const userId = user.id;
   let body: { room_id?: string; new_bank_sc?: number };
   try {

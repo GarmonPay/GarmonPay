@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCeloApiClients } from "@/lib/celo-api-clients";
+import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { getUserCoins } from "@/lib/coins";
 import { debitGpayCoins } from "@/lib/coins";
 import { validateEntry } from "@/lib/celo-engine";
@@ -11,14 +11,11 @@ export async function POST(request: Request) {
   if (!clients) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
-  const { sessionClient, adminClient } = clients;
-  const {
-    data: { user },
-    error: authError,
-  } = await sessionClient.auth.getUser();
-  if (authError || !user) {
+  const auth = await getCeloAuth(request, clients);
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { user, adminClient } = auth;
   const userId = user.id;
   let body: Record<string, unknown>;
   try {

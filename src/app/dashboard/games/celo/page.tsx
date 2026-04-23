@@ -14,6 +14,7 @@ import {
   safeBankGpcCents,
 } from "@/lib/celo-lobby-stats";
 import { CeloRoomCard, type CeloRoomCardData } from "@/components/celo/CeloRoomCard";
+import { fetchCeloApi } from "@/lib/celo-api-fetch";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -173,12 +174,19 @@ export default function CeloLobbyPage() {
       setCreateError("Insufficient GPay Coins for starting bank");
       return;
     }
+    if (!supabase) {
+      setCreateError("Not connected. Please refresh and try again.");
+      return;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setCreateError("Please log in first");
+      return;
+    }
     setCreating(true);
     try {
-      const res = await fetch("/api/celo/room/create", {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           name: form.name.trim(),
           max_players: form.max_players,
@@ -188,6 +196,10 @@ export default function CeloLobbyPage() {
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string; room?: { id: string } };
       if (!res.ok) {
+        if (res.status === 401) {
+          setCreateError("Session expired. Please log in again.");
+          return;
+        }
         setCreateError(j.error ?? "Create failed");
         return;
       }

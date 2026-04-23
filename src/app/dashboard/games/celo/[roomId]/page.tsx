@@ -20,6 +20,7 @@ import {
   mergeCeloPlayerRealtime,
   normalizeCeloPlayerRow,
 } from "@/lib/celo-player-state";
+import { alertCeloUnauthorized, fetchCeloApi } from "@/lib/celo-api-fetch";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
 
@@ -476,16 +477,18 @@ export default function CeloRoomPage() {
 
   async function handleStart() {
     if (!room) return;
+    if (!supabase) {
+      setStartRoundError("Not connected. Please refresh and try again.");
+      return;
+    }
     setStartRoundError(null);
     if (CELO_DEBUG) {
       console.log("[C-Lo room] Start round click", { roomId: room.id, banker: room.banker_id, stakedPlayerCount });
     }
     setRollingAction(true);
     try {
-      const res = await fetch("/api/celo/round/start", {
+      const res = await fetchCeloApi(supabase, "/api/celo/round/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ room_id: room.id }),
       });
       const text = await res.text();
@@ -499,6 +502,10 @@ export default function CeloRoomPage() {
       }
       if (CELO_DEBUG) console.log("[C-Lo room] Start round response", res.status, j);
       if (!res.ok) {
+        if (res.status === 401) {
+          setStartRoundError("Session expired. Please log in again.");
+          return;
+        }
         setStartRoundError(j.error ?? "Could not start round");
         return;
       }
@@ -514,16 +521,18 @@ export default function CeloRoomPage() {
 
   async function handleRoll() {
     if (!room || !round || rollingAction) return;
+    if (!supabase) {
+      alert("Please log in first");
+      return;
+    }
     setRollingAction(true);
     setRolling(true);
     setRollName(null);
     setDice(null);
     const wait = new Promise((r) => setTimeout(r, 2200));
     const [res] = await Promise.all([
-      fetch("/api/celo/round/roll", {
+      fetchCeloApi(supabase, "/api/celo/round/roll", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ room_id: room.id, round_id: round.id }),
       }),
       wait,
@@ -539,7 +548,11 @@ export default function CeloRoomPage() {
       newBalance?: number;
     };
     if (!res.ok) {
-      alert(j.error ?? "Roll failed");
+      if (res.status === 401) {
+        alertCeloUnauthorized();
+      } else {
+        alert(j.error ?? "Roll failed");
+      }
       setRollingAction(false);
       return;
     }
@@ -559,19 +572,33 @@ export default function CeloRoomPage() {
 
   async function handleJoin() {
     if (!room) return;
-    const res = await fetch("/api/celo/room/join", {
+    if (!supabase) {
+      alert("Please log in first");
+      return;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (CELO_DEBUG) {
+      console.log("SESSION:", session);
+    }
+    if (!session?.access_token) {
+      alert("Please log in first");
+      return;
+    }
+    const res = await fetchCeloApi(supabase, "/api/celo/room/join", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({
         room_id: room.id,
         role: "player",
         entry_sc: entryAmount,
       }),
     });
-    const j = await res.json();
+    const j = (await res.json()) as { error?: string };
     if (!res.ok) {
-      alert((j as { error?: string }).error ?? "Join failed");
+      if (res.status === 401) {
+        alertCeloUnauthorized();
+        return;
+      }
+      alert(j.error ?? "Join failed");
       return;
     }
     await fetchAll();
@@ -1003,10 +1030,12 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  const res = await fetch("/api/celo/room/lower-bank", {
+                  if (!supabase) {
+                    alert("Please log in first");
+                    return;
+                  }
+                  const res = await fetchCeloApi(supabase, "/api/celo/room/lower-bank", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
                     body: JSON.stringify({
                       room_id: room.id,
                       new_bank_sc: lowerAmt,
@@ -1016,8 +1045,12 @@ export default function CeloRoomPage() {
                     setShowLower(false);
                     void fetchAll();
                   } else {
-                    const j = await res.json();
-                    alert((j as { error?: string }).error);
+                    if (res.status === 401) {
+                      alertCeloUnauthorized();
+                      return;
+                    }
+                    const j = (await res.json()) as { error?: string };
+                    alert(j.error ?? "Could not update bank");
                   }
                 }}
                 className="min-h-[44px] flex-1 rounded font-bold"
@@ -1059,10 +1092,12 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  const res = await fetch("/api/celo/banker/accept", {
+                  if (!supabase) {
+                    alert("Please log in first");
+                    return;
+                  }
+                  const res = await fetchCeloApi(supabase, "/api/celo/banker/accept", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
                     body: JSON.stringify({
                       room_id: room.id,
                       round_id: round?.id,
@@ -1072,8 +1107,12 @@ export default function CeloRoomPage() {
                     setShowBanker(false);
                     void fetchAll();
                   } else {
-                    const j = await res.json();
-                    alert((j as { error?: string }).error);
+                    if (res.status === 401) {
+                      alertCeloUnauthorized();
+                      return;
+                    }
+                    const j = (await res.json()) as { error?: string };
+                    alert(j.error ?? "Could not take the bank");
                   }
                 }}
                 className="min-h-[44px] flex-1 rounded font-bold"
