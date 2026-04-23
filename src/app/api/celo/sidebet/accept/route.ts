@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
-import { celoAccountingLog } from "@/lib/celo-accounting";
+import { celoAccountingAuditLog, celoAccountingLog } from "@/lib/celo-accounting";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -84,6 +84,11 @@ export async function POST(request: Request) {
       betId,
       userId,
       amount,
+      reference: refundRef,
+    });
+    celoAccountingAuditLog("sidebet_accept_refund_after_update_failed", {
+      betId,
+      userId,
       reference: refundRef,
     });
     await creditGpayIdempotent(

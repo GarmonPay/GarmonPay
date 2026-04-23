@@ -4,7 +4,7 @@ import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { getUserCoins } from "@/lib/coins";
 import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
 import { validateEntry } from "@/lib/celo-engine";
-import { celoAccountingLog } from "@/lib/celo-accounting";
+import { celoAccountingAuditLog, celoAccountingLog } from "@/lib/celo-accounting";
 
 const CLOSED = new Set(["completed", "cancelled"]);
 
@@ -161,6 +161,11 @@ export async function POST(request: Request) {
           userId,
           reference: entryRef,
         });
+        celoAccountingAuditLog("join_debit_duplicate_treated_seated", {
+          roomId,
+          userId,
+          reference: entryRef,
+        });
         return NextResponse.json({
           already_seated: true,
           player: row,
@@ -220,6 +225,12 @@ export async function POST(request: Request) {
   if (iErr || !p) {
     const refundRef = `celo_join_refund_${roomId}_${userId}`;
     celoAccountingLog("entry_refund_attempt", {
+      roomId,
+      userId,
+      entrySc,
+      reference: refundRef,
+    });
+    celoAccountingAuditLog("join_refund_after_insert_failed", {
       roomId,
       userId,
       entrySc,

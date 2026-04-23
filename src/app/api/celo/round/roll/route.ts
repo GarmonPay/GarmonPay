@@ -10,6 +10,7 @@ import {
 } from "@/lib/celo-engine";
 import { insertCeloPlatformFee } from "@/lib/celo-platform-fee";
 import {
+  celoAccountingAuditLog,
   celoAccountingLog,
   celoUpdateRoundIfStatus,
 } from "@/lib/celo-accounting";
@@ -290,6 +291,12 @@ async function handleBankerRoll(
         roundId: round.id,
         status: cur?.status,
       });
+      celoAccountingAuditLog("settlement_finalize_skipped_already_complete", {
+        path: "banker_instant_win",
+        roundId: round.id,
+        status: cur?.status,
+        reason: "conditional_update_0_rows_or_idempotent",
+      });
       if (
         cur?.status === "completed" &&
         cur.banker_dice_result === "instant_win"
@@ -434,6 +441,11 @@ async function handleBankerRoll(
         .eq("id", round.id)
         .maybeSingle();
       celoAccountingLog("instant_loss_finalize_skip", {
+        roundId: round.id,
+        status: cur?.status,
+      });
+      celoAccountingAuditLog("settlement_finalize_skipped_already_complete", {
+        path: "banker_instant_loss",
         roundId: round.id,
         status: cur?.status,
       });
@@ -707,6 +719,11 @@ async function handlePlayerRoll(
           .eq("id", round.id)
           .maybeSingle();
         celoAccountingLog("player_phase_settlement_skip", {
+          roundId: round.id,
+          status: cur?.status,
+        });
+        celoAccountingAuditLog("settlement_finalize_skipped_already_complete", {
+          path: "player_phase_complete_round",
           roundId: round.id,
           status: cur?.status,
         });

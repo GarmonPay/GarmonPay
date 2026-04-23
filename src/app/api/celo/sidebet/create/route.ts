@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
-import { celoAccountingLog } from "@/lib/celo-accounting";
+import { celoAccountingAuditLog, celoAccountingLog } from "@/lib/celo-accounting";
 import { CELO_SIDEBET_ODDS } from "@/lib/celo-sidebet-odds";
 import { randomUUID } from "crypto";
 
@@ -113,6 +113,11 @@ export async function POST(request: Request) {
       roomId,
       userId,
       amount,
+      reference: refundRef,
+    });
+    celoAccountingAuditLog("sidebet_create_refund_after_insert_failed", {
+      roomId,
+      userId,
       reference: refundRef,
     });
     await creditGpayIdempotent(

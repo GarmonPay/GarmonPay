@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase";
 import { walletLedgerEntry } from "@/lib/wallet-ledger";
+import { celoAccountingAuditLog } from "@/lib/celo-accounting";
 
 /** PostgREST cannot match RPC if DB still has legacy param name `p_sweeps_coins` instead of `p_gpay_coins`. */
 function isCreditCoinsRpcMismatch(err: { message?: string; code?: string } | null): boolean {
@@ -205,6 +206,11 @@ export async function creditGpayIdempotent(
   const r = await creditCoins(userId, 0, amt, description, reference, type);
   if (r.success) return { success: true };
   if (typeof r.message === "string" && r.message.toLowerCase().includes("duplicate")) {
+    celoAccountingAuditLog("credit_gpay_idempotent_duplicate_ok", {
+      userId,
+      reference,
+      type,
+    });
     return { success: true };
   }
   return r;

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { celoAccountingAuditLog } from "@/lib/celo-accounting";
 
 export async function insertCeloPlatformFee(
   supabase: SupabaseClient,
@@ -18,7 +19,14 @@ export async function insertCeloPlatformFee(
   const { error } = await supabase.from("platform_earnings").insert(row);
   if (error) {
     const code = (error as { code?: string }).code;
-    if (code === "23505") return;
+    if (code === "23505") {
+      celoAccountingAuditLog("platform_earnings_insert_duplicate_ignored", {
+        idempotencyKey: opts?.idempotencyKey,
+        roundId: opts?.roundId,
+        label,
+      });
+      return;
+    }
     console.error("[celo] platform_earnings insert failed:", error.message);
   }
 }

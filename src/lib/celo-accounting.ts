@@ -8,12 +8,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const CELO_ACCOUNTING_DEBUG = process.env.NODE_ENV === "development";
 
+/** Staging / extended operator logs (server env). Does not replace CELO_ACCOUNTING_DEBUG. */
+export const CELO_ACCOUNTING_AUDIT_LOG =
+  process.env.NODE_ENV === "development" ||
+  process.env.CELO_ACCOUNTING_AUDIT_LOG === "1";
+
 export function celoAccountingLog(
   phase: string,
   payload: Record<string, unknown>
 ): void {
   if (!CELO_ACCOUNTING_DEBUG) return;
   console.log(`[C-Lo accounting] ${phase}`, payload);
+}
+
+/** Idempotent skips, finalize races, refunds — for staging operators (set CELO_ACCOUNTING_AUDIT_LOG=1). */
+export function celoAccountingAuditLog(
+  phase: string,
+  payload: Record<string, unknown>
+): void {
+  if (!CELO_ACCOUNTING_AUDIT_LOG) return;
+  console.log(`[C-Lo accounting audit] ${phase}`, payload);
 }
 
 /** Update a round only if `status` is one of `fromStatuses`; returns updated row or null. */
