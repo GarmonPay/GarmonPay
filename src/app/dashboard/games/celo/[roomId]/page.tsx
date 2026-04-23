@@ -16,15 +16,20 @@ import {
 } from "@/lib/celo-room-dice";
 import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
-import { CeloRoomChatPanel } from "@/components/celo/CeloRoomChatPanel";
+import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
 import {
   CeloRoomSideBetsPanel,
   type CeloSideBetRow,
 } from "@/components/celo/CeloRoomSideBetsPanel";
 import {
+  CELO_CHAT_SELECT_WITH_USER,
+  CELO_ROOM_PLAYERS_USER_EMBED,
+  CELO_USER_PROFILE_FIELDS,
   countStakedEntryPlayers,
   normalizeCeloPlayerRow,
+  type CeloEntryPlayerFields,
 } from "@/lib/celo-player-state";
+import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
 import { alertCeloUnauthorized, fetchCeloApi } from "@/lib/celo-api-fetch";
 import { applyCeloStateUpdate } from "@/lib/celo/celoStateMerge";
 
@@ -53,15 +58,7 @@ type Room = {
   total_rounds: number;
 };
 
-type Player = {
-  id: string;
-  user_id: string;
-  role: string;
-  entry_sc: number;
-  bet_cents: number;
-  seat_number: number | null;
-  dice_type: string;
-};
+type Player = CeloEntryPlayerFields;
 
 type Round = {
   id: string;
@@ -101,6 +98,41 @@ function sortCeloPlayersBySeat(list: Player[]): Player[] {
   });
 }
 
+const CELO_PLAYER_FETCH_SELECT = `*,${CELO_ROOM_PLAYERS_USER_EMBED}`;
+
+function normalizeChatRow(raw: unknown): ChatRow {
+  const r = raw as Record<string, unknown>;
+  const uRaw = r.users;
+  const u = (Array.isArray(uRaw) ? uRaw[0] : uRaw) as Record<string, unknown> | null | undefined;
+  const str = (v: unknown) => {
+    const s = String(v ?? "").trim();
+    return s.length ? s : null;
+  };
+  return {
+    id: String(r.id),
+    user_id: String(r.user_id),
+    message: String(r.message ?? ""),
+    created_at: String(r.created_at ?? ""),
+    is_system: Boolean(r.is_system),
+    display_name: u ? str((u as { display_name?: unknown }).display_name) : null,
+    full_name: u ? str(u.full_name) : null,
+    username: u ? str(u.username) : null,
+    email: u ? str(u.email) : null,
+    avatar_url: u ? str(u.avatar_url) : null,
+  };
+}
+
+function mergePlayerProfile(prev: Player | undefined, next: Player): Player {
+  if (!prev) return next;
+  return {
+    ...next,
+    full_name: next.full_name ?? prev.full_name ?? null,
+    username: next.username ?? prev.username ?? null,
+    email: next.email ?? prev.email ?? null,
+    avatar_url: next.avatar_url ?? prev.avatar_url ?? null,
+  };
+}
+
 export default function CeloRoomPage() {
   const params = useParams();
   const roomId = String(params.roomId ?? "");
@@ -125,9 +157,8 @@ export default function CeloRoomPage() {
   const [sideTab, setSideTab] = useState<"side" | "chat">("side");
   const [panelOpen, setPanelOpen] = useState(true);
   const [chat, setChat] = useState("");
-  const [messages, setMessages] = useState<
-    { id: string; user_id: string; message: string; created_at: string }[]
-  >([]);
+  const [messages, setMessages] = useState<ChatRow[]>([]);
+  const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
   const [sideBets, setSideBets] = useState<CeloSideBetRow[]>([]);
   const [sideBetsLoading, setSideBetsLoading] = useState(false);
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
@@ -152,6 +183,7 @@ export default function CeloRoomPage() {
   const roomRef = useRef<Room | null>(null);
   const playersRef = useRef<Player[]>([]);
   const roundRef = useRef<Round | null>(null);
+  const chatDraftRef = useRef("");
 
   useEffect(() => {
     roomRef.current = room;
@@ -162,6 +194,10 @@ export default function CeloRoomPage() {
   useEffect(() => {
     roundRef.current = round;
   }, [round]);
+
+  useEffect(() => {
+    chatDraftRef.current = chat;
+  }, [chat]);
 
   useEffect(() => {
     rollingRef.current = rolling;
@@ -221,7 +257,7 @@ export default function CeloRoomPage() {
       supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
       supabase
         .from("celo_room_players")
-        .select("*")
+        .select(CELO_PLAYER_FETCH_SELECT)
         .eq("room_id", roomId)
         .order("seat_number", { ascending: true }),
       supabase
@@ -233,7 +269,7 @@ export default function CeloRoomPage() {
         .limit(1),
       supabase
         .from("celo_chat")
-        .select("id, user_id, message, created_at")
+        .select(CELO_CHAT_SELECT_WITH_USER)
         .eq("room_id", roomId)
         .order("created_at", { ascending: true })
         .limit(50),
@@ -360,7 +396,7 @@ export default function CeloRoomPage() {
     }
 
     setMessages(
-      (chatRes.data as { id: string; user_id: string; message: string; created_at: string }[]) ?? []
+      ((chatRes.data as unknown[]) ?? []).map((row) => normalizeChatRow(row))
     );
     if (chatRes.error && CELO_DEBUG) console.warn("[C-Lo room] chat", chatRes.error);
 
@@ -417,13 +453,74 @@ export default function CeloRoomPage() {
         activeRound: activeRound?.id,
         players: playerRows.length,
         sideBets: sideRes.data?.length,
-        staked: countStakedEntryPlayers(playerRows),
+        staked: countStakedEntryPlayers(
+          playerRows,
+          (roomRes.data as Room | null | undefined)?.banker_id ?? null
+        ),
         diceComponent: "mounted",
         chatMounted: true,
         sideBetsMounted: true,
         fetchToken: myToken,
       });
     }
+  }, [supabase, roomId]);
+
+  const sendRoomChat = useCallback(async () => {
+    const text = chatDraftRef.current.trim();
+    if (!supabase || !me || !room || !text) return;
+    const message = text.slice(0, 500);
+    const { data, error } = await supabase
+      .from("celo_chat")
+      .insert({ room_id: room.id, user_id: me, message })
+      .select(CELO_CHAT_SELECT_WITH_USER)
+      .single();
+    if (error) {
+      if (CELO_DEBUG) console.warn("[C-Lo room] chat send", error);
+      return;
+    }
+    setChat("");
+    const row = normalizeChatRow(data);
+    const enriched: ChatRow = {
+      ...row,
+      display_name: row.display_name ?? myProfile?.display_name ?? null,
+      full_name: row.full_name ?? myProfile?.full_name ?? null,
+      username: row.username ?? myProfile?.username ?? null,
+      email: row.email ?? myProfile?.email ?? null,
+      avatar_url: row.avatar_url ?? myProfile?.avatar_url ?? null,
+    };
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === enriched.id)) return prev;
+      return [...prev, enriched];
+    });
+    lastRealtimeUpdateRef.current = Date.now();
+  }, [supabase, me, room, myProfile]);
+
+  const refreshRoomPlayers = useCallback(async () => {
+    if (!supabase || !roomId) return;
+    const { data, error } = await supabase
+      .from("celo_room_players")
+      .select(CELO_PLAYER_FETCH_SELECT)
+      .eq("room_id", roomId)
+      .order("seat_number", { ascending: true });
+    if (error || !data) return;
+    const rows = ((data as unknown[]) ?? []).map((row) => normalizeCeloPlayerRow(row) as Player);
+    const merged = applyCeloStateUpdate(
+      {
+        room: roomRef.current as unknown as Record<string, unknown> | null,
+        players: playersRef.current,
+        currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+      },
+      {
+        players: rows as unknown as Player[],
+        updated_at: new Date().toISOString(),
+      },
+      "fetch",
+      { playersSnapshot: true }
+    );
+    setRoom(merged.room as Room | null);
+    setPlayers(merged.players as Player[]);
+    setRound(merged.currentRound as Round | null);
+    setPlayersSnapshotReady(true);
   }, [supabase, roomId]);
 
   useEffect(() => {
@@ -448,6 +545,21 @@ export default function CeloRoomPage() {
       setUiReady(true);
     })();
   }, [router, roomId, supabase, fetchAll]);
+
+  useEffect(() => {
+    if (!supabase || !me) {
+      setMyProfile(null);
+      return;
+    }
+    void supabase
+      .from("users")
+      .select(CELO_USER_PROFILE_FIELDS)
+      .eq("id", me)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setMyProfile(data as UserDisplayProfile);
+      });
+  }, [supabase, me]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -520,7 +632,10 @@ export default function CeloRoomPage() {
 
           if (et === "INSERT" && rowNew) {
             if (String(rowNew.room_id ?? "") === roomId) {
-              const row = normalizeCeloPlayerRow(rowNew) as Player;
+              const row = mergePlayerProfile(
+                undefined,
+                normalizeCeloPlayerRow(rowNew) as Player
+              );
               const without = prev.filter(
                 (p) => p.id !== row.id && p.user_id !== row.user_id
               );
@@ -540,7 +655,10 @@ export default function CeloRoomPage() {
               if (!("bet_cents" in n) && prevRow) {
                 n.bet_cents = prevRow.bet_cents;
               }
-              const row = normalizeCeloPlayerRow(n) as Player;
+              const row = mergePlayerProfile(
+                prevRow,
+                normalizeCeloPlayerRow(n) as Player
+              );
               const has = prev.some(
                 (p) => p.user_id === row.user_id || p.id === row.id
               );
@@ -548,7 +666,7 @@ export default function CeloRoomPage() {
                 has
                   ? prev.map((p) =>
                       p.user_id === row.user_id || p.id === row.id
-                        ? { ...p, ...row }
+                        ? mergePlayerProfile(p, row)
                         : p
                     )
                   : [...prev, row]
@@ -583,6 +701,7 @@ export default function CeloRoomPage() {
           setPlayers(merged.players as Player[]);
           setRound(merged.currentRound as Round | null);
           setPlayersSnapshotReady(true);
+          void refreshRoomPlayers();
           void fetchAll();
         }
       )
@@ -755,7 +874,7 @@ export default function CeloRoomPage() {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [supabase, roomId, fetchAll]);
+  }, [supabase, roomId, fetchAll, refreshRoomPlayers]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !roomId) return;
@@ -840,8 +959,8 @@ export default function CeloRoomPage() {
       ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
       : CELO_IDLE_DICE;
   const stakedPlayerCount = useMemo(
-    () => countStakedEntryPlayers(players),
-    [players]
+    () => countStakedEntryPlayers(players, room?.banker_id ?? null),
+    [players, room?.banker_id]
   );
   const spectators = useMemo(
     () => players.filter((p) => p.role === "spectator").length,
@@ -849,6 +968,11 @@ export default function CeloRoomPage() {
   );
   const seatedAtTable = useMemo(
     () => players.filter((p) => p.role !== "spectator").length,
+    [players]
+  );
+  const playersAtTable = useMemo(
+    () =>
+      sortCeloPlayersBySeat(players.filter((p) => p.role !== "spectator")),
     [players]
   );
 
@@ -1157,7 +1281,15 @@ export default function CeloRoomPage() {
     };
 
     const mergeJoinPayload = () => {
-      const row = j.player ? (normalizeCeloPlayerRow(j.player) as Player) : undefined;
+      const rowRaw = j.player ? (normalizeCeloPlayerRow(j.player) as Player) : undefined;
+      const row = rowRaw
+        ? mergePlayerProfile(
+            playersRef.current.find(
+              (p) => p.user_id === rowRaw.user_id || p.id === rowRaw.id
+            ),
+            rowRaw
+          )
+        : undefined;
       const incomingPlayers = row
         ? sortCeloPlayersBySeat([
             ...playersRef.current.filter(
@@ -1321,6 +1453,39 @@ export default function CeloRoomPage() {
               <span>Staked {stakedPlayerCount} player{stakedPlayerCount === 1 ? "" : "s"}</span>
             </div>
           )}
+          {room && playersAtTable.length > 0 ? (
+            <div className="mt-2 border-t border-white/5 pt-2">
+              <p className="font-mono text-[9px] uppercase tracking-widest text-zinc-500">
+                At the table
+              </p>
+              <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-300 sm:text-[11px]">
+                {playersAtTable.map((p) => {
+                  const isRoomBanker =
+                    String(room.banker_id) === p.user_id || p.role === "banker";
+                  return (
+                    <li key={p.id} className="flex min-w-0 max-w-full items-baseline gap-1">
+                      <span className="shrink-0 text-zinc-500">
+                        {p.seat_number != null ? `S${p.seat_number}` : "—"}
+                      </span>
+                      <span className="min-w-0 truncate text-zinc-200">
+                        {resolveDisplayName(p, p.user_id)}
+                      </span>
+                      {isRoomBanker ? (
+                        <span className="shrink-0 rounded bg-amber-500/15 px-1 text-[9px] font-bold uppercase tracking-wide text-amber-300/95">
+                          Banker
+                        </span>
+                      ) : null}
+                      {p.role === "player" && p.entry_sc > 0 ? (
+                        <span className="shrink-0 text-zinc-500">
+                          · {Math.floor(p.entry_sc).toLocaleString()} GPC
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </header>
         {roomFetchError && (
           <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/50 px-3 py-2 text-center text-xs text-red-200">
@@ -1597,20 +1762,9 @@ export default function CeloRoomPage() {
                 messages={messages}
                 value={chat}
                 onChange={setChat}
-                onSend={async () => {
-                  if (!supabase || !me || !room || !chat.trim()) return;
-                  const { error } = await supabase.from("celo_chat").insert({
-                    room_id: room.id,
-                    user_id: me,
-                    message: chat.trim().slice(0, 500),
-                  });
-                  if (!error) {
-                    setChat("");
-                    void fetchAll();
-                  } else if (CELO_DEBUG) {
-                    console.warn("[C-Lo room] chat send", error);
-                  }
-                }}
+                onSend={() => void sendRoomChat()}
+                selfProfile={myProfile}
+                selfUserId={me}
                 canSend={!!(supabase && me && room && chat.trim().length > 0)}
               />
             </div>
@@ -1682,18 +1836,9 @@ export default function CeloRoomPage() {
             messages={messages}
             value={chat}
             onChange={setChat}
-            onSend={async () => {
-              if (!supabase || !me || !room || !chat.trim()) return;
-              const { error } = await supabase.from("celo_chat").insert({
-                room_id: room.id,
-                user_id: me,
-                message: chat.trim().slice(0, 500),
-              });
-              if (!error) {
-                setChat("");
-                void fetchAll();
-              }
-            }}
+            onSend={() => void sendRoomChat()}
+            selfProfile={myProfile}
+            selfUserId={me}
             canSend={!!(supabase && me && room && chat.trim().length > 0)}
           />
         )}

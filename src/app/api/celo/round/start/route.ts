@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
+import { CELO_ROOM_PLAYERS_USER_EMBED } from "@/lib/celo-player-state";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -51,10 +52,13 @@ export async function POST(request: Request) {
   }
   const { data: players } = await adminClient
     .from("celo_room_players")
-    .select("user_id, role, entry_sc")
+    .select(`user_id, role, entry_sc,${CELO_ROOM_PLAYERS_USER_EMBED}`)
     .eq("room_id", roomId);
   const staked = (players ?? []).filter(
-    (p) => p.role === "player" && Number(p.entry_sc) > 0
+    (p) =>
+      p.role === "player" &&
+      String(p.user_id) !== String(room.banker_id) &&
+      Number(p.entry_sc) > 0
   );
   if (staked.length < 1) {
     return NextResponse.json(

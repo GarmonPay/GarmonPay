@@ -1,8 +1,20 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
 
-export type ChatRow = { id: string; user_id: string; message: string; created_at: string };
+export type ChatRow = {
+  id: string;
+  user_id: string;
+  message: string;
+  created_at: string;
+  is_system?: boolean;
+  full_name?: string | null;
+  username?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  display_name?: string | null;
+};
 
 type Props = {
   messages: ChatRow[];
@@ -12,6 +24,9 @@ type Props = {
   canSend: boolean;
   className?: string;
   minHeightStyle?: CSSProperties;
+  /** Current user profile for the typing placeholder / optimistic label. */
+  selfProfile?: UserDisplayProfile | null;
+  selfUserId?: string | null;
 };
 
 /**
@@ -25,7 +40,14 @@ export function CeloRoomChatPanel({
   canSend,
   className = "",
   minHeightStyle,
+  selfProfile,
+  selfUserId,
 }: Props) {
+  const selfLabel =
+    selfUserId != null
+      ? resolveDisplayName(selfProfile ?? undefined, selfUserId)
+      : "You";
+
   return (
     <div
       className={`flex min-h-0 flex-1 flex-col border-purple-500/20 ${className}`}
@@ -42,7 +64,9 @@ export function CeloRoomChatPanel({
         ) : (
           messages.map((m) => (
             <div key={m.id} className="text-[#9CA3AF] break-words">
-              <span className="text-[#A855F7]">{(m.user_id ?? "").slice(0, 4)}</span>{" "}
+              <span className="text-[#A855F7]">
+                {resolveDisplayName(m, m.user_id)}
+              </span>{" "}
               {m.message}
             </div>
           ))
@@ -56,7 +80,7 @@ export function CeloRoomChatPanel({
             if (e.key === "Enter" && canSend) void onSend();
           }}
           className="min-h-[40px] min-w-0 flex-1 rounded border border-purple-500/30 bg-white/[0.05] px-2 text-sm text-white placeholder:text-white/30"
-          placeholder="Message…"
+          placeholder={canSend ? `Message as ${selfLabel}…` : "Message…"}
         />
         <button
           type="button"

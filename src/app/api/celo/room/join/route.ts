@@ -5,6 +5,9 @@ import { getUserCoins } from "@/lib/coins";
 import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
 import { validateEntry } from "@/lib/celo-engine";
 import { celoAccountingAuditLog, celoAccountingLog } from "@/lib/celo-accounting";
+import { CELO_ROOM_PLAYERS_USER_EMBED } from "@/lib/celo-player-state";
+
+const CELO_PLAYER_ROW_SELECT = `*,${CELO_ROOM_PLAYERS_USER_EMBED}`;
 
 const CLOSED = new Set(["completed", "cancelled"]);
 
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
     );
   const { data: existing } = await adminClient
     .from("celo_room_players")
-    .select("*")
+    .select(CELO_PLAYER_ROW_SELECT)
     .eq("room_id", roomId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
         bet_cents: 0,
         dice_type: "standard",
       })
-      .select("*")
+      .select(CELO_PLAYER_ROW_SELECT)
       .single();
     if (error || !p) {
       return NextResponse.json(
@@ -146,7 +149,7 @@ export async function POST(request: Request) {
     if (dup) {
       const { data: row } = await adminClient
         .from("celo_room_players")
-        .select("*")
+        .select(CELO_PLAYER_ROW_SELECT)
         .eq("room_id", roomId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -196,7 +199,7 @@ export async function POST(request: Request) {
       bet_cents: entrySc,
       dice_type: "standard",
     })
-    .select("*")
+    .select(CELO_PLAYER_ROW_SELECT)
     .single();
   if (
     iErr &&
@@ -204,7 +207,7 @@ export async function POST(request: Request) {
   ) {
     const { data: row } = await adminClient
       .from("celo_room_players")
-      .select("*")
+      .select(CELO_PLAYER_ROW_SELECT)
       .eq("room_id", roomId)
       .eq("user_id", userId)
       .maybeSingle();

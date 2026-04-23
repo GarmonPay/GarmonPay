@@ -4,6 +4,17 @@
  * `role === "player"` and `entry_sc > 0` (GPC, integer cents/scale as stored in DB).
  */
 
+/** Fields embedded from `public.users` (FK user_id). */
+export const CELO_USER_PROFILE_FIELDS = "id,email,full_name,avatar_url,username";
+
+/** Use with `.from("celo_room_players").select(...)` so UI can resolve display names. */
+export const CELO_ROOM_PLAYERS_USER_EMBED = `users:user_id(${CELO_USER_PROFILE_FIELDS})`;
+
+/** Same embed on `celo_chat.user_id` → `users`. */
+export const CELO_CHAT_USER_EMBED = `users:user_id(${CELO_USER_PROFILE_FIELDS})`;
+
+export const CELO_CHAT_SELECT_WITH_USER = `id, user_id, message, created_at, is_system, ${CELO_CHAT_USER_EMBED}`;
+
 export type CeloEntryPlayerFields = {
   id: string;
   user_id: string;
@@ -12,10 +23,27 @@ export type CeloEntryPlayerFields = {
   bet_cents: number;
   seat_number: number | null;
   dice_type: string;
+  /** From joined `users` row (optional). */
+  full_name?: string | null;
+  username?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
 };
+
+function extractUsersEmbed(r: Record<string, unknown>): Record<string, unknown> | null {
+  const raw = r.users;
+  if (raw == null) return null;
+  if (Array.isArray(raw)) return (raw[0] as Record<string, unknown>) ?? null;
+  return raw as Record<string, unknown>;
+}
 
 export function normalizeCeloPlayerRow(row: unknown): CeloEntryPlayerFields {
   const r = row as Record<string, unknown>;
+  const u = extractUsersEmbed(r);
+  const str = (v: unknown) => {
+    const s = String(v ?? "").trim();
+    return s.length ? s : null;
+  };
   return {
     id: String(r.id),
     user_id: String(r.user_id),
@@ -27,16 +55,27 @@ export function normalizeCeloPlayerRow(row: unknown): CeloEntryPlayerFields {
         ? null
         : Math.floor(Number(r.seat_number)),
     dice_type: String(r.dice_type ?? "standard"),
+    full_name: u ? str(u.full_name) : null,
+    username: u ? str(u.username) : null,
+    email: u ? str(u.email) : null,
+    avatar_url: u ? str(u.avatar_url) : null,
   };
 }
 
-/** Valid posted entries for "start round": non-banker players with stake. */
+/**
+ * Valid posted entries for "start round": seated `player` role with stake,
+ * excluding the room banker even if a bad row marks them as player.
+ */
 export function countStakedEntryPlayers(
-  players: { role: string; entry_sc: number }[]
+  players: { role: string; entry_sc: number; user_id?: string }[],
+  bankerUserId?: string | null
 ): number {
-  return players.filter(
-    (p) => p.role === "player" && Math.floor(Number(p.entry_sc ?? 0)) > 0
-  ).length;
+  const banker = bankerUserId ? String(bankerUserId) : "";
+  return players.filter((p) => {
+    if (p.role !== "player") return false;
+    if (banker && String(p.user_id ?? "") === banker) return false;
+    return Math.floor(Number(p.entry_sc ?? 0)) > 0;
+  }).length;
 }
 
 export function mergeCeloPlayerRealtime(
@@ -68,7 +107,14 @@ export function mergeCeloPlayerRealtime(
     const idx = previous.findIndex((p) => p.id === next.id);
     if (idx >= 0) {
       const copy = previous.slice();
-      copy[idx] = { ...copy[idx], ...next };
+      const prevRow = copy[idx];
+      const mergedProfile = {
+        full_name: next.full_name ?? prevRow.full_name ?? null,
+        username: next.username ?? prevRow.username ?? null,
+        email: next.email ?? prevRow.email ?? null,
+        avatar_url: next.avatar_url ?? prevRow.avatar_url ?? null,
+      };
+      copy[idx] = { ...prevRow, ...next, ...mergedProfile };
       return copy.sort(compareCeloPlayerSeat);
     }
     return [...previous, next].sort(compareCeloPlayerSeat);

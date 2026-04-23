@@ -15,6 +15,7 @@ import {
 } from "@/lib/celo-lobby-stats";
 import { CeloRoomCard, type CeloRoomCardData } from "@/components/celo/CeloRoomCard";
 import { fetchCeloApi } from "@/lib/celo-api-fetch";
+import { CELO_USER_PROFILE_FIELDS } from "@/lib/celo-player-state";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -47,7 +48,7 @@ export default function CeloLobbyPage() {
     setErr(null);
     const { data, error } = await supabase
       .from("celo_rooms")
-      .select("*")
+      .select(`*,banker:banker_id(${CELO_USER_PROFILE_FIELDS})`)
       .in("status", CELO_LOBBY_LIST_STATUSES)
       .order("created_at", { ascending: false });
 

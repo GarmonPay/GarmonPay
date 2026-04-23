@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
 
 export type CeloRoomCardData = {
   id: string;
@@ -13,6 +14,8 @@ export type CeloRoomCardData = {
   current_bank_sc: number | null;
   current_bank_cents: number | null;
   banker_id: string;
+  /** From `banker:banker_id(...)` embed on lobby fetch. */
+  banker?: UserDisplayProfile | null;
 };
 
 function minEntry(r: CeloRoomCardData) {
@@ -50,8 +53,8 @@ export function CeloRoomCard({ room }: { room: CeloRoomCardData }) {
         </div>
         <div>
           <div className="text-[10px] font-mono uppercase text-gray-500">Banker</div>
-          <div className="truncate font-mono text-xs text-gray-400">
-            {(room.banker_id ?? "—").slice(0, 6)}…
+          <div className="truncate font-mono text-xs text-gray-400" title={room.banker_id}>
+            {resolveDisplayName(room.banker ?? null, room.banker_id)}
           </div>
         </div>
       </div>
