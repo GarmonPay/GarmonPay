@@ -456,339 +456,327 @@ export default function CeloRoomPage() {
     }
   }
 
-  const diceSize = 48;
   const spectators = players.filter((p) => p.role === "spectator").length;
+  const [diceSize, setDiceSize] = useState(60);
+  useEffect(() => {
+    const setFrom = () => {
+      setDiceSize(typeof window !== "undefined" && window.innerWidth >= 1024 ? 78 : window.innerWidth >= 768 ? 70 : 58);
+    };
+    setFrom();
+    window.addEventListener("resize", setFrom);
+    return () => window.removeEventListener("resize", setFrom);
+  }, []);
+
+  const feltW = "min(100%, 28rem)";
+  const feltH = "clamp(12rem, 32vw, 17rem)";
+
+  const gamePanelClass =
+    "flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-amber-400/15 bg-gradient-to-b from-[#0c0718] to-[#05020d] p-4 shadow-[0_0_0_1px_rgba(245,200,66,0.08),0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.04)] md:p-6";
+  const railClass =
+    "hidden min-h-0 w-full min-w-0 flex-col overflow-y-auto overflow-x-hidden rounded-2xl border border-amber-400/15 bg-[#08050f] p-4 text-sm shadow-[0_12px_40px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)] md:flex md:max-w-[220px] md:shrink-0 md:self-stretch";
+  const rightRailClass =
+    "hidden min-h-0 w-[300px] min-w-0 max-w-full flex-col overflow-hidden border-amber-400/10 pl-0 md:flex md:justify-stretch md:self-stretch";
 
   return (
     <div
-      className={`flex h-full min-h-0 w-full flex-col text-white ${dm.className}`}
-      style={{ background: "#05010F" }}
+      className={`flex h-full min-h-0 w-full flex-col overflow-hidden text-white ${dm.className}`}
+      style={{ background: "radial-gradient(120% 80% at 50% 0%, #1a0a2e 0%, #05010F 45%, #020108 100%)" }}
     >
-      <header
-        className="flex h-12 shrink-0 items-center gap-2 border-b px-3"
-        style={{
-          background: "rgba(5,1,15,0.97)",
-          borderColor: "rgba(124,58,237,0.2)",
-        }}
-      >
-        <Link
-          href="/dashboard/games/celo"
-          className="shrink-0 min-h-touch rounded px-2 text-lg"
-          style={{ color: "#F5C842" }}
+      <div className="mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-2 pt-3 md:px-6 md:pt-5">
+        <header
+          className="flex h-12 items-center gap-2 rounded-xl border border-amber-400/10 bg-black/30 px-3 py-1 shadow-inner md:h-12 md:px-4"
         >
-          ←
-        </Link>
-        <span className={`truncate text-[13px] text-white ${cinzel.className}`}>
-          {room?.name?.slice(0, 20) ?? "…"}
-        </span>
-        <div className="ml-auto font-mono text-[11px] text-[#9CA3AF]">
-          {round ? `R${round.round_number}` : ""}
-        </div>
-        <span
-          className="font-mono text-[10px] uppercase"
-          style={{
-            color: connection === "live" ? "#10B981" : connection === "offline" ? "#EF4444" : "#F59E0B",
-          }}
-        >
-          {connection === "live" ? "● live" : connection}
-        </span>
-        <span className="font-mono text-[10px] text-[#6B7280]">👁 {spectators}</span>
-      </header>
-      {roomFetchError && (
-        <div
-          className="shrink-0 px-3 py-2 text-center text-xs text-red-300"
-          style={{ background: "rgba(127,29,29,0.35)" }}
-        >
-          {roomFetchError}
-        </div>
-      )}
-      <div
-        className="flex h-[52px] shrink-0 items-center border-b px-3"
-        style={{
-          background: "rgba(13,5,32,0.95)",
-          borderColor: "rgba(245,200,66,0.1)",
-        }}
-      >
-        <div className="flex-1" />
-        <div className="text-center">
-          <div
-            className="font-mono text-[9px] tracking-wider"
-            style={{ color: "#F5C842" }}
+          <Link
+            href="/dashboard/games/celo"
+            className="shrink-0 min-h-touch rounded-lg px-2.5 text-lg text-amber-300/90 transition hover:text-amber-200"
           >
-            PRIZE POOL
-          </div>
-          <div
-            className="font-mono text-sm font-bold text-white"
-            style={{ fontFamily: "ui-monospace, 'Courier New', monospace" }}
-          >
-            {prize.toLocaleString()} GPC
-          </div>
-          <div className="text-[10px] text-[#6B7280]">{gpcToUsdDisplay(prize)}</div>
-        </div>
-        <div className="flex-1 text-right">
-          <div className="font-mono text-[9px] text-[#6B7280]">BANK</div>
-          <div
-            className="font-mono text-sm font-bold"
-            style={{ color: "#F5C842", fontFamily: "ui-monospace, 'Courier New', monospace" }}
-          >
-            {room ? bankVal(room).toLocaleString() : 0} GPC
-          </div>
-          {isBanker && room?.last_round_was_celo && (
-            <button
-              type="button"
-              onClick={() => {
-                setLowerAmt(clamp(bankVal(room) - minE, minE, bankVal(room)));
-                setShowLower(true);
-              }}
-              className="text-[9px] font-mono text-[#F5C842] underline"
-            >
-              LOWER ↓
-            </button>
+            ←
+          </Link>
+          <span className={`min-w-0 flex-1 truncate text-sm font-bold text-white md:text-base ${cinzel.className}`}>
+            {room?.name?.slice(0, 32) ?? "C-Lo"}
+          </span>
+          {round && (
+            <span className="shrink-0 font-mono text-xs text-amber-200/80">R{round.round_number}</span>
           )}
-        </div>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-        <div className="relative flex min-h-[min(50vh,420px)] flex-1 flex-col items-center justify-center overflow-hidden">
-          <div
-            className="pointer-events-none absolute inset-0 z-0"
+          <span
+            className="shrink-0 font-mono text-[10px] uppercase tracking-wide"
             style={{
-              background: "#05010F",
-            }}
-          />
-          <div
-            className="absolute left-0 top-0 z-0 h-full w-0.5"
-            style={{
-              background: "#7C3AED",
-              boxShadow: "0 0 10px #7C3AED",
-            }}
-          />
-          <div
-            className="absolute right-0 top-0 z-0 h-full w-0.5 md:hidden"
-            style={{
-              background: "#F5C842",
-              boxShadow: "0 0 10px #F5C842",
-            }}
-          />
-          <div
-            className="pointer-events-none absolute bottom-0 left-0 z-0 h-1 w-full"
-            style={{ background: "#10B981", boxShadow: "0 0 10px #10B981" }}
-          />
-          <div
-            className="relative z-10 flex w-full flex-col items-center justify-center px-2 py-4"
-            style={{
-              minHeight: 220,
+              color: connection === "live" ? "#34D399" : connection === "offline" ? "#F87171" : "#FBBF24",
             }}
           >
-            <p
-              className="mb-3 max-w-sm px-2 text-center font-mono text-[11px] text-[#9CA3AF]"
-            >
-              {tableStatusText}
-            </p>
-            <div
-              className="relative"
-              style={{
-                width: "min(260px, 82vw)",
-                height: 168,
-                borderRadius: "50%",
-                background: "#0A2010",
-                border: "8px solid #5C3A1A",
-                boxShadow:
-                  "0 0 0 2px #8B5E3C, 0 8px 32px rgba(0,0,0,0.7), inset 0 0 40px rgba(0,0,0,0.5)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                className={`absolute ${cinzel.className} select-none pointer-events-none`}
-                style={{ fontSize: 44, color: "#F5C842", opacity: 0.05 }}
-              >
-                GP
-              </span>
-              <div
-                className="relative z-[5] flex items-center justify-center gap-2"
-                style={{ opacity: showIdleDice ? 0.5 : 1 }}
-              >
-                {rolling
-                  ? [0, 1, 2].map((i) => (
-                      <div
-                        key={i}
-                        className="animate-pulse"
-                        style={{
-                          width: diceSize,
-                          height: diceSize,
-                          borderRadius: diceSize * 0.16,
-                          background: "linear-gradient(135deg,#DC2626,#991B1B)",
-                          flexShrink: 0,
-                        }}
-                      />
-                    ))
-                  : [0, 1, 2].map((i) => (
-                      <DiceFace
-                        key={i}
-                        value={diceToRender[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                        diceType={myDiceType}
-                        size={diceSize}
-                        rolling={false}
-                        delay={[0, 133, 266][i]}
-                      />
-                    ))}
+            {connection === "live" ? "Live" : connection}
+          </span>
+          <span className="hidden shrink-0 text-[10px] text-zinc-500 sm:inline">👁 {spectators}</span>
+        </header>
+        {roomFetchError && (
+          <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/50 px-3 py-2 text-center text-xs text-red-200">
+            {roomFetchError}
+          </div>
+        )}
+      </div>
+
+      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col px-4 pb-3 md:min-h-0 md:px-6 md:pb-6">
+        <div
+          className="grid min-h-0 w-full flex-1 grid-cols-1 content-stretch items-stretch gap-4 md:min-h-0 md:grid-cols-[minmax(0,200px)_minmax(28rem,1fr)_minmax(260px,300px)] md:gap-6"
+        >
+          <aside className={railClass}>
+            <p className={`text-xs text-amber-200/90 ${cinzel.className}`}>Table</p>
+            <p className="mt-1 truncate text-[11px] text-zinc-300">{room?.name ?? "—"}</p>
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Status</p>
+            <p className="text-xs text-zinc-200">{room?.status ?? "—"}</p>
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Min entry</p>
+            <p className="font-mono text-sm text-amber-200">{room ? minVal(room).toLocaleString() : "—"} GPC</p>
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Seats (max)</p>
+            <p className="text-sm text-zinc-200">{room ? room.max_players : "—"}</p>
+            <p className="mt-3 text-[10px] text-zinc-500">Spectators</p>
+            <p className="text-sm">{spectators}</p>
+          </aside>
+
+          <main className="relative z-0 flex min-h-0 min-w-0 flex-col order-first md:order-none">
+            <div className={gamePanelClass}>
+              <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-center border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
+                <div className="text-left">
+                  <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200/60">
+                    Prize pool
+                  </p>
+                  <p className="mt-0.5 font-mono text-lg font-bold text-white md:text-xl" style={{ fontFamily: "ui-monospace, 'Courier New', monospace" }}>
+                    {prize.toLocaleString()}{" "}
+                    <span className="text-sm font-normal text-amber-100/50">GPC</span>
+                  </p>
+                  <p className="mt-0.5 font-mono text-[10px] text-zinc-500">{gpcToUsdDisplay(prize)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200/60">Bank</p>
+                  <p
+                    className="mt-0.5 font-mono text-lg font-bold text-amber-300 md:text-xl"
+                    style={{ fontFamily: "ui-monospace, 'Courier New', monospace" }}
+                  >
+                    {room ? bankVal(room).toLocaleString() : 0}{" "}
+                    <span className="text-sm font-normal text-amber-100/50">GPC</span>
+                  </p>
+                  {isBanker && room?.last_round_was_celo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLowerAmt(clamp(bankVal(room) - minE, minE, bankVal(room)));
+                        setShowLower(true);
+                      }}
+                      className="mt-0.5 text-[10px] font-mono text-amber-200/80 underline"
+                    >
+                      Lower bank
+                    </button>
+                  )}
+                </div>
               </div>
-              <RollNameDisplay
-                rollName={rollName}
-                onComplete={() => setRollName(null)}
+
+              <p className="mx-auto mb-4 max-w-md text-center text-xs leading-relaxed text-zinc-300 md:text-sm">
+                {tableStatusText}
+              </p>
+
+              <div className="flex flex-1 flex-col items-center justify-center py-2 md:min-h-[12rem] md:py-6">
+                <div
+                  className="relative"
+                  style={{
+                    width: feltW,
+                    height: feltH,
+                    maxWidth: "28rem",
+                    minHeight: "12rem",
+                    borderRadius: "50%",
+                    background: "radial-gradient(ellipse at 50% 40%, #0f2a16 0%, #061208 50%, #030a06 100%)",
+                    border: "10px solid #6B4423",
+                    boxShadow: `
+                    0 0 0 2px #A67C52,
+                    0 20px 50px rgba(0,0,0,0.75),
+                    inset 0 0 50px rgba(0,0,0,0.5),
+                    inset 0 -20px 40px rgba(0,0,0,0.35)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span
+                    className={`absolute ${cinzel.className} pointer-events-none select-none`}
+                    style={{ fontSize: "clamp(2.5rem,8vw,3.5rem)", color: "#F5C842", opacity: 0.04 }}
+                  >
+                    GP
+                  </span>
+                  <div
+                    className="relative z-[5] flex items-center justify-center gap-2 md:gap-3"
+                    style={{ opacity: showIdleDice && !rolling ? 0.55 : 1 }}
+                  >
+                    {rolling
+                      ? [0, 1, 2].map((i) => (
+                          <div
+                            key={i}
+                            className="animate-pulse rounded-xl"
+                            style={{
+                              width: diceSize,
+                              height: diceSize,
+                              background: "linear-gradient(135deg,#DC2626,#991B1B)",
+                            }}
+                          />
+                        ))
+                      : [0, 1, 2].map((i) => (
+                          <DiceFace
+                            key={i}
+                            value={diceToRender[i] as 1 | 2 | 3 | 4 | 5 | 6}
+                            diceType={myDiceType}
+                            size={diceSize}
+                            rolling={false}
+                            delay={[0, 133, 266][i]}
+                          />
+                        ))}
+                  </div>
+                  <RollNameDisplay rollName={rollName} onComplete={() => setRollName(null)} />
+                </div>
+                {showIdleDice && !rolling && (
+                  <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-amber-200/25">
+                    Awaiting the next throw
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-auto border-t border-white/5 pt-4">
+                <p className="mb-2 text-center font-mono text-[9px] uppercase tracking-widest text-zinc-500">
+                  Action
+                </p>
+                <div className="mx-auto flex w-full max-w-xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4">
+                  <div className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-amber-400/10 bg-black/25 px-3 py-2 sm:max-w-[7.5rem] sm:flex-col sm:items-start sm:py-3">
+                    <span className="font-mono text-[9px] uppercase text-zinc-500">Your balance</span>
+                    <span className="font-mono text-sm font-bold text-amber-200">{myBalance.toLocaleString()} GPC</span>
+                    <span className="hidden text-[9px] text-zinc-500 sm:inline">{gpcToUsdDisplay(myBalance)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {canRoll && (
+                      <button
+                        type="button"
+                        disabled={rollingAction}
+                        onClick={() => void handleRoll()}
+                        className={`w-full min-h-[48px] max-w-md rounded-xl px-5 text-sm font-bold text-zinc-950 ${cinzel.className} mx-auto block transition hover:opacity-95`}
+                        style={{
+                          background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                          boxShadow: "0 0 0 1px rgba(0,0,0,0.2), 0 10px 28px rgba(245,200,66,0.2)",
+                          opacity: rollingAction ? 0.65 : 1,
+                        }}
+                      >
+                        Roll dice
+                      </button>
+                    )}
+                    {mustStart && isBanker && !canRoll && (
+                      <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!canStartRound}
+                          onClick={() => void handleStart()}
+                          className={`w-full min-h-[48px] rounded-xl text-sm font-bold text-zinc-950 ${cinzel.className} transition hover:opacity-95`}
+                          style={{
+                            background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                            boxShadow: "0 0 0 1px rgba(0,0,0,0.2), 0 10px 28px rgba(245,200,66,0.2)",
+                            opacity: canStartRound ? 1 : 0.45,
+                          }}
+                        >
+                          Start round
+                        </button>
+                        {stakedPlayerCount < 1 && (
+                          <p className="px-1 text-center text-xs text-amber-100/80">
+                            At least one player must post an entry before you can start.
+                          </p>
+                        )}
+                        {startRoundError && <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>}
+                      </div>
+                    )}
+                    {room && !inProgress && !isBanker && (myRow?.entry_sc ?? 0) === 0 && !isSpec && (
+                      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {[minE, minE * 2, minE * 5, bankVal(room)]
+                            .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
+                            .map((amt) => (
+                              <button
+                                key={amt}
+                                type="button"
+                                onClick={() => setEntryAmount(amt)}
+                                className="min-h-10 min-w-[3.5rem] rounded-lg border text-xs"
+                                style={{
+                                  borderColor: entryAmount === amt ? "rgba(245,200,66,0.7)" : "rgba(113,59,200,0.3)",
+                                  background: entryAmount === amt ? "rgba(245,200,66,0.12)" : "rgba(0,0,0,0.2)",
+                                  color: entryAmount === amt ? "#F5C842" : "#9CA3AF",
+                                }}
+                              >
+                                {amt}
+                              </button>
+                            ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={entryAmount > myBalance}
+                          onClick={() => void handleJoin()}
+                          className="w-full min-h-12 rounded-xl font-bold text-zinc-950"
+                          style={{
+                            background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                            borderRadius: 10,
+                            opacity: entryAmount > myBalance ? 0.4 : 1,
+                          }}
+                        >
+                          {!myRow ? "Join" : "Post"} {entryAmount} GPC
+                        </button>
+                      </div>
+                    )}
+                    {isSpec && (
+                      <p className="text-center text-xs text-zinc-500">You are spectating this table</p>
+                    )}
+                  </div>
+                  <div className="flex justify-center sm:flex-col sm:items-center sm:justify-start">
+                    <button
+                      type="button"
+                      onClick={() => setDiceModal(true)}
+                      className="h-11 w-11 shrink-0 rounded-lg border border-violet-500/35 bg-violet-950/40 text-lg transition hover:bg-violet-900/50"
+                      aria-label="Dice style"
+                    >
+                      🎲
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <aside className={`${rightRailClass} min-h-0`}>
+            <div className="grid h-full w-full min-h-0 max-h-[min(100dvh,52rem)] grid-rows-[minmax(8rem,0.4fr)_minmax(0,1fr)] overflow-hidden rounded-2xl border border-amber-400/12 bg-[#08050f] p-0 shadow-lg md:max-h-none">
+              <CeloRoomSideBetsPanel
+                bets={sideBets}
+                loading={sideBetsLoading}
+                className="min-h-0 overflow-y-auto border-b-0"
+              />
+              <CeloRoomChatPanel
+                className="min-h-0 border-t border-amber-400/10"
+                messages={messages}
+                value={chat}
+                onChange={setChat}
+                onSend={async () => {
+                  if (!supabase || !me || !room || !chat.trim()) return;
+                  const { error } = await supabase.from("celo_chat").insert({
+                    room_id: room.id,
+                    user_id: me,
+                    message: chat.trim().slice(0, 500),
+                  });
+                  if (!error) {
+                    setChat("");
+                    void fetchAll();
+                  } else if (CELO_DEBUG) {
+                    console.warn("[C-Lo room] chat send", error);
+                  }
+                }}
+                canSend={!!(supabase && me && room && chat.trim().length > 0)}
               />
             </div>
-            {showIdleDice && !rolling && (
-              <p className="mt-2 font-mono text-[10px] text-white/30">Idle — next hand shows here</p>
-            )}
-          </div>
+          </aside>
         </div>
-        <aside
-          className="hidden w-[min(100%,360px)] shrink-0 flex-col border-l border-[rgba(124,58,237,0.25)] bg-[#070212] md:flex"
-          style={{ minHeight: 0 }}
-        >
-          <CeloRoomSideBetsPanel bets={sideBets} loading={sideBetsLoading} className="min-h-0" />
-          <CeloRoomChatPanel
-            className="min-h-0 border-t border-[rgba(124,58,237,0.2)]"
-            minHeightStyle={{ minHeight: 200 }}
-            messages={messages}
-            value={chat}
-            onChange={setChat}
-            onSend={async () => {
-              if (!supabase || !me || !room || !chat.trim()) return;
-              const { error } = await supabase.from("celo_chat").insert({
-                room_id: room.id,
-                user_id: me,
-                message: chat.trim().slice(0, 500),
-              });
-              if (!error) {
-                setChat("");
-                void fetchAll();
-              } else if (CELO_DEBUG) {
-                console.warn("[C-Lo room] chat send", error);
-              }
-            }}
-            canSend={!!(supabase && me && room && chat.trim().length > 0)}
-          />
-        </aside>
       </div>
+      <div className="mx-auto w-full max-w-[1500px] px-4 pb-3 md:px-6">
       <div
-        className="flex h-[52px] shrink-0 items-center gap-2 border-t px-2"
+        className="grid h-11 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs md:hidden"
         style={{
-          background: "rgba(5,1,15,0.97)",
-          borderColor: "rgba(124,58,237,0.2)",
-        }}
-      >
-        <div className="shrink-0 min-w-0 text-[10px] text-[#6B7280]">
-          BALANCE
-          <div
-            className="font-mono text-xs font-bold"
-            style={{ color: "#F5C842" }}
-          >
-            {myBalance.toLocaleString()} GPC
-          </div>
-          <div className="text-[9px] text-[#6B7280]">
-            {gpcToUsdDisplay(myBalance)}
-          </div>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center">
-          {canRoll ? (
-            <button
-              type="button"
-              disabled={rollingAction}
-              onClick={() => void handleRoll()}
-              className={`w-full min-h-[40px] max-w-xs rounded-lg px-4 text-[13px] font-bold text-[#0A0A0A] ${cinzel.className}`}
-              style={{
-                background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                boxShadow: "0 0 16px rgba(245,200,66,0.3)",
-                opacity: rollingAction ? 0.6 : 1,
-              }}
-            >
-              🎲 Roll
-            </button>
-          ) : null}
-          {mustStart && isBanker && !canRoll && (
-            <div className="flex w-full max-w-xs flex-col items-center gap-1">
-              <button
-                type="button"
-                disabled={!canStartRound}
-                onClick={() => void handleStart()}
-                className={`w-full min-h-[40px] rounded-lg px-4 text-[13px] font-bold text-[#0A0A0A] ${cinzel.className}`}
-                style={{
-                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                  opacity: canStartRound ? 1 : 0.45,
-                }}
-              >
-                🎲 Start round
-              </button>
-              {stakedPlayerCount < 1 && (
-                <p className="text-center text-[10px] text-amber-200/80">
-                  At least one player must post an entry before you can start.
-                </p>
-              )}
-              {startRoundError && (
-                <p className="text-center text-[10px] text-red-300">{startRoundError}</p>
-              )}
-            </div>
-          )}
-          {room &&
-            !inProgress &&
-            !isBanker &&
-            (myRow?.entry_sc ?? 0) === 0 &&
-            !isSpec && (
-            <div className="mt-1 flex w-full max-w-sm flex-col gap-1">
-              <div className="flex flex-wrap justify-center gap-1">
-                {[minE, minE * 2, minE * 5, bankVal(room)]
-                  .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
-                  .map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setEntryAmount(amt)}
-                      className="min-h-[36px] rounded border px-2 text-xs"
-                      style={{
-                        borderColor: entryAmount === amt ? "#F5C842" : "rgba(124,58,237,0.4)",
-                        background: entryAmount === amt ? "rgba(245,200,66,0.2)" : "transparent",
-                        color: entryAmount === amt ? "#F5C842" : "#9CA3AF",
-                      }}
-                    >
-                      {amt}
-                    </button>
-                  ))}
-              </div>
-              <button
-                type="button"
-                disabled={entryAmount > myBalance}
-                onClick={() => void handleJoin()}
-                className="w-full min-h-[40px] font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                  color: "#0A0A0A",
-                  borderRadius: 8,
-                }}
-              >
-                {!myRow ? "Join" : "Post"} {entryAmount} GPC
-              </button>
-            </div>
-          )}
-          {isSpec && <div className="text-center text-xs text-[#6B7280]">Spectating</div>}
-        </div>
-        <button
-          type="button"
-          onClick={() => setDiceModal(true)}
-          className="shrink-0 h-9 w-9 rounded border text-sm"
-          style={{ borderColor: "rgba(124,58,237,0.35)", background: "rgba(124,58,237,0.12)" }}
-          aria-label="Dice"
-        >
-          🎲
-        </button>
-      </div>
-      <div
-        className="grid h-9 shrink-0 border-t text-xs md:hidden"
-        style={{
-          background: "rgba(5,1,15,0.97)",
-          borderColor: "rgba(124,58,237,0.1)",
+          background: "rgba(5,1,15,0.9)",
           gridTemplateColumns: "1fr 1fr",
         }}
       >
@@ -822,11 +810,10 @@ export default function CeloRoomPage() {
         </button>
       </div>
       <div
-        className="shrink-0 overflow-hidden border-t transition-[height] duration-200 ease-out md:hidden"
+        className="shrink-0 overflow-hidden rounded-b-xl border border-t-0 border-amber-400/10 transition-[height] duration-200 ease-out md:hidden"
         style={{
-          background: "rgba(13,5,32,0.98)",
+          background: "rgba(8,5,15,0.98)",
           height: panelOpen ? "min(44vh, 320px)" : 0,
-          borderColor: "rgba(124,58,237,0.1)",
         }}
       >
         {sideTab === "side" && (
@@ -839,7 +826,7 @@ export default function CeloRoomPage() {
         {sideTab === "chat" && (
           <CeloRoomChatPanel
             className="h-full"
-            minHeightStyle={{ minHeight: "min(40vh, 280px)" }}
+            minHeightStyle={{ minHeight: "min(42vh, 300px)" }}
             messages={messages}
             value={chat}
             onChange={setChat}
@@ -858,6 +845,7 @@ export default function CeloRoomPage() {
             canSend={!!(supabase && me && room && chat.trim().length > 0)}
           />
         )}
+      </div>
       </div>
       {showLower && room && (
         <div
