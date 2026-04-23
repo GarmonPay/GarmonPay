@@ -415,16 +415,20 @@ export default function CeloRoomPage() {
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
+  /** No resolved triplet yet; round is in a rolling phase (banker or player) — all clients, incl. remote. */
   const showTableRollTumble = useMemo(() => {
     if (!inProgress || !round) return false;
     if (dice != null) return false;
     return round.status === "banker_rolling" || round.status === "player_rolling";
   }, [dice, inProgress, round]);
-  const tumbling = rolling || showTableRollTumble;
-  const showIdleDice = dice == null && !showTableRollTumble;
-  const diceToRender: [number, number, number] = showIdleDice
-    ? CELO_IDLE_DICE
-    : [clampDie(dice![0]), clampDie(dice![1]), clampDie(dice![2])];
+  /** True while local 2.2s roll is in progress OR server says rolling with no triplet in state. */
+  const isDiceRolling = rolling || showTableRollTumble;
+  /** All DiceFace rolling= true when we’re animating a throw but don’t have final pips in state. */
+  const isRollingFaces = dice == null && isDiceRolling;
+  const showIdleDice = dice == null && !isDiceRolling;
+  const facePips: [number, number, number] = dice
+    ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
+    : CELO_IDLE_DICE;
   const stakedPlayerCount = useMemo(
     () => countStakedEntryPlayers(players),
     [players]
@@ -508,12 +512,13 @@ export default function CeloRoomPage() {
     if (!CELO_DEBUG) return;
     console.log("[C-Lo room] felt (dev)", {
       hasDice: dice != null,
-      tumbling,
+      isDiceRolling,
+      isRollingFaces,
       showTableRollTumble,
       localRolling: rolling,
       roundStatus: round?.status,
     });
-  }, [dice, tumbling, showTableRollTumble, rolling, round?.status]);
+  }, [dice, isDiceRolling, isRollingFaces, showTableRollTumble, rolling, round?.status]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -600,7 +605,6 @@ export default function CeloRoomPage() {
       }),
       wait,
     ]);
-    setRolling(false);
     const j = (await res.json()) as {
       error?: string;
       dice?: number[];
@@ -611,6 +615,7 @@ export default function CeloRoomPage() {
       newBalance?: number;
     };
     if (!res.ok) {
+      setRolling(false);
       if (res.status === 401) {
         setRollError("Session expired. Please log in again.");
       } else {
@@ -622,6 +627,7 @@ export default function CeloRoomPage() {
     if (j.dice?.length === 3) {
       setDice([j.dice[0], j.dice[1], j.dice[2]]);
     }
+    setRolling(false);
     if (j.rollName) {
       setTimeout(() => setRollName(j.rollName ?? null), 300);
     }
@@ -861,44 +867,27 @@ export default function CeloRoomPage() {
                   </span>
                   <div
                     className="relative z-[5] flex items-center justify-center gap-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.55)] md:gap-3"
-                    style={{ opacity: showIdleDice && !tumbling ? 0.55 : 1 }}
+                    style={{ opacity: showIdleDice && !isDiceRolling ? 0.55 : 1 }}
                   >
-                    {tumbling
-                      ? [0, 1, 2].map((i) => (
-                          <div
-                            key={i}
-                            className="animate-pulse rounded-xl"
-                            style={{
-                              width: diceSize,
-                              height: diceSize,
-                              background: "linear-gradient(135deg,#E63946,#9B1B1B)",
-                              boxShadow: "0 0 24px rgba(245,200,90,0.35), inset 0 2px 0 rgba(255,255,255,0.15)",
-                            }}
-                          />
-                        ))
-                      : [0, 1, 2].map((i) => (
-                          <DiceFace
-                            key={
-                              round?.id
-                                ? `${round.id}-dice-${diceToRender[0]}-${diceToRender[1]}-${diceToRender[2]}-${i}`
-                                : i
-                            }
-                            value={diceToRender[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                            diceType={myDiceType}
-                            size={diceSize}
-                            rolling={false}
-                            delay={[0, 133, 266][i]}
-                          />
-                        ))}
+                    {[0, 1, 2].map((i) => (
+                      <DiceFace
+                        key={`${round?.id ?? "r"}-f${i}-${isRollingFaces ? "spin" : "face"}-${facePips[0]}-${facePips[1]}-${facePips[2]}`}
+                        value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
+                        diceType={myDiceType}
+                        size={diceSize}
+                        rolling={isRollingFaces}
+                        delay={[0, 120, 240][i]}
+                      />
+                    ))}
                   </div>
                   <RollNameDisplay rollName={rollName} onComplete={() => setRollName(null)} />
                 </div>
-                {showIdleDice && !tumbling && (
+                {showIdleDice && !isDiceRolling && (
                   <p className="mt-3 max-w-sm px-2 text-center font-mono text-[10px] uppercase tracking-widest text-amber-200/35">
                     Awaiting the next throw
                   </p>
                 )}
-                {tumbling && (
+                {isRollingFaces && (
                   <p className="mt-2.5 text-center font-mono text-[10px] text-amber-200/50">
                     Rolling…
                   </p>

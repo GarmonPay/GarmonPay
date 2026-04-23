@@ -142,6 +142,7 @@ export default function DiceFace({
         `,
           position: "relative",
           flexShrink: 0,
+          willChange: rolling ? "transform" : "auto",
           animation: rolling
             ? `celoDiceShake 0.3s ease-in-out ${delay}ms infinite`
             : "celoDiceLand 0.4s cubic-bezier(0.34, 1.2, 0.64, 1)",

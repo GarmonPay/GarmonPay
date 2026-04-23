@@ -6,6 +6,7 @@ export function clampDie(n: unknown): 1 | 2 | 3 | 4 | 5 | 6 {
   return v as 1 | 2 | 3 | 4 | 5 | 6;
 }
 
+/** Shown before a round and as the face during `DiceFace rolling` (shake) before pips are known. */
 export const CELO_IDLE_DICE: [1, 1, 1] = [1, 1, 1];
 
 export function tripletFromDiceJson(
