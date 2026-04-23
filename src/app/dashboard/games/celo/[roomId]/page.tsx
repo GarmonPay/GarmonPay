@@ -15,6 +15,11 @@ import {
   CeloRoomSideBetsPanel,
   type CeloSideBetRow,
 } from "@/components/celo/CeloRoomSideBetsPanel";
+import {
+  countStakedEntryPlayers,
+  mergeCeloPlayerRealtime,
+  normalizeCeloPlayerRow,
+} from "@/lib/celo-player-state";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
 
@@ -101,8 +106,12 @@ export default function CeloRoomPage() {
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
   const [startRoundError, setStartRoundError] = useState<string | null>(null);
   const [uiReady, setUiReady] = useState(false);
+  /** At least one full `fetchAll` has applied; avoids stale copy before players load. */
+  const [playersSnapshotReady, setPlayersSnapshotReady] = useState(false);
+  const [diceSize, setDiceSize] = useState(60);
   const rollingRef = useRef(false);
   const rollingActionRef = useRef(false);
+  const fetchTokenRef = useRef(0);
 
   useEffect(() => {
     rollingRef.current = rolling;
@@ -113,6 +122,7 @@ export default function CeloRoomPage() {
 
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
+    const myToken = ++fetchTokenRef.current;
     setSideBetsLoading(true);
     setRoomFetchError(null);
     const [
@@ -149,6 +159,8 @@ export default function CeloRoomPage() {
         .order("created_at", { ascending: false })
         .limit(30),
     ]);
+    if (myToken !== fetchTokenRef.current) return;
+
     setSideBetsLoading(false);
 
     if (roomRes.error) {
@@ -157,13 +169,20 @@ export default function CeloRoomPage() {
     if (roomRes.data) setRoom(roomRes.data as Room);
     else if (roomRes.error) setRoom(null);
 
-    setPlayers((playersRes.data as Player[]) ?? []);
+    if (myToken !== fetchTokenRef.current) return;
+
+    const playerRows: Player[] = ((playersRes.data ?? []) as unknown[]).map(
+      (row) => normalizeCeloPlayerRow(row) as Player
+    );
+    setPlayers(playerRows);
     if (playersRes.error && CELO_DEBUG) console.warn("[C-Lo room] players", playersRes.error);
 
     const ar = (roundsRes.data as Round[] | null) ?? [];
     const activeRound = ar[0] ?? null;
     setRound(activeRound);
     if (roundsRes.error && CELO_DEBUG) console.warn("[C-Lo room] rounds", roundsRes.error);
+
+    if (myToken !== fetchTokenRef.current) return;
 
     setMessages(
       (chatRes.data as { id: string; user_id: string; message: string; created_at: string }[]) ?? []
@@ -181,6 +200,7 @@ export default function CeloRoomPage() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (myToken !== fetchTokenRef.current) return;
       const t = tripletFromDiceJson(lastRoll?.dice);
       if (t) {
         setDice(t);
@@ -188,7 +208,13 @@ export default function CeloRoomPage() {
         setDice(null);
       }
     } else if (!activeRound && !rollingActionRef.current) {
-      setDice(null);
+      if (myToken === fetchTokenRef.current) {
+        setDice(null);
+      }
+    }
+
+    if (myToken === fetchTokenRef.current) {
+      setPlayersSnapshotReady(true);
     }
 
     if (CELO_DEBUG) {
@@ -196,11 +222,13 @@ export default function CeloRoomPage() {
         roomId,
         room: roomRes.data,
         activeRound: activeRound?.id,
-        players: playersRes.data?.length,
+        players: playerRows.length,
         sideBets: sideRes.data?.length,
+        staked: countStakedEntryPlayers(playerRows),
         diceComponent: "mounted",
         chatMounted: true,
         sideBetsMounted: true,
+        fetchToken: myToken,
       });
     }
   }, [supabase, roomId]);
@@ -257,7 +285,26 @@ export default function CeloRoomPage() {
           table: "celo_room_players",
           filter: `room_id=eq.${roomId}`,
         },
-        () => void fetchAll()
+        (payload) => {
+          if (CELO_DEBUG) {
+            const p = payload as { eventType?: string; new?: unknown; old?: unknown };
+            console.log("[C-Lo room] realtime celo_room_players", p.eventType, p.new ?? p.old);
+          }
+          setPlayers((prev) => {
+            const m = mergeCeloPlayerRealtime(
+              prev,
+              {
+                eventType: (payload as { eventType: string }).eventType,
+                new: (payload as { new: Record<string, unknown> | null }).new,
+                old: (payload as { old: Record<string, unknown> | null }).old,
+              },
+              roomId
+            );
+            return m as Player[];
+          });
+          setPlayersSnapshotReady(true);
+          void fetchAll();
+        }
       )
       .on(
         "postgres_changes",
@@ -288,7 +335,7 @@ export default function CeloRoomPage() {
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
+        { event: "*", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
         () => void fetchAll()
       )
       .subscribe((status) => {
@@ -300,6 +347,39 @@ export default function CeloRoomPage() {
       void supabase.removeChannel(ch);
     };
   }, [supabase, roomId, fetchAll]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !roomId) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void fetchAll();
+    };
+    const onFocus = () => {
+      void fetchAll();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", onFocus);
+    const t = window.setInterval(refresh, 10_000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(t);
+    };
+  }, [fetchAll, roomId]);
+
+  useEffect(() => {
+    const setFrom = () => {
+      setDiceSize(
+        typeof window !== "undefined" && window.innerWidth >= 1024
+          ? 78
+          : window.innerWidth >= 768
+            ? 70
+            : 58
+      );
+    };
+    setFrom();
+    window.addEventListener("resize", setFrom);
+    return () => window.removeEventListener("resize", setFrom);
+  }, []);
 
   const myRow = players.find((p) => p.user_id === me);
   const isBanker = myRow?.role === "banker" || me === room?.banker_id;
@@ -323,7 +403,18 @@ export default function CeloRoomPage() {
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
-  const stakedPlayerCount = players.filter((p) => p.role === "player" && p.entry_sc > 0).length;
+  const stakedPlayerCount = useMemo(
+    () => countStakedEntryPlayers(players),
+    [players]
+  );
+  const spectators = useMemo(
+    () => players.filter((p) => p.role === "spectator").length,
+    [players]
+  );
+  const seatedAtTable = useMemo(
+    () => players.filter((p) => p.role !== "spectator").length,
+    [players]
+  );
 
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
@@ -333,6 +424,9 @@ export default function CeloRoomPage() {
       if (round.status === "player_rolling") return "Player's roll";
       if (round.status === "betting") return "Betting / payouts";
     }
+    if (isBanker && !inProgress && !playersSnapshotReady) {
+      return "Syncing table…";
+    }
     if (isBanker && stakedPlayerCount < 1) {
       return "Need at least one player with a posted entry to start";
     }
@@ -340,15 +434,45 @@ export default function CeloRoomPage() {
     return "Waiting for banker";
   })();
 
+  const myEntrySc = Math.floor(Number(myRow?.entry_sc ?? 0));
   const canRoll = !!(
     room &&
     round &&
     inProgress &&
     ((round.status === "banker_rolling" && isBanker) ||
-      (round.status === "player_rolling" && isPlayer && (myRow?.entry_sc ?? 0) > 0))
+      (round.status === "player_rolling" && isPlayer && myEntrySc > 0))
   );
   const mustStart = !!(room && isBanker && !inProgress);
   const canStartRound = mustStart && (stakedPlayerCount >= 1) && !rollingAction;
+  const startRoundDisabledReason = (() => {
+    if (!mustStart || !isBanker) return null;
+    if (rollingAction) return "round_action_in_progress";
+    if (stakedPlayerCount < 1) return "no_staked_non_banker_player";
+    return null;
+  })();
+
+  useEffect(() => {
+    if (!CELO_DEBUG) return;
+    console.log("[C-Lo room] start eligibility (dev)", {
+      roomId,
+      players: players.length,
+      stakedPlayerCount,
+      roomStatus: room?.status,
+      roundStatus: round?.status,
+      playersSnapshotReady,
+      canStartRound,
+      startRoundDisabledReason,
+    });
+  }, [
+    roomId,
+    players.length,
+    stakedPlayerCount,
+    room?.status,
+    round?.status,
+    playersSnapshotReady,
+    canStartRound,
+    startRoundDisabledReason,
+  ]);
 
   async function handleStart() {
     if (!room) return;
@@ -456,57 +580,72 @@ export default function CeloRoomPage() {
     }
   }
 
-  const spectators = players.filter((p) => p.role === "spectator").length;
-  const [diceSize, setDiceSize] = useState(60);
-  useEffect(() => {
-    const setFrom = () => {
-      setDiceSize(typeof window !== "undefined" && window.innerWidth >= 1024 ? 78 : window.innerWidth >= 768 ? 70 : 58);
-    };
-    setFrom();
-    window.addEventListener("resize", setFrom);
-    return () => window.removeEventListener("resize", setFrom);
-  }, []);
-
-  const feltW = "min(100%, 28rem)";
-  const feltH = "clamp(12rem, 32vw, 17rem)";
+  const feltW = "min(100%, 32rem)";
+  const feltH = "clamp(13.5rem, 34vw, 20rem)";
 
   const gamePanelClass =
-    "flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-amber-400/15 bg-gradient-to-b from-[#0c0718] to-[#05020d] p-4 shadow-[0_0_0_1px_rgba(245,200,66,0.08),0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.04)] md:p-6";
-  const railClass =
-    "hidden min-h-0 w-full min-w-0 flex-col overflow-y-auto overflow-x-hidden rounded-2xl border border-amber-400/15 bg-[#08050f] p-4 text-sm shadow-[0_12px_40px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)] md:flex md:max-w-[220px] md:shrink-0 md:self-stretch";
+    "flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col self-center overflow-hidden rounded-2xl border border-amber-400/15 bg-gradient-to-b from-[#0c0718] to-[#05020d] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.08),0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-5 md:p-6";
   const rightRailClass =
-    "hidden min-h-0 w-[300px] min-w-0 max-w-full flex-col overflow-hidden border-amber-400/10 pl-0 md:flex md:justify-stretch md:self-stretch";
+    "hidden min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden md:flex md:max-w-[20rem] md:shrink-0 md:self-stretch lg:max-w-[22rem]";
 
   return (
     <div
-      className={`flex h-full min-h-0 w-full flex-col overflow-hidden text-white ${dm.className}`}
+      className={`flex w-full min-w-0 max-w-full flex-col overflow-x-hidden text-white ${dm.className}`}
       style={{ background: "radial-gradient(120% 80% at 50% 0%, #1a0a2e 0%, #05010F 45%, #020108 100%)" }}
     >
-      <div className="mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-2 pt-3 md:px-6 md:pt-5">
-        <header
-          className="flex h-12 items-center gap-2 rounded-xl border border-amber-400/10 bg-black/30 px-3 py-1 shadow-inner md:h-12 md:px-4"
-        >
-          <Link
-            href="/dashboard/games/celo"
-            className="shrink-0 min-h-touch rounded-lg px-2.5 text-lg text-amber-300/90 transition hover:text-amber-200"
-          >
-            ←
-          </Link>
-          <span className={`min-w-0 flex-1 truncate text-sm font-bold text-white md:text-base ${cinzel.className}`}>
-            {room?.name?.slice(0, 32) ?? "C-Lo"}
-          </span>
-          {round && (
-            <span className="shrink-0 font-mono text-xs text-amber-200/80">R{round.round_number}</span>
+      <div className="mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-1 pt-2 sm:pt-3 md:px-6 md:pt-4">
+        <header className="rounded-2xl border border-amber-400/10 bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-4">
+          <div className="flex min-h-10 min-w-0 items-center gap-2">
+            <Link
+              href="/dashboard/games/celo"
+              className="shrink-0 min-h-touch rounded-lg px-1.5 text-base text-amber-300/90 transition hover:text-amber-200 sm:px-2.5 sm:text-lg"
+            >
+              ←
+            </Link>
+            <span
+              className={`min-w-0 flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
+            >
+              {room?.name?.slice(0, 40) ?? "C-Lo"}
+            </span>
+            {round && (
+              <span className="shrink-0 font-mono text-xs text-amber-200/80">R{round.round_number}</span>
+            )}
+            <span
+              className="shrink-0 font-mono text-[10px] uppercase tracking-wide"
+              style={{
+                color:
+                  connection === "live"
+                    ? "#34D399"
+                    : connection === "offline"
+                      ? "#F87171"
+                      : "#FBBF24",
+              }}
+            >
+              {connection === "live" ? "Live" : connection}
+            </span>
+            <span className="hidden shrink-0 text-[10px] text-zinc-500 sm:inline" title="Spectators">
+              {spectators}👁
+            </span>
+          </div>
+          {room && (
+            <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/5 pt-1.5 font-mono text-[10px] sm:text-[11px] sm:leading-tight text-zinc-500">
+              <span className="shrink-0">Min {minVal(room).toLocaleString()} GPC</span>
+              <span className="text-zinc-700" aria-hidden>
+                ·
+              </span>
+              <span>
+                Seated {seatedAtTable}/{room.max_players}
+              </span>
+              <span className="text-zinc-700" aria-hidden>
+                ·
+              </span>
+              <span className="whitespace-nowrap text-zinc-300">{String(room.status)}</span>
+              <span className="text-zinc-700" aria-hidden>
+                ·
+              </span>
+              <span>Staked {stakedPlayerCount} player{stakedPlayerCount === 1 ? "" : "s"}</span>
+            </div>
           )}
-          <span
-            className="shrink-0 font-mono text-[10px] uppercase tracking-wide"
-            style={{
-              color: connection === "live" ? "#34D399" : connection === "offline" ? "#F87171" : "#FBBF24",
-            }}
-          >
-            {connection === "live" ? "Live" : connection}
-          </span>
-          <span className="hidden shrink-0 text-[10px] text-zinc-500 sm:inline">👁 {spectators}</span>
         </header>
         {roomFetchError && (
           <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/50 px-3 py-2 text-center text-xs text-red-200">
@@ -515,24 +654,11 @@ export default function CeloRoomPage() {
         )}
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col px-4 pb-3 md:min-h-0 md:px-6 md:pb-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-3 px-4 pb-3 md:gap-5 md:px-6 md:pb-6">
         <div
-          className="grid min-h-0 w-full flex-1 grid-cols-1 content-stretch items-stretch gap-4 md:min-h-0 md:grid-cols-[minmax(0,200px)_minmax(28rem,1fr)_minmax(260px,300px)] md:gap-6"
+          className="grid min-h-0 w-full min-w-0 flex-1 grid-cols-1 place-items-stretch content-stretch gap-4 sm:gap-5 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:items-start md:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-6"
         >
-          <aside className={railClass}>
-            <p className={`text-xs text-amber-200/90 ${cinzel.className}`}>Table</p>
-            <p className="mt-1 truncate text-[11px] text-zinc-300">{room?.name ?? "—"}</p>
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Status</p>
-            <p className="text-xs text-zinc-200">{room?.status ?? "—"}</p>
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Min entry</p>
-            <p className="font-mono text-sm text-amber-200">{room ? minVal(room).toLocaleString() : "—"} GPC</p>
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500">Seats (max)</p>
-            <p className="text-sm text-zinc-200">{room ? room.max_players : "—"}</p>
-            <p className="mt-3 text-[10px] text-zinc-500">Spectators</p>
-            <p className="text-sm">{spectators}</p>
-          </aside>
-
-          <main className="relative z-0 flex min-h-0 min-w-0 flex-col order-first md:order-none">
+          <main className="relative z-0 order-1 flex min-w-0 flex-col md:order-none">
             <div className={gamePanelClass}>
               <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-center border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
                 <div className="text-left">
@@ -579,8 +705,8 @@ export default function CeloRoomPage() {
                   style={{
                     width: feltW,
                     height: feltH,
-                    maxWidth: "28rem",
-                    minHeight: "12rem",
+                    maxWidth: "32rem",
+                    minHeight: "13rem",
                     borderRadius: "50%",
                     background: "radial-gradient(ellipse at 50% 40%, #0f2a16 0%, #061208 50%, #030a06 100%)",
                     border: "10px solid #6B4423",
@@ -677,15 +803,18 @@ export default function CeloRoomPage() {
                         >
                           Start round
                         </button>
-                        {stakedPlayerCount < 1 && (
+                        {stakedPlayerCount < 1 && playersSnapshotReady && (
                           <p className="px-1 text-center text-xs text-amber-100/80">
                             At least one player must post an entry before you can start.
                           </p>
                         )}
+                        {stakedPlayerCount < 1 && !playersSnapshotReady && (
+                          <p className="px-1 text-center text-xs text-zinc-500">Syncing players…</p>
+                        )}
                         {startRoundError && <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>}
                       </div>
                     )}
-                    {room && !inProgress && !isBanker && (myRow?.entry_sc ?? 0) === 0 && !isSpec && (
+                    {room && !inProgress && !isBanker && myEntrySc === 0 && !isSpec && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-2">
                         <div className="flex flex-wrap justify-center gap-1.5">
                           {[minE, minE * 2, minE * 5, bankVal(room)]
@@ -772,9 +901,9 @@ export default function CeloRoomPage() {
           </aside>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-[1500px] px-4 pb-3 md:px-6">
+      <div className="mx-auto mt-5 w-full max-w-[1500px] px-4 pb-2 md:mt-0 md:hidden md:px-6">
       <div
-        className="grid h-11 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs md:hidden"
+        className="grid h-11 w-full min-w-0 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs"
         style={{
           background: "rgba(5,1,15,0.9)",
           gridTemplateColumns: "1fr 1fr",

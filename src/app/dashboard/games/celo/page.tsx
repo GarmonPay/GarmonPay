@@ -150,6 +150,19 @@ export default function CeloLobbyPage() {
     };
   }, [supabase, loadRooms]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadRooms();
+    };
+    window.addEventListener("focus", onVis);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onVis);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadRooms]);
+
   async function handleCreate() {
     setCreateError("");
     if (!form.name.trim()) {
@@ -189,16 +202,18 @@ export default function CeloLobbyPage() {
 
   return (
     <div
-      className={`min-h-screen w-full text-white ${dm.className} pb-28 md:pb-8`}
+      className={`w-full min-w-0 text-white ${dm.className} pb-28 md:pb-8`}
       style={{ background: "#05010F" }}
     >
-      <div className="mx-auto max-w-6xl px-4">
+      <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6">
         <section
-          className="relative overflow-hidden pt-10"
+          className="relative overflow-hidden pt-6 sm:pt-8 md:pt-9"
           style={{
             background: "linear-gradient(160deg, #0D0520 0%, #05010F 60%)",
             borderRadius: 16,
-            padding: "20px 12px 24px",
+            padding: "16px 14px 20px",
+            border: "1px solid rgba(245, 200, 66, 0.1)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
           <div
@@ -244,15 +259,20 @@ export default function CeloLobbyPage() {
 
         {loading ? (
           <div
-            className="mb-4 h-5 w-full max-w-md mx-auto rounded bg-white/[0.06] pt-2"
+            className="mx-auto mb-4 h-5 w-full max-w-md rounded bg-white/[0.06] pt-2"
             style={{ animation: "pulse 1.2s ease-in-out infinite" }}
             aria-hidden
           />
         ) : err ? null : (
-          <div className="mb-4 flex flex-wrap justify-center gap-3 pt-2 font-mono text-[12px] text-[#9CA3AF]">
-            <span>🎲 {tablesLive} tables live</span>
-            <span>💰 {gpcInPlay.toLocaleString()} GPC in play</span>
-            <span>👥 {seatsTakenInLivePublicRooms} seats taken</span>
+          <div
+            className="mx-auto mb-5 max-w-2xl rounded-2xl border border-amber-400/10 bg-black/20 px-4 py-2.5 font-mono text-[11px] sm:text-[12px] text-zinc-400"
+            style={{ boxShadow: "0 0 0 1px rgba(127, 52, 180, 0.08), inset 0 1px 0 rgba(255,255,255,0.03)" }}
+          >
+            <div className="grid grid-cols-1 items-center justify-items-center gap-2 min-[400px]:grid-cols-3 min-[400px]:justify-items-stretch sm:gap-0">
+              <span className="text-center">🎲 {tablesLive} live</span>
+              <span className="min-[400px]:text-center">💰 {gpcInPlay.toLocaleString()} GPC in play</span>
+              <span className="text-center">👥 {seatsTakenInLivePublicRooms} seats</span>
+            </div>
           </div>
         )}
 

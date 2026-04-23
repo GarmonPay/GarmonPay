@@ -26,7 +26,7 @@ export function CeloRoomCard({ room }: { room: CeloRoomCardData }) {
   const m = minEntry(room);
   const b = bank(room);
   return (
-    <div className="mb-4 rounded-xl border border-yellow-500/20 bg-black/40 p-4 shadow-md transition hover:shadow-yellow-500/20">
+    <div className="mb-4 rounded-2xl border border-amber-400/12 bg-gradient-to-b from-[#0c0618] to-[#05020d] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-amber-400/20">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 text-lg font-bold text-white">
           {room.name}
