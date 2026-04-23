@@ -125,18 +125,20 @@ export async function POST(request: Request) {
   if (!round) {
     return NextResponse.json({ error: "No active round" }, { status: 400 });
   }
-  const dice = rollThreeDice();
-  const roll = evaluateRoll(dice);
   const feePct = room.platform_fee_pct ?? 10;
   if (player.role === "banker" || userId === room.banker_id) {
     if (round.status !== "banker_rolling") {
       return NextResponse.json({ error: "Not your turn" }, { status: 400 });
     }
-    return handleBankerRoll(
-      adminClient,
-      { room, round, userId, dice, roll, feePct }
-    );
+    await adminClient
+      .from("celo_rounds")
+      .update({ banker_roll_in_flight: false })
+      .eq("id", round.id)
+      .neq("status", "banker_rolling");
+    return handleBankerRoll(adminClient, { room, round, userId, feePct });
   }
+  const dice = rollThreeDice();
+  const roll = evaluateRoll(dice);
   if (player.role === "player") {
     if (round.status !== "player_rolling") {
       return NextResponse.json({ error: "Not your turn" }, { status: 400 });
@@ -218,14 +220,10 @@ async function handleBankerRoll(
     room: RoomRow;
     round: RoundRow;
     userId: string;
-    dice: [number, number, number];
-    roll: ReturnType<typeof evaluateRoll>;
     feePct: number;
   }
 ) {
-  const { room, round, userId, dice, roll, feePct } = ctx;
-  const now = new Date().toISOString();
-  const diceArr = [dice[0], dice[1], dice[2]];
+  const { room, round, userId, feePct } = ctx;
 
   const marked = await markBankerRollInFlight(admin, round.id);
   if (!marked) {
@@ -246,6 +244,11 @@ async function handleBankerRoll(
       { status: 409 }
     );
   }
+
+  const dice = rollThreeDice();
+  const roll = evaluateRoll(dice);
+  const now = new Date().toISOString();
+  const diceArr = [dice[0], dice[1], dice[2]];
 
   if (roll.result === "no_count") {
     celoAccountingLog("banker_no_count_throw", {
