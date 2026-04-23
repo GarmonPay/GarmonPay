@@ -27,6 +27,11 @@ type Props = {
   /** Active round id for attribution (optional). */
   roundId?: string | null;
   minAmount?: number;
+  /** Apply server-returned row before refetch so in-flight fetch does not wipe UI. */
+  onMutateSuccess?: (payload: {
+    mode: "create" | "accept";
+    sideBet: CeloSideBetRow;
+  }) => void;
   onAfterMutate?: () => void;
 };
 
@@ -47,6 +52,7 @@ export function CeloRoomSideBetsPanel({
   roomId,
   roundId,
   minAmount = 100,
+  onMutateSuccess,
   onAfterMutate,
 }: Props) {
   const [betType, setBetType] = useState<string>(CELO_SIDEBET_TYPES[0] ?? "celo");
@@ -112,13 +118,17 @@ export function CeloRoomSideBetsPanel({
       }
       createIdempotencyRef.current = null;
       setHint("Side entry posted.");
+      const sb = j.sideBet as CeloSideBetRow | undefined;
+      if (sb) {
+        onMutateSuccess?.({ mode: "create", sideBet: sb });
+      }
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Network error");
     } finally {
       setBusy(null);
     }
-  }, [supabase, me, roomId, roundId, betType, amount, busy, refresh]);
+  }, [supabase, me, roomId, roundId, betType, amount, busy, refresh, onMutateSuccess]);
 
   const postAccept = useCallback(
     async (betId: string) => {
@@ -139,7 +149,7 @@ export function CeloRoomSideBetsPanel({
           method: "POST",
           body: JSON.stringify({ bet_id: betId }),
         });
-        const j = (await res.json()) as { error?: string };
+        const j = (await res.json()) as { error?: string; sideBet?: unknown };
         if (CELO_DEBUG) {
           console.log("[C-Lo side bets] accept response", res.status, j);
         }
@@ -152,6 +162,10 @@ export function CeloRoomSideBetsPanel({
           return;
         }
         setHint("Matched.");
+        const sb = j.sideBet as CeloSideBetRow | undefined;
+        if (sb) {
+          onMutateSuccess?.({ mode: "accept", sideBet: sb });
+        }
         refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Network error");
@@ -160,7 +174,7 @@ export function CeloRoomSideBetsPanel({
         setBusy(null);
       }
     },
-    [supabase, me, refresh]
+    [supabase, me, refresh, onMutateSuccess]
   );
 
   const canInteract = !!(supabase && me && roomId);

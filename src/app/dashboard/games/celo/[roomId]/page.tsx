@@ -149,6 +149,33 @@ export default function CeloRoomPage() {
     rollingActionRef.current = rollingAction;
   }, [rollingAction]);
 
+  const bumpOptimisticAsRealtime = useCallback(() => {
+    lastRealtimeUpdateRef.current = Date.now();
+    if (CELO_DEBUG) {
+      console.log("[C-Lo] optimistic update treated as realtime");
+    }
+  }, []);
+
+  const handleSideBetMutateSuccess = useCallback(
+    (payload: { mode: "create" | "accept"; sideBet: CeloSideBetRow }) => {
+      setSideBets((prev) => {
+        if (payload.mode === "create") {
+          if (prev.some((x) => x.id === payload.sideBet.id)) {
+            return prev.map((b) =>
+              b.id === payload.sideBet.id ? { ...b, ...payload.sideBet } : b
+            );
+          }
+          return [payload.sideBet, ...prev].slice(0, 40);
+        }
+        return prev.map((b) =>
+          b.id === payload.sideBet.id ? { ...b, ...payload.sideBet } : b
+        );
+      });
+      bumpOptimisticAsRealtime();
+    },
+    [bumpOptimisticAsRealtime]
+  );
+
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
     const myToken = ++fetchTokenRef.current;
@@ -1002,9 +1029,7 @@ export default function CeloRoomPage() {
     };
 
     const mergeJoinPayload = () => {
-      let touched = false;
       if (j.player) {
-        touched = true;
         const row = normalizeCeloPlayerRow(j.player) as Player;
         setPlayers((prev) =>
           sortCeloPlayersBySeat([
@@ -1015,14 +1040,10 @@ export default function CeloRoomPage() {
         setPlayersSnapshotReady(true);
       }
       if (j.room && String((j.room as { id?: string }).id ?? "") === room.id) {
-        touched = true;
         setRoom(
           (prev) =>
             ({ ...(prev ?? {}), ...j.room }) as Room
         );
-      }
-      if (touched) {
-        lastRealtimeUpdateRef.current = Date.now();
       }
     };
 
@@ -1046,6 +1067,7 @@ export default function CeloRoomPage() {
         }
         setJoinHint("You’re already at this table. Updating…");
         mergeJoinPayload();
+        bumpOptimisticAsRealtime();
         scheduleFetchAll();
         return;
       }
@@ -1055,11 +1077,13 @@ export default function CeloRoomPage() {
     if (j.already_seated) {
       setJoinHint("You’re already seated — syncing the table…");
       mergeJoinPayload();
+      bumpOptimisticAsRealtime();
       scheduleFetchAll();
       return;
     }
     setJoinHint(null);
     mergeJoinPayload();
+    bumpOptimisticAsRealtime();
     scheduleFetchAll();
   }
 
@@ -1415,6 +1439,7 @@ export default function CeloRoomPage() {
                 roomId={room?.id ?? roomId}
                 roundId={round?.id ?? null}
                 minAmount={room ? minE : 1000}
+                onMutateSuccess={handleSideBetMutateSuccess}
                 onAfterMutate={() => void fetchAll()}
               />
               <CeloRoomChatPanel
@@ -1496,6 +1521,7 @@ export default function CeloRoomPage() {
             roomId={room?.id ?? roomId}
             roundId={round?.id ?? null}
             minAmount={room ? minE : 1000}
+            onMutateSuccess={handleSideBetMutateSuccess}
             onAfterMutate={() => void fetchAll()}
           />
         )}
