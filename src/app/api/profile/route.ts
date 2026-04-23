@@ -58,65 +58,57 @@ export async function GET(req: Request) {
     }
   }
 
-  let row:
-    | {
-        id?: string;
-        email?: string | null;
-        full_name?: string | null;
-        avatar_url?: string | null;
-        membership?: string | null;
-        referral_code?: string | null;
-        reportable_earnings_cents?: number | null;
-        tax_info_submitted_at?: string | null;
-      }
-    | null = null;
-
-  const fullSelect = await admin
-    .from("profiles")
-    .select(
-      "id, email, full_name, avatar_url, membership, referral_code, reportable_earnings_cents, tax_info_submitted_at",
-    )
+  /** Display + membership live on `public.users` (avatar_url / full_name are not on `profiles`). */
+  const { data: urow, error: userErr } = await admin
+    .from("users")
+    .select("id, email, full_name, avatar_url, membership, referral_code")
     .eq("id", userId)
     .maybeSingle();
 
-  const colMissing =
-    fullSelect.error &&
-    (/does not exist/i.test(fullSelect.error.message ?? "") ||
-      (fullSelect.error as { code?: string }).code === "42703");
-
-  if (colMissing) {
-    const basic = await admin
-      .from("profiles")
-      .select("id, email, full_name, avatar_url, membership, referral_code")
-      .eq("id", userId)
-      .maybeSingle();
-    if (basic.error) {
-      console.error("[profile GET]", basic.error);
-      return NextResponse.json({ error: basic.error.message }, { status: 500 });
-    }
-    row = basic.data as typeof row;
-  } else if (fullSelect.error) {
-    console.error("[profile GET]", fullSelect.error);
-    return NextResponse.json({ error: fullSelect.error.message }, { status: 500 });
-  } else {
-    row = fullSelect.data as typeof row;
+  if (userErr) {
+    console.error("[profile GET] users", userErr);
+    return NextResponse.json({ error: userErr.message }, { status: 500 });
+  }
+  if (!urow) {
+    return NextResponse.json(
+      { error: "User profile not found. Complete signup or contact support." },
+      { status: 404 }
+    );
   }
 
-  const r = row as {
+  const { data: taxRow, error: taxErr } = await admin
+    .from("profiles")
+    .select("reportable_earnings_cents, tax_info_submitted_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const taxColMissing =
+    taxErr &&
+    (/does not exist/i.test(taxErr.message ?? "") || (taxErr as { code?: string }).code === "42703");
+  if (taxErr && !taxColMissing) {
+    console.error("[profile GET] profiles tax columns", taxErr);
+  }
+
+  const r = urow as {
     id?: string;
     email?: string | null;
     full_name?: string | null;
     avatar_url?: string | null;
     membership?: string | null;
     referral_code?: string | null;
-    reportable_earnings_cents?: number | null;
-    tax_info_submitted_at?: string | null;
   } | null;
 
-  const reportableEarningsCents = Number(r?.reportable_earnings_cents ?? 0);
+  const tax = taxErr
+    ? null
+    : (taxRow as {
+        reportable_earnings_cents?: number | null;
+        tax_info_submitted_at?: string | null;
+      } | null);
+
+  const reportableEarningsCents = Number(tax?.reportable_earnings_cents ?? 0);
   const taxSubmitted =
-    typeof r?.tax_info_submitted_at === "string" && r.tax_info_submitted_at.length > 0
-      ? r.tax_info_submitted_at
+    typeof tax?.tax_info_submitted_at === "string" && tax.tax_info_submitted_at.length > 0
+      ? tax.tax_info_submitted_at
       : null;
   const taxInfoRequired = computeTaxInfoRequired(reportableEarningsCents, taxSubmitted);
 
@@ -231,20 +223,20 @@ export async function PATCH(req: Request) {
   };
 
   const { data: updated, error } = await admin
-    .from("profiles")
+    .from("users")
     .update(payload)
     .eq("id", userId)
     .select("id, email, full_name, avatar_url, membership, referral_code")
     .maybeSingle();
 
   if (error) {
-    console.error("[profile PATCH]", error);
+    console.error("[profile PATCH] users", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!updated) {
     return NextResponse.json(
-      { error: "Profile row not found. Complete signup or contact support." },
+      { error: "User profile not found. Complete signup or contact support." },
       { status: 404 }
     );
   }
