@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
 export type DiceType =
   | "standard"
@@ -16,51 +16,68 @@ interface Props {
   diceType?: DiceType;
   size?: number;
   rolling?: boolean;
+  /** Stagger multi-die tumble (ms). */
   delay?: number;
 }
 
 const STYLES: Record<
   DiceType,
   {
-    bg: string;
+    face: string;
+    rim: string;
     dot: string;
-    border: string;
+    dotGlow: string;
+    pipShadow: string;
   }
 > = {
   standard: {
-    bg: "linear-gradient(135deg,#DC2626,#991B1B)",
-    dot: "#FFFFFF",
-    border: "rgba(255,255,255,0.2)",
+    face: "linear-gradient(145deg, #EF4444 0%, #B91C1C 45%, #7F1D1D 100%)",
+    rim: "linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(0,0,0,0.25) 100%)",
+    dot: "#FAFAFA",
+    dotGlow: "rgba(255,255,255,0.45)",
+    pipShadow: "0 2px 4px rgba(0,0,0,0.55)",
   },
   gold: {
-    bg: "linear-gradient(135deg,#F5C842,#D4A017)",
-    dot: "#1A0A00",
-    border: "rgba(255,255,255,0.3)",
+    face: "linear-gradient(145deg, #FDE68A 0%, #F5C842 35%, #B45309 100%)",
+    rim: "linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(120,53,15,0.5) 100%)",
+    dot: "#1C0A00",
+    dotGlow: "rgba(28,10,0,0.35)",
+    pipShadow: "0 1px 3px rgba(0,0,0,0.4)",
   },
   street: {
-    bg: "linear-gradient(135deg,#166534,#14532D)",
-    dot: "#FFFFFF",
-    border: "rgba(255,255,255,0.15)",
+    face: "linear-gradient(145deg, #22C55E 0%, #15803D 50%, #14532D 100%)",
+    rim: "linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(0,0,0,0.35) 100%)",
+    dot: "#F0FDF4",
+    dotGlow: "rgba(240,253,244,0.35)",
+    pipShadow: "0 2px 4px rgba(0,0,0,0.5)",
   },
   midnight: {
-    bg: "linear-gradient(135deg,#1E1B4B,#0F0A2E)",
-    dot: "#A855F7",
-    border: "rgba(168,85,247,0.4)",
+    face: "linear-gradient(145deg, #6366F1 0%, #312E81 50%, #1E1B4B 100%)",
+    rim: "linear-gradient(180deg, rgba(196,181,253,0.35) 0%, rgba(0,0,0,0.45) 100%)",
+    dot: "#E9D5FF",
+    dotGlow: "rgba(233,213,255,0.5)",
+    pipShadow: "0 2px 5px rgba(0,0,0,0.65)",
   },
   blood: {
-    bg: "linear-gradient(135deg,#7F1D1D,#450A0A)",
+    face: "linear-gradient(145deg, #991B1B 0%, #450A0A 100%)",
+    rim: "linear-gradient(180deg, rgba(245,200,66,0.25) 0%, rgba(0,0,0,0.5) 100%)",
     dot: "#F5C842",
-    border: "rgba(245,200,66,0.3)",
+    dotGlow: "rgba(245,200,66,0.4)",
+    pipShadow: "0 2px 4px rgba(0,0,0,0.6)",
   },
   fire: {
-    bg: "linear-gradient(135deg,#EA580C,#9A3412)",
-    dot: "#FEF08A",
-    border: "rgba(254,240,138,0.3)",
+    face: "linear-gradient(145deg, #FB923C 0%, #EA580C 45%, #7C2D12 100%)",
+    rim: "linear-gradient(180deg, rgba(254,240,138,0.4) 0%, rgba(124,45,18,0.5) 100%)",
+    dot: "#FEF9C3",
+    dotGlow: "rgba(254,249,195,0.45)",
+    pipShadow: "0 2px 4px rgba(0,0,0,0.55)",
   },
   diamond: {
-    bg: "linear-gradient(135deg,#BFDBFE,#93C5FD)",
+    face: "linear-gradient(145deg, #EFF6FF 0%, #BFDBFE 40%, #60A5FA 100%)",
+    rim: "linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(30,58,138,0.35) 100%)",
     dot: "#1E3A8A",
-    border: "rgba(255,255,255,0.5)",
+    dotGlow: "rgba(30,58,138,0.25)",
+    pipShadow: "0 1px 3px rgba(0,0,0,0.35)",
   },
 };
 
@@ -105,88 +122,146 @@ export default function DiceFace({
   rolling = false,
   delay = 0,
 }: Props) {
+  const uid = useId().replace(/:/g, "");
+  const tumbleId = `celoTumble-${uid}`;
+  const landId = `celoLand-${uid}`;
   const s = STYLES[diceType];
   const pips = PIPS[value] ?? PIPS[1];
-  const r = Math.round(size * 0.16);
-  const pipSize = Math.round(size * 0.17);
-  const pad = Math.round(size * 0.1);
+  const r = Math.round(size * 0.18);
+  const pipSize = Math.round(size * 0.168);
+  const pad = Math.round(size * 0.11);
+
+  const prevRolling = useRef(rolling);
+  const [landSeq, setLandSeq] = useState(0);
+  useEffect(() => {
+    if (prevRolling.current && !rolling) {
+      setLandSeq((n) => n + 1);
+    }
+    prevRolling.current = rolling;
+  }, [rolling]);
+
+  const perspective = Math.round(size * 3.2);
+  const dieLift = rolling ? 0 : Math.round(size * 0.04);
 
   return (
     <>
       <style>{`
-        @keyframes celoDiceShake {
-          0%   { transform: rotate(0deg) scale(1) translateY(0) }
-          20%  { transform: rotate(-24deg) scale(0.92) translateY(1px) }
-          40%  { transform: rotate(22deg) scale(1.08) translateY(-1px) }
-          60%  { transform: rotate(-14deg) scale(0.98) translateY(0) }
-          80%  { transform: rotate(10deg) scale(1.04) translateY(0) }
-          100% { transform: rotate(0deg) scale(1) translateY(0) }
+        @keyframes ${tumbleId} {
+          0%   { transform: rotateX(-12deg) rotateY(0deg) rotateZ(0deg) translateY(0) scale(1); filter: blur(0.5px); }
+          12%  { transform: rotateX(38deg) rotateY(52deg) rotateZ(-18deg) translateY(-${Math.max(4, Math.round(size * 0.06))}px) scale(1.04); filter: blur(0.35px); }
+          28%  { transform: rotateX(-22deg) rotateY(118deg) rotateZ(24deg) translateY(${Math.round(size * 0.02)}px) scale(0.97); filter: blur(0.45px); }
+          44%  { transform: rotateX(55deg) rotateY(200deg) rotateZ(-32deg) translateY(-${Math.round(size * 0.05)}px) scale(1.06); filter: blur(0.3px); }
+          60%  { transform: rotateX(-35deg) rotateY(290deg) rotateZ(18deg) translateY(${Math.round(size * 0.03)}px) scale(0.98); filter: blur(0.4px); }
+          78%  { transform: rotateX(28deg) rotateY(380deg) rotateZ(-12deg) translateY(-${Math.round(size * 0.025)}px) scale(1.02); filter: blur(0.2px); }
+          100% { transform: rotateX(-12deg) rotateY(440deg) rotateZ(6deg) translateY(0) scale(1); filter: blur(0.35px); }
         }
-        @keyframes celoDiceLand {
-          0%   { transform: scale(1.18) translateY(-4px); opacity: 0.75 }
-          50%  { transform: scale(0.95) translateY(2px); opacity: 1 }
-          100% { transform: scale(1) translateY(0); opacity: 1 }
+        @keyframes ${landId} {
+          0%   { transform: rotateX(-8deg) rotateY(8deg) scale(1.12) translateY(-${Math.round(size * 0.12)}px); filter: blur(0.25px); }
+          55%  { transform: rotateX(2deg) rotateY(-2deg) scale(0.94) translateY(${Math.round(size * 0.04)}px); filter: blur(0.05px); }
+          100% { transform: rotateX(0deg) rotateY(0deg) scale(1) translateY(0); filter: blur(0); }
         }
       `}</style>
       <div
         style={{
           width: size,
           height: size,
-          borderRadius: r,
-          background: s.bg,
-          border: `1.5px solid ${s.border}`,
-          boxShadow: `
-          0 4px 12px rgba(0,0,0,0.6),
-          inset 0 1px 0 rgba(255,255,255,0.15),
-          inset 0 -1px 0 rgba(0,0,0,0.3)
-        `,
-          position: "relative",
           flexShrink: 0,
-          willChange: rolling ? "transform" : "auto",
-          animation: rolling
-            ? `celoDiceShake 0.3s ease-in-out ${delay}ms infinite`
-            : "celoDiceLand 0.4s cubic-bezier(0.34, 1.2, 0.64, 1)",
-          filter: rolling ? "blur(0.4px)" : "none",
+          perspective,
+          perspectiveOrigin: "50% 88%",
         }}
       >
         <div
+          key={landSeq}
           style={{
-            position: "absolute",
-            inset: pad,
-            display: "grid",
-            gridTemplateColumns: "repeat(3,1fr)",
-            gridTemplateRows: "repeat(3,1fr)",
+            width: size,
+            height: size,
+            borderRadius: r,
+            transformStyle: "preserve-3d",
+            willChange: rolling ? "transform, filter" : "transform",
+            transform: rolling
+              ? undefined
+              : `translateY(${dieLift}px) rotateX(0deg)`,
+            animation: rolling
+              ? `${tumbleId} 1.05s cubic-bezier(0.45, 0.05, 0.2, 1) ${delay}ms infinite both`
+              : `${landId} 0.48s cubic-bezier(0.34, 1.15, 0.64, 1) both`,
+            boxShadow: rolling
+              ? `
+                0 ${Math.round(size * 0.2)}px ${Math.round(size * 0.45)}px rgba(0,0,0,0.55),
+                0 ${Math.round(size * 0.06)}px ${Math.round(size * 0.14)}px rgba(245,200,90,0.12),
+                inset 0 2px 0 rgba(255,255,255,0.22),
+                inset 0 -3px 6px rgba(0,0,0,0.35)
+              `
+              : `
+                0 ${Math.round(size * 0.14)}px ${Math.round(size * 0.28)}px rgba(0,0,0,0.6),
+                0 ${Math.round(size * 0.04)}px ${Math.round(size * 0.1)}px rgba(245,200,90,0.14),
+                inset 0 2px 0 rgba(255,255,255,0.25),
+                inset 0 -4px 8px rgba(0,0,0,0.38)
+              `,
+            border: "1px solid rgba(0,0,0,0.35)",
+            position: "relative",
+            background: s.rim,
+            padding: 1,
           }}
         >
-          {[1, 2, 3].map((row) =>
-            [1, 2, 3].map((col) => {
-              const has = pips.some(
-                ([r2, c]) => r2 === row && c === col
-              );
-              return (
-                <div
-                  key={`${row}-${col}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {has && (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: r - 1,
+              background: s.face,
+              position: "relative",
+              overflow: "hidden",
+              boxShadow: "inset 0 3px 10px rgba(255,255,255,0.18), inset 0 -6px 14px rgba(0,0,0,0.35)",
+            }}
+          >
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(125deg, rgba(255,255,255,0.2) 0%, transparent 42%, transparent 58%, rgba(0,0,0,0.12) 100%)",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: pad,
+                display: "grid",
+                gridTemplateColumns: "repeat(3,1fr)",
+                gridTemplateRows: "repeat(3,1fr)",
+              }}
+            >
+              {[1, 2, 3].map((row) =>
+                [1, 2, 3].map((col) => {
+                  const has = pips.some(([r2, c]) => r2 === row && c === col);
+                  return (
                     <div
+                      key={`${row}-${col}`}
                       style={{
-                        width: pipSize,
-                        height: pipSize,
-                        borderRadius: "50%",
-                        background: s.dot,
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
-                    />
-                  )}
-                </div>
-              );
-            })
-          )}
+                    >
+                      {has && (
+                        <div
+                          style={{
+                            width: pipSize,
+                            height: pipSize,
+                            borderRadius: "50%",
+                            background: `radial-gradient(circle at 32% 32%, ${s.dotGlow}, ${s.dot} 55%, ${s.dot} 100%)`,
+                            boxShadow: `${s.pipShadow}, inset 0 -1px 1px rgba(0,0,0,0.35)`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </>

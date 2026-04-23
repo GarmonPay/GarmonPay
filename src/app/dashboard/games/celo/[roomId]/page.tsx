@@ -7,7 +7,13 @@ import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
-import { CELO_IDLE_DICE, clampDie, resolveCeloFeltDice, tripletFromDiceJson } from "@/lib/celo-room-dice";
+import {
+  CELO_IDLE_DICE,
+  clampDie,
+  computeCeloVisualDiceMode,
+  resolveCeloFeltDice,
+  tripletFromDiceJson,
+} from "@/lib/celo-room-dice";
 import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel } from "@/components/celo/CeloRoomChatPanel";
@@ -64,6 +70,7 @@ type Round = {
   player_celo_expires_at: string | null;
   /** Set when the banker has rolled; source of truth for their dice in this round. */
   banker_dice?: unknown;
+  banker_dice_result?: string | null;
 };
 
 function bankVal(r: Room) {
@@ -114,6 +121,10 @@ export default function CeloRoomPage() {
   const [diceSize, setDiceSize] = useState(60);
   const [joinHint, setJoinHint] = useState<string | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
+  /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
+  const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
+  const [lowerBankError, setLowerBankError] = useState<string | null>(null);
+  const [bankerAcceptError, setBankerAcceptError] = useState<string | null>(null);
   const rollingRef = useRef(false);
   const rollingActionRef = useRef(false);
   const fetchTokenRef = useRef(0);
@@ -158,11 +169,13 @@ export default function CeloRoomPage() {
         .limit(50),
       supabase
         .from("celo_side_bets")
-        .select("id, bet_type, amount_cents, status, odds_multiplier, creator_id, acceptor_id, created_at")
+        .select(
+          "id, bet_type, amount_cents, status, odds_multiplier, creator_id, acceptor_id, created_at, expires_at"
+        )
         .eq("room_id", roomId)
         .in("status", ["open", "matched", "locked"])
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(40),
     ]);
     if (myToken !== fetchTokenRef.current) return;
 
@@ -189,6 +202,34 @@ export default function CeloRoomPage() {
 
     if (myToken !== fetchTokenRef.current) return;
 
+    let hasCurrentPlayerFinal = false;
+    if (
+      activeRound?.status === "player_rolling" &&
+      activeRound.current_player_seat != null &&
+      playerRows.length
+    ) {
+      const seat = activeRound.current_player_seat;
+      const uid = playerRows.find(
+        (p) =>
+          p.role === "player" && Number(p.seat_number) === Number(seat)
+      )?.user_id;
+      if (uid && activeRound.id) {
+        const { data: prRow } = await supabase
+          .from("celo_player_rolls")
+          .select("id")
+          .eq("round_id", activeRound.id)
+          .eq("user_id", uid)
+          .in("outcome", ["win", "loss"])
+          .limit(1)
+          .maybeSingle();
+        if (myToken !== fetchTokenRef.current) return;
+        hasCurrentPlayerFinal = !!prRow;
+      }
+    }
+    if (myToken === fetchTokenRef.current) {
+      setCurrentPlayerResolvedRoll(hasCurrentPlayerFinal);
+    }
+
     setMessages(
       (chatRes.data as { id: string; user_id: string; message: string; created_at: string }[]) ?? []
     );
@@ -208,8 +249,12 @@ export default function CeloRoomPage() {
       if (myToken !== fetchTokenRef.current) return;
       const rRow = activeRound as Round;
       const t = resolveCeloFeltDice(lastPr?.dice, rRow.banker_dice);
-      if (t) {
-        setDice(t);
+      let applyTriplet = t;
+      if (activeRound.status === "player_rolling" && !hasCurrentPlayerFinal) {
+        applyTriplet = null;
+      }
+      if (applyTriplet) {
+        setDice(applyTriplet);
       } else if (!rollingActionRef.current) {
         setDice(null);
       }
@@ -321,9 +366,34 @@ export default function CeloRoomPage() {
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
+          const p = payload as {
+            eventType?: string;
+            new?: Record<string, unknown> | null;
+            old?: Record<string, unknown> | null;
+          };
           if (CELO_DEBUG) {
-            const p = payload as { eventType?: string; new?: { status?: string; banker_dice?: unknown } };
             console.log("[C-Lo room] realtime celo_rounds", p.eventType, p.new);
+          }
+          const n = p.new as Partial<Round> | null | undefined;
+          if (n?.id && typeof n.id === "string") {
+            setRound((prev) => {
+              if (!prev || prev.id !== n.id) return prev;
+              return { ...prev, ...n } as Round;
+            });
+            if (n.status === "player_rolling") {
+              setCurrentPlayerResolvedRoll(false);
+            }
+            if (n.status === "banker_rolling" && n.banker_dice == null) {
+              setDice(null);
+            }
+            if (
+              n.status === "banker_rolling" &&
+              n.banker_dice != null &&
+              p.eventType === "UPDATE"
+            ) {
+              const trip = tripletFromDiceJson(n.banker_dice);
+              if (trip) setDice(trip);
+            }
           }
           void fetchAll();
         }
@@ -332,15 +402,20 @@ export default function CeloRoomPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
         (payload) => {
-          if (CELO_DEBUG) {
-            const p = payload as { eventType?: string; new?: { dice?: unknown } | null; old?: unknown };
-            console.log("[C-Lo room] realtime celo_player_rolls", p.eventType, p.new ?? p.old);
-          }
-          const n = (payload as { new: { dice?: unknown } | null; eventType: string }).new;
           const et = (payload as { eventType: string }).eventType;
+          const n = (payload as { new: { dice?: unknown; outcome?: string } | null }).new;
+          if (CELO_DEBUG) {
+            console.log("[C-Lo room] realtime celo_player_rolls", et, n ?? (payload as { old?: unknown }).old);
+            console.log("[C-Lo room] dice sync: player_rolls event → merge triplet if present");
+          }
           if ((et === "INSERT" || et === "UPDATE") && n?.dice) {
             const t = tripletFromDiceJson(n.dice);
-            if (t) setDice(t);
+            if (t) {
+              setDice(t);
+              if (n.outcome === "win" || n.outcome === "loss") {
+                setCurrentPlayerResolvedRoll(true);
+              }
+            }
           }
           void fetchAll();
         }
@@ -348,7 +423,28 @@ export default function CeloRoomPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
-        () => void fetchAll()
+        (payload) => {
+          const p = payload as unknown as {
+            eventType: string;
+            new?: CeloSideBetRow | null;
+            old?: CeloSideBetRow | null;
+          };
+          if (CELO_DEBUG) {
+            console.log("[C-Lo room] realtime celo_side_bets", p.eventType, p.new ?? p.old);
+          }
+          if (p.eventType === "INSERT" && p.new) {
+            setSideBets((prev) => {
+              if (prev.some((x) => x.id === p.new!.id)) return prev;
+              return [p.new!, ...prev].slice(0, 40);
+            });
+          }
+          if (p.eventType === "UPDATE" && p.new) {
+            setSideBets((prev) =>
+              prev.map((b) => (b.id === p.new!.id ? { ...b, ...p.new! } : b))
+            );
+          }
+          void fetchAll();
+        }
       )
       .on(
         "postgres_changes",
@@ -415,20 +511,36 @@ export default function CeloRoomPage() {
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
-  /** No resolved triplet yet; round is in a rolling phase (banker or player) — all clients, incl. remote. */
-  const showTableRollTumble = useMemo(() => {
-    if (!inProgress || !round) return false;
-    if (dice != null) return false;
-    return round.status === "banker_rolling" || round.status === "player_rolling";
-  }, [dice, inProgress, round]);
-  /** True while local 2.2s roll is in progress OR server says rolling with no triplet in state. */
-  const isDiceRolling = rolling || showTableRollTumble;
-  /** All DiceFace rolling= true when we’re animating a throw but don’t have final pips in state. */
-  const isRollingFaces = dice == null && isDiceRolling;
-  const showIdleDice = dice == null && !isDiceRolling;
-  const facePips: [number, number, number] = dice
-    ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
-    : CELO_IDLE_DICE;
+  const hasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
+
+  const visualDiceMode = useMemo(
+    () =>
+      computeCeloVisualDiceMode({
+        inProgress,
+        roundStatus: round?.status,
+        hasBankerTriplet,
+        currentPlayerHasFinalRoll: currentPlayerResolvedRoll,
+        localRolling: rolling,
+      }),
+    [
+      inProgress,
+      round?.status,
+      hasBankerTriplet,
+      currentPlayerResolvedRoll,
+      rolling,
+    ]
+  );
+
+  /** Tumble animation: waiting on banker write, waiting on current player final, or local roll window. */
+  const isRollingFaces =
+    visualDiceMode === "banker_tumble" || visualDiceMode === "player_tumble";
+
+  const showIdleDice = !inProgress && !rolling;
+  const facePips: [number, number, number] = isRollingFaces
+    ? CELO_IDLE_DICE
+    : dice
+      ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
+      : CELO_IDLE_DICE;
   const stakedPlayerCount = useMemo(
     () => countStakedEntryPlayers(players),
     [players]
@@ -509,16 +621,37 @@ export default function CeloRoomPage() {
   }, [round?.id]);
 
   useEffect(() => {
+    setCurrentPlayerResolvedRoll(false);
+  }, [round?.id]);
+
+  useEffect(() => {
     if (!CELO_DEBUG) return;
+    const src =
+      dice != null
+        ? "felt_triplet_state"
+        : round?.banker_dice
+          ? "banker_dice_pending_merge"
+          : "none";
     console.log("[C-Lo room] felt (dev)", {
+      visualDiceMode,
+      diceSourceLogged: src,
       hasDice: dice != null,
-      isDiceRolling,
       isRollingFaces,
-      showTableRollTumble,
       localRolling: rolling,
       roundStatus: round?.status,
+      currentPlayerResolvedRoll,
+      hasBankerTriplet,
     });
-  }, [dice, isDiceRolling, isRollingFaces, showTableRollTumble, rolling, round?.status]);
+  }, [
+    visualDiceMode,
+    dice,
+    isRollingFaces,
+    rolling,
+    round?.status,
+    round?.banker_dice,
+    currentPlayerResolvedRoll,
+    hasBankerTriplet,
+  ]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -634,7 +767,10 @@ export default function CeloRoomPage() {
     setRollError(null);
     if (typeof j.newBalance === "number") setMyBalance(j.newBalance);
     if (j.canLowerBank) setShowLower(true);
-    if (j.player_can_become_banker) setShowBanker(true);
+    if (j.player_can_become_banker) {
+      setBankerAcceptError(null);
+      setShowBanker(true);
+    }
     await fetchAll();
     setTimeout(() => setRollName(null), 2800);
     setRollingAction(false);
@@ -663,7 +799,7 @@ export default function CeloRoomPage() {
         entry_sc: entryAmount,
       }),
     });
-    const j = (await res.json()) as { error?: string };
+    const j = (await res.json()) as { error?: string; already_seated?: boolean };
     if (!res.ok) {
       if (res.status === 401) {
         setJoinHint("Session expired. Please sign in again.");
@@ -679,6 +815,11 @@ export default function CeloRoomPage() {
         return;
       }
       setJoinHint(j.error ?? "Couldn’t post entry");
+      return;
+    }
+    if (j.already_seated) {
+      setJoinHint("You’re already seated — syncing the table…");
+      await fetchAll();
       return;
     }
     setJoinHint(null);
@@ -802,6 +943,7 @@ export default function CeloRoomPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        setLowerBankError(null);
                         setLowerAmt(clamp(bankVal(room) - minE, minE, bankVal(room)));
                         setShowLower(true);
                       }}
@@ -819,11 +961,10 @@ export default function CeloRoomPage() {
 
               <div className="relative z-10 flex flex-1 flex-col items-center justify-center py-1 md:min-h-[12rem] md:py-4">
                 <div
-                  className="pointer-events-none absolute -inset-6 -z-10 opacity-80 md:-inset-8"
+                  className="pointer-events-none absolute -inset-6 -z-10 opacity-90 md:-inset-8"
                   style={{
                     background:
-                      "radial-gradient(60% 55% at 50% 42%, rgba(245,200,66,0.14) 0%, rgba(80,30,120,0.1) 35%, transparent 70%)",
-                    filter: "blur(0px)",
+                      "radial-gradient(52% 48% at 50% 40%, rgba(255,235,180,0.22) 0%, rgba(245,200,66,0.12) 28%, rgba(80,30,120,0.08) 45%, transparent 72%)",
                   }}
                   aria-hidden
                 />
@@ -841,21 +982,21 @@ export default function CeloRoomPage() {
                     boxShadow: `
                     0 0 0 1px #c9a061,
                     0 0 0 3px #4a2d1a,
-                    0 0 35px rgba(245, 200, 90, 0.18),
-                    0 24px 64px rgba(0,0,0,0.7),
-                    inset 0 8px 36px rgba(200, 230, 160, 0.12),
-                    inset 0 -32px 48px rgba(0,0,0,0.55)`,
+                    0 0 48px rgba(255, 230, 160, 0.2),
+                    0 24px 64px rgba(0,0,0,0.72),
+                    inset 0 8px 42px rgba(220, 245, 180, 0.16),
+                    inset 0 -32px 52px rgba(0,0,0,0.58)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
                   <div
-                    className="pointer-events-none absolute left-1/2 top-1/3 z-0 w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    className="pointer-events-none absolute left-1/2 top-[38%] z-0 w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{
-                      height: "42%",
+                      height: "48%",
                       background:
-                        "radial-gradient(ellipse at 50% 50%, rgba(255, 255, 200, 0.14) 0%, transparent 72%)",
+                        "radial-gradient(ellipse at 50% 45%, rgba(255, 255, 220, 0.28) 0%, rgba(255,240,200,0.1) 42%, transparent 74%)",
                     }}
                     aria-hidden
                   />
@@ -866,12 +1007,15 @@ export default function CeloRoomPage() {
                     GP
                   </span>
                   <div
-                    className="relative z-[5] flex items-center justify-center gap-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.55)] md:gap-3"
-                    style={{ opacity: showIdleDice && !isDiceRolling ? 0.55 : 1 }}
+                    className="relative z-[5] flex items-center justify-center gap-2 md:gap-3"
+                    style={{
+                      opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
+                      filter: isRollingFaces ? "drop-shadow(0 6px 14px rgba(0,0,0,0.5))" : "drop-shadow(0 10px 22px rgba(0,0,0,0.55))",
+                    }}
                   >
                     {[0, 1, 2].map((i) => (
                       <DiceFace
-                        key={`${round?.id ?? "r"}-f${i}-${isRollingFaces ? "spin" : "face"}-${facePips[0]}-${facePips[1]}-${facePips[2]}`}
+                        key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
                         value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
                         diceType={myDiceType}
                         size={diceSize}
@@ -882,7 +1026,7 @@ export default function CeloRoomPage() {
                   </div>
                   <RollNameDisplay rollName={rollName} onComplete={() => setRollName(null)} />
                 </div>
-                {showIdleDice && !isDiceRolling && (
+                {showIdleDice && !isRollingFaces && (
                   <p className="mt-3 max-w-sm px-2 text-center font-mono text-[10px] uppercase tracking-widest text-amber-200/35">
                     Awaiting the next throw
                   </p>
@@ -1024,6 +1168,12 @@ export default function CeloRoomPage() {
                 bets={sideBets}
                 loading={sideBetsLoading}
                 className="min-h-0 overflow-y-auto border-b-0"
+                supabase={supabase}
+                me={me}
+                roomId={room?.id ?? roomId}
+                roundId={round?.id ?? null}
+                minAmount={room ? minE : 1000}
+                onAfterMutate={() => void fetchAll()}
               />
               <CeloRoomChatPanel
                 className="min-h-0 border-t border-amber-400/10"
@@ -1099,6 +1249,12 @@ export default function CeloRoomPage() {
             className="h-full min-h-0"
             bets={sideBets}
             loading={sideBetsLoading}
+            supabase={supabase}
+            me={me}
+            roomId={room?.id ?? roomId}
+            roundId={round?.id ?? null}
+            minAmount={room ? minE : 1000}
+            onAfterMutate={() => void fetchAll()}
           />
         )}
         {sideTab === "chat" && (
@@ -1137,6 +1293,9 @@ export default function CeloRoomPage() {
             <p className={`text-lg text-[#F5C842] ${cinzel.className}`}>
               Lower bank
             </p>
+            {lowerBankError && (
+              <p className="mt-2 text-sm text-red-300/95">{lowerBankError}</p>
+            )}
             <input
               type="number"
               value={lowerAmt}
@@ -1152,8 +1311,9 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={async () => {
+                  setLowerBankError(null);
                   if (!supabase) {
-                    alert("Please log in first");
+                    setLowerBankError("Connect to the app to change the bank.");
                     return;
                   }
                   const res = await fetchCeloApi(supabase, "/api/celo/room/lower-bank", {
@@ -1172,7 +1332,7 @@ export default function CeloRoomPage() {
                       return;
                     }
                     const j = (await res.json()) as { error?: string };
-                    alert(j.error ?? "Could not update bank");
+                    setLowerBankError(j.error ?? "Could not update bank");
                   }
                 }}
                 className="min-h-[44px] flex-1 rounded font-bold"
@@ -1185,7 +1345,10 @@ export default function CeloRoomPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowLower(false)}
+                onClick={() => {
+                  setLowerBankError(null);
+                  setShowLower(false);
+                }}
                 className="min-h-[44px] text-[#6B7280]"
               >
                 Cancel
@@ -1207,6 +1370,9 @@ export default function CeloRoomPage() {
             <p className={`mt-2 text-xl text-[#F5C842] ${cinzel.className}`}>
               Take the bank?
             </p>
+            {bankerAcceptError && (
+              <p className="mt-2 text-sm text-red-300/95">{bankerAcceptError}</p>
+            )}
             <p className="mt-1 text-sm text-[#9CA3AF]">
               Cover {bankVal(room).toLocaleString()} GPC
             </p>
@@ -1214,8 +1380,9 @@ export default function CeloRoomPage() {
               <button
                 type="button"
                 onClick={async () => {
+                  setBankerAcceptError(null);
                   if (!supabase) {
-                    alert("Please log in first");
+                    setBankerAcceptError("Connect to the app to take the bank.");
                     return;
                   }
                   const res = await fetchCeloApi(supabase, "/api/celo/banker/accept", {
@@ -1234,7 +1401,7 @@ export default function CeloRoomPage() {
                       return;
                     }
                     const j = (await res.json()) as { error?: string };
-                    alert(j.error ?? "Could not take the bank");
+                    setBankerAcceptError(j.error ?? "Could not take the bank");
                   }
                 }}
                 className="min-h-[44px] flex-1 rounded font-bold"
@@ -1245,7 +1412,14 @@ export default function CeloRoomPage() {
               >
                 Become banker
               </button>
-              <button type="button" onClick={() => setShowBanker(false)} className="text-[#6B7280]">
+              <button
+                type="button"
+                onClick={() => {
+                  setBankerAcceptError(null);
+                  setShowBanker(false);
+                }}
+                className="text-[#6B7280]"
+              >
                 No
               </button>
             </div>

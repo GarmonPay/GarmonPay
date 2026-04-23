@@ -2,16 +2,8 @@ import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
 import { celoAccountingLog } from "@/lib/celo-accounting";
+import { CELO_SIDEBET_ODDS } from "@/lib/celo-sidebet-odds";
 import { randomUUID } from "crypto";
-
-const ODDS: Record<string, number> = {
-  celo: 8.0,
-  shit: 8.0,
-  hand_crack: 4.5,
-  trips: 8.0,
-  banker_wins: 1.8,
-  player_wins: 1.8,
-};
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -51,7 +43,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const mult = ODDS[betType];
+  const mult = CELO_SIDEBET_ODDS[betType];
   if (mult == null) {
     return NextResponse.json({ error: "Invalid bet_type" }, { status: 400 });
   }
