@@ -14,6 +14,7 @@ import {
   celoAccountingLog,
   celoUpdateRoundIfStatus,
 } from "@/lib/celo-accounting";
+import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
 
 type RoomRow = {
   id: string;
@@ -442,6 +443,12 @@ async function handleBankerRoll(
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
+    await runCeloSideBetSettlementAfterRoundComplete(
+      admin,
+      room.id,
+      round.id,
+      feePct
+    );
     celoAccountingLog("banker_instant_win_done", {
       roundId: round.id,
       newBank,
@@ -577,6 +584,12 @@ async function handleBankerRoll(
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
+    await runCeloSideBetSettlementAfterRoundComplete(
+      admin,
+      room.id,
+      round.id,
+      feePct
+    );
     celoAccountingLog("instant_loss_done", { roundId: round.id });
     return NextResponse.json({
       dice,
@@ -819,6 +832,12 @@ async function handlePlayerRoll(
             last_activity: now,
           })
           .eq("id", room.id);
+        await runCeloSideBetSettlementAfterRoundComplete(
+          admin,
+          room.id,
+          round.id,
+          feePct
+        );
         celoAccountingLog("player_phase_settlement_complete", {
           roundId: round.id,
         });

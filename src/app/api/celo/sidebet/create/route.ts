@@ -104,6 +104,7 @@ export async function POST(request: Request) {
       odds_multiplier: mult,
       status: "open",
       expires_at: expires,
+      creator_debit_ref: ref,
     })
     .select("*")
     .single();

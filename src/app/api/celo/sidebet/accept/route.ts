@@ -38,12 +38,21 @@ export async function POST(request: Request) {
     status: string;
     amount_cents: number;
     expires_at: string | null;
+    acceptor_id: string | null;
   };
   if (bet.creator_id === userId) {
     return NextResponse.json(
       { error: "You cannot match your own post" },
       { status: 400 }
     );
+  }
+  if (bet.status === "matched" && bet.acceptor_id === userId) {
+    const { data: cur } = await adminClient
+      .from("celo_side_bets")
+      .select("*")
+      .eq("id", betId)
+      .single();
+    return NextResponse.json({ sideBet: cur, idempotent: true });
   }
   if (bet.status !== "open") {
     return NextResponse.json(
@@ -67,6 +76,19 @@ export async function POST(request: Request) {
     "celo_sidebet"
   );
   if (!debit.success) {
+    if (
+      typeof debit.message === "string" &&
+      /duplicate/i.test(debit.message)
+    ) {
+      const { data: cur } = await adminClient
+        .from("celo_side_bets")
+        .select("*")
+        .eq("id", betId)
+        .maybeSingle();
+      if (cur && String((cur as { status?: string }).status) === "matched") {
+        return NextResponse.json({ sideBet: cur, idempotent: true });
+      }
+    }
     return NextResponse.json(
       { error: debit.message ?? "Insufficient balance" },
       { status: 400 }
@@ -74,10 +96,11 @@ export async function POST(request: Request) {
   }
   const { data: updated, error: uErr } = await adminClient
     .from("celo_side_bets")
-    .update({ acceptor_id: userId, status: "matched" })
+    .update({ acceptor_id: userId, status: "matched", acceptor_debit_ref: ref })
     .eq("id", betId)
+    .eq("status", "open")
     .select("*")
-    .single();
+    .maybeSingle();
   if (uErr) {
     const refundRef = `celo_side_accept_refund_${betId}_${userId}`;
     celoAccountingLog("side_accept_refund_attempt", {
@@ -101,6 +124,32 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: uErr.message },
       { status: 500 }
+    );
+  }
+  if (!updated) {
+    const refundRef = `celo_side_accept_refund_${betId}_${userId}_race`;
+    await creditGpayIdempotent(
+      userId,
+      amount,
+      "C-Lo side entry refund (match race)",
+      refundRef,
+      "celo_bank_refund"
+    );
+    const { data: cur } = await adminClient
+      .from("celo_side_bets")
+      .select("*")
+      .eq("id", betId)
+      .maybeSingle();
+    if (
+      cur &&
+      String((cur as { status?: string }).status) === "matched" &&
+      (cur as { acceptor_id?: string }).acceptor_id === userId
+    ) {
+      return NextResponse.json({ sideBet: cur, idempotent: true });
+    }
+    return NextResponse.json(
+      { error: "Could not match this post (race). Try again." },
+      { status: 409 }
     );
   }
   return NextResponse.json({ sideBet: updated });

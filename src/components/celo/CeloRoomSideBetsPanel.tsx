@@ -264,7 +264,15 @@ export function CeloRoomSideBetsPanel({
                     ? "Matched"
                     : b.status === "locked"
                       ? "Locked"
-                      : b.status;
+                      : b.status === "won"
+                        ? "Settled (creator)"
+                        : b.status === "lost"
+                          ? "Settled (acceptor)"
+                          : b.status === "cancelled"
+                            ? "Void / cancelled"
+                            : b.status === "expired"
+                              ? "Expired"
+                              : b.status;
               return (
                 <li
                   key={b.id}
