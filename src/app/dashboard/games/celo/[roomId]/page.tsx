@@ -26,8 +26,14 @@ import {
   normalizeCeloPlayerRow,
 } from "@/lib/celo-player-state";
 import { alertCeloUnauthorized, fetchCeloApi } from "@/lib/celo-api-fetch";
+import { applyCeloStateUpdate } from "@/lib/celo/celoStateMerge";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
+
+/*
+ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
+NO EXCEPTIONS (realtime, fetch, join, roll)
+*/
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -141,6 +147,21 @@ export default function CeloRoomPage() {
   const fetchTokenRef = useRef(0);
   /** Latest realtime mutation time; fetch results older than this must not apply. */
   const lastRealtimeUpdateRef = useRef(0);
+  /** Start time of the in-flight fetchAll (for stale guards across awaits). */
+  const fetchStartedAtRef = useRef(0);
+  const roomRef = useRef<Room | null>(null);
+  const playersRef = useRef<Player[]>([]);
+  const roundRef = useRef<Round | null>(null);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
 
   useEffect(() => {
     rollingRef.current = rolling;
@@ -180,6 +201,7 @@ export default function CeloRoomPage() {
     if (!supabase || !roomId) return;
     const myToken = ++fetchTokenRef.current;
     const fetchStartedAt = Date.now();
+    fetchStartedAtRef.current = fetchStartedAt;
     setSideBetsLoading(true);
     setRoomFetchError(null);
 
@@ -241,29 +263,57 @@ export default function CeloRoomPage() {
     if (roomRes.error) {
       setRoomFetchError(roomRes.error.message);
     }
-    if (roomRes.data) setRoom(roomRes.data as Room);
-    else if (roomRes.error) setRoom(null);
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
 
     const playerRows: Player[] = ((playersRes.data ?? []) as unknown[]).map(
       (row) => normalizeCeloPlayerRow(row) as Player
     );
-    setPlayers(playerRows);
     if (playersRes.error && CELO_DEBUG) console.warn("[C-Lo room] players", playersRes.error);
+
+    const ar = (roundsRes.data as Round[] | null) ?? [];
+    const activeRound = ar[0] ?? null;
+    if (roundsRes.error && CELO_DEBUG) console.warn("[C-Lo room] rounds", roundsRes.error);
 
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
       return;
     }
 
-    const ar = (roundsRes.data as Round[] | null) ?? [];
-    const activeRound = ar[0] ?? null;
-    setRound(activeRound);
-    if (roundsRes.error && CELO_DEBUG) console.warn("[C-Lo room] rounds", roundsRes.error);
+    if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
+      console.log("[C-Lo] skipping stale fetch (realtime newer than fetch start)");
+      setSideBetsLoading(false);
+      return;
+    }
+
+    let incomingRoom: Record<string, unknown> | null | undefined = undefined;
+    if (roomRes.data) incomingRoom = roomRes.data as unknown as Record<string, unknown>;
+    else if (roomRes.error) incomingRoom = null;
+
+    const mergedFetch = applyCeloStateUpdate(
+      {
+        room: roomRef.current as unknown as Record<string, unknown> | null,
+        players: playersRef.current,
+        currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+      },
+      {
+        room: incomingRoom !== undefined ? incomingRoom : undefined,
+        players: playerRows,
+        currentRound:
+          activeRound === null
+            ? null
+            : (activeRound as unknown as Record<string, unknown>),
+      },
+      "fetch",
+      { playersSnapshot: true }
+    );
+
+    if (isStaleFetch()) {
+      console.log("[C-Lo] skipping stale fetch");
+      return;
+    }
+
+    setRoom(mergedFetch.room as Room | null);
+    setPlayers(mergedFetch.players as Player[]);
+    setRound(mergedFetch.currentRound as Round | null);
 
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
@@ -430,7 +480,20 @@ export default function CeloRoomPage() {
             console.log("[RT] room update", rowNew);
           }
           if (rowNew && String(rowNew.id ?? "") === roomId) {
-            setRoom((prev) => ({ ...(prev ?? (rowNew as unknown as Room)), ...rowNew }) as Room);
+            setRoom((prevRoom) =>
+              applyCeloStateUpdate(
+                {
+                  room: prevRoom as unknown as Record<string, unknown> | null,
+                  players: playersRef.current,
+                  currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+                },
+                {
+                  room: rowNew,
+                  updated_at: new Date().toISOString(),
+                },
+                "realtime"
+              ).room as Room
+            );
           }
           void fetchAll();
         }
@@ -452,17 +515,19 @@ export default function CeloRoomPage() {
           const rowNew = (payload as { new: Record<string, unknown> | null }).new;
           const rowOld = (payload as { old: Record<string, unknown> | null }).old;
 
-          setPlayers((prev) => {
-            if (et === "INSERT" && rowNew) {
-              if (String(rowNew.room_id ?? "") !== roomId) return prev;
+          const prev = playersRef.current;
+          let nextPlayers = prev;
+
+          if (et === "INSERT" && rowNew) {
+            if (String(rowNew.room_id ?? "") === roomId) {
               const row = normalizeCeloPlayerRow(rowNew) as Player;
               const without = prev.filter(
                 (p) => p.id !== row.id && p.user_id !== row.user_id
               );
-              return sortCeloPlayersBySeat([...without, row]);
+              nextPlayers = sortCeloPlayersBySeat([...without, row]);
             }
-            if (et === "UPDATE" && rowNew) {
-              if (String(rowNew.room_id ?? "") !== roomId) return prev;
+          } else if (et === "UPDATE" && rowNew) {
+            if (String(rowNew.room_id ?? "") === roomId) {
               const uid = String(rowNew.user_id ?? "");
               const id = String(rowNew.id ?? "");
               const prevRow = prev.find(
@@ -479,28 +544,44 @@ export default function CeloRoomPage() {
               const has = prev.some(
                 (p) => p.user_id === row.user_id || p.id === row.id
               );
-              const next = has
-                ? prev.map((p) =>
-                    p.user_id === row.user_id || p.id === row.id
-                      ? { ...p, ...row }
-                      : p
-                  )
-                : [...prev, row];
-              return sortCeloPlayersBySeat(next);
-            }
-            if (et === "DELETE" && rowOld) {
-              const oldId = String(rowOld.id ?? "");
-              const oldUid = String(rowOld.user_id ?? "");
-              return prev.filter(
-                (p) =>
-                  !(
-                    (oldId && p.id === oldId) ||
-                    (oldUid && p.user_id === oldUid)
-                  )
+              nextPlayers = sortCeloPlayersBySeat(
+                has
+                  ? prev.map((p) =>
+                      p.user_id === row.user_id || p.id === row.id
+                        ? { ...p, ...row }
+                        : p
+                    )
+                  : [...prev, row]
               );
             }
-            return prev;
-          });
+          } else if (et === "DELETE" && rowOld) {
+            const oldId = String(rowOld.id ?? "");
+            const oldUid = String(rowOld.user_id ?? "");
+            nextPlayers = prev.filter(
+              (p) =>
+                !(
+                  (oldId && p.id === oldId) ||
+                  (oldUid && p.user_id === oldUid)
+                )
+            );
+          }
+
+          const merged = applyCeloStateUpdate(
+            {
+              room: roomRef.current as unknown as Record<string, unknown> | null,
+              players: prev,
+              currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+            },
+            {
+              players: nextPlayers,
+              updated_at: new Date().toISOString(),
+            },
+            "realtime",
+            { playersSnapshot: true }
+          );
+          setRoom(merged.room as Room);
+          setPlayers(merged.players as Player[]);
+          setRound(merged.currentRound as Round | null);
           setPlayersSnapshotReady(true);
           void fetchAll();
         }
@@ -528,25 +609,58 @@ export default function CeloRoomPage() {
 
           if (p.eventType === "DELETE" && rowOld?.id) {
             const oid = String(rowOld.id);
-            setRound((prev) => (prev?.id === oid ? null : prev));
+            const prevR = roundRef.current;
+            if (prevR?.id === oid) {
+              const mergedDel = applyCeloStateUpdate(
+                {
+                  room: roomRef.current as unknown as Record<string, unknown> | null,
+                  players: playersRef.current,
+                  currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+                },
+                {
+                  currentRound: null,
+                  updated_at: new Date().toISOString(),
+                },
+                "realtime"
+              );
+              setRoom(mergedDel.room as Room);
+              setPlayers(mergedDel.players as Player[]);
+              setRound(mergedDel.currentRound as Round | null);
+            }
             void fetchAll();
             return;
           }
 
           if (n?.id && typeof n.id === "string" && String(n.room_id ?? "") === roomId) {
             const active = new Set(["banker_rolling", "player_rolling", "betting"]);
-            setRound((prev) => {
-              if (!prev || prev.id === n.id) {
-                return { ...(prev ?? {}), ...n } as Round;
-              }
-              if (
-                p.eventType === "INSERT" &&
-                active.has(String(n.status ?? ""))
-              ) {
-                return { ...n } as Round;
-              }
-              return prev;
-            });
+            const prevR = roundRef.current;
+            let incomingRound: Round | undefined;
+            if (!prevR || prevR.id === n.id) {
+              incomingRound = { ...(prevR ?? {}), ...n } as Round;
+            } else if (
+              p.eventType === "INSERT" &&
+              active.has(String(n.status ?? ""))
+            ) {
+              incomingRound = { ...n } as Round;
+            }
+
+            if (incomingRound !== undefined) {
+              const mergedRt = applyCeloStateUpdate(
+                {
+                  room: roomRef.current as unknown as Record<string, unknown> | null,
+                  players: playersRef.current,
+                  currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+                },
+                {
+                  currentRound: incomingRound as unknown as Record<string, unknown>,
+                  updated_at: new Date().toISOString(),
+                },
+                "realtime"
+              );
+              setRoom(mergedRt.room as Room);
+              setPlayers(mergedRt.players as Player[]);
+              setRound(mergedRt.currentRound as Round | null);
+            }
 
             if (n.status === "player_rolling") {
               setCurrentPlayerResolvedRoll(false);
@@ -987,6 +1101,20 @@ export default function CeloRoomPage() {
         setBankerAcceptError(null);
         setShowBanker(true);
       }
+      setRoom((prevRoom) =>
+        applyCeloStateUpdate(
+          {
+            room: prevRoom as unknown as Record<string, unknown> | null,
+            players: playersRef.current,
+            currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+          },
+          {
+            updated_at: new Date().toISOString(),
+          },
+          "roll"
+        ).room as Room
+      );
+      lastRealtimeUpdateRef.current = Date.now();
       await fetchAll();
       setTimeout(() => setRollName(null), 2800);
     } catch (e) {
@@ -1029,30 +1157,40 @@ export default function CeloRoomPage() {
     };
 
     const mergeJoinPayload = () => {
-      if (j.player) {
-        const row = normalizeCeloPlayerRow(j.player) as Player;
-        setPlayers((prev) =>
-          sortCeloPlayersBySeat([
-            ...prev.filter((p) => p.id !== row.id && p.user_id !== row.user_id),
+      const row = j.player ? (normalizeCeloPlayerRow(j.player) as Player) : undefined;
+      const incomingPlayers = row
+        ? sortCeloPlayersBySeat([
+            ...playersRef.current.filter(
+              (p) => p.id !== row.id && p.user_id !== row.user_id
+            ),
             row,
           ])
-        );
-        setPlayersSnapshotReady(true);
-      }
+        : undefined;
+      let incomingRoom: Record<string, unknown> | undefined = undefined;
       if (j.room && String((j.room as { id?: string }).id ?? "") === room.id) {
-        setRoom(
-          (prev) =>
-            ({ ...(prev ?? {}), ...j.room }) as Room
-        );
+        incomingRoom = j.room as Record<string, unknown>;
       }
+      const mergedJoin = applyCeloStateUpdate(
+        {
+          room: roomRef.current as unknown as Record<string, unknown> | null,
+          players: playersRef.current,
+          currentRound: roundRef.current as unknown as Record<string, unknown> | null,
+        },
+        {
+          room: incomingRoom,
+          players: incomingPlayers,
+          updated_at: new Date().toISOString(),
+        },
+        "join"
+      );
+      setRoom(mergedJoin.room as Room);
+      setPlayers(mergedJoin.players as Player[]);
+      setRound(mergedJoin.currentRound as Round | null);
+      if (row) setPlayersSnapshotReady(true);
     };
 
     const scheduleFetchAll = () => {
-      if (typeof window !== "undefined") {
-        window.setTimeout(() => void fetchAll(), 300);
-      } else {
-        void fetchAll();
-      }
+      void fetchAll();
     };
 
     if (!res.ok) {
@@ -1068,7 +1206,11 @@ export default function CeloRoomPage() {
         setJoinHint("You’re already at this table. Updating…");
         mergeJoinPayload();
         bumpOptimisticAsRealtime();
-        scheduleFetchAll();
+        if (typeof window !== "undefined") {
+          window.setTimeout(() => scheduleFetchAll(), 300);
+        } else {
+          scheduleFetchAll();
+        }
         return;
       }
       setJoinHint(j.error ?? "Couldn’t post entry");
@@ -1078,13 +1220,21 @@ export default function CeloRoomPage() {
       setJoinHint("You’re already seated — syncing the table…");
       mergeJoinPayload();
       bumpOptimisticAsRealtime();
-      scheduleFetchAll();
+      if (typeof window !== "undefined") {
+        window.setTimeout(() => scheduleFetchAll(), 300);
+      } else {
+        scheduleFetchAll();
+      }
       return;
     }
     setJoinHint(null);
     mergeJoinPayload();
     bumpOptimisticAsRealtime();
-    scheduleFetchAll();
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => scheduleFetchAll(), 300);
+    } else {
+      scheduleFetchAll();
+    }
   }
 
   const feltW = "min(100%, 32rem)";
