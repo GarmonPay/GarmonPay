@@ -1,14 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
+import { CELO_IDLE_DICE, clampDie, tripletFromDiceJson } from "@/lib/celo-room-dice";
 import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
+import { CeloRoomChatPanel } from "@/components/celo/CeloRoomChatPanel";
+import {
+  CeloRoomSideBetsPanel,
+  type CeloSideBetRow,
+} from "@/components/celo/CeloRoomSideBetsPanel";
+
+const CELO_DEBUG = process.env.NODE_ENV === "development";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -83,19 +91,36 @@ export default function CeloRoomPage() {
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
   const [sideTab, setSideTab] = useState<"side" | "chat">("side");
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [chat, setChat] = useState("");
   const [messages, setMessages] = useState<
     { id: string; user_id: string; message: string; created_at: string }[]
   >([]);
+  const [sideBets, setSideBets] = useState<CeloSideBetRow[]>([]);
+  const [sideBetsLoading, setSideBetsLoading] = useState(false);
+  const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
+  const [startRoundError, setStartRoundError] = useState<string | null>(null);
+  const [uiReady, setUiReady] = useState(false);
+  const rollingRef = useRef(false);
+  const rollingActionRef = useRef(false);
+
+  useEffect(() => {
+    rollingRef.current = rolling;
+  }, [rolling]);
+  useEffect(() => {
+    rollingActionRef.current = rollingAction;
+  }, [rollingAction]);
 
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
+    setSideBetsLoading(true);
+    setRoomFetchError(null);
     const [
-      { data: r },
-      { data: p },
-      { data: activeRounds },
-      { data: ch },
+      roomRes,
+      playersRes,
+      roundsRes,
+      chatRes,
+      sideRes,
     ] = await Promise.all([
       supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
       supabase
@@ -116,14 +141,68 @@ export default function CeloRoomPage() {
         .eq("room_id", roomId)
         .order("created_at", { ascending: true })
         .limit(50),
+      supabase
+        .from("celo_side_bets")
+        .select("id, bet_type, amount_cents, status, odds_multiplier, creator_id, acceptor_id, created_at")
+        .eq("room_id", roomId)
+        .in("status", ["open", "matched", "locked"])
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
-    if (r) setRoom(r as Room);
-    setPlayers((p as Player[]) ?? []);
-    const ar = (activeRounds as Round[] | null) ?? [];
-    setRound(ar[0] ?? null);
+    setSideBetsLoading(false);
+
+    if (roomRes.error) {
+      setRoomFetchError(roomRes.error.message);
+    }
+    if (roomRes.data) setRoom(roomRes.data as Room);
+    else if (roomRes.error) setRoom(null);
+
+    setPlayers((playersRes.data as Player[]) ?? []);
+    if (playersRes.error && CELO_DEBUG) console.warn("[C-Lo room] players", playersRes.error);
+
+    const ar = (roundsRes.data as Round[] | null) ?? [];
+    const activeRound = ar[0] ?? null;
+    setRound(activeRound);
+    if (roundsRes.error && CELO_DEBUG) console.warn("[C-Lo room] rounds", roundsRes.error);
+
     setMessages(
-      (ch as { id: string; user_id: string; message: string; created_at: string }[]) ?? []
+      (chatRes.data as { id: string; user_id: string; message: string; created_at: string }[]) ?? []
     );
+    if (chatRes.error && CELO_DEBUG) console.warn("[C-Lo room] chat", chatRes.error);
+
+    setSideBets((sideRes.data as CeloSideBetRow[]) ?? []);
+    if (sideRes.error && CELO_DEBUG) console.warn("[C-Lo room] side bets", sideRes.error);
+
+    if (activeRound?.id && !rollingRef.current) {
+      const { data: lastRoll } = await supabase
+        .from("celo_player_rolls")
+        .select("dice")
+        .eq("round_id", activeRound.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const t = tripletFromDiceJson(lastRoll?.dice);
+      if (t) {
+        setDice(t);
+      } else if (!rollingActionRef.current) {
+        setDice(null);
+      }
+    } else if (!activeRound && !rollingActionRef.current) {
+      setDice(null);
+    }
+
+    if (CELO_DEBUG) {
+      console.log("[C-Lo room] sync", {
+        roomId,
+        room: roomRes.data,
+        activeRound: activeRound?.id,
+        players: playersRes.data?.length,
+        sideBets: sideRes.data?.length,
+        diceComponent: "mounted",
+        chatMounted: true,
+        sideBetsMounted: true,
+      });
+    }
   }, [supabase, roomId]);
 
   useEffect(() => {
@@ -145,8 +224,21 @@ export default function CeloRoomPage() {
         );
       }
       await fetchAll();
+      setUiReady(true);
     })();
   }, [router, roomId, supabase, fetchAll]);
+
+  useEffect(() => {
+    if (!CELO_DEBUG) return;
+    console.log("[C-Lo room] state", {
+      roomId,
+      roomStatus: room?.status,
+      round: round?.id,
+      roundStatus: round?.status,
+      playerRows: players.length,
+      hasDice: !!dice,
+    });
+  }, [roomId, room?.status, round?.id, round?.status, players.length, dice]);
 
   useEffect(() => {
     if (!supabase || !roomId) return;
@@ -186,6 +278,16 @@ export default function CeloRoomPage() {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
+        () => void fetchAll()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
+        () => void fetchAll()
+      )
+      .on(
+        "postgres_changes",
         { event: "INSERT", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
         () => void fetchAll()
       )
@@ -210,11 +312,34 @@ export default function CeloRoomPage() {
       setEntryAmount((e) => (e < m ? m : e));
     }
   }, [room]);
+
+  const showIdleDice = dice == null;
+  const diceToRender: [number, number, number] = showIdleDice
+    ? CELO_IDLE_DICE
+    : [clampDie(dice![0]), clampDie(dice![1]), clampDie(dice![2])];
+
   const prize = round?.prize_pool_sc ?? 0;
   const inProgress = !!(
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
+  const stakedPlayerCount = players.filter((p) => p.role === "player" && p.entry_sc > 0).length;
+
+  const tableStatusText = (() => {
+    if (!uiReady) return "Loading table…";
+    if (!room) return roomFetchError ? "Could not load room" : "Loading…";
+    if (inProgress && round) {
+      if (round.status === "banker_rolling") return "Banker's roll";
+      if (round.status === "player_rolling") return "Player's roll";
+      if (round.status === "betting") return "Betting / payouts";
+    }
+    if (isBanker && stakedPlayerCount < 1) {
+      return "Need at least one player with a posted entry to start";
+    }
+    if (isBanker) return "Start a round when ready";
+    return "Waiting for banker";
+  })();
+
   const canRoll = !!(
     room &&
     round &&
@@ -223,9 +348,14 @@ export default function CeloRoomPage() {
       (round.status === "player_rolling" && isPlayer && (myRow?.entry_sc ?? 0) > 0))
   );
   const mustStart = !!(room && isBanker && !inProgress);
+  const canStartRound = mustStart && (stakedPlayerCount >= 1) && !rollingAction;
 
   async function handleStart() {
     if (!room) return;
+    setStartRoundError(null);
+    if (CELO_DEBUG) {
+      console.log("[C-Lo room] Start round click", { roomId: room.id, banker: room.banker_id, stakedPlayerCount });
+    }
     setRollingAction(true);
     try {
       const res = await fetch("/api/celo/round/start", {
@@ -234,12 +364,25 @@ export default function CeloRoomPage() {
         credentials: "include",
         body: JSON.stringify({ room_id: room.id }),
       });
-      const j = await res.json();
+      const text = await res.text();
+      let j: { error?: string; round?: unknown } = {};
+      try {
+        j = text ? (JSON.parse(text) as { error?: string }) : {};
+      } catch {
+        setStartRoundError("Invalid response from server");
+        if (CELO_DEBUG) console.error("[C-Lo room] Start round bad JSON", text);
+        return;
+      }
+      if (CELO_DEBUG) console.log("[C-Lo room] Start round response", res.status, j);
       if (!res.ok) {
-        alert((j as { error?: string }).error ?? "Start failed");
+        setStartRoundError(j.error ?? "Could not start round");
         return;
       }
       await fetchAll();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Start round failed";
+      setStartRoundError(msg);
+      if (CELO_DEBUG) console.error("[C-Lo room] Start round exception", e);
     } finally {
       setRollingAction(false);
     }
@@ -351,6 +494,14 @@ export default function CeloRoomPage() {
         </span>
         <span className="font-mono text-[10px] text-[#6B7280]">👁 {spectators}</span>
       </header>
+      {roomFetchError && (
+        <div
+          className="shrink-0 px-3 py-2 text-center text-xs text-red-300"
+          style={{ background: "rgba(127,29,29,0.35)" }}
+        >
+          {roomFetchError}
+        </div>
+      )}
       <div
         className="flex h-[52px] shrink-0 items-center border-b px-3"
         style={{
@@ -396,83 +547,69 @@ export default function CeloRoomPage() {
           )}
         </div>
       </div>
-      <div
-        className="relative min-h-0 flex-1 overflow-hidden"
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-      >
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            zIndex: 0,
-            background: "#05010F",
-            boxShadow: "inset 0 0 0 0 transparent",
-          }}
-        />
-        <div
-          className="absolute left-0 top-0 h-full w-0.5"
-          style={{
-            zIndex: 0,
-            background: "#7C3AED",
-            boxShadow: "0 0 10px #7C3AED",
-          }}
-        />
-        <div
-          className="absolute right-0 top-0 h-full w-0.5"
-          style={{
-            zIndex: 0,
-            background: "#F5C842",
-            boxShadow: "0 0 10px #F5C842",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute bottom-0 left-0 h-1 w-full"
-          style={{ background: "#10B981", boxShadow: "0 0 10px #10B981" }}
-        />
-        <div
-          className="relative z-10"
-          style={{
-            width: "min(280px, 90vw)",
-            minHeight: 200,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="relative flex min-h-[min(50vh,420px)] flex-1 flex-col items-center justify-center overflow-hidden">
           <div
-            className="relative"
+            className="pointer-events-none absolute inset-0 z-0"
             style={{
-              width: "min(260px, 82vw)",
-              height: 168,
-              borderRadius: "50%",
-              background: "#0A2010",
-              border: "8px solid #5C3A1A",
-              boxShadow:
-                "0 0 0 2px #8B5E3C, 0 8px 32px rgba(0,0,0,0.7), inset 0 0 40px rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              background: "#05010F",
+            }}
+          />
+          <div
+            className="absolute left-0 top-0 z-0 h-full w-0.5"
+            style={{
+              background: "#7C3AED",
+              boxShadow: "0 0 10px #7C3AED",
+            }}
+          />
+          <div
+            className="absolute right-0 top-0 z-0 h-full w-0.5 md:hidden"
+            style={{
+              background: "#F5C842",
+              boxShadow: "0 0 10px #F5C842",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute bottom-0 left-0 z-0 h-1 w-full"
+            style={{ background: "#10B981", boxShadow: "0 0 10px #10B981" }}
+          />
+          <div
+            className="relative z-10 flex w-full flex-col items-center justify-center px-2 py-4"
+            style={{
+              minHeight: 220,
             }}
           >
-            <span
-              className={`absolute ${cinzel.className} select-none pointer-events-none`}
-              style={{ fontSize: 44, color: "#F5C842", opacity: 0.05 }}
+            <p
+              className="mb-3 max-w-sm px-2 text-center font-mono text-[11px] text-[#9CA3AF]"
             >
-              GP
-            </span>
-            <div className="relative z-[5] flex items-center justify-center gap-2">
-              {dice && dice[0] > 0
-                ? [0, 1, 2].map((i) => (
-                    <DiceFace
-                      key={i}
-                      value={clamp(dice[i], 1, 6) as 1 | 2 | 3 | 4 | 5 | 6}
-                      diceType={myDiceType}
-                      size={diceSize}
-                      rolling={rolling}
-                      delay={[0, 133, 266][i]}
-                    />
-                  ))
-                : rolling
+              {tableStatusText}
+            </p>
+            <div
+              className="relative"
+              style={{
+                width: "min(260px, 82vw)",
+                height: 168,
+                borderRadius: "50%",
+                background: "#0A2010",
+                border: "8px solid #5C3A1A",
+                boxShadow:
+                  "0 0 0 2px #8B5E3C, 0 8px 32px rgba(0,0,0,0.7), inset 0 0 40px rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                className={`absolute ${cinzel.className} select-none pointer-events-none`}
+                style={{ fontSize: 44, color: "#F5C842", opacity: 0.05 }}
+              >
+                GP
+              </span>
+              <div
+                className="relative z-[5] flex items-center justify-center gap-2"
+                style={{ opacity: showIdleDice ? 0.5 : 1 }}
+              >
+                {rolling
                   ? [0, 1, 2].map((i) => (
                       <div
                         key={i}
@@ -486,21 +623,55 @@ export default function CeloRoomPage() {
                         }}
                       />
                     ))
-                  : (
-                      <span
-                        className="font-mono text-[11px] tracking-widest"
-                        style={{ color: "rgba(255,255,255,0.15)" }}
-                      >
-                        {round ? "WAITING…" : ""}
-                      </span>
-                    )}
+                  : [0, 1, 2].map((i) => (
+                      <DiceFace
+                        key={i}
+                        value={diceToRender[i] as 1 | 2 | 3 | 4 | 5 | 6}
+                        diceType={myDiceType}
+                        size={diceSize}
+                        rolling={false}
+                        delay={[0, 133, 266][i]}
+                      />
+                    ))}
+              </div>
+              <RollNameDisplay
+                rollName={rollName}
+                onComplete={() => setRollName(null)}
+              />
             </div>
-            <RollNameDisplay
-              rollName={rollName}
-              onComplete={() => setRollName(null)}
-            />
+            {showIdleDice && !rolling && (
+              <p className="mt-2 font-mono text-[10px] text-white/30">Idle — next hand shows here</p>
+            )}
           </div>
         </div>
+        <aside
+          className="hidden w-[min(100%,360px)] shrink-0 flex-col border-l border-[rgba(124,58,237,0.25)] bg-[#070212] md:flex"
+          style={{ minHeight: 0 }}
+        >
+          <CeloRoomSideBetsPanel bets={sideBets} loading={sideBetsLoading} className="min-h-0" />
+          <CeloRoomChatPanel
+            className="min-h-0 border-t border-[rgba(124,58,237,0.2)]"
+            minHeightStyle={{ minHeight: 200 }}
+            messages={messages}
+            value={chat}
+            onChange={setChat}
+            onSend={async () => {
+              if (!supabase || !me || !room || !chat.trim()) return;
+              const { error } = await supabase.from("celo_chat").insert({
+                room_id: room.id,
+                user_id: me,
+                message: chat.trim().slice(0, 500),
+              });
+              if (!error) {
+                setChat("");
+                void fetchAll();
+              } else if (CELO_DEBUG) {
+                console.warn("[C-Lo room] chat send", error);
+              }
+            }}
+            canSend={!!(supabase && me && room && chat.trim().length > 0)}
+          />
+        </aside>
       </div>
       <div
         className="flex h-[52px] shrink-0 items-center gap-2 border-t px-2"
@@ -538,20 +709,28 @@ export default function CeloRoomPage() {
             </button>
           ) : null}
           {mustStart && isBanker && !canRoll && (
-            <button
-              type="button"
-              disabled={
-                rollingAction || !players.some((p) => p.role === "player" && p.entry_sc > 0)
-              }
-              onClick={() => void handleStart()}
-              className={`w-full min-h-[40px] max-w-xs rounded-lg px-4 text-[13px] font-bold text-[#0A0A0A] ${cinzel.className}`}
-              style={{
-                background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                opacity: rollingAction ? 0.6 : 1,
-              }}
-            >
-              🎲 Start round
-            </button>
+            <div className="flex w-full max-w-xs flex-col items-center gap-1">
+              <button
+                type="button"
+                disabled={!canStartRound}
+                onClick={() => void handleStart()}
+                className={`w-full min-h-[40px] rounded-lg px-4 text-[13px] font-bold text-[#0A0A0A] ${cinzel.className}`}
+                style={{
+                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
+                  opacity: canStartRound ? 1 : 0.45,
+                }}
+              >
+                🎲 Start round
+              </button>
+              {stakedPlayerCount < 1 && (
+                <p className="text-center text-[10px] text-amber-200/80">
+                  At least one player must post an entry before you can start.
+                </p>
+              )}
+              {startRoundError && (
+                <p className="text-center text-[10px] text-red-300">{startRoundError}</p>
+              )}
+            </div>
           )}
           {room &&
             !inProgress &&
@@ -643,62 +822,41 @@ export default function CeloRoomPage() {
         </button>
       </div>
       <div
-        className="shrink-0 overflow-hidden border-t transition-[height] duration-200 md:hidden"
+        className="shrink-0 overflow-hidden border-t transition-[height] duration-200 ease-out md:hidden"
         style={{
           background: "rgba(13,5,32,0.98)",
-          height: panelOpen ? 120 : 0,
+          height: panelOpen ? "min(44vh, 320px)" : 0,
           borderColor: "rgba(124,58,237,0.1)",
         }}
       >
         {sideTab === "side" && (
-          <p className="p-2 text-center text-xs text-[#6B7280]">Side entries: use the API or expand later</p>
+          <CeloRoomSideBetsPanel
+            className="h-full min-h-0"
+            bets={sideBets}
+            loading={sideBetsLoading}
+          />
         )}
         {sideTab === "chat" && (
-          <div className="flex h-full flex-col p-2">
-            <div
-              className="min-h-0 flex-1 overflow-y-auto text-xs"
-              style={{ maxHeight: 64 }}
-            >
-              {messages.map((m) => (
-                <div key={m.id} className="text-[#9CA3AF]">
-                  <span className="text-[#A855F7]">{(m.user_id ?? "").slice(0, 4)}</span>{" "}
-                  {m.message}
-                </div>
-              ))}
-            </div>
-            <div className="mt-1 flex gap-1">
-              <input
-                value={chat}
-                onChange={(e) => setChat(e.target.value)}
-                className="min-h-[36px] min-w-0 flex-1 rounded border px-2"
-                style={{
-                  borderColor: "rgba(124,58,237,0.3)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#fff",
-                }}
-                placeholder="Message…"
-              />
-              <button
-                type="button"
-                className="shrink-0 min-h-[36px] rounded px-2 text-xs font-bold"
-                style={{ background: "#7C3AED", color: "#fff" }}
-                onClick={async () => {
-                  if (!supabase || !me || !room || !chat.trim()) return;
-                  const { error } = await supabase.from("celo_chat").insert({
-                    room_id: room.id,
-                    user_id: me,
-                    message: chat.trim().slice(0, 500),
-                  });
-                  if (!error) {
-                    setChat("");
-                    void fetchAll();
-                  }
-                }}
-              >
-                Send
-              </button>
-            </div>
-          </div>
+          <CeloRoomChatPanel
+            className="h-full"
+            minHeightStyle={{ minHeight: "min(40vh, 280px)" }}
+            messages={messages}
+            value={chat}
+            onChange={setChat}
+            onSend={async () => {
+              if (!supabase || !me || !room || !chat.trim()) return;
+              const { error } = await supabase.from("celo_chat").insert({
+                room_id: room.id,
+                user_id: me,
+                message: chat.trim().slice(0, 500),
+              });
+              if (!error) {
+                setChat("");
+                void fetchAll();
+              }
+            }}
+            canSend={!!(supabase && me && room && chat.trim().length > 0)}
+          />
         )}
       </div>
       {showLower && room && (
