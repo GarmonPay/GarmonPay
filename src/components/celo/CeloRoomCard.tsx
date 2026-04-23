@@ -6,6 +6,7 @@ export type CeloRoomCardData = {
   id: string;
   name: string;
   status: string;
+  room_type?: string | null;
   max_players: number;
   minimum_entry_sc: number | null;
   min_bet_cents: number | null;

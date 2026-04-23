@@ -7,6 +7,11 @@ import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
+import {
+  countSeatedParticipants,
+  isPublicLiveCeloRoom,
+  safeBankGpcCents,
+} from "@/lib/celo-lobby-stats";
 import { CeloRoomCard, type CeloRoomCardData } from "@/components/celo/CeloRoomCard";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
@@ -30,7 +35,8 @@ export default function CeloLobbyPage() {
     minimum_entry_sc: 1000,
     starting_bank_sc: 2000,
   });
-  const [playerCount, setPlayerCount] = useState(0);
+  /** Seated player + banker count across public live rooms only; from DB, not guessed. */
+  const [seatsTakenInLivePublicRooms, setSeatsTakenInLivePublicRooms] = useState(0);
   // Single stable client; creating a new client every render retriggered effects and left loading stuck.
   const supabase = useMemo(() => createBrowserClient(), []);
 
@@ -42,17 +48,44 @@ export default function CeloLobbyPage() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    console.log("ROOMS:", data);
-
     if (error) {
       setErr(error.message || "Could not load rooms");
       setRooms([]);
+      setSeatsTakenInLivePublicRooms(0);
       return;
     }
-    setRooms((data as CeloRoomCardData[]) ?? []);
+    const list = (data as CeloRoomCardData[]) ?? [];
+    setRooms(list);
+
+    const livePublic = list.filter(isPublicLiveCeloRoom);
+    const liveIds = livePublic.map((r) => r.id);
+    if (liveIds.length === 0) {
+      setSeatsTakenInLivePublicRooms(0);
+      return;
+    }
+    const { data: participations, error: pErr } = await supabase
+      .from("celo_room_players")
+      .select("id, role")
+      .in("room_id", liveIds);
+    if (pErr) {
+      setSeatsTakenInLivePublicRooms(0);
+      return;
+    }
+    setSeatsTakenInLivePublicRooms(countSeatedParticipants(participations as { role: string }[]));
   }, [supabase]);
 
   const filteredRooms = rooms || [];
+
+  const livePublicRooms = useMemo(
+    () => rooms.filter(isPublicLiveCeloRoom),
+    [rooms]
+  );
+
+  const tablesLive = livePublicRooms.length;
+  const gpcInPlay = useMemo(
+    () => livePublicRooms.reduce((s, r) => s + safeBankGpcCents(r), 0),
+    [livePublicRooms]
+  );
 
   const loadUser = useCallback(async () => {
     if (!supabase) return;
@@ -104,35 +137,18 @@ export default function CeloLobbyPage() {
           void loadRooms();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "celo_room_players" },
+        () => {
+          void loadRooms();
+        }
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(ch);
     };
   }, [supabase, loadRooms]);
-
-  const totalGpc = useMemo(
-    () =>
-      rooms.reduce(
-        (s, r) => s + Math.max(0, r.current_bank_sc ?? r.current_bank_cents ?? 0),
-        0
-      ),
-    [rooms]
-  );
-
-  useEffect(() => {
-    if (!supabase || rooms.length === 0) {
-      setPlayerCount(0);
-      return;
-    }
-    void (async () => {
-      const ids = rooms.map((r) => r.id);
-      const { data, error } = await supabase
-        .from("celo_room_players")
-        .select("id")
-        .in("room_id", ids);
-      if (!error) setPlayerCount((data ?? []).length);
-    })();
-  }, [supabase, rooms]);
 
   async function handleCreate() {
     setCreateError("");
@@ -226,11 +242,19 @@ export default function CeloLobbyPage() {
           </p>
         </section>
 
-        <div className="mb-4 flex flex-wrap justify-center gap-3 pt-2 font-mono text-[12px] text-[#9CA3AF]">
-          <span>🎲 {rooms.length} tables live</span>
-          <span>💰 {totalGpc.toLocaleString()} GPC in play</span>
-          <span>👥 {playerCount} seats taken</span>
-        </div>
+        {loading ? (
+          <div
+            className="mb-4 h-5 w-full max-w-md mx-auto rounded bg-white/[0.06] pt-2"
+            style={{ animation: "pulse 1.2s ease-in-out infinite" }}
+            aria-hidden
+          />
+        ) : err ? null : (
+          <div className="mb-4 flex flex-wrap justify-center gap-3 pt-2 font-mono text-[12px] text-[#9CA3AF]">
+            <span>🎲 {tablesLive} tables live</span>
+            <span>💰 {gpcInPlay.toLocaleString()} GPC in play</span>
+            <span>👥 {seatsTakenInLivePublicRooms} seats taken</span>
+          </div>
+        )}
 
         <div className="text-center text-sm">
           {myBalance > 0 ? (
