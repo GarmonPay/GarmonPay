@@ -962,6 +962,16 @@ export default function CeloRoomPage() {
     () => countStakedEntryPlayers(players, room?.banker_id ?? null),
     [players, room?.banker_id]
   );
+
+  /** Banker waiting to start: re-pull players so we do not miss entry rows if realtime lagged. */
+  useEffect(() => {
+    if (!supabase || !roomId || !room || !isBanker || inProgress || stakedPlayerCount >= 1) return;
+    const t = window.setInterval(() => {
+      void refreshRoomPlayers();
+    }, 3500);
+    return () => window.clearInterval(t);
+  }, [supabase, roomId, room, isBanker, inProgress, stakedPlayerCount, refreshRoomPlayers]);
+
   const spectators = useMemo(
     () => players.filter((p) => p.role === "spectator").length,
     [players]

@@ -66,16 +66,48 @@ export function normalizeCeloPlayerRow(row: unknown): CeloEntryPlayerFields {
  * Valid posted entries for "start round": seated `player` role with stake,
  * excluding the room banker even if a bad row marks them as player.
  */
+/** GPC stake for this row (legacy column names use *_cents). */
+export function effectiveStakeSc(p: { entry_sc?: unknown; bet_cents?: unknown }): number {
+  return Math.max(
+    0,
+    Math.floor(Number(p.entry_sc ?? 0)),
+    Math.floor(Number((p as { bet_cents?: unknown }).bet_cents ?? 0))
+  );
+}
+
+/** Compare auth / FK user ids regardless of hyphen casing in string form. */
+export function normalizeCeloUserId(id: string | null | undefined): string {
+  return String(id ?? "")
+    .trim()
+    .replace(/-/g, "")
+    .toLowerCase();
+}
+
+/**
+ * True if this `celo_room_players` row counts toward "banker may start round":
+ * posted stake, not the room banker (by id), not spectator/banker seat.
+ * Role must be `player` (case-insensitive) or empty (partial realtime / legacy rows).
+ */
+export function isStakedNonBankerForStartRound(
+  p: { role?: string; user_id?: string; entry_sc?: number; bet_cents?: number },
+  bankerUserId?: string | null
+): boolean {
+  const banker = normalizeCeloUserId(bankerUserId);
+  const uid = normalizeCeloUserId(p.user_id);
+  if (banker.length > 0 && uid === banker) return false;
+
+  const role = String(p.role ?? "").trim().toLowerCase();
+  if (role === "spectator" || role === "banker") return false;
+  if (role.length > 0 && role !== "player") return false;
+
+  return effectiveStakeSc(p) > 0;
+}
+
 export function countStakedEntryPlayers(
-  players: { role: string; entry_sc: number; user_id?: string }[],
+  players: { role: string; entry_sc: number; user_id?: string; bet_cents?: number }[],
   bankerUserId?: string | null
 ): number {
-  const banker = bankerUserId ? String(bankerUserId) : "";
-  return players.filter((p) => {
-    if (p.role !== "player") return false;
-    if (banker && String(p.user_id ?? "") === banker) return false;
-    return Math.floor(Number(p.entry_sc ?? 0)) > 0;
-  }).length;
+  return players.filter((p) => isStakedNonBankerForStartRound(p, bankerUserId)).length;
 }
 
 export function mergeCeloPlayerRealtime(

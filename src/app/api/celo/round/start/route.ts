@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { CELO_ROOM_PLAYERS_USER_EMBED } from "@/lib/celo-player-state";
+import {
+  CELO_ROOM_PLAYERS_USER_EMBED,
+  effectiveStakeSc,
+  isStakedNonBankerForStartRound,
+  normalizeCeloUserId,
+} from "@/lib/celo-player-state";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -32,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
   const room = roomRaw as { banker_id: string; id: string; total_rounds?: number };
-  if (room.banker_id !== userId) {
+  if (normalizeCeloUserId(room.banker_id) !== normalizeCeloUserId(userId)) {
     return NextResponse.json(
       { error: "Only the banker can start a round" },
       { status: 403 }
@@ -52,13 +57,13 @@ export async function POST(request: Request) {
   }
   const { data: players } = await adminClient
     .from("celo_room_players")
-    .select(`user_id, role, entry_sc,${CELO_ROOM_PLAYERS_USER_EMBED}`)
+    .select(`user_id, role, entry_sc, bet_cents,${CELO_ROOM_PLAYERS_USER_EMBED}`)
     .eq("room_id", roomId);
-  const staked = (players ?? []).filter(
-    (p) =>
-      p.role === "player" &&
-      String(p.user_id) !== String(room.banker_id) &&
-      Number(p.entry_sc) > 0
+  const staked = (players ?? []).filter((p) =>
+    isStakedNonBankerForStartRound(
+      p as { role?: string; user_id?: string; entry_sc?: number; bet_cents?: number },
+      room.banker_id ?? null
+    )
   );
   if (staked.length < 1) {
     return NextResponse.json(
@@ -66,10 +71,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const prizePool = staked.reduce(
-    (s, p) => s + Math.max(0, Math.floor(Number(p.entry_sc) || 0)),
-    0
-  );
+  const prizePool = staked.reduce((s, p) => s + effectiveStakeSc(p), 0);
   const platformFee = Math.floor(prizePool * 0.1);
   const { count: prev } = await adminClient
     .from("celo_rounds")
