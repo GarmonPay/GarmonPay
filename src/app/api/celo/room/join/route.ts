@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { getUserCoins } from "@/lib/coins";
-import { debitGpayCoins } from "@/lib/coins";
+import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
 import { validateEntry } from "@/lib/celo-engine";
+import { celoAccountingLog } from "@/lib/celo-accounting";
 
 const CLOSED = new Set(["completed", "cancelled"]);
 
@@ -57,15 +58,21 @@ export async function POST(request: Request) {
     );
   const { data: existing } = await adminClient
     .from("celo_room_players")
-    .select("id")
+    .select("*")
     .eq("room_id", roomId)
     .eq("user_id", userId)
     .maybeSingle();
   if (existing) {
-    return NextResponse.json(
-      { error: "You are already at this table" },
-      { status: 400 }
-    );
+    const { data: roomAfter } = await adminClient
+      .from("celo_rooms")
+      .select("*")
+      .eq("id", roomId)
+      .single();
+    return NextResponse.json({
+      already_seated: true,
+      player: existing,
+      room: roomAfter,
+    });
   }
   const { data: allPlayers } = await adminClient
     .from("celo_room_players")
@@ -118,19 +125,60 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+  const entryRef = `celo_join_${roomId}_${userId}`;
+  celoAccountingLog("entry_debit_attempt", {
+    roomId,
+    userId,
+    entrySc,
+    reference: entryRef,
+  });
   const debit = await debitGpayCoins(
     userId,
     entrySc,
     "C-Lo table entry (join)",
-    `celo_join_${roomId}_${userId}`,
+    entryRef,
     "celo_entry"
   );
   if (!debit.success) {
+    const dup =
+      typeof debit.message === "string" &&
+      /duplicate/i.test(debit.message);
+    if (dup) {
+      const { data: row } = await adminClient
+        .from("celo_room_players")
+        .select("*")
+        .eq("room_id", roomId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (row) {
+        const { data: roomAfter } = await adminClient
+          .from("celo_rooms")
+          .select("*")
+          .eq("id", roomId)
+          .single();
+        celoAccountingLog("entry_debit_duplicate_idempotent", {
+          roomId,
+          userId,
+          reference: entryRef,
+        });
+        return NextResponse.json({
+          already_seated: true,
+          player: row,
+          room: roomAfter,
+        });
+      }
+    }
+    celoAccountingLog("entry_debit_failed", {
+      roomId,
+      userId,
+      message: debit.message,
+    });
     return NextResponse.json(
       { error: debit.message ?? "Debit failed" },
       { status: 400 }
     );
   }
+  celoAccountingLog("entry_debit_ok", { roomId, userId, reference: entryRef });
   const nextSeat = await getNextSeat(adminClient, roomId, room.max_players);
   const { data: p, error: iErr } = await adminClient
     .from("celo_room_players")
@@ -145,16 +193,44 @@ export async function POST(request: Request) {
     })
     .select("*")
     .single();
+  if (
+    iErr &&
+    (iErr as { code?: string }).code === "23505"
+  ) {
+    const { data: row } = await adminClient
+      .from("celo_room_players")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (row) {
+      const { data: roomAfter } = await adminClient
+        .from("celo_rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+      celoAccountingLog("entry_insert_race_idempotent", { roomId, userId });
+      return NextResponse.json({
+        already_seated: true,
+        player: row,
+        room: roomAfter,
+      });
+    }
+  }
   if (iErr || !p) {
-    await import("@/lib/coins").then(({ creditCoins }) =>
-      creditCoins(
-        userId,
-        0,
-        entrySc,
-        "C-Lo join refund (player insert failed)",
-        `celo_join_refund_${userId}_${Date.now()}`,
-        "celo_bank_refund"
-      )
+    const refundRef = `celo_join_refund_${roomId}_${userId}`;
+    celoAccountingLog("entry_refund_attempt", {
+      roomId,
+      userId,
+      entrySc,
+      reference: refundRef,
+    });
+    await creditGpayIdempotent(
+      userId,
+      entrySc,
+      "C-Lo join refund (player insert failed)",
+      refundRef,
+      "celo_bank_refund"
     );
     return NextResponse.json(
       { error: iErr?.message ?? "Join failed" },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { debitGpayCoins } from "@/lib/coins";
+import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
+import { celoAccountingLog } from "@/lib/celo-accounting";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -78,6 +79,20 @@ export async function POST(request: Request) {
     .select("*")
     .single();
   if (uErr) {
+    const refundRef = `celo_side_accept_refund_${betId}_${userId}`;
+    celoAccountingLog("side_accept_refund_attempt", {
+      betId,
+      userId,
+      amount,
+      reference: refundRef,
+    });
+    await creditGpayIdempotent(
+      userId,
+      amount,
+      "C-Lo side entry refund (match update failed)",
+      refundRef,
+      "celo_bank_refund"
+    );
     return NextResponse.json(
       { error: uErr.message },
       { status: 500 }

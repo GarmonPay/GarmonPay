@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { creditCoins, getUserCoins } from "@/lib/coins";
+import { creditGpayIdempotent, getUserCoins } from "@/lib/coins";
 import {
   comparePoints,
   calculatePayout,
@@ -9,6 +9,10 @@ import {
   rollThreeDice,
 } from "@/lib/celo-engine";
 import { insertCeloPlatformFee } from "@/lib/celo-platform-fee";
+import {
+  celoAccountingLog,
+  celoUpdateRoundIfStatus,
+} from "@/lib/celo-accounting";
 
 type RoomRow = {
   id: string;
@@ -180,15 +184,35 @@ async function handleBankerRoll(
   const { room, round, userId, dice, roll, feePct } = ctx;
   const now = new Date().toISOString();
   const diceArr = [dice[0], dice[1], dice[2]];
-  await admin
-    .from("celo_rounds")
-    .update({
+
+  if (roll.result === "no_count") {
+    const updated = await celoUpdateRoundIfStatus(admin, round.id, ["banker_rolling"], {
       banker_dice: diceArr,
       banker_dice_name: roll.rollName,
       banker_dice_result: roll.result,
-    })
-    .eq("id", round.id);
-  if (roll.result === "no_count") {
+    });
+    if (!updated) {
+      celoAccountingLog("banker_no_count_skip", { roundId: round.id });
+      const { data: cur } = await admin
+        .from("celo_rounds")
+        .select("status, banker_dice, banker_dice_name, banker_dice_result")
+        .eq("id", round.id)
+        .maybeSingle();
+      if (cur?.status === "banker_rolling" && Array.isArray(cur.banker_dice)) {
+        const d = cur.banker_dice as number[];
+        return NextResponse.json({
+          dice: [d[0], d[1], d[2]] as [number, number, number],
+          rollName: cur.banker_dice_name,
+          result: cur.banker_dice_result,
+          outcome: "reroll",
+          isCelo: roll.isCelo,
+        });
+      }
+      return NextResponse.json(
+        { error: "Round is not in banker rolling state" },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -197,28 +221,121 @@ async function handleBankerRoll(
       isCelo: roll.isCelo,
     });
   }
+
   if (roll.result === "instant_win") {
     const prizePool = Math.max(0, Math.floor(Number(round.prize_pool_sc) || 0));
     const fee = Math.floor((prizePool * feePct) / 100);
     const bankerWins = Math.max(0, prizePool - fee);
-    const cr = await creditCoins(
+    const payoutRef = `celo_round_banker_win_${round.id}`;
+
+    celoAccountingLog("banker_instant_win_payout_attempt", {
+      roundId: round.id,
       userId,
-      0,
+      bankerWins,
+      reference: payoutRef,
+    });
+    const cr = await creditGpayIdempotent(
+      userId,
       bankerWins,
       "C-Lo round (banker table)",
-      `celo_round_banker_win_${round.id}`,
+      payoutRef,
       "celo_payout"
     );
     if (!cr.success) {
+      celoAccountingLog("banker_instant_win_payout_fail", {
+        roundId: round.id,
+        message: cr.message,
+      });
       return NextResponse.json(
         { error: cr.message ?? "Credit failed" },
         { status: 500 }
       );
     }
-    await insertCeloPlatformFee(admin, fee, `C-Lo platform fee (round ${round.id})`, {
-      userId,
-      roundId: round.id,
-    });
+
+    const { data: finalized, error: finErr } = await admin
+      .from("celo_rounds")
+      .update({
+        banker_dice: diceArr,
+        banker_dice_name: roll.rollName,
+        banker_dice_result: roll.result,
+        status: "completed",
+        platform_fee_sc: fee,
+        completed_at: now,
+      })
+      .eq("id", round.id)
+      .eq("status", "banker_rolling")
+      .select("id")
+      .maybeSingle();
+
+    if (finErr) {
+      celoAccountingLog("banker_instant_win_finalize_err", {
+        roundId: round.id,
+        message: finErr.message,
+      });
+      return NextResponse.json(
+        { error: finErr.message ?? "Finalize failed" },
+        { status: 500 }
+      );
+    }
+
+    if (!finalized) {
+      const { data: cur } = await admin
+        .from("celo_rounds")
+        .select(
+          "status, banker_dice, banker_dice_name, banker_dice_result, platform_fee_sc"
+        )
+        .eq("id", round.id)
+        .maybeSingle();
+      celoAccountingLog("banker_instant_win_finalize_skip", {
+        roundId: round.id,
+        status: cur?.status,
+      });
+      if (
+        cur?.status === "completed" &&
+        cur.banker_dice_result === "instant_win"
+      ) {
+        const { data: roomFresh } = await admin
+          .from("celo_rooms")
+          .select("current_bank_sc")
+          .eq("id", room.id)
+          .maybeSingle();
+        const nb = Math.max(
+          0,
+          Math.floor(
+            Number((roomFresh as { current_bank_sc?: number })?.current_bank_sc) ||
+              room.current_bank_sc
+          )
+        );
+        return NextResponse.json({
+          idempotent: true,
+          dice: Array.isArray(cur.banker_dice)
+            ? (cur.banker_dice as [number, number, number])
+            : dice,
+          rollName: cur.banker_dice_name ?? roll.rollName,
+          result: cur.banker_dice_result,
+          outcome: "banker_wins",
+          isCelo: roll.isCelo,
+          bankerWins,
+          newBank: nb,
+          canLowerBank: roll.isCelo,
+        });
+      }
+      return NextResponse.json(
+        { error: "Could not finalize round after payout" },
+        { status: 500 }
+      );
+    }
+
+    await insertCeloPlatformFee(
+      admin,
+      fee,
+      `C-Lo platform fee (round ${round.id})`,
+      {
+        userId,
+        roundId: round.id,
+        idempotencyKey: `celo_pf_${round.id}_banker_table`,
+      }
+    );
     const newBank = Math.max(0, room.current_bank_sc + bankerWins);
     await admin
       .from("celo_rooms")
@@ -230,15 +347,12 @@ async function handleBankerRoll(
         last_activity: now,
       })
       .eq("id", room.id);
-    await admin
-      .from("celo_rounds")
-      .update({
-        status: "completed",
-        platform_fee_sc: fee,
-        completed_at: now,
-      })
-      .eq("id", round.id);
     await resetRoomEntries(admin, room.id);
+    celoAccountingLog("banker_instant_win_done", {
+      roundId: round.id,
+      newBank,
+      reference: payoutRef,
+    });
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -250,33 +364,99 @@ async function handleBankerRoll(
       canLowerBank: roll.isCelo,
     });
   }
+
   if (roll.result === "instant_loss") {
     const { data: staked } = await admin
       .from("celo_room_players")
       .select("user_id, entry_sc, role")
       .eq("room_id", room.id);
+
     for (const p of staked ?? []) {
       if (p.role !== "player") continue;
       const e = Math.max(0, Math.floor(Number(p.entry_sc) || 0));
       if (e <= 0) continue;
       const { net, fee } = calculatePayout(e, feePct);
-      const c = await creditCoins(
+      const ref = `celo_round_players_win_${round.id}_${p.user_id}`;
+      celoAccountingLog("instant_loss_payout_attempt", {
+        roundId: round.id,
+        userId: p.user_id,
+        net,
+        reference: ref,
+      });
+      const c = await creditGpayIdempotent(
         p.user_id,
-        0,
         net,
         "C-Lo round (players earn vs banker loss)",
-        `celo_round_players_win_${round.id}_${p.user_id}`,
+        ref,
         "celo_payout"
       );
-      if (c.success) {
-        await insertCeloPlatformFee(
-          admin,
-          fee,
-          `C-Lo fee (round ${round.id} player)`,
-          { userId: p.user_id, roundId: round.id }
+      if (!c.success) {
+        celoAccountingLog("instant_loss_payout_fail", {
+          roundId: round.id,
+          userId: p.user_id,
+          message: c.message,
+        });
+        return NextResponse.json(
+          { error: c.message ?? "Player payout failed" },
+          { status: 500 }
         );
       }
+      await insertCeloPlatformFee(
+        admin,
+        fee,
+        `C-Lo fee (round ${round.id} player)`,
+        {
+          userId: p.user_id,
+          roundId: round.id,
+          idempotencyKey: `celo_pf_${round.id}_instant_loss_${p.user_id}`,
+        }
+      );
     }
+
+    const { data: finalized } = await admin
+      .from("celo_rounds")
+      .update({
+        banker_dice: diceArr,
+        banker_dice_name: roll.rollName,
+        banker_dice_result: roll.result,
+        status: "completed",
+        completed_at: now,
+      })
+      .eq("id", round.id)
+      .eq("status", "banker_rolling")
+      .select("id")
+      .maybeSingle();
+
+    if (!finalized) {
+      const { data: cur } = await admin
+        .from("celo_rounds")
+        .select("status, banker_dice, banker_dice_name, banker_dice_result")
+        .eq("id", round.id)
+        .maybeSingle();
+      celoAccountingLog("instant_loss_finalize_skip", {
+        roundId: round.id,
+        status: cur?.status,
+      });
+      if (
+        cur?.status === "completed" &&
+        cur.banker_dice_result === "instant_loss"
+      ) {
+        return NextResponse.json({
+          idempotent: true,
+          dice: Array.isArray(cur.banker_dice)
+            ? (cur.banker_dice as [number, number, number])
+            : dice,
+          rollName: cur.banker_dice_name ?? roll.rollName,
+          result: cur.banker_dice_result,
+          outcome: "players_win",
+        });
+      }
+      return NextResponse.json(
+        { error: "Could not finalize round after payouts" },
+        { status: 500 }
+      );
+    }
+
     await admin
       .from("celo_rooms")
       .update({
@@ -285,11 +465,8 @@ async function handleBankerRoll(
         last_activity: now,
       })
       .eq("id", room.id);
-    await admin
-      .from("celo_rounds")
-      .update({ status: "completed", completed_at: now })
-      .eq("id", round.id);
     await resetRoomEntries(admin, room.id);
+    celoAccountingLog("instant_loss_done", { roundId: round.id });
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -297,17 +474,47 @@ async function handleBankerRoll(
       outcome: "players_win",
     });
   }
+
   if (roll.result === "point" && roll.point != null) {
     const staked = await getStakedPlayersOrdered(admin, room.id);
     const firstSeat = staked[0]?.seat_number ?? 1;
-    await admin
-      .from("celo_rounds")
-      .update({
-        banker_point: roll.point,
-        status: "player_rolling",
-        current_player_seat: firstSeat,
-      })
-      .eq("id", round.id);
+    const updated = await celoUpdateRoundIfStatus(admin, round.id, ["banker_rolling"], {
+      banker_dice: diceArr,
+      banker_dice_name: roll.rollName,
+      banker_dice_result: roll.result,
+      banker_point: roll.point,
+      status: "player_rolling",
+      current_player_seat: firstSeat,
+    });
+    if (!updated) {
+      const { data: cur } = await admin
+        .from("celo_rounds")
+        .select(
+          "status, banker_point, banker_dice, banker_dice_name, banker_dice_result, current_player_seat"
+        )
+        .eq("id", round.id)
+        .maybeSingle();
+      celoAccountingLog("banker_point_transition_skip", {
+        roundId: round.id,
+        status: cur?.status,
+      });
+      if (cur?.status === "player_rolling") {
+        return NextResponse.json({
+          idempotent: true,
+          dice: Array.isArray(cur.banker_dice)
+            ? (cur.banker_dice as [number, number, number])
+            : dice,
+          rollName: cur.banker_dice_name ?? roll.rollName,
+          result: cur.banker_dice_result,
+          point: cur.banker_point,
+          outcome: "players_must_roll",
+        });
+      }
+      return NextResponse.json(
+        { error: "Round is not in banker rolling state" },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({
       dice,
       rollName: roll.rollName,
@@ -349,12 +556,18 @@ async function handlePlayerRoll(
   let playerCanBecomeBanker = false;
   if (roll.result === "instant_win") {
     const { net, fee } = calculatePayout(entry, feePct);
-    const c = await creditCoins(
+    const winRef = `celo_player_win_${round.id}_${userId}`;
+    celoAccountingLog("player_roll_instant_win_payout_attempt", {
+      roundId: round.id,
       userId,
-      0,
+      net,
+      reference: winRef,
+    });
+    const c = await creditGpayIdempotent(
+      userId,
       net,
       "C-Lo player roll (instant win)",
-      `celo_player_win_${round.id}_${userId}`,
+      winRef,
       "celo_payout"
     );
     if (!c.success) {
@@ -367,7 +580,11 @@ async function handlePlayerRoll(
       admin,
       fee,
       `C-Lo fee (player win ${round.id})`,
-      { userId, roundId: round.id }
+      {
+        userId,
+        roundId: round.id,
+        idempotencyKey: `celo_pf_${round.id}_player_win_${userId}`,
+      }
     );
     outcome = "win";
     payoutSc = net;
@@ -389,19 +606,35 @@ async function handlePlayerRoll(
     const cmp = comparePoints(roll.point, bankerPoint);
     if (cmp === "win") {
       const { net, fee } = calculatePayout(entry, feePct);
-      await creditCoins(
+      const ptRef = `celo_player_point_${round.id}_${userId}`;
+      celoAccountingLog("player_roll_point_win_payout_attempt", {
+        roundId: round.id,
         userId,
-        0,
+        net,
+        reference: ptRef,
+      });
+      const pc = await creditGpayIdempotent(
+        userId,
         net,
         "C-Lo player point win",
-        `celo_player_point_${round.id}_${userId}`,
+        ptRef,
         "celo_payout"
       );
+      if (!pc.success) {
+        return NextResponse.json(
+          { error: pc.message ?? "Credit failed" },
+          { status: 500 }
+        );
+      }
       await insertCeloPlatformFee(
         admin,
         fee,
         `C-Lo fee (point win ${round.id})`,
-        { userId, roundId: round.id }
+        {
+          userId,
+          roundId: round.id,
+          idempotencyKey: `celo_pf_${round.id}_point_win_${userId}`,
+        }
       );
       outcome = "win";
       payoutSc = net;
@@ -449,17 +682,35 @@ async function handlePlayerRoll(
     );
     if (!anyLeft) {
       hasMore = false;
-      await admin
+      const { data: finalized } = await admin
         .from("celo_rounds")
         .update({ status: "completed", completed_at: now })
-        .eq("id", round.id);
-      await admin
-        .from("celo_rooms")
-        .update({
-          total_rounds: (room.total_rounds ?? 0) + 1,
-          last_activity: now,
-        })
-        .eq("id", room.id);
+        .eq("id", round.id)
+        .eq("status", "player_rolling")
+        .select("id")
+        .maybeSingle();
+      if (finalized) {
+        await admin
+          .from("celo_rooms")
+          .update({
+            total_rounds: (room.total_rounds ?? 0) + 1,
+            last_activity: now,
+          })
+          .eq("id", room.id);
+        celoAccountingLog("player_phase_settlement_complete", {
+          roundId: round.id,
+        });
+      } else {
+        const { data: cur } = await admin
+          .from("celo_rounds")
+          .select("status")
+          .eq("id", round.id)
+          .maybeSingle();
+        celoAccountingLog("player_phase_settlement_skip", {
+          roundId: round.id,
+          status: cur?.status,
+        });
+      }
     } else {
       const staked = await getStakedPlayersOrdered(admin, room.id);
       const next = staked[0];

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { debitGpayCoins } from "@/lib/coins";
+import { debitGpayCoins, creditGpayIdempotent } from "@/lib/coins";
+import { celoAccountingLog } from "@/lib/celo-accounting";
+import { randomUUID } from "crypto";
 
 const ODDS: Record<string, number> = {
   celo: 8.0,
@@ -22,7 +24,13 @@ export async function POST(request: Request) {
   }
   const { user, adminClient } = auth;
   const userId = user.id;
-  let body: { room_id?: string; round_id?: string; bet_type?: string; amount_sc?: number };
+  let body: {
+    room_id?: string;
+    round_id?: string;
+    bet_type?: string;
+    amount_sc?: number;
+    idempotency_key?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -75,7 +83,10 @@ export async function POST(request: Request) {
       );
     }
   }
-  const ref = `celo_side_create_${roomId}_${roundIdRaw || "na"}_${userId}_${Date.now()}`;
+  const idem = String(body.idempotency_key ?? "").trim();
+  const ref = idem.length
+    ? `celo_side_create_${idem}`
+    : `celo_side_create_${roomId}_${roundIdRaw || "na"}_${userId}_${randomUUID()}`;
   const debit = await debitGpayCoins(
     userId,
     amount,
@@ -105,6 +116,20 @@ export async function POST(request: Request) {
     .select("*")
     .single();
   if (error) {
+    const refundRef = `celo_side_create_refund_${ref}`;
+    celoAccountingLog("side_create_refund_attempt", {
+      roomId,
+      userId,
+      amount,
+      reference: refundRef,
+    });
+    await creditGpayIdempotent(
+      userId,
+      amount,
+      "C-Lo side entry refund (insert failed)",
+      refundRef,
+      "celo_bank_refund"
+    );
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ sideBet });
