@@ -115,19 +115,17 @@ export default function DiceFace({
     <>
       <style>{`
         @keyframes celoDiceShake {
-          0%   { transform: rotate(0deg) scale(1) }
-          15%  { transform: rotate(-18deg) scale(0.93) }
-          30%  { transform: rotate(18deg) scale(1.07) }
-          45%  { transform: rotate(-12deg) scale(0.97) }
-          60%  { transform: rotate(12deg) scale(1.03) }
-          75%  { transform: rotate(-6deg) scale(0.99) }
-          90%  { transform: rotate(6deg) scale(1.01) }
-          100% { transform: rotate(0deg) scale(1) }
+          0%   { transform: rotate(0deg) scale(1) translateY(0) }
+          20%  { transform: rotate(-24deg) scale(0.92) translateY(1px) }
+          40%  { transform: rotate(22deg) scale(1.08) translateY(-1px) }
+          60%  { transform: rotate(-14deg) scale(0.98) translateY(0) }
+          80%  { transform: rotate(10deg) scale(1.04) translateY(0) }
+          100% { transform: rotate(0deg) scale(1) translateY(0) }
         }
         @keyframes celoDiceLand {
-          0%   { transform: scale(1.2) }
-          50%  { transform: scale(0.93) }
-          100% { transform: scale(1) }
+          0%   { transform: scale(1.18) translateY(-4px); opacity: 0.75 }
+          50%  { transform: scale(0.95) translateY(2px); opacity: 1 }
+          100% { transform: scale(1) translateY(0); opacity: 1 }
         }
       `}</style>
       <div
@@ -145,8 +143,8 @@ export default function DiceFace({
           position: "relative",
           flexShrink: 0,
           animation: rolling
-            ? `celoDiceShake 0.35s ease-in-out ${delay}ms infinite`
-            : "celoDiceLand 0.3s ease-out",
+            ? `celoDiceShake 0.3s ease-in-out ${delay}ms infinite`
+            : "celoDiceLand 0.4s cubic-bezier(0.34, 1.2, 0.64, 1)",
           filter: rolling ? "blur(0.4px)" : "none",
         }}
       >

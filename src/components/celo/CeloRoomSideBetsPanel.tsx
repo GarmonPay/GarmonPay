@@ -30,9 +30,8 @@ export function CeloRoomSideBetsPanel({ bets, loading, className = "" }: Props) 
         {loading ? (
           <p className="text-center text-[11px] text-white/30">Loading…</p>
         ) : bets.length === 0 ? (
-          <p className="text-center text-[11px] text-white/35">
-            No open side entries. Side bets use table GPC; offers appear here when players post
-            them.
+          <p className="px-1 text-center text-[11px] leading-relaxed text-amber-100/40">
+            No side entries yet. When players post side action, offers will appear here.
           </p>
         ) : (
           <ul className="space-y-2 text-[11px]">
