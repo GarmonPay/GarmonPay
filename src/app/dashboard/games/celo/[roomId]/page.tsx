@@ -18,10 +18,6 @@ import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
 import {
-  CeloRoomSideBetsPanel,
-  type CeloSideBetRow,
-} from "@/components/celo/CeloRoomSideBetsPanel";
-import {
   CELO_CHAT_SELECT_WITH_USER,
   CELO_ROOM_PLAYERS_USER_EMBED,
   CELO_USER_PROFILE_FIELDS,
@@ -154,13 +150,10 @@ export default function CeloRoomPage() {
   const [showBanker, setShowBanker] = useState(false);
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
-  const [sideTab, setSideTab] = useState<"side" | "chat">("side");
   const [panelOpen, setPanelOpen] = useState(true);
   const [chat, setChat] = useState("");
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
-  const [sideBets, setSideBets] = useState<CeloSideBetRow[]>([]);
-  const [sideBetsLoading, setSideBetsLoading] = useState(false);
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
   const [startRoundError, setStartRoundError] = useState<string | null>(null);
   const [uiReady, setUiReady] = useState(false);
@@ -213,32 +206,11 @@ export default function CeloRoomPage() {
     }
   }, []);
 
-  const handleSideBetMutateSuccess = useCallback(
-    (payload: { mode: "create" | "accept"; sideBet: CeloSideBetRow }) => {
-      setSideBets((prev) => {
-        if (payload.mode === "create") {
-          if (prev.some((x) => x.id === payload.sideBet.id)) {
-            return prev.map((b) =>
-              b.id === payload.sideBet.id ? { ...b, ...payload.sideBet } : b
-            );
-          }
-          return [payload.sideBet, ...prev].slice(0, 40);
-        }
-        return prev.map((b) =>
-          b.id === payload.sideBet.id ? { ...b, ...payload.sideBet } : b
-        );
-      });
-      bumpOptimisticAsRealtime();
-    },
-    [bumpOptimisticAsRealtime]
-  );
-
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
     const myToken = ++fetchTokenRef.current;
     const fetchStartedAt = Date.now();
     fetchStartedAtRef.current = fetchStartedAt;
-    setSideBetsLoading(true);
     setRoomFetchError(null);
 
     const isStaleFetch = (): boolean => {
@@ -252,7 +224,6 @@ export default function CeloRoomPage() {
       playersRes,
       roundsRes,
       chatRes,
-      sideRes,
     ] = await Promise.all([
       supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
       supabase
@@ -273,24 +244,7 @@ export default function CeloRoomPage() {
         .eq("room_id", roomId)
         .order("created_at", { ascending: true })
         .limit(50),
-      supabase
-        .from("celo_side_bets")
-        .select(
-          "id, bet_type, amount_cents, status, odds_multiplier, creator_id, acceptor_id, created_at, expires_at"
-        )
-        .eq("room_id", roomId)
-        .in("status", ["open", "matched", "locked"])
-        .order("created_at", { ascending: false })
-        .limit(40),
     ]);
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      setSideBetsLoading(false);
-      return;
-    }
-
-    setSideBetsLoading(false);
-
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
       return;
@@ -316,7 +270,6 @@ export default function CeloRoomPage() {
 
     if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
       console.log("[C-Lo] skipping stale fetch (realtime newer than fetch start)");
-      setSideBetsLoading(false);
       return;
     }
 
@@ -400,9 +353,6 @@ export default function CeloRoomPage() {
     );
     if (chatRes.error && CELO_DEBUG) console.warn("[C-Lo room] chat", chatRes.error);
 
-    setSideBets((sideRes.data as CeloSideBetRow[]) ?? []);
-    if (sideRes.error && CELO_DEBUG) console.warn("[C-Lo room] side bets", sideRes.error);
-
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
       return;
@@ -452,14 +402,12 @@ export default function CeloRoomPage() {
         room: roomRes.data,
         activeRound: activeRound?.id,
         players: playerRows.length,
-        sideBets: sideRes.data?.length,
         staked: countStakedEntryPlayers(
           playerRows,
           (roomRes.data as Room | null | undefined)?.banker_id ?? null
         ),
         diceComponent: "mounted",
         chatMounted: true,
-        sideBetsMounted: true,
         fetchToken: myToken,
       });
     }
@@ -797,7 +745,7 @@ export default function CeloRoomPage() {
               }
               if (
                 n.banker_dice != null &&
-                p.eventType === "UPDATE" &&
+                (p.eventType === "UPDATE" || p.eventType === "INSERT") &&
                 n.banker_roll_in_flight !== true
               ) {
                 const trip = tripletFromDiceJson(n.banker_dice);
@@ -827,33 +775,6 @@ export default function CeloRoomPage() {
                 setCurrentPlayerResolvedRoll(true);
               }
             }
-          }
-          void fetchAll();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "celo_side_bets", filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          lastRealtimeUpdateRef.current = Date.now();
-          const p = payload as unknown as {
-            eventType: string;
-            new?: CeloSideBetRow | null;
-            old?: CeloSideBetRow | null;
-          };
-          if (CELO_DEBUG) {
-            console.log("[C-Lo room] realtime celo_side_bets", p.eventType, p.new ?? p.old);
-          }
-          if (p.eventType === "INSERT" && p.new) {
-            setSideBets((prev) => {
-              if (prev.some((x) => x.id === p.new!.id)) return prev;
-              return [p.new!, ...prev].slice(0, 40);
-            });
-          }
-          if (p.eventType === "UPDATE" && p.new) {
-            setSideBets((prev) =>
-              prev.map((b) => (b.id === p.new!.id ? { ...b, ...p.new! } : b))
-            );
           }
           void fetchAll();
         }
@@ -1754,21 +1675,9 @@ export default function CeloRoomPage() {
           </main>
 
           <aside className={`${rightRailClass} min-h-0`}>
-            <div className="grid h-full w-full min-h-0 max-h-[min(100dvh,52rem)] grid-rows-[minmax(8rem,0.4fr)_minmax(0,1fr)] overflow-hidden rounded-2xl border border-amber-400/12 bg-[#08050f] p-0 shadow-lg md:max-h-none">
-              <CeloRoomSideBetsPanel
-                bets={sideBets}
-                loading={sideBetsLoading}
-                className="min-h-0 overflow-y-auto border-b-0"
-                supabase={supabase}
-                me={me}
-                roomId={room?.id ?? roomId}
-                roundId={round?.id ?? null}
-                minAmount={room ? minE : 1000}
-                onMutateSuccess={handleSideBetMutateSuccess}
-                onAfterMutate={() => void fetchAll()}
-              />
+            <div className="flex h-full min-h-0 max-h-[min(100dvh,52rem)] flex-col overflow-hidden rounded-2xl border border-amber-400/12 bg-[#08050f] p-0 shadow-lg md:max-h-none">
               <CeloRoomChatPanel
-                className="min-h-0 border-t border-amber-400/10"
+                className="min-h-0 flex-1"
                 messages={messages}
                 value={chat}
                 onChange={setChat}
@@ -1786,36 +1695,19 @@ export default function CeloRoomPage() {
         className="grid h-11 w-full min-w-0 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs"
         style={{
           background: "rgba(5,1,15,0.9)",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "1fr",
         }}
       >
         <button
           type="button"
-          onClick={() => {
-            setSideTab("side");
-            setPanelOpen((o) => !o || sideTab !== "side");
-          }}
+          onClick={() => setPanelOpen((o) => !o)}
           className="min-h-touch font-mono"
           style={{
-            borderBottom: sideTab === "side" && panelOpen ? "2px solid #F5C842" : "2px solid transparent",
-            color: sideTab === "side" && panelOpen ? "#F5C842" : "#6B7280",
+            borderBottom: panelOpen ? "2px solid #F5C842" : "2px solid transparent",
+            color: panelOpen ? "#F5C842" : "#6B7280",
           }}
         >
-          🎰 Side
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setSideTab("chat");
-            setPanelOpen((o) => !o || sideTab !== "chat");
-          }}
-          className="min-h-touch font-mono"
-          style={{
-            borderBottom: sideTab === "chat" && panelOpen ? "2px solid #F5C842" : "2px solid transparent",
-            color: sideTab === "chat" && panelOpen ? "#F5C842" : "#6B7280",
-          }}
-        >
-          💬 Chat
+          💬 Table chat
         </button>
       </div>
       <div
@@ -1825,33 +1717,17 @@ export default function CeloRoomPage() {
           height: panelOpen ? "min(44vh, 320px)" : 0,
         }}
       >
-        {sideTab === "side" && (
-          <CeloRoomSideBetsPanel
-            className="h-full min-h-0"
-            bets={sideBets}
-            loading={sideBetsLoading}
-            supabase={supabase}
-            me={me}
-            roomId={room?.id ?? roomId}
-            roundId={round?.id ?? null}
-            minAmount={room ? minE : 1000}
-            onMutateSuccess={handleSideBetMutateSuccess}
-            onAfterMutate={() => void fetchAll()}
-          />
-        )}
-        {sideTab === "chat" && (
-          <CeloRoomChatPanel
-            className="h-full"
-            minHeightStyle={{ minHeight: "min(42vh, 300px)" }}
-            messages={messages}
-            value={chat}
-            onChange={setChat}
-            onSend={() => void sendRoomChat()}
-            selfProfile={myProfile}
-            selfUserId={me}
-            canSend={!!(supabase && me && room && chat.trim().length > 0)}
-          />
-        )}
+        <CeloRoomChatPanel
+          className="h-full min-h-0"
+          minHeightStyle={{ minHeight: "min(42vh, 300px)" }}
+          messages={messages}
+          value={chat}
+          onChange={setChat}
+          onSend={() => void sendRoomChat()}
+          selfProfile={myProfile}
+          selfUserId={me}
+          canSend={!!(supabase && me && room && chat.trim().length > 0)}
+        />
       </div>
       </div>
       {showLower && room && (
