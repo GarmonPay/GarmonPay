@@ -1036,6 +1036,18 @@ export default function CeloRoomPage() {
   })();
 
   const myEntrySc = Math.floor(Number(myRow?.entry_sc ?? 0));
+
+  useEffect(() => {
+    if (!CELO_DEBUG) return;
+    if (!room || inProgress || isBanker || myEntrySc > 0 || isSpec) return;
+    console.log("[C-Lo] entry button render", {
+      disabled: myBalance > 0 && entryAmount > myBalance,
+      selectedAmount: entryAmount,
+      isSubmitting: false,
+      myBalance,
+    });
+  }, [room, inProgress, isBanker, myEntrySc, isSpec, entryAmount, myBalance]);
+
   const canRollBanker =
     isBanker && round?.status === "banker_rolling" && !rollingAction;
   const canRollPlayer = !!(
@@ -1823,6 +1835,7 @@ export default function CeloRoomPage() {
                         <div className="flex flex-wrap justify-center gap-1.5">
                           {[minE, minE * 2, minE * 5, bankVal(room)]
                             .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
+                            .sort((a, b) => a - b)
                             .map((amt) => (
                               <button
                                 key={amt}
@@ -1844,13 +1857,16 @@ export default function CeloRoomPage() {
                         </div>
                         <button
                           type="button"
-                          disabled={entryAmount > myBalance}
-                          onClick={() => void handleJoin()}
+                          disabled={myBalance > 0 && entryAmount > myBalance}
+                          onClick={() => {
+                            console.log("[C-Lo] entry button clicked");
+                            void handleJoin();
+                          }}
                           className="w-full min-h-12 rounded-xl font-bold text-zinc-950"
                           style={{
                             background: "linear-gradient(135deg, #F5C842, #B8860B)",
                             borderRadius: 10,
-                            opacity: entryAmount > myBalance ? 0.4 : 1,
+                            opacity: myBalance > 0 && entryAmount > myBalance ? 0.4 : 1,
                           }}
                         >
                           {!myRow ? "Join" : "Post"} {entryAmount} GPC
