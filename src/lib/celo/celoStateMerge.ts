@@ -70,16 +70,27 @@ export function mergePlayers<
     return sortPlayersBySeat(merged);
   }
 
-  let next = [...prev];
-  for (const row of incoming) {
-    const idx = next.findIndex((p) => p.id === row.id || p.user_id === row.user_id);
-    if (idx >= 0) {
-      next[idx] = { ...(next[idx] as object), ...(row as object) } as Pl;
+  /** user_id is the match key: overlay incoming, keep prev not listed (partial must not remove). */
+  const byUser = new Map(
+    (incoming as Pl[]).map((p) => [p.user_id, p])
+  );
+  const used = new Set<string>();
+  const out: Pl[] = [];
+  for (const p of prev) {
+    const inc = byUser.get(p.user_id);
+    if (inc) {
+      out.push({ ...(p as object), ...(inc as object) } as Pl);
+      used.add(p.user_id);
     } else {
-      next.push(row);
+      out.push(p);
     }
   }
-  return sortPlayersBySeat(next);
+  for (const p of incoming) {
+    if (!used.has(p.user_id)) {
+      out.push(p);
+    }
+  }
+  return sortPlayersBySeat(out);
 }
 
 function sortPlayersBySeat<
@@ -103,9 +114,7 @@ export function resolveRound<Rn extends Record<string, unknown>>(
   if (incoming === undefined) return prev;
   if (incoming === null) return isIncomingNewer ? null : prev;
   if (!prev) return incoming as Rn;
-  const pt = roundRevision(prev);
-  const it = roundRevision(incoming);
-  if (isIncomingNewer || it >= pt) {
+  if (isIncomingNewer) {
     return { ...(prev as object), ...(incoming as object) } as Rn;
   }
   return prev;
@@ -152,9 +161,16 @@ export function applyCeloStateUpdate<
   lastUpdatedSource: CeloMergeSource;
   lastUpdatedAt: number;
 } {
+  const hasTopLevelUpdatedAt =
+    incoming.updated_at != null && String(incoming.updated_at).trim() !== "";
   const prevTime = aggregateRevision(prev);
   const nextTime = incomingEffectiveTime(incoming, source);
-  const isIncomingNewer = nextTime >= prevTime;
+  /**
+   * If the payload has no top-level `updated_at` and no inferable time from room/round,
+   * never drop the update. Otherwise use revision ordering (room/round timestamps count).
+   */
+  const isIncomingNewer =
+    (!hasTopLevelUpdatedAt && nextTime === 0) || nextTime >= prevTime;
 
   let nextRoom: Rm | null = prev.room;
   if (isIncomingNewer && incoming.room !== undefined) {
