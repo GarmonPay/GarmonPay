@@ -493,7 +493,7 @@ export default function CeloRoomPage() {
     lastRealtimeUpdateRef.current = Date.now();
   }, [supabase, me, room, myProfile]);
 
-  const refreshRoomPlayers = useCallback(async () => {
+  const refreshRoomPlayers = useCallback(async (force = false) => {
     if (!supabase || !roomId) return;
     const fetchStartedAt = Date.now();
     const { data, error } = await supabase
@@ -502,7 +502,7 @@ export default function CeloRoomPage() {
       .eq("room_id", roomId)
       .order("seat_number", { ascending: true });
     if (error || !data) return;
-    if (lastRealtimeUpdateRef.current > fetchStartedAt) {
+    if (!force && lastRealtimeUpdateRef.current > fetchStartedAt + 500) {
       if (CELO_DEBUG) {
         console.log("[C-Lo] skipping refreshRoomPlayers (realtime while fetching players)");
       }
@@ -707,7 +707,7 @@ export default function CeloRoomPage() {
           setPlayers(merged.players as Player[]);
           setRound(merged.currentRound as Round | null);
           setPlayersSnapshotReady(true);
-          void refreshRoomPlayers();
+          void refreshRoomPlayers(true);
           void fetchAll();
         }
       )
@@ -1198,7 +1198,7 @@ export default function CeloRoomPage() {
   }, [isBanker, isPlayer, isSpec, myEntrySc, room, inProgress]);
 
   async function handleStart() {
-    if (!room) return;
+    if (!room || !canStartRound) return;
     if (!supabase) {
       setStartRoundError("Not connected. Please refresh and try again.");
       return;
@@ -1851,12 +1851,23 @@ export default function CeloRoomPage() {
                           type="button"
                           disabled={!canStartRound}
                           onClick={() => void handleStart()}
-                          className={`w-full min-h-[48px] rounded-xl text-sm font-bold text-zinc-950 ${cinzel.className} transition hover:opacity-95`}
-                          style={{
-                            background: "linear-gradient(135deg, #F5C842, #B8860B)",
-                            boxShadow: "0 0 0 1px rgba(0,0,0,0.2), 0 10px 28px rgba(245,200,66,0.2)",
-                            opacity: canStartRound ? 1 : 0.45,
-                          }}
+                          className={`w-full min-h-[48px] rounded-xl text-sm font-bold ${dm.className} transition ${
+                            canStartRound
+                              ? "text-zinc-950 enabled:hover:opacity-95"
+                              : "cursor-not-allowed text-zinc-500"
+                          }`}
+                          style={
+                            canStartRound
+                              ? {
+                                  background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                                  boxShadow:
+                                    "0 0 0 1px rgba(0,0,0,0.2), 0 10px 28px rgba(245,200,66,0.2)",
+                                }
+                              : {
+                                  background: "linear-gradient(180deg, #3f3f46 0%, #27272a 100%)",
+                                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                                }
+                          }
                         >
                           Start round
                         </button>
