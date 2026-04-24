@@ -25,6 +25,7 @@ import {
   CELO_USER_PROFILE_FIELDS,
   countStakedEntryPlayers,
   normalizeCeloPlayerRow,
+  normalizeCeloUserId,
   type CeloEntryPlayerFields,
 } from "@/lib/celo-player-state";
 import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
@@ -935,8 +936,14 @@ export default function CeloRoomPage() {
     return () => window.removeEventListener("resize", setFrom);
   }, []);
 
-  const myRow = players.find((p) => p.user_id === me);
-  const isBanker = myRow?.role === "banker" || me === room?.banker_id;
+  const myRow = players.find(
+    (p) => me != null && normalizeCeloUserId(p.user_id) === normalizeCeloUserId(me)
+  );
+  const isBanker =
+    myRow?.role === "banker" ||
+    (me != null &&
+      room != null &&
+      normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id));
   const isPlayer = myRow?.role === "player";
   const isSpec = myRow?.role === "spectator";
   const minE = room ? minVal(room) : 1000;
