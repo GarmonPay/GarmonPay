@@ -163,6 +163,8 @@ export default function CeloRoomPage() {
   const [playersSnapshotReady, setPlayersSnapshotReady] = useState(false);
   const [diceSize, setDiceSize] = useState(60);
   const [joinHint, setJoinHint] = useState<string | null>(null);
+  const [joinSubmitting, setJoinSubmitting] = useState(false);
+  const joinInFlightRef = useRef(false);
   const [rollError, setRollError] = useState<string | null>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
@@ -1425,7 +1427,7 @@ export default function CeloRoomPage() {
   }
 
   async function handleJoin() {
-    if (!room) return;
+    if (!room || joinInFlightRef.current) return;
     if (!supabase) {
       setJoinHint("Connect to the app to post an entry.");
       return;
@@ -1439,6 +1441,9 @@ export default function CeloRoomPage() {
       return;
     }
     setJoinHint(null);
+    joinInFlightRef.current = true;
+    setJoinSubmitting(true);
+    try {
     const res = await fetchCeloApi(supabase, "/api/celo/room/join", {
       method: "POST",
       body: JSON.stringify({
@@ -1447,12 +1452,18 @@ export default function CeloRoomPage() {
         entry_sc: entryAmount,
       }),
     });
-    const j = (await res.json()) as {
+    let j: {
       error?: string;
       already_seated?: boolean;
       player?: Record<string, unknown>;
       room?: Record<string, unknown>;
     };
+    try {
+      j = (await res.json()) as typeof j;
+    } catch {
+      setJoinHint("Invalid response from server.");
+      return;
+    }
 
     const mergeJoinPayload = () => {
       const rowRaw = j.player ? (normalizeCeloPlayerRow(j.player) as Player) : undefined;
@@ -1540,6 +1551,12 @@ export default function CeloRoomPage() {
       window.setTimeout(() => scheduleFetchAll(), 300);
     } else {
       scheduleFetchAll();
+    }
+    } catch (e) {
+      setJoinHint(e instanceof Error ? e.message : "Couldn’t post entry");
+    } finally {
+      joinInFlightRef.current = false;
+      setJoinSubmitting(false);
     }
   }
 
@@ -1890,19 +1907,26 @@ export default function CeloRoomPage() {
                         </div>
                         <button
                           type="button"
-                          disabled={myBalance > 0 && entryAmount > myBalance}
+                          disabled={
+                            joinSubmitting || (myBalance > 0 && entryAmount > myBalance)
+                          }
+                          aria-busy={joinSubmitting}
                           onClick={() => {
-                            console.log("[C-Lo] entry button clicked");
                             void handleJoin();
                           }}
-                          className="w-full min-h-12 rounded-xl font-bold text-zinc-950"
+                          className="w-full min-h-12 rounded-xl font-bold text-zinc-950 touch-manipulation"
                           style={{
                             background: "linear-gradient(135deg, #F5C842, #B8860B)",
                             borderRadius: 10,
-                            opacity: myBalance > 0 && entryAmount > myBalance ? 0.4 : 1,
+                            opacity:
+                              joinSubmitting || (myBalance > 0 && entryAmount > myBalance)
+                                ? 0.4
+                                : 1,
                           }}
                         >
-                          {!myRow ? "Join" : "Post"} {entryAmount} GPC
+                          {joinSubmitting
+                            ? "Posting…"
+                            : `${!myRow ? "Join" : "Post"} ${entryAmount} GPC`}
                         </button>
                       </div>
                     )}
