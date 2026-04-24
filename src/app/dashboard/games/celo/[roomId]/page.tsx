@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
@@ -28,14 +29,17 @@ import {
 } from "@/lib/celo-player-state";
 import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
 import { alertCeloUnauthorized, fetchCeloApi } from "@/lib/celo-api-fetch";
-import { applyCeloStateUpdate } from "@/lib/celo/celoStateMerge";
+import {
+  applyCeloStateUpdate,
+  type CeloMergeOptions,
+  type CeloMergeSource,
+} from "@/lib/celo/celoStateMerge";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
 
 /*
-ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate().
-NO EXCEPTIONS (realtime, fetch, join, roll).
-Raw setRoom(obj) calls WILL cause race conditions.
+ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
+NO EXCEPTIONS (realtime, fetch, join, roll)
 */
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
@@ -230,6 +234,55 @@ export default function CeloRoomPage() {
     }
   }, []);
 
+  /** Single funnel: merge with React's latest `room` via functional setState, then players/round from same merge. */
+  const commitCeloAggregateMerge = useCallback(
+    (
+      incoming: Partial<{
+        updated_at?: string | null;
+        room: Record<string, unknown> | null | undefined;
+        players: Player[];
+        currentRound: Record<string, unknown> | null | undefined;
+      }>,
+      source: CeloMergeSource,
+      opts?: CeloMergeOptions,
+      /** When set (e.g. RT player handler), use this list as merge "prev" instead of playersRef. */
+      playersForMerge?: Player[]
+    ) => {
+      let merged:
+        | ReturnType<
+            typeof applyCeloStateUpdate<
+              Record<string, unknown>,
+              Player,
+              Record<string, unknown>
+            >
+          >
+        | undefined;
+      const playersBase = playersForMerge ?? playersRef.current;
+      flushSync(() => {
+        setRoom((prevRoom) => {
+          merged = applyCeloStateUpdate(
+            {
+              room: (prevRoom as unknown as Record<string, unknown> | null) ?? null,
+              players: playersBase,
+              currentRound: roundRef.current as unknown as Record<
+                string,
+                unknown
+              > | null,
+            },
+            incoming,
+            source,
+            opts
+          );
+          return (merged!.room ?? null) as Room | null;
+        });
+      });
+      if (!merged) return;
+      setPlayers(merged.players as Player[]);
+      setRound(merged.currentRound as Round | null);
+    },
+    []
+  );
+
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
     const myToken = ++fetchTokenRef.current;
@@ -338,12 +391,7 @@ export default function CeloRoomPage() {
       return;
     }
 
-    const mergedFetch = applyCeloStateUpdate(
-      {
-        room: roomRef.current as unknown as Record<string, unknown> | null,
-        players: playersRef.current,
-        currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-      },
+    commitCeloAggregateMerge(
       {
         room: incomingRoom !== undefined ? incomingRoom : undefined,
         players: playerRows,
@@ -355,15 +403,6 @@ export default function CeloRoomPage() {
       "fetch",
       { playersSnapshot: true }
     );
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    setRoom(mergedFetch.room as Room | null);
-    setPlayers(mergedFetch.players as Player[]);
-    setRound(mergedFetch.currentRound as Round | null);
 
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
@@ -461,7 +500,7 @@ export default function CeloRoomPage() {
         fetchToken: myToken,
       });
     }
-  }, [supabase, roomId]);
+  }, [supabase, roomId, commitCeloAggregateMerge]);
 
   const sendRoomChat = useCallback(async () => {
     const text = chatDraftRef.current.trim();
@@ -509,12 +548,7 @@ export default function CeloRoomPage() {
       return;
     }
     const rows = ((data as unknown[]) ?? []).map((row) => normalizeCeloPlayerRow(row) as Player);
-    const merged = applyCeloStateUpdate(
-      {
-        room: roomRef.current as unknown as Record<string, unknown> | null,
-        players: playersRef.current,
-        currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-      },
+    commitCeloAggregateMerge(
       {
         players: rows as unknown as Player[],
         updated_at: new Date().toISOString(),
@@ -522,11 +556,8 @@ export default function CeloRoomPage() {
       "fetch",
       { playersSnapshot: true }
     );
-    setRoom(merged.room as Room | null);
-    setPlayers(merged.players as Player[]);
-    setRound(merged.currentRound as Round | null);
     setPlayersSnapshotReady(true);
-  }, [supabase, roomId]);
+  }, [supabase, roomId, commitCeloAggregateMerge]);
 
   useEffect(() => {
     void (async () => {
@@ -597,21 +628,13 @@ export default function CeloRoomPage() {
             console.log("[RT] room update", rowNew);
           }
           if (rowNew && String(rowNew.id ?? "") === roomId) {
-            const mergedRoom = applyCeloStateUpdate(
-              {
-                room: roomRef.current as unknown as Record<string, unknown> | null,
-                players: playersRef.current,
-                currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-              },
+            commitCeloAggregateMerge(
               {
                 room: rowNew,
                 updated_at: new Date().toISOString(),
               },
               "realtime"
             );
-            setRoom(mergedRoom.room as Room);
-            setPlayers(mergedRoom.players as Player[]);
-            setRound(mergedRoom.currentRound as Round | null);
           }
           void fetchAll();
         }
@@ -690,22 +713,15 @@ export default function CeloRoomPage() {
             );
           }
 
-          const merged = applyCeloStateUpdate(
-            {
-              room: roomRef.current as unknown as Record<string, unknown> | null,
-              players: prev,
-              currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-            },
+          commitCeloAggregateMerge(
             {
               players: nextPlayers,
               updated_at: new Date().toISOString(),
             },
             "realtime",
-            { playersSnapshot: true }
+            { playersSnapshot: true },
+            prev
           );
-          setRoom(merged.room as Room);
-          setPlayers(merged.players as Player[]);
-          setRound(merged.currentRound as Round | null);
           setPlayersSnapshotReady(true);
           void refreshRoomPlayers(true);
           void fetchAll();
@@ -736,21 +752,13 @@ export default function CeloRoomPage() {
             const oid = String(rowOld.id);
             const prevR = roundRef.current;
             if (prevR?.id === oid) {
-              const mergedDel = applyCeloStateUpdate(
-                {
-                  room: roomRef.current as unknown as Record<string, unknown> | null,
-                  players: playersRef.current,
-                  currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-                },
+              commitCeloAggregateMerge(
                 {
                   currentRound: null,
                   updated_at: new Date().toISOString(),
                 },
                 "realtime"
               );
-              setRoom(mergedDel.room as Room);
-              setPlayers(mergedDel.players as Player[]);
-              setRound(mergedDel.currentRound as Round | null);
             }
             void fetchAll();
             return;
@@ -770,21 +778,13 @@ export default function CeloRoomPage() {
             }
 
             if (incomingRound !== undefined) {
-              const mergedRt = applyCeloStateUpdate(
-                {
-                  room: roomRef.current as unknown as Record<string, unknown> | null,
-                  players: playersRef.current,
-                  currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-                },
+              commitCeloAggregateMerge(
                 {
                   currentRound: incomingRound as unknown as Record<string, unknown>,
                   updated_at: new Date().toISOString(),
                 },
                 "realtime"
               );
-              setRoom(mergedRt.room as Room);
-              setPlayers(mergedRt.players as Player[]);
-              setRound(mergedRt.currentRound as Round | null);
             }
 
             if (n.status === "player_rolling") {
@@ -859,7 +859,7 @@ export default function CeloRoomPage() {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [supabase, roomId, fetchAll, refreshRoomPlayers]);
+  }, [supabase, roomId, fetchAll, refreshRoomPlayers, commitCeloAggregateMerge]);
 
   /** If the roll fetch path misses the JSON body, still clear local rolling when this round row updates. */
   useEffect(() => {
@@ -1381,12 +1381,7 @@ export default function CeloRoomPage() {
         j.currentRound && String((j.currentRound as { id?: string }).id ?? round.id) === round.id
           ? j.currentRound
           : undefined;
-      const mergedRoll = applyCeloStateUpdate(
-        {
-          room: roomRef.current as unknown as Record<string, unknown> | null,
-          players: playersRef.current,
-          currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-        },
+      commitCeloAggregateMerge(
         {
           room: rollRoomPatch,
           currentRound: rollRoundPatch,
@@ -1394,9 +1389,6 @@ export default function CeloRoomPage() {
         },
         "roll"
       );
-      setRoom(mergedRoll.room as Room);
-      setPlayers(mergedRoll.players as Player[]);
-      setRound(mergedRoll.currentRound as Round | null);
       lastRealtimeUpdateRef.current = Date.now();
       await fetchAll();
       setTimeout(() => setRollName(null), 2800);
@@ -1487,12 +1479,7 @@ export default function CeloRoomPage() {
       if (j.room && String((j.room as { id?: string }).id ?? "") === room.id) {
         incomingRoom = j.room as Record<string, unknown>;
       }
-      const mergedJoin = applyCeloStateUpdate(
-        {
-          room: roomRef.current as unknown as Record<string, unknown> | null,
-          players: playersRef.current,
-          currentRound: roundRef.current as unknown as Record<string, unknown> | null,
-        },
+      commitCeloAggregateMerge(
         {
           room: incomingRoom,
           players: incomingPlayers,
@@ -1500,9 +1487,6 @@ export default function CeloRoomPage() {
         },
         "join"
       );
-      setRoom(mergedJoin.room as Room);
-      setPlayers(mergedJoin.players as Player[]);
-      setRound(mergedJoin.currentRound as Round | null);
       if (row) setPlayersSnapshotReady(true);
     };
 

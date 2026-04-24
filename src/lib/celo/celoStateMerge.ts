@@ -2,6 +2,9 @@
  * C-Lo aggregate merge: room + players + round share a logical revision clock.
  * Prefer newest DB timestamps (updated_at, last_activity, created_at); optional
  * client synthetic updated_at for join/roll paths when the API omits clocks.
+ *
+ * Client: commit results via functional `setRoom(prev => …)` (see CeloRoomPage
+ * `commitCeloAggregateMerge`) so fetch/realtime races never overwrite fresh room.
  */
 
 export type CeloMergeSource = "unknown" | "realtime" | "fetch" | "join" | "roll";
