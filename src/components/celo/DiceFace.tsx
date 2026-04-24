@@ -115,6 +115,79 @@ const PIPS: Record<number, [number, number][]> = {
   ],
 };
 
+/** +Z = toward viewer; pips: front=1, back=6, right=2, left=5, top=3, bottom=4. */
+const FINAL: Record<1 | 2 | 3 | 4 | 5 | 6, { rx: number; ry: number }> = {
+  1: { rx: 0, ry: 0 },
+  2: { rx: 0, ry: -90 },
+  3: { rx: -90, ry: 0 },
+  4: { rx: 90, ry: 0 },
+  5: { rx: 0, ry: 90 },
+  6: { rx: 0, ry: 180 },
+};
+
+type FaceId = "front" | "back" | "right" | "left" | "top" | "bottom";
+const FACE_PIP: Record<FaceId, 1 | 2 | 3 | 4 | 5 | 6> = {
+  front: 1,
+  back: 6,
+  right: 2,
+  left: 5,
+  top: 3,
+  bottom: 4,
+};
+
+function PipsOnFace({
+  v,
+  st,
+  pipSize,
+  pad,
+}: {
+  v: 1 | 2 | 3 | 4 | 5 | 6;
+  st: (typeof STYLES)[DiceType];
+  pipSize: number;
+  pad: number;
+}) {
+  const pips = PIPS[v] ?? PIPS[1];
+  return (
+    <div
+      className="absolute"
+      style={{
+        inset: pad,
+        top: 1,
+        left: 1,
+        right: 1,
+        bottom: 1,
+        display: "grid",
+        gridTemplateColumns: "repeat(3,1fr)",
+        gridTemplateRows: "repeat(3,1fr)",
+      }}
+    >
+      {[1, 2, 3].map((row) =>
+        [1, 2, 3].map((col) => {
+          const has = pips.some(([r, c]) => r === row && c === col);
+          return (
+            <div
+              key={`${row}-${col}`}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              {has && (
+                <div
+                  style={{
+                    width: pipSize,
+                    height: pipSize,
+                    borderRadius: "50%",
+                    background: `radial-gradient(circle at 32% 32%, ${st.dotGlow}, ${st.dot} 55%, ${st.dot} 100%)`,
+                    boxShadow: `${st.pipShadow}, inset 0 -1px 1px rgba(0,0,0,0.35)`,
+                  }}
+                />
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export default function DiceFace({
   value,
   diceType = "standard",
@@ -122,145 +195,153 @@ export default function DiceFace({
   rolling = false,
   delay = 0,
 }: Props) {
-  const uid = useId().replace(/:/g, "");
-  const tumbleId = `celoTumble-${uid}`;
-  const landId = `celoLand-${uid}`;
+  const id = useId().replace(/:/g, "");
+  const slug = `d3d-${id}`;
   const s = STYLES[diceType];
-  const pips = PIPS[value] ?? PIPS[1];
-  const r = Math.round(size * 0.18);
-  const pipSize = Math.round(size * 0.168);
+  const r = Math.round(size * 0.1);
+  const pipSize = Math.round(size * 0.16);
   const pad = Math.round(size * 0.11);
+  const hz = size / 2;
+  const fin = FINAL[value] ?? { rx: 0, ry: 0 };
+  const settledT = `rotateX(${fin.rx}deg) rotateY(${fin.ry}deg)`;
+  const [bump, setBump] = useState(0);
+  const wasRolling = useRef(rolling);
 
-  const prevRolling = useRef(rolling);
-  const [landSeq, setLandSeq] = useState(0);
   useEffect(() => {
-    if (prevRolling.current && !rolling) {
-      setLandSeq((n) => n + 1);
+    if (wasRolling.current && !rolling) {
+      setBump((b) => b + 1);
     }
-    prevRolling.current = rolling;
+    wasRolling.current = rolling;
   }, [rolling]);
-
-  const perspective = Math.round(size * 3.2);
-  const dieLift = rolling ? 0 : Math.round(size * 0.04);
 
   return (
     <>
       <style>{`
-        @keyframes ${tumbleId} {
-          0%   { transform: rotateX(-12deg) rotateY(0deg) rotateZ(0deg) translateY(0) scale(1); filter: blur(0.5px); }
-          12%  { transform: rotateX(38deg) rotateY(52deg) rotateZ(-18deg) translateY(-${Math.max(4, Math.round(size * 0.06))}px) scale(1.04); filter: blur(0.35px); }
-          28%  { transform: rotateX(-22deg) rotateY(118deg) rotateZ(24deg) translateY(${Math.round(size * 0.02)}px) scale(0.97); filter: blur(0.45px); }
-          44%  { transform: rotateX(55deg) rotateY(200deg) rotateZ(-32deg) translateY(-${Math.round(size * 0.05)}px) scale(1.06); filter: blur(0.3px); }
-          60%  { transform: rotateX(-35deg) rotateY(290deg) rotateZ(18deg) translateY(${Math.round(size * 0.03)}px) scale(0.98); filter: blur(0.4px); }
-          78%  { transform: rotateX(28deg) rotateY(380deg) rotateZ(-12deg) translateY(-${Math.round(size * 0.025)}px) scale(1.02); filter: blur(0.2px); }
-          100% { transform: rotateX(-12deg) rotateY(440deg) rotateZ(6deg) translateY(0) scale(1); filter: blur(0.35px); }
+        @keyframes ${slug}-tumble {
+          0%   { transform: translateZ(${Math.round(hz * 0.1)}px) rotateX(12deg) rotateY(0deg); }
+          20%  { transform: translateZ(${Math.round(hz * 0.22)}px) rotateX(-32deg) rotateY(200deg); }
+          40%  { transform: translateZ(0) rotateX(28deg) rotateY(400deg); }
+          60%  { transform: translateZ(${Math.round(hz * 0.15)}px) rotateX(-20deg) rotateY(600deg); }
+          80%  { transform: translateZ(0) rotateX(8deg) rotateY(800deg); }
+          100% { transform: translateZ(0) rotateX(0deg) rotateY(900deg); }
         }
-        @keyframes ${landId} {
-          0%   { transform: rotateX(-8deg) rotateY(8deg) scale(1.12) translateY(-${Math.round(size * 0.12)}px); filter: blur(0.25px); }
-          55%  { transform: rotateX(2deg) rotateY(-2deg) scale(0.94) translateY(${Math.round(size * 0.04)}px); filter: blur(0.05px); }
-          100% { transform: rotateX(0deg) rotateY(0deg) scale(1) translateY(0); filter: blur(0); }
+        @keyframes ${slug}-bounce {
+          0% { transform: translateY(0) scale(1.1); }
+          40% { transform: translateY(${Math.max(2, size * 0.07)}px) scale(0.94); }
+          70% { transform: translateY(-${Math.max(1, size * 0.04)}px) scale(1.04); }
+          100% { transform: translateY(0) scale(1); }
         }
       `}</style>
       <div
+        className="relative"
         style={{
-          width: size,
-          height: size,
+          width: size * 1.1,
+          height: size * 1.1,
           flexShrink: 0,
-          perspective,
-          perspectiveOrigin: "50% 88%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 2px",
         }}
       >
         <div
-          key={landSeq}
+          key={bump}
           style={{
-            width: size,
-            height: size,
-            borderRadius: r,
-            transformStyle: "preserve-3d",
-            willChange: rolling ? "transform, filter" : "transform",
-            transform: rolling
-              ? undefined
-              : `translateY(${dieLift}px) rotateX(0deg)`,
-            animation: rolling
-              ? `${tumbleId} 1.05s cubic-bezier(0.45, 0.05, 0.2, 1) ${delay}ms infinite both`
-              : `${landId} 0.48s cubic-bezier(0.34, 1.15, 0.64, 1) both`,
-            boxShadow: rolling
-              ? `
-                0 ${Math.round(size * 0.2)}px ${Math.round(size * 0.45)}px rgba(0,0,0,0.55),
-                0 ${Math.round(size * 0.06)}px ${Math.round(size * 0.14)}px rgba(245,200,90,0.12),
-                inset 0 2px 0 rgba(255,255,255,0.22),
-                inset 0 -3px 6px rgba(0,0,0,0.35)
-              `
-              : `
-                0 ${Math.round(size * 0.14)}px ${Math.round(size * 0.28)}px rgba(0,0,0,0.6),
-                0 ${Math.round(size * 0.04)}px ${Math.round(size * 0.1)}px rgba(245,200,90,0.14),
-                inset 0 2px 0 rgba(255,255,255,0.25),
-                inset 0 -4px 8px rgba(0,0,0,0.38)
-              `,
-            border: "1px solid rgba(0,0,0,0.35)",
-            position: "relative",
-            background: s.rim,
-            padding: 1,
+            position: "relative" as const,
+            width: size * 1.1,
+            height: size * 1.1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            animation: !rolling
+              ? `${slug}-bounce 0.4s cubic-bezier(0.36, 1, 0.4, 1) both`
+              : undefined,
+            transformStyle: "preserve-3d" as const,
+            WebkitTransformStyle: "preserve-3d",
+            perspective: Math.max(500, size * 9),
+            WebkitPerspective: Math.max(500, size * 9),
+            perspectiveOrigin: "50% 55%",
+            overflow: "visible",
           }}
         >
           <div
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: r - 1,
-              background: s.face,
-              position: "relative",
-              overflow: "hidden",
-              boxShadow: "inset 0 3px 10px rgba(255,255,255,0.18), inset 0 -6px 14px rgba(0,0,0,0.35)",
-            }}
+            style={
+              {
+                position: "relative" as const,
+                width: size,
+                height: size,
+                transformStyle: "preserve-3d" as const,
+                WebkitTransformStyle: "preserve-3d" as const,
+                transform: rolling ? undefined : settledT,
+                WebkitTransform: rolling ? undefined : settledT,
+                transition: rolling
+                  ? undefined
+                  : "transform 0.18s ease-out, -webkit-transform 0.18s ease-out",
+                willChange: rolling ? "transform" : undefined,
+                WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
+                animation: rolling
+                  ? `${slug}-tumble 1.7s ease-out infinite`
+                  : undefined,
+                WebkitAnimation: rolling
+                  ? `${slug}-tumble 1.7s ease-out infinite`
+                  : undefined,
+                animationDelay: `${delay}ms`,
+                WebkitAnimationDelay: `${delay}ms`,
+              } as React.CSSProperties
+            }
           >
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(125deg, rgba(255,255,255,0.2) 0%, transparent 42%, transparent 58%, rgba(0,0,0,0.12) 100%)",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: pad,
-                display: "grid",
-                gridTemplateColumns: "repeat(3,1fr)",
-                gridTemplateRows: "repeat(3,1fr)",
-              }}
-            >
-              {[1, 2, 3].map((row) =>
-                [1, 2, 3].map((col) => {
-                  const has = pips.some(([r2, c]) => r2 === row && c === col);
-                  return (
-                    <div
-                      key={`${row}-${col}`}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {has && (
-                        <div
-                          style={{
-                            width: pipSize,
-                            height: pipSize,
-                            borderRadius: "50%",
-                            background: `radial-gradient(circle at 32% 32%, ${s.dotGlow}, ${s.dot} 55%, ${s.dot} 100%)`,
-                            boxShadow: `${s.pipShadow}, inset 0 -1px 1px rgba(0,0,0,0.35)`,
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {(Object.keys(FACE_PIP) as FaceId[]).map((k) => {
+              const pval = FACE_PIP[k];
+              let t = "";
+              if (k === "front") t = `translateZ(${hz}px)`;
+              if (k === "back") t = `translateZ(-${hz}px) rotateY(180deg)`;
+              if (k === "right") t = `translateX(${hz}px) rotateY(90deg)`;
+              if (k === "left") t = `translateX(-${hz}px) rotateY(-90deg)`;
+              if (k === "top") t = `translateY(-${hz}px) rotateX(90deg)`;
+              if (k === "bottom") t = `translateY(${hz}px) rotateX(-90deg)`;
+              return (
+                <div
+                  key={k}
+                  style={
+                    {
+                      position: "absolute" as const,
+                      left: 0,
+                      top: 0,
+                      width: size,
+                      height: size,
+                      transform: t,
+                      WebkitTransform: t,
+                      transformStyle: "preserve-3d",
+                      WebkitBackfaceVisibility: "hidden",
+                      backfaceVisibility: "hidden",
+                      background: s.rim,
+                      border: "1px solid rgba(0,0,0,0.38)",
+                      borderRadius: r,
+                      boxShadow: "0 0 0 0.5px rgba(0,0,0,0.2)",
+                    } as React.CSSProperties
+                  }
+                >
+                  <div
+                    className="absolute"
+                    style={{
+                      inset: 0,
+                      borderRadius: r,
+                      background: s.face,
+                    }}
+                  />
+                  <PipsOnFace v={pval} st={s} pipSize={pipSize} pad={pad} />
+                  <div
+                    className="pointer-events-none absolute rounded-[inherit]"
+                    style={{
+                      inset: 0,
+                      background:
+                        "linear-gradient(125deg, rgba(255,255,255,0.18) 0%, transparent 40%, rgba(0,0,0,0.1) 100%)",
+                    }}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

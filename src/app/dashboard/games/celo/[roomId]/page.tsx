@@ -177,6 +177,20 @@ export default function CeloRoomPage() {
   const playersRef = useRef<Player[]>([]);
   const roundRef = useRef<Round | null>(null);
   const chatDraftRef = useRef("");
+  const rollWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rollFetchAbortRef = useRef<AbortController | null>(null);
+  const ROLL_ANIM_MIN_MS = 1800;
+  const ROLL_HARD_TIMEOUT_MS = 8000;
+
+  useEffect(() => {
+    return () => {
+      if (rollWatchdogRef.current) {
+        clearTimeout(rollWatchdogRef.current);
+        rollWatchdogRef.current = null;
+      }
+      rollFetchAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     roomRef.current = room;
@@ -750,6 +764,9 @@ export default function CeloRoomPage() {
               ) {
                 const trip = tripletFromDiceJson(n.banker_dice);
                 if (trip) setDice(trip);
+                if (rollingRef.current) {
+                  setRolling(false);
+                }
               }
             }
           }
@@ -774,6 +791,9 @@ export default function CeloRoomPage() {
               if (n.outcome === "win" || n.outcome === "loss") {
                 setCurrentPlayerResolvedRoll(true);
               }
+              if (rollingRef.current) {
+                setRolling(false);
+              }
             }
           }
           void fetchAll();
@@ -796,6 +816,47 @@ export default function CeloRoomPage() {
       void supabase.removeChannel(ch);
     };
   }, [supabase, roomId, fetchAll, refreshRoomPlayers]);
+
+  /** If the roll fetch path misses the JSON body, still clear local rolling when this round row updates. */
+  useEffect(() => {
+    if (!supabase || !round?.id) return;
+    const rid = round.id;
+    const ch = supabase
+      .channel(`celo_round_active:${rid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "celo_rounds",
+          filter: `id=eq.${rid}`,
+        },
+        (payload) => {
+          const n = (payload as { new?: Record<string, unknown> | null }).new;
+          if (!n) return;
+          lastRealtimeUpdateRef.current = Date.now();
+          if (n.banker_dice != null && n.banker_roll_in_flight !== true) {
+            const trip = tripletFromDiceJson(n.banker_dice);
+            if (trip) setDice(trip);
+            if (rollingRef.current) {
+              if (CELO_DEBUG) {
+                console.log(
+                  "[C-Lo] round-scoped RT: cleared rolling from celo_rounds update"
+                );
+              }
+              setRolling(false);
+            }
+            if (rollingActionRef.current) {
+              setRollingAction(false);
+            }
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+  }, [supabase, round?.id]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !roomId) return;
@@ -847,7 +908,8 @@ export default function CeloRoomPage() {
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
-  const hasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
+  const roundHasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
+  const feltTripletPresent = dice != null;
 
   const bankerRollInFlight = round?.banker_roll_in_flight === true;
 
@@ -856,14 +918,16 @@ export default function CeloRoomPage() {
       computeCeloVisualDiceMode({
         inProgress,
         roundStatus: round?.status,
-        hasBankerTriplet,
+        roundHasBankerTriplet,
+        feltTripletPresent,
         currentPlayerHasFinalRoll: currentPlayerResolvedRoll,
         localRolling: rolling,
       }),
     [
       inProgress,
       round?.status,
-      hasBankerTriplet,
+      roundHasBankerTriplet,
+      feltTripletPresent,
       currentPlayerResolvedRoll,
       rolling,
     ]
@@ -1008,7 +1072,8 @@ export default function CeloRoomPage() {
     if (visualDiceMode === "banker_tumble") {
       if (bankerRollInFlight) tumbleWhy = "server_banker_roll_in_flight";
       else if (rolling) tumbleWhy = "local_rolling";
-      else if (!hasBankerTriplet) tumbleWhy = "no_banker_triplet_yet";
+      else if (!roundHasBankerTriplet && !feltTripletPresent)
+        tumbleWhy = "no_banker_triplet_yet";
     }
     console.log("[C-Lo room] felt (dev)", {
       visualDiceMode,
@@ -1020,7 +1085,8 @@ export default function CeloRoomPage() {
       localRolling: rolling,
       roundStatus: round?.status,
       currentPlayerResolvedRoll,
-      hasBankerTriplet,
+      roundHasBankerTriplet,
+      feltTripletPresent,
     });
   }, [
     visualDiceMode,
@@ -1032,7 +1098,8 @@ export default function CeloRoomPage() {
     round?.banker_roll_in_flight,
     bankerRollInFlight,
     currentPlayerResolvedRoll,
-    hasBankerTriplet,
+    roundHasBankerTriplet,
+    feltTripletPresent,
   ]);
 
   useEffect(() => {
@@ -1107,43 +1174,108 @@ export default function CeloRoomPage() {
       CELO_DEBUG && isBanker && round.status === "banker_rolling";
     if (rollingAction && !bankerRollBypass) return;
     if (!supabase) {
+      console.error("[C-Lo] roll: blocked — no supabase client");
       setRollError("Please log in to roll.");
       return;
     }
     setRollError(null);
+    if (rollWatchdogRef.current) {
+      clearTimeout(rollWatchdogRef.current);
+      rollWatchdogRef.current = null;
+    }
+    rollFetchAbortRef.current?.abort();
+    const ac = new AbortController();
+    rollFetchAbortRef.current = ac;
+    const hardTimeout = setTimeout(() => {
+      if (ac.signal.aborted) return;
+      console.error("[C-Lo] roll: aborting fetch (hard 8s)", {
+        roomId: room.id,
+        roundId: round.id,
+      });
+      ac.abort();
+    }, ROLL_HARD_TIMEOUT_MS);
+    type RollJson = {
+      error?: string;
+      dice?: number[];
+      rollName?: string;
+      outcome?: string;
+      canLowerBank?: boolean;
+      player_can_become_banker?: boolean;
+      newBalance?: number;
+    };
+    rollWatchdogRef.current = setTimeout(() => {
+      rollWatchdogRef.current = null;
+      if (!rollingRef.current) return;
+      console.error("[C-Lo] roll: watchdog — rolling still true after 8s", {
+        roomId: room.id,
+        roundId: round.id,
+      });
+      setRollError("Roll timed out — please retry");
+      setRolling(false);
+      setRollingAction(false);
+      void fetchAll();
+    }, ROLL_HARD_TIMEOUT_MS);
+    setRollingAction(true);
+    setRolling(true);
+    setRollName(null);
+    setDice(null);
+    let sawOkResponse = false;
     try {
-      setRollingAction(true);
-      setRolling(true);
-      setRollName(null);
-      setDice(null);
-      const wait = new Promise((r) => setTimeout(r, 2200));
-      const [res] = await Promise.all([
+      const [fetchRes] = await Promise.all([
         fetchCeloApi(supabase, "/api/celo/round/roll", {
           method: "POST",
           body: JSON.stringify({ room_id: room.id, round_id: round.id }),
+          signal: ac.signal,
+        }).catch((e: unknown) => {
+          if (e instanceof Error && e.name === "AbortError") {
+            console.error("[C-Lo] roll: fetch aborted (timeout or unmount)", {
+              roomId: room.id,
+              roundId: round.id,
+            });
+            throw e;
+          }
+          console.error("[C-Lo] roll: fetch threw", e, { roomId: room.id, roundId: round.id });
+          throw e;
         }),
-        wait,
+        new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), ROLL_ANIM_MIN_MS)
+        ),
       ]);
-      const j = (await res.json()) as {
-        error?: string;
-        dice?: number[];
-        rollName?: string;
-        outcome?: string;
-        canLowerBank?: boolean;
-        player_can_become_banker?: boolean;
-        newBalance?: number;
-      };
+      const res = fetchRes as Response;
+      const text = await res.text();
+      let j: RollJson = {};
+      if (text) {
+        try {
+          j = JSON.parse(text) as RollJson;
+        } catch (parseErr) {
+          console.error(
+            "[C-Lo] roll: JSON parse failed",
+            parseErr,
+            { status: res.status, textPreview: text.slice(0, 240) }
+          );
+          setRollError("Invalid response from server");
+          setRolling(false);
+          return;
+        }
+      }
       if (!res.ok) {
-        setRolling(false);
         if (res.status === 401) {
           setRollError("Session expired. Please log in again.");
         } else {
-          setRollError(j.error ?? "Could not complete roll");
+          setRollError((j as RollJson).error ?? "Could not complete roll");
         }
+        setRolling(false);
+        console.error("[C-Lo] roll: HTTP not ok", {
+          status: res.status,
+          error: (j as RollJson).error,
+        });
         return;
       }
+      sawOkResponse = true;
       if (j.dice?.length === 3) {
         setDice([j.dice[0], j.dice[1], j.dice[2]]);
+      } else {
+        console.error("[C-Lo] roll: ok but missing j.dice (expected 3)", { j, roundId: round.id });
       }
       setRolling(false);
       if (j.rollName) {
@@ -1173,11 +1305,28 @@ export default function CeloRoomPage() {
       await fetchAll();
       setTimeout(() => setRollName(null), 2800);
     } catch (e) {
-      console.error("[C-Lo] roll error", e);
-      setRollError(e instanceof Error ? e.message : "Roll failed");
-      setRolling(false);
+      if (e instanceof Error && e.name === "AbortError") {
+        setRollError("Roll timed out — please retry");
+        console.error("[C-Lo] roll: request aborted (network or 8s cap)", {
+          roomId: room.id,
+          roundId: round.id,
+        });
+      } else {
+        console.error("[C-Lo] roll: unhandled", e, {
+          roomId: room.id,
+          roundId: round.id,
+        });
+        setRollError(e instanceof Error ? e.message : "Roll failed");
+      }
+      if (!sawOkResponse) setRolling(false);
     } finally {
+      clearTimeout(hardTimeout);
+      if (rollWatchdogRef.current) {
+        clearTimeout(rollWatchdogRef.current);
+        rollWatchdogRef.current = null;
+      }
       setRollingAction(false);
+      rollFetchAbortRef.current = null;
     }
   }
 
@@ -1532,7 +1681,7 @@ export default function CeloRoomPage() {
                         diceType={myDiceType}
                         size={diceSize}
                         rolling={isRollingFaces}
-                        delay={[0, 120, 240][i]}
+                        delay={[0, 80, 160][i]}
                       />
                     ))}
                   </div>

@@ -50,8 +50,10 @@ export type CeloVisualDiceMode =
 export function computeCeloVisualDiceMode(input: {
   inProgress: boolean;
   roundStatus: string | null | undefined;
-  /** Banker has written dice to the round row (may be no_count reroll faces). */
-  hasBankerTriplet: boolean;
+  /** `celo_rounds.banker_dice` present in merged round state. */
+  roundHasBankerTriplet: boolean;
+  /** Felt has a triplet from API/realtime/fetch (dice state) before round row catches up. */
+  feltTripletPresent: boolean;
   /** Current seat's player already has a win/loss row this round (authoritative). */
   currentPlayerHasFinalRoll: boolean;
   /** Local client is mid handleRoll() animation window. */
@@ -61,14 +63,20 @@ export function computeCeloVisualDiceMode(input: {
   if (!input.inProgress) return "idle";
   if (s === "banker_rolling") {
     /** `banker_roll_in_flight` is animation-only on the server; do not gate felt UX on it. */
-    if (input.localRolling || !input.hasBankerTriplet) {
+    if (
+      input.localRolling ||
+      (!input.roundHasBankerTriplet && !input.feltTripletPresent)
+    ) {
       return "banker_tumble";
     }
     return "banker_settled";
   }
   if (s === "player_rolling") {
-    if (!input.currentPlayerHasFinalRoll || input.localRolling) return "player_tumble";
-    return "player_settled";
+    if (input.localRolling) return "player_tumble";
+    if (input.currentPlayerHasFinalRoll || input.feltTripletPresent) {
+      return "player_settled";
+    }
+    return "player_tumble";
   }
   if (s === "betting") return "banker_settled";
   return "idle";
