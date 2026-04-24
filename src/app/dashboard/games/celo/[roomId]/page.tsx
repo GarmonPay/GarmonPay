@@ -12,9 +12,10 @@ import {
   clampDie,
   computeCeloVisualDiceMode,
   resolveCeloFeltDice,
+  shouldClobberFeltTripletOnFetch,
   tripletFromDiceJson,
 } from "@/lib/celo-room-dice";
-import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
+import DiceFace, { type DiceType, type TumbleVariant } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
 import {
@@ -179,6 +180,8 @@ export default function CeloRoomPage() {
   const chatDraftRef = useRef("");
   const rollWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rollFetchAbortRef = useRef<AbortController | null>(null);
+  const diceRef = useRef<[number, number, number] | null>(null);
+  const feltTiedToRoundIdRef = useRef<string | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
   const ROLL_HARD_TIMEOUT_MS = 8000;
 
@@ -212,6 +215,10 @@ export default function CeloRoomPage() {
   useEffect(() => {
     rollingActionRef.current = rollingAction;
   }, [rollingAction]);
+
+  useEffect(() => {
+    diceRef.current = dice;
+  }, [dice]);
 
   const bumpOptimisticAsRealtime = useCallback(() => {
     lastRealtimeUpdateRef.current = Date.now();
@@ -390,10 +397,32 @@ export default function CeloRoomPage() {
       if (activeRound.status === "player_rolling" && !hasCurrentPlayerFinal) {
         applyTriplet = null;
       }
+      const serverHasBankerTriplet = !!tripletFromDiceJson(
+        (activeRound as Round).banker_dice
+      );
       if (applyTriplet) {
         setDice(applyTriplet);
-      } else if (!rollingActionRef.current) {
-        setDice(null);
+        feltTiedToRoundIdRef.current = null;
+      } else {
+        const clobber = shouldClobberFeltTripletOnFetch({
+          rollingActionInProgress: rollingActionRef.current,
+          activeStatus: activeRound.status,
+          serverHasBankerTriplet,
+          hasPlayerFinalWinLoss: hasCurrentPlayerFinal,
+          hasLocalFeltTriplet: tripletFromDiceJson(diceRef.current) != null,
+          localFeltTiedToThisRound: feltTiedToRoundIdRef.current === activeRound.id,
+        });
+        if (clobber) {
+          setDice(null);
+          feltTiedToRoundIdRef.current = null;
+        } else if (CELO_DEBUG) {
+          console.log("[C-Lo] fetch: preserved felt (see shouldClobberFeltTripletOnFetch comment)", {
+            status: activeRound.status,
+            serverHasBankerTriplet,
+            tiedRound: feltTiedToRoundIdRef.current,
+            roundId: activeRound.id,
+          });
+        }
       }
     } else if (!activeRound && !rollingActionRef.current) {
       if (isStaleFetch()) {
@@ -401,6 +430,7 @@ export default function CeloRoomPage() {
         return;
       }
       setDice(null);
+      feltTiedToRoundIdRef.current = null;
     }
 
     if (isStaleFetch()) {
@@ -933,6 +963,16 @@ export default function CeloRoomPage() {
     ]
   );
 
+  useEffect(() => {
+    console.log("[C-Lo] state", {
+      isRolling: rolling,
+      dice,
+      bankerDice: round?.banker_dice,
+      roundId: round?.id,
+      mode: visualDiceMode,
+    });
+  }, [rolling, dice, round?.banker_dice, round?.id, visualDiceMode]);
+
   /** Tumble animation: waiting on banker write, waiting on current player final, or local roll window. */
   const isRollingFaces =
     visualDiceMode === "banker_tumble" || visualDiceMode === "player_tumble";
@@ -947,6 +987,12 @@ export default function CeloRoomPage() {
     () => countStakedEntryPlayers(players, room?.banker_id ?? null),
     [players, room?.banker_id]
   );
+
+  const CELO_TUMBLE: { variant: TumbleVariant; durationSec: number }[] = [
+    { variant: "a", durationSec: 1.65 },
+    { variant: "b", durationSec: 1.8 },
+    { variant: "c", durationSec: 1.95 },
+  ];
 
   /** Banker waiting to start: re-pull players so we do not miss entry rows if realtime lagged. */
   useEffect(() => {
@@ -1043,6 +1089,7 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     setCurrentPlayerResolvedRoll(false);
+    feltTiedToRoundIdRef.current = null;
   }, [round?.id]);
 
   useEffect(() => {
@@ -1206,6 +1253,7 @@ export default function CeloRoomPage() {
     rollWatchdogRef.current = setTimeout(() => {
       rollWatchdogRef.current = null;
       if (!rollingRef.current) return;
+      console.warn("[C-Lo] watchdog fired (rolling still true after 8s cap)");
       console.error("[C-Lo] roll: watchdog — rolling still true after 8s", {
         roomId: room.id,
         roundId: round.id,
@@ -1274,6 +1322,7 @@ export default function CeloRoomPage() {
       sawOkResponse = true;
       if (j.dice?.length === 3) {
         setDice([j.dice[0], j.dice[1], j.dice[2]]);
+        feltTiedToRoundIdRef.current = round.id;
       } else {
         console.error("[C-Lo] roll: ok but missing j.dice (expected 3)", { j, roundId: round.id });
       }
@@ -1671,7 +1720,9 @@ export default function CeloRoomPage() {
                     className="relative z-[5] flex items-center justify-center gap-2 md:gap-3"
                     style={{
                       opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
-                      filter: isRollingFaces ? "drop-shadow(0 6px 14px rgba(0,0,0,0.5))" : "drop-shadow(0 10px 22px rgba(0,0,0,0.55))",
+                      boxShadow: isRollingFaces
+                        ? "0 6px 20px rgba(0,0,0,0.4)"
+                        : "0 10px 24px rgba(0,0,0,0.5)",
                     }}
                   >
                     {[0, 1, 2].map((i) => (
@@ -1682,6 +1733,8 @@ export default function CeloRoomPage() {
                         size={diceSize}
                         rolling={isRollingFaces}
                         delay={[0, 80, 160][i]}
+                        variant={CELO_TUMBLE[i]!.variant}
+                        durationSec={CELO_TUMBLE[i]!.durationSec}
                       />
                     ))}
                   </div>

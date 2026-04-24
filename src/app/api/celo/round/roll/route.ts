@@ -255,11 +255,19 @@ async function handleBankerRoll(
       roundId: round.id,
       priorBankerDice: round.banker_dice != null,
     });
+    console.log("[celo/roll] no_count: pre celoUpdateRoundIfStatus", {
+      roundId: round.id,
+      diceArr,
+    });
     const updated = await celoUpdateRoundIfStatus(admin, round.id, ["banker_rolling"], {
       banker_dice: diceArr,
       banker_dice_name: roll.rollName,
       banker_dice_result: roll.result,
       banker_roll_in_flight: false,
+    });
+    console.log("[celo/roll] no_count: post celoUpdateRoundIfStatus", {
+      roundId: round.id,
+      updated: !!updated,
     });
     if (!updated) {
       await clearBankerRollInFlight(admin, round.id, "no_count_update_race");
@@ -605,6 +613,10 @@ async function handleBankerRoll(
   if (roll.result === "point" && roll.point != null) {
     const staked = await getStakedPlayersOrdered(admin, room.id);
     const firstSeat = staked[0]?.seat_number ?? 1;
+    console.log("[celo/roll] point: pre celoUpdateRoundIfStatus", {
+      roundId: round.id,
+      diceArr,
+    });
     const updated = await celoUpdateRoundIfStatus(admin, round.id, ["banker_rolling"], {
       banker_dice: diceArr,
       banker_dice_name: roll.rollName,
@@ -613,6 +625,10 @@ async function handleBankerRoll(
       banker_roll_in_flight: false,
       status: "player_rolling",
       current_player_seat: firstSeat,
+    });
+    console.log("[celo/roll] point: post celoUpdateRoundIfStatus", {
+      roundId: round.id,
+      updated: !!updated,
     });
     if (!updated) {
       await clearBankerRollInFlight(admin, round.id, "banker_point_transition_race");

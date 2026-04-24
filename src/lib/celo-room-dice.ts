@@ -9,6 +9,38 @@ export function clampDie(n: unknown): 1 | 2 | 3 | 4 | 5 | 6 {
 /** Shown before a round and as the face during tumble before pips are known. */
 export const CELO_IDLE_DICE: [1, 1, 1] = [1, 1, 1];
 
+/**
+ * Invariant: a background fetchAll must not call setDice(null) while we already hold
+ * a valid felt triplet for this round from a successful /api/celo/round/roll but the
+ * public SELECT has not yet returned `banker_dice` (replica/RLS lag) or, in player_rolling,
+ * the latest roll is a rerow that has no final win/loss row yet. Otherwise feltTripletPresent
+ * can flip to false, visual mode stays "tumble" forever, and the UI is stuck on "Rolling…".
+ */
+export function shouldClobberFeltTripletOnFetch(p: {
+  /** True while handleRoll still holds rollingAction. */
+  rollingActionInProgress: boolean;
+  activeStatus: string | null | undefined;
+  serverHasBankerTriplet: boolean;
+  hasPlayerFinalWinLoss: boolean;
+  hasLocalFeltTriplet: boolean;
+  localFeltTiedToThisRound: boolean;
+}): boolean {
+  if (p.rollingActionInProgress) return false;
+  if (!p.hasLocalFeltTriplet) return true;
+  const s = p.activeStatus ?? "";
+  if (
+    s === "banker_rolling" &&
+    !p.serverHasBankerTriplet &&
+    p.localFeltTiedToThisRound
+  ) {
+    return false;
+  }
+  if (s === "player_rolling" && !p.hasPlayerFinalWinLoss && p.localFeltTiedToThisRound) {
+    return false;
+  }
+  return true;
+}
+
 export function tripletFromDiceJson(
   raw: unknown
 ): [1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6] | null {
