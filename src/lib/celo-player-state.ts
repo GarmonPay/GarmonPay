@@ -58,13 +58,11 @@ export function normalizeCeloPlayerRow(row: unknown): CeloEntryPlayerFields {
   const stakeCol = Math.max(0, Math.floor(Number(r.stake_amount_sc ?? 0)));
   const legacyStake = Math.max(entrySc, betCents);
   const stakeAmountSc = Math.max(stakeCol, legacyStake);
-  const explicitPosted = r.entry_posted === true;
-  const entryPosted =
-    explicitPosted ||
-    (r.entry_posted !== false && legacyStake > 0);
-  const seatStatusRaw = String(r.player_seat_status ?? "").trim();
+  /** DB flag only; staked count in UI also requires stake_amount_sc > 0. */
+  const entryPosted = r.entry_posted === true;
+  const statusRaw = String(r.status ?? r.player_seat_status ?? "").trim();
   const status =
-    seatStatusRaw ||
+    statusRaw ||
     (entryPosted && stakeAmountSc > 0 ? "active" : "seated");
   const isBankerShaped = r.is_banker;
   return {
@@ -104,7 +102,10 @@ export function shapeCeloRoomStatePlayer(
     Math.floor(Number(row.entry_sc ?? 0)),
     Math.floor(Number(row.bet_cents ?? 0))
   );
-  const posted = row.entry_posted === true || stake > 0;
+  const entryPosted = row.entry_posted === true;
+  const statusStr = String(
+    row.status ?? row.player_seat_status ?? (entryPosted && stake > 0 ? "active" : "seated")
+  );
   return {
     id: String(row.id),
     room_id: String(row.room_id ?? ""),
@@ -114,14 +115,14 @@ export function shapeCeloRoomStatePlayer(
     bet_cents: row.bet_cents,
     entry_sc: row.entry_sc,
     dice_type: row.dice_type,
-    entry_posted: posted,
+    entry_posted: entryPosted,
     stake_amount_sc: stake,
-    player_seat_status: row.player_seat_status ?? (posted ? "active" : "seated"),
+    status: statusStr,
+    player_seat_status: row.player_seat_status,
     joined_at: row.joined_at,
     is_banker:
       roomBankerId != null &&
       normalizeCeloUserId(uid) === normalizeCeloUserId(roomBankerId),
-    status: String(row.player_seat_status ?? (posted ? "active" : "seated")),
     created_at: row.joined_at ?? row.created_at ?? null,
     users: row.users,
   };
@@ -172,12 +173,9 @@ export function isStakedNonBankerForStartRound(
   if (role === "spectator" || role === "banker") return false;
   if (role.length > 0 && role !== "player") return false;
 
-  if (p.entry_posted === false) return false;
+  if (p.entry_posted !== true) return false;
 
-  const stake = Math.max(
-    Math.floor(Number(p.stake_amount_sc ?? 0)),
-    effectiveStakeSc(p)
-  );
+  const stake = Math.floor(Number(p.stake_amount_sc ?? 0));
   return stake > 0;
 }
 
@@ -230,6 +228,9 @@ export function mergeCeloPlayerRealtime(
       if (!("entry_sc" in n)) n.entry_sc = previousRow.entry_sc;
       if (!("stake_amount_sc" in n)) n.stake_amount_sc = previousRow.stake_amount_sc;
       if (!("entry_posted" in n)) n.entry_posted = previousRow.entry_posted;
+      if (!("status" in n)) {
+        (n as Record<string, unknown>).status = previousRow.status;
+      }
       if (!("player_seat_status" in n)) {
         (n as Record<string, unknown>).player_seat_status = previousRow.status;
       }

@@ -1029,10 +1029,33 @@ export default function CeloRoomPage() {
     : dice
       ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
       : CELO_IDLE_DICE;
-  const stakedPlayerCount = useMemo(
-    () => countStakedEntryPlayers(players, bankerUserIdResolved),
-    [players, bankerUserIdResolved]
-  );
+  const stakedPlayerCount = useMemo(() => {
+    const n = players.filter((p) => {
+      const bankerRow =
+        p.is_banker === true ||
+        (bankerUserIdResolved != null &&
+          normalizeCeloUserId(p.user_id) ===
+            normalizeCeloUserId(bankerUserIdResolved));
+      if (bankerRow) return false;
+      return (
+        p.entry_posted === true && Number(p.stake_amount_sc || 0) > 0
+      );
+    }).length;
+    return n;
+  }, [players, bankerUserIdResolved]);
+
+  useEffect(() => {
+    console.log(
+      "[C-Lo UI] staked players calc",
+      players.map((p) => ({
+        user_id: p.user_id,
+        is_banker: p.is_banker,
+        entry_posted: p.entry_posted,
+        stake_amount_sc: p.stake_amount_sc,
+      })),
+      stakedPlayerCount
+    );
+  }, [players, stakedPlayerCount]);
   const seatedPlayerCount = useMemo(
     () => countSeatedCeloPlayerRoles(players),
     [players]
@@ -1149,6 +1172,30 @@ export default function CeloRoomPage() {
     myRow != null &&
     myRow.entry_posted !== true &&
     myEntrySc <= 0;
+
+  useEffect(() => {
+    console.log("[C-Lo UI] post entry disabled reason", {
+      isBanker,
+      roomStatus: room?.status,
+      selectedEntryAmount: entryAmount,
+      alreadyPosted: myRow?.entry_posted,
+      stake: myRow?.stake_amount_sc,
+      hasRound: Boolean(round),
+      inProgress,
+      gpcBalance: myBalance,
+      canPostEntry,
+    });
+  }, [
+    isBanker,
+    room?.status,
+    entryAmount,
+    myRow?.entry_posted,
+    myRow?.stake_amount_sc,
+    round,
+    inProgress,
+    myBalance,
+    canPostEntry,
+  ]);
   const canRoll = canRollBanker || canRollPlayer;
   const roomPhase = String(room?.status ?? "");
   const startableRoomStatuses = ["waiting", "active", "entry_phase"];
@@ -1675,6 +1722,7 @@ export default function CeloRoomPage() {
   }
 
   async function handlePostEntry() {
+    console.log("[C-Lo UI] POST ENTRY BUTTON CLICKED");
     if (!room || !supabase || !me || postEntryInFlightRef.current) return;
     console.log("[C-Lo] post entry clicked", {
       roomId: room.id,
@@ -1686,6 +1734,10 @@ export default function CeloRoomPage() {
       playerStake: myRow?.stake_amount_sc,
       gpcBalance: myBalance,
     });
+    console.log("[C-Lo UI] post entry payload", {
+      roomId: room.id,
+      amount: entryAmount,
+    });
     if (!canPostEntry) return;
     setJoinHint(null);
     postEntryInFlightRef.current = true;
@@ -1696,6 +1748,7 @@ export default function CeloRoomPage() {
         body: JSON.stringify({ roomId: room.id, amount: entryAmount }),
       });
       const text = await res.text();
+      console.log("[C-Lo UI] post entry raw response", { status: res.status, body: text });
       let j: {
         ok?: boolean;
         error?: string;

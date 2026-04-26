@@ -119,6 +119,20 @@ export async function GET(request: Request) {
     shapeCeloRoomStatePlayer(raw as Record<string, unknown>, bankerIdForShape || null)
   );
 
+  console.log(
+    "[C-Lo RoomState] players",
+    playersShaped.map((p) => {
+      const o = p as Record<string, unknown>;
+      return {
+        user_id: o.user_id,
+        is_banker: o.is_banker,
+        status: o.status,
+        entry_posted: o.entry_posted,
+        stake_amount_sc: o.stake_amount_sc,
+      };
+    })
+  );
+
   return NextResponse.json({
     room: roomRaw,
     players: playersShaped,

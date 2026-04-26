@@ -51,6 +51,8 @@ export async function POST(request: Request) {
     return jsonErr("amount must be a positive number", 400);
   }
 
+  console.log("[C-Lo PostEntry] request", { roomId, amount, userId });
+
   const { data: roomRaw, error: rErr } = await adminClient
     .from("celo_rooms")
     .select("*")
@@ -126,6 +128,8 @@ export async function POST(request: Request) {
     stake_amount_sc?: number;
   };
 
+  console.log("[C-Lo PostEntry] existing player", pl);
+
   if (String(pl.role) !== "player") {
     return jsonErr("Only players in a player seat can post an entry", 400);
   }
@@ -165,10 +169,11 @@ export async function POST(request: Request) {
       bet_cents: amount,
       entry_posted: true,
       stake_amount_sc: amount,
+      status: "active",
       player_seat_status: "active",
     })
-    .eq("id", pl.id)
     .eq("room_id", roomId)
+    .eq("user_id", userId)
     .select(CELO_SELECT)
     .single();
 
@@ -183,6 +188,8 @@ export async function POST(request: Request) {
     );
     return jsonErr(uErr?.message ?? "Could not save entry", 500);
   }
+
+  console.log("[C-Lo PostEntry] updated player", updated);
 
   let roomAfter = roomRaw as Record<string, unknown>;
   const nextRoomStatus =

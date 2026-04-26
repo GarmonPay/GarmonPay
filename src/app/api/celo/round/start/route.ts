@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import {
   CELO_ROOM_PLAYERS_USER_EMBED,
-  effectiveStakeSc,
   isStakedNonBankerForStartRound,
   normalizeCeloUserId,
 } from "@/lib/celo-player-state";
@@ -69,21 +68,34 @@ export async function POST(request: Request) {
   }
   const { data: players } = await adminClient
     .from("celo_room_players")
-    .select(`user_id, role, entry_sc, bet_cents,${CELO_ROOM_PLAYERS_USER_EMBED}`)
+    .select(
+      `user_id, role, entry_sc, bet_cents, entry_posted, stake_amount_sc,${CELO_ROOM_PLAYERS_USER_EMBED}`
+    )
     .eq("room_id", roomId);
   const staked = (players ?? []).filter((p) =>
     isStakedNonBankerForStartRound(
-      p as { role?: string; user_id?: string; entry_sc?: number; bet_cents?: number },
+      p as {
+        role?: string;
+        user_id?: string;
+        entry_sc?: number;
+        bet_cents?: number;
+        entry_posted?: boolean;
+        stake_amount_sc?: number;
+      },
       room.banker_id ?? null
     )
   );
+  console.log("[C-Lo StartRound] staked players", staked);
   if (staked.length < 1) {
     return NextResponse.json(
       { error: "At least one player with a posted entry is required" },
       { status: 400 }
     );
   }
-  const prizePool = staked.reduce((s, p) => s + effectiveStakeSc(p), 0);
+  const prizePool = staked.reduce(
+    (s, p) => s + Math.floor(Number((p as { stake_amount_sc?: number }).stake_amount_sc ?? 0)),
+    0
+  );
   const platformFee = Math.floor(prizePool * 0.1);
   const { count: prev } = await adminClient
     .from("celo_rounds")
