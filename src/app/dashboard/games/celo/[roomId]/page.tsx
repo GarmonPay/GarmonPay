@@ -164,7 +164,6 @@ export default function CeloRoomPage() {
   const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
   const [startRoundError, setStartRoundError] = useState<string | null>(null);
-  const [beginRollsError, setBeginRollsError] = useState<string | null>(null);
   const [uiReady, setUiReady] = useState(false);
   /** At least one full `fetchAll` has applied; avoids stale copy before players load. */
   const [playersSnapshotReady, setPlayersSnapshotReady] = useState(false);
@@ -299,25 +298,12 @@ export default function CeloRoomPage() {
       return false;
     };
 
-    const [
-      roomRes,
-      playersRes,
-      roundsRes,
-      chatRes,
-    ] = await Promise.all([
-      supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
-      supabase
-        .from("celo_room_players")
-        .select(CELO_PLAYER_FETCH_SELECT)
-        .eq("room_id", roomId)
-        .order("seat_number", { ascending: true }),
-      supabase
-        .from("celo_rounds")
-        .select("*")
-        .eq("room_id", roomId)
-        .in("status", ["banker_rolling", "player_rolling", "betting"])
-        .order("round_number", { ascending: false })
-        .limit(1),
+    const [stateRes, chatRes] = await Promise.all([
+      fetchCeloApi(
+        supabase,
+        `/api/celo/room/state?room_id=${encodeURIComponent(roomId)}`,
+        { method: "GET" }
+      ),
       supabase
         .from("celo_chat")
         .select(CELO_CHAT_SELECT_WITH_USER)
@@ -325,46 +311,67 @@ export default function CeloRoomPage() {
         .order("created_at", { ascending: true })
         .limit(50),
     ]);
+
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
       return;
     }
 
-    if (roomRes.error) {
-      setRoomFetchError(roomRes.error.message);
-    }
+    let incomingRoom: Record<string, unknown> | null | undefined = undefined;
+    let playerRows: Player[] = [];
+    let activeRound: Round | null = null;
+    let roomForLog: Room | null = null;
 
-    let playerRows: Player[] = ((playersRes.data ?? []) as unknown[]).map(
-      (row) => normalizeCeloPlayerRow(row) as Player
-    );
-    if (playersRes.error && CELO_DEBUG) console.warn("[C-Lo room] players", playersRes.error);
-
-    if (roomRes.data && (playersRes.error != null || playerRows.length === 0)) {
-      const res = await fetchCeloApi(
-        supabase,
-        `/api/celo/room/players?room_id=${encodeURIComponent(roomId)}`,
-        { method: "GET" }
+    if (!stateRes.ok) {
+      const errText = await stateRes.text();
+      if (stateRes.status === 401) {
+        setRoomFetchError("Session expired. Please log in again.");
+      } else {
+        setRoomFetchError(errText.slice(0, 200) || "Could not load room state");
+      }
+      const [roomRes, playersRes, roundsRes] = await Promise.all([
+        supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
+        supabase
+          .from("celo_room_players")
+          .select(CELO_PLAYER_FETCH_SELECT)
+          .eq("room_id", roomId)
+          .order("seat_number", { ascending: true }),
+        supabase
+          .from("celo_rounds")
+          .select("*")
+          .eq("room_id", roomId)
+          .in("status", ["banker_rolling", "player_rolling", "betting"])
+          .order("round_number", { ascending: false })
+          .limit(1),
+      ]);
+      if (isStaleFetch()) return;
+      if (roomRes.data) {
+        incomingRoom = roomRes.data as unknown as Record<string, unknown>;
+        roomForLog = roomRes.data as Room;
+      } else if (roomRes.error) incomingRoom = null;
+      playerRows = ((playersRes.data ?? []) as unknown[]).map(
+        (row) => normalizeCeloPlayerRow(row) as Player
       );
-      if (isStaleFetch()) {
-        console.log("[C-Lo] skipping stale fetch");
-        return;
+      const ar = (roundsRes.data as Round[] | null) ?? [];
+      activeRound = ar[0] ?? null;
+    } else {
+      const body = (await stateRes.json()) as {
+        room?: Record<string, unknown>;
+        players?: unknown[];
+        activeRound?: Record<string, unknown> | null;
+      };
+      if (body.room) {
+        incomingRoom = body.room;
+        roomForLog = body.room as unknown as Room;
       }
-      if (res.ok) {
-        const body = (await res.json()) as { players?: unknown[] };
-        playerRows = (body.players ?? []).map(
-          (row) => normalizeCeloPlayerRow(row) as Player
-        );
-        if (CELO_DEBUG) {
-          console.log("[C-Lo room] players (server list)", playerRows.length);
-        }
-      } else if (CELO_DEBUG) {
-        console.warn("[C-Lo room] players server list failed", res.status);
-      }
+      playerRows = ((body.players ?? []) as unknown[]).map(
+        (row) => normalizeCeloPlayerRow(row) as Player
+      );
+      activeRound =
+        body.activeRound == null
+          ? null
+          : (body.activeRound as unknown as Round);
     }
-
-    const ar = (roundsRes.data as Round[] | null) ?? [];
-    const activeRound = ar[0] ?? null;
-    if (roundsRes.error && CELO_DEBUG) console.warn("[C-Lo room] rounds", roundsRes.error);
 
     if (isStaleFetch()) {
       console.log("[C-Lo] skipping stale fetch");
@@ -376,9 +383,63 @@ export default function CeloRoomPage() {
       return;
     }
 
-    let incomingRoom: Record<string, unknown> | null | undefined = undefined;
-    if (roomRes.data) incomingRoom = roomRes.data as unknown as Record<string, unknown>;
-    else if (roomRes.error) incomingRoom = null;
+    const roomStatusStr =
+      incomingRoom != null
+        ? String((incomingRoom as { status?: string }).status ?? "")
+        : "";
+    if (
+      (roomStatusStr === "rolling" || roomStatusStr === "active") &&
+      !activeRound
+    ) {
+      const { data: r2 } = await supabase
+        .from("celo_rounds")
+        .select("*")
+        .eq("room_id", roomId)
+        .neq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (isStaleFetch()) return;
+      const st = String((r2 as { status?: string } | null)?.status ?? "");
+      if (
+        r2 &&
+        (st === "banker_rolling" || st === "player_rolling" || st === "betting")
+      ) {
+        activeRound = r2 as unknown as Round;
+      }
+    }
+
+    if (isStaleFetch()) return;
+
+    if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
+      console.log("[C-Lo] skipping stale fetch (realtime after repair)");
+      return;
+    }
+
+    const bankerForCount =
+      roomForLog?.banker_id ??
+      (incomingRoom as { banker_id?: string } | null | undefined)?.banker_id ??
+      null;
+    const stakedN = countStakedEntryPlayers(playerRows, bankerForCount);
+    const roomStatForStart = String(
+      (incomingRoom as { status?: string } | null | undefined)?.status ?? ""
+    );
+    const canStartComputed =
+      incomingRoom != null &&
+      me != null &&
+      normalizeCeloUserId(
+        (incomingRoom as { banker_id?: string }).banker_id
+      ) === normalizeCeloUserId(me) &&
+      activeRound == null &&
+      ["waiting", "active", "entry_phase"].includes(roomStatForStart) &&
+      stakedN >= 1;
+
+    console.log("[C-Lo] room status", roomStatusStr);
+    console.log("[C-Lo] players count", playerRows.length);
+    console.log("[C-Lo] banker id", bankerForCount);
+    console.log("[C-Lo] current user id", me);
+    console.log("[C-Lo] current round", activeRound?.id ?? null, activeRound?.status ?? null);
+    console.log("[C-Lo] canStartRound", canStartComputed);
 
     let hasCurrentPlayerFinal = false;
     if (
@@ -514,19 +575,16 @@ export default function CeloRoomPage() {
     if (CELO_DEBUG && !isStaleFetch()) {
       console.log("[C-Lo room] sync", {
         roomId,
-        room: roomRes.data,
+        room: roomForLog ?? incomingRoom,
         activeRound: activeRound?.id,
         players: playerRows.length,
-        staked: countStakedEntryPlayers(
-          playerRows,
-          (roomRes.data as Room | null | undefined)?.banker_id ?? null
-        ),
+        staked: countStakedEntryPlayers(playerRows, bankerForCount),
         diceComponent: "mounted",
         chatMounted: true,
         fetchToken: myToken,
       });
     }
-  }, [supabase, roomId, commitCeloAggregateMerge]);
+  }, [supabase, roomId, commitCeloAggregateMerge, me]);
 
   const sendRoomChat = useCallback(async () => {
     const text = chatDraftRef.current.trim();
@@ -1014,6 +1072,10 @@ export default function CeloRoomPage() {
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
+    const rts = String(room.status ?? "");
+    if (rts === "rolling" && !round) {
+      return "Syncing round…";
+    }
     if (inProgress && round) {
       if (round.status === "banker_rolling") return "Banker's roll";
       if (round.status === "player_rolling") return "Player's roll";
@@ -1022,25 +1084,27 @@ export default function CeloRoomPage() {
     if (isBanker && !inProgress && !playersSnapshotReady) {
       return "Syncing table…";
     }
-    const rts = String(room.status ?? "");
     if (rts === "entry_phase" && isBanker) {
       return stakedPlayerCount < 1
         ? "Waiting for players to post entries…"
-        : "When ready, begin rolls to open the felt.";
+        : "When ready, start the round to open the felt.";
     }
     if (rts === "waiting" && isBanker && seatedPlayerCount < 1) {
-      return "No players seated yet. You can open entries now.";
+      return "No players seated yet. Players can post entries when seated.";
     }
     if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc === 0) {
       return "Post your entry to join this round’s pot.";
     }
     if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc > 0) {
-      return "Entry posted. Waiting for the banker to begin rolls…";
+      return "Entry posted. Waiting for the banker to start the round…";
+    }
+    if ((rts === "waiting" || rts === "active") && !isBanker && isPlayer && myEntrySc > 0) {
+      return "Entry posted. Waiting for the banker to start the round…";
     }
     if (rts === "waiting" && !isBanker) {
-      return "Waiting for the banker to open the entry window…";
+      return "Waiting for the banker to start the round…";
     }
-    if (isBanker) return "Open the entry window when a player is seated.";
+    if (isBanker) return "Start the round when at least one player has posted an entry.";
     return "Waiting for banker";
   })();
 
@@ -1067,41 +1131,40 @@ export default function CeloRoomPage() {
   );
   const canRoll = canRollBanker || canRollPlayer;
   const roomPhase = String(room?.status ?? "");
-  const showOpenEntry =
-    !!room && isBanker && !inProgress && roomPhase === "waiting";
-  const showBeginRolls =
-    !!room && isBanker && !inProgress && roomPhase === "entry_phase";
+  const startableRoomStatuses = ["waiting", "active", "entry_phase"];
+  const showStartRound =
+    !!room &&
+    isBanker &&
+    !inProgress &&
+    startableRoomStatuses.includes(roomPhase);
   const canStartRound =
-    showOpenEntry && !rollingAction;
-  const canBeginRolls =
-    showBeginRolls && stakedPlayerCount >= 1 && !rollingAction;
+    showStartRound && stakedPlayerCount >= 1 && !rollingAction;
   const startRoundDisabledReason = (() => {
-    if (!showOpenEntry) return null;
-    if (rollingAction) return "round_action_in_progress";
-    return null;
-  })();
-  const beginRollsDisabledReason = (() => {
-    if (!showBeginRolls) return null;
+    if (!showStartRound) return null;
     if (rollingAction) return "round_action_in_progress";
     if (stakedPlayerCount < 1) return "no_posted_entries";
     return null;
   })();
 
   const feltIdleLabel = (() => {
-    if (roomPhase === "waiting") {
-      return isBanker
-        ? "OPEN ENTRIES TO START THIS ROUND"
-        : "WAITING FOR BANKER TO OPEN ENTRIES";
+    if (roomPhase === "rolling" && !round) {
+      return "SYNCING ROUND…";
     }
-    if (roomPhase === "entry_phase") {
+    if (
+      roomPhase === "waiting" ||
+      roomPhase === "entry_phase" ||
+      roomPhase === "active"
+    ) {
       if (isBanker) {
         return stakedPlayerCount > 0
-          ? "BEGIN ROLLS WHEN READY"
+          ? "START ROUND WHEN READY"
           : "WAITING FOR PLAYERS TO POST ENTRIES";
       }
-      if (isPlayer && myEntrySc > 0) return "ENTRY LOCKED - WAITING FOR BANKER";
+      if (isPlayer && myEntrySc > 0) {
+        return "ENTRY POSTED — WAITING FOR BANKER TO START";
+      }
       if (isPlayer) return "POST YOUR ENTRY TO JOIN THIS ROUND";
-      return "ENTRY WINDOW IS OPEN";
+      return "WAITING FOR TABLE";
     }
     return "AWAITING THE NEXT THROW";
   })();
@@ -1117,9 +1180,7 @@ export default function CeloRoomPage() {
       roundStatus: round?.status,
       playersSnapshotReady,
       canStartRound,
-      canBeginRolls,
       startRoundDisabledReason,
-      beginRollsDisabledReason,
     });
   }, [
     roomId,
@@ -1130,9 +1191,7 @@ export default function CeloRoomPage() {
     round?.status,
     playersSnapshotReady,
     canStartRound,
-    canBeginRolls,
     startRoundDisabledReason,
-    beginRollsDisabledReason,
   ]);
 
   useEffect(() => {
@@ -1235,10 +1294,11 @@ export default function CeloRoomPage() {
     }
     setStartRoundError(null);
     if (CELO_DEBUG) {
-      console.log("[C-Lo room] Open entry phase", {
+      console.log("[C-Lo room] Start round", {
         roomId: room.id,
         banker: room.banker_id,
         seatedPlayerCount,
+        stakedPlayerCount,
       });
     }
     setRollingAction(true);
@@ -1248,26 +1308,37 @@ export default function CeloRoomPage() {
         body: JSON.stringify({ room_id: room.id }),
       });
       const text = await res.text();
-      let j: { error?: string; room?: unknown } = {};
+      let j: { error?: string; room?: unknown; round?: unknown } = {};
       try {
-        j = text ? (JSON.parse(text) as { error?: string; room?: unknown }) : {};
+        j = text
+          ? (JSON.parse(text) as { error?: string; room?: unknown; round?: unknown })
+          : {};
       } catch {
         setStartRoundError("Invalid response from server");
         if (CELO_DEBUG) console.error("[C-Lo room] Start round bad JSON", text);
         return;
       }
-      if (CELO_DEBUG) console.log("[C-Lo room] Start round response", res.status, j);
+      console.log("[C-Lo] start round response", { status: res.status, body: j });
       if (!res.ok) {
         if (res.status === 401) {
           setStartRoundError("Session expired. Please log in again.");
           return;
         }
-        setStartRoundError(j.error ?? "Could not open entry phase");
+        setStartRoundError(j.error ?? "Could not start round");
         return;
       }
-      if (j.room && String((j.room as { id?: string }).id ?? "") === room.id) {
+      const rid = String((j.room as { id?: string } | undefined)?.id ?? "");
+      if (rid === room.id) {
+        bumpOptimisticAsRealtime();
         commitCeloAggregateMerge(
-          { room: j.room as Record<string, unknown>, updated_at: new Date().toISOString() },
+          {
+            room: j.room as Record<string, unknown>,
+            currentRound:
+              j.round != null
+                ? (j.round as Record<string, unknown>)
+                : undefined,
+            updated_at: new Date().toISOString(),
+          },
           "join"
         );
       }
@@ -1276,53 +1347,6 @@ export default function CeloRoomPage() {
       const msg = e instanceof Error ? e.message : "Start round failed";
       setStartRoundError(msg);
       if (CELO_DEBUG) console.error("[C-Lo room] Start round exception", e);
-    } finally {
-      setRollingAction(false);
-    }
-  }
-
-  async function handleBeginRolls() {
-    if (!room || !canBeginRolls) return;
-    if (!supabase) {
-      setBeginRollsError("Not connected. Please refresh and try again.");
-      return;
-    }
-    setBeginRollsError(null);
-    setRollingAction(true);
-    try {
-      const res = await fetchCeloApi(supabase, "/api/celo/round/begin-rolls", {
-        method: "POST",
-        body: JSON.stringify({ room_id: room.id }),
-      });
-      const text = await res.text();
-      let j: { error?: string; round?: unknown; room?: unknown } = {};
-      try {
-        j = text ? (JSON.parse(text) as typeof j) : {};
-      } catch {
-        setBeginRollsError("Invalid response from server");
-        return;
-      }
-      if (!res.ok) {
-        if (res.status === 401) {
-          setBeginRollsError("Session expired. Please log in again.");
-          return;
-        }
-        setBeginRollsError(j.error ?? "Could not begin rolls");
-        return;
-      }
-      if (j.round) {
-        commitCeloAggregateMerge(
-          {
-            currentRound: j.round as unknown as Record<string, unknown>,
-            room: j.room as Record<string, unknown> | undefined,
-            updated_at: new Date().toISOString(),
-          },
-          "join"
-        );
-      }
-      await fetchAll();
-    } catch (e) {
-      setBeginRollsError(e instanceof Error ? e.message : "Begin rolls failed");
     } finally {
       setRollingAction(false);
     }
@@ -1994,56 +2018,36 @@ export default function CeloRoomPage() {
                         </button>
                       </div>
                     )}
-                    {(showOpenEntry || showBeginRolls) && isBanker && !canRoll && (
+                    {showStartRound && isBanker && !canRoll && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
-                        {showOpenEntry && (
-                          <>
-                            <button
-                              type="button"
-                              disabled={!canStartRound}
-                              onClick={() => void handleStart()}
-                              className={`w-full min-h-[48px] rounded-xl px-4 text-sm font-bold ${dm.className} transition-all ${
-                                canStartRound
-                                  ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] text-black shadow-[0_0_20px_rgba(245,200,66,0.4)] hover:scale-[1.02]"
-                                  : "cursor-not-allowed border border-purple-800/40 bg-purple-950/40 text-purple-200/80"
-                              }`}
-                            >
-                              {canStartRound
-                                ? "Start round (open entries)"
-                                : "Start round"}
-                            </button>
-                            {seatedPlayerCount < 1 && (
-                              <p className="px-1 text-center text-xs text-zinc-500">
-                                Waiting for players to join...
-                              </p>
-                            )}
-                            {startRoundError && (
-                              <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>
-                            )}
-                          </>
+                        <button
+                          type="button"
+                          disabled={!canStartRound}
+                          onClick={() => void handleStart()}
+                          className={`w-full min-h-[48px] rounded-xl px-4 text-sm font-bold ${dm.className} transition-all ${
+                            canStartRound
+                              ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] text-black shadow-[0_0_20px_rgba(245,200,66,0.4)] hover:scale-[1.02]"
+                              : "cursor-not-allowed border border-purple-800/40 bg-purple-950/40 text-purple-200/80"
+                          }`}
+                        >
+                          {canStartRound
+                            ? "Start round"
+                            : stakedPlayerCount < 1
+                              ? "Waiting for players to post entries…"
+                              : "Start round"}
+                        </button>
+                        {stakedPlayerCount < 1 && seatedPlayerCount >= 1 && (
+                          <p className="px-1 text-center text-xs text-zinc-500">
+                            Players must post entries before the round can start.
+                          </p>
                         )}
-                        {showBeginRolls && (
-                          <>
-                            <button
-                              type="button"
-                              disabled={!canBeginRolls}
-                              onClick={() => void handleBeginRolls()}
-                              className={`w-full min-h-[48px] rounded-xl px-4 text-sm font-bold ${dm.className} transition-all ${
-                                canBeginRolls
-                                  ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] text-black shadow-[0_0_20px_rgba(245,200,66,0.4)] hover:scale-[1.02]"
-                                  : "cursor-not-allowed border border-purple-800/40 bg-purple-950/40 text-purple-200/80"
-                              }`}
-                            >
-                              {canBeginRolls
-                                ? "Begin rolls"
-                                : stakedPlayerCount < 1
-                                  ? "Waiting for players to post entries…"
-                                  : "Begin rolls"}
-                            </button>
-                            {beginRollsError && (
-                              <p className="px-1 text-center text-xs text-red-300">{beginRollsError}</p>
-                            )}
-                          </>
+                        {seatedPlayerCount < 1 && (
+                          <p className="px-1 text-center text-xs text-zinc-500">
+                            Waiting for players to join…
+                          </p>
+                        )}
+                        {startRoundError && (
+                          <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>
                         )}
                       </div>
                     )}
@@ -2051,19 +2055,12 @@ export default function CeloRoomPage() {
                       !inProgress &&
                       isPlayer &&
                       myEntrySc > 0 &&
-                      String(room.status) === "entry_phase" && (
+                      (String(room.status) === "entry_phase" ||
+                        String(room.status) === "waiting" ||
+                        String(room.status) === "active") && (
                         <p className="text-center text-sm text-amber-200/90">
                           Your entry: {myEntrySc.toLocaleString()} GPC posted. Waiting for the banker
-                          to begin rolls…
-                        </p>
-                      )}
-                    {room &&
-                      !inProgress &&
-                      isPlayer &&
-                      myEntrySc === 0 &&
-                      String(room.status) === "waiting" && (
-                        <p className="text-center text-sm text-zinc-400">
-                          You have a seat. Waiting for the banker to open the entry window…
+                          to start the round…
                         </p>
                       )}
                     {room &&
@@ -2097,7 +2094,9 @@ export default function CeloRoomPage() {
                       isPlayer &&
                       myEntrySc === 0 &&
                       !isSpec &&
-                      String(room.status) === "entry_phase" && (
+                      (String(room.status) === "entry_phase" ||
+                        String(room.status) === "waiting" ||
+                        String(room.status) === "active") && (
                         <div className="mx-auto flex w-full max-w-md flex-col gap-2">
                           {joinHint && (
                             <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>

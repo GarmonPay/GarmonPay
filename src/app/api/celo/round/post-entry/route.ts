@@ -47,9 +47,10 @@ export async function POST(request: Request) {
     min_bet_cents: number | null;
     banker_id: string | null;
   };
-  if (String(room.status) !== "entry_phase") {
+  const rs = String(room.status);
+  if (rs !== "entry_phase" && rs !== "waiting") {
     return NextResponse.json(
-      { error: "Entries can only be posted during the entry phase" },
+      { error: "Entries can only be posted while the table is waiting for the round to start" },
       { status: 400 }
     );
   }

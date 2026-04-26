@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   const { data: roomAfter, error: upErr } = await adminClient
     .from("celo_rooms")
     .update({
-      status: "active",
+      status: "rolling",
       last_activity: new Date().toISOString(),
     })
     .eq("id", roomId)
