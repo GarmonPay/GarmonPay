@@ -898,11 +898,18 @@ export default function CeloRoomPage() {
   const myRow = players.find(
     (p) => me != null && normalizeCeloUserId(p.user_id) === normalizeCeloUserId(me)
   );
+  /**
+   * Some realtime room patches may briefly omit banker_id, so derive banker user id
+   * from seated rows as a fallback to keep banker gating/status correct.
+   */
+  const bankerUserIdResolved =
+    room?.banker_id ??
+    players.find((p) => String(p.role ?? "").toLowerCase() === "banker")?.user_id ??
+    null;
   const isBanker =
     myRow?.role === "banker" ||
     (me != null &&
-      room != null &&
-      normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id));
+      normalizeCeloUserId(me) === normalizeCeloUserId(bankerUserIdResolved));
   const isPlayer = myRow?.role === "player";
   const isSpec = myRow?.role === "spectator";
   const minE = room ? minVal(room) : 1000;
@@ -964,8 +971,8 @@ export default function CeloRoomPage() {
       ? [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])]
       : CELO_IDLE_DICE;
   const stakedPlayerCount = useMemo(
-    () => countStakedEntryPlayers(players, room?.banker_id ?? null),
-    [players, room?.banker_id]
+    () => countStakedEntryPlayers(players, bankerUserIdResolved),
+    [players, bankerUserIdResolved]
   );
   const seatedPlayerCount = useMemo(
     () => countSeatedCeloPlayerRoles(players),
