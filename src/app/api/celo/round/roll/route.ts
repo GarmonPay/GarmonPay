@@ -451,6 +451,7 @@ async function handleBankerRoll(
         banker_celo_at: roll.isCelo ? now : room.banker_celo_at,
         total_rounds: (room.total_rounds ?? 0) + 1,
         last_activity: now,
+        status: "waiting",
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
@@ -592,6 +593,7 @@ async function handleBankerRoll(
         last_round_was_celo: false,
         total_rounds: (room.total_rounds ?? 0) + 1,
         last_activity: now,
+        status: "waiting",
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
@@ -849,6 +851,7 @@ async function handlePlayerRoll(
           .update({
             total_rounds: (room.total_rounds ?? 0) + 1,
             last_activity: now,
+            status: "waiting",
           })
           .eq("id", room.id);
         await runCeloSideBetSettlementAfterRoundComplete(

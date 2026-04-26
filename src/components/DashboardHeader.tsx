@@ -26,6 +26,10 @@ function HeaderNavIcons({ className }: { className?: string }) {
 }
 
 export function DashboardHeader() {
+  const pathname = usePathname() ?? "";
+  const compactWalletOnGameRoom =
+    pathname.startsWith("/dashboard/games/celo/") && pathname !== "/dashboard/games/celo";
+
   return (
     <header className="w-full shrink-0 border-b shadow-soft glass-bar border-white/[0.06]">
       {/* Mobile / small: tight rows — title + icons, then wallet (see DashboardCoinBalances) */}
@@ -41,7 +45,10 @@ export function DashboardHeader() {
           </Link>
               <HeaderNavIcons />
             </div>
-            <DashboardCoinBalances compact />
+            <DashboardCoinBalances
+              compact
+              hideCompactActionsOnMobile={compactWalletOnGameRoom}
+            />
           </div>
         </div>
       </div>
@@ -61,7 +68,10 @@ export function DashboardHeader() {
           <div className="hidden min-w-0 flex-1 tablet:block" aria-hidden />
 
           <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 sm:gap-3">
-            <DashboardCoinBalances compact />
+            <DashboardCoinBalances
+              compact
+              hideCompactActionsOnMobile={compactWalletOnGameRoom}
+            />
             <HeaderNavIcons />
           </div>
         </div>

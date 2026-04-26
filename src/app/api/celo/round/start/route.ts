@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import {
-  CELO_ROOM_PLAYERS_USER_EMBED,
-  effectiveStakeSc,
-  isStakedNonBankerForStartRound,
-  normalizeCeloUserId,
-} from "@/lib/celo-player-state";
+import { normalizeCeloUserId } from "@/lib/celo-player-state";
 
+/**
+ * Banker opens the entry phase immediately (players may join/post after).
+ * Round row is created later via POST /api/celo/round/begin-rolls.
+ */
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
   if (!clients) {
@@ -36,11 +35,17 @@ export async function POST(request: Request) {
   if (rErr || !roomRaw) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
-  const room = roomRaw as { banker_id: string; id: string; total_rounds?: number };
+  const room = roomRaw as { banker_id: string; id: string; status: string };
   if (normalizeCeloUserId(room.banker_id) !== normalizeCeloUserId(userId)) {
     return NextResponse.json(
       { error: "Only the banker can start a round" },
       { status: 403 }
+    );
+  }
+  if (String(room.status) !== "waiting") {
+    return NextResponse.json(
+      { error: "The room is not ready to open entries (must be waiting)" },
+      { status: 400 }
     );
   }
   const { data: active } = await adminClient
@@ -55,54 +60,20 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const { data: players } = await adminClient
-    .from("celo_room_players")
-    .select(`user_id, role, entry_sc, bet_cents,${CELO_ROOM_PLAYERS_USER_EMBED}`)
-    .eq("room_id", roomId);
-  const staked = (players ?? []).filter((p) =>
-    isStakedNonBankerForStartRound(
-      p as { role?: string; user_id?: string; entry_sc?: number; bet_cents?: number },
-      room.banker_id ?? null
-    )
-  );
-  if (staked.length < 1) {
-    return NextResponse.json(
-      { error: "At least one player with an entry is required" },
-      { status: 400 }
-    );
-  }
-  const prizePool = staked.reduce((s, p) => s + effectiveStakeSc(p), 0);
-  const platformFee = Math.floor(prizePool * 0.1);
-  const { count: prev } = await adminClient
-    .from("celo_rounds")
-    .select("id", { count: "exact", head: true })
-    .eq("room_id", roomId);
-  const roundNumber = (prev ?? 0) + 1;
-  const { data: round, error: insErr } = await adminClient
-    .from("celo_rounds")
-    .insert({
-      room_id: roomId,
-      round_number: roundNumber,
-      banker_id: userId,
-      status: "banker_rolling",
-      prize_pool_sc: prizePool,
-      platform_fee_sc: platformFee,
-      bank_covered: false,
+  const { data: roomAfter, error: upErr } = await adminClient
+    .from("celo_rooms")
+    .update({
+      status: "entry_phase",
+      last_activity: new Date().toISOString(),
     })
+    .eq("id", roomId)
     .select("*")
     .single();
-  if (insErr || !round) {
+  if (upErr || !roomAfter) {
     return NextResponse.json(
-      { error: insErr?.message ?? "Could not start round" },
+      { error: upErr?.message ?? "Could not update room" },
       { status: 500 }
     );
   }
-  await adminClient
-    .from("celo_rooms")
-    .update({
-      status: "active",
-      last_activity: new Date().toISOString(),
-    })
-    .eq("id", roomId);
-  return NextResponse.json({ round });
+  return NextResponse.json({ room: roomAfter });
 }

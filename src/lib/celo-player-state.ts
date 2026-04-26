@@ -110,6 +110,15 @@ export function countStakedEntryPlayers(
   return players.filter((p) => isStakedNonBankerForStartRound(p, bankerUserId)).length;
 }
 
+/** Seated `player` rows (excludes spectators); used to enable “Start round” before any entry is posted. */
+export function countSeatedCeloPlayerRoles(
+  players: { role: string }[] | null | undefined
+): number {
+  if (!players?.length) return 0;
+  return players.filter((p) => String(p.role ?? "").toLowerCase() === "player")
+    .length;
+}
+
 export function mergeCeloPlayerRealtime(
   previous: CeloEntryPlayerFields[],
   payload: {

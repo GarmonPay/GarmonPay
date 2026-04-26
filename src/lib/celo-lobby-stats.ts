@@ -6,6 +6,7 @@
 /** Open / joinable public-room statuses only (excludes completed, cancelled, etc.). */
 export const CELO_LOBBY_LIVE_ROOM_STATUSES = new Set([
   "waiting",
+  "entry_phase",
   "active",
   "rolling",
   "open",
@@ -14,6 +15,7 @@ export const CELO_LOBBY_LIVE_ROOM_STATUSES = new Set([
 /** Use with `.in("status", ...)` on `celo_rooms` so cancelled/completed rows never load in the lobby. */
 export const CELO_LOBBY_LIST_STATUSES: string[] = [
   "waiting",
+  "entry_phase",
   "active",
   "rolling",
   "open",

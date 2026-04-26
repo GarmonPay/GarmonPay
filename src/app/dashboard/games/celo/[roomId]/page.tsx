@@ -23,6 +23,7 @@ import {
   CELO_CHAT_SELECT_WITH_USER,
   CELO_ROOM_PLAYERS_USER_EMBED,
   CELO_USER_PROFILE_FIELDS,
+  countSeatedCeloPlayerRoles,
   countStakedEntryPlayers,
   normalizeCeloPlayerRow,
   normalizeCeloUserId,
@@ -163,6 +164,7 @@ export default function CeloRoomPage() {
   const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
   const [startRoundError, setStartRoundError] = useState<string | null>(null);
+  const [beginRollsError, setBeginRollsError] = useState<string | null>(null);
   const [uiReady, setUiReady] = useState(false);
   /** At least one full `fetchAll` has applied; avoids stale copy before players load. */
   const [playersSnapshotReady, setPlayersSnapshotReady] = useState(false);
@@ -332,10 +334,33 @@ export default function CeloRoomPage() {
       setRoomFetchError(roomRes.error.message);
     }
 
-    const playerRows: Player[] = ((playersRes.data ?? []) as unknown[]).map(
+    let playerRows: Player[] = ((playersRes.data ?? []) as unknown[]).map(
       (row) => normalizeCeloPlayerRow(row) as Player
     );
     if (playersRes.error && CELO_DEBUG) console.warn("[C-Lo room] players", playersRes.error);
+
+    if (roomRes.data && (playersRes.error != null || playerRows.length === 0)) {
+      const res = await fetchCeloApi(
+        supabase,
+        `/api/celo/room/players?room_id=${encodeURIComponent(roomId)}`,
+        { method: "GET" }
+      );
+      if (isStaleFetch()) {
+        console.log("[C-Lo] skipping stale fetch");
+        return;
+      }
+      if (res.ok) {
+        const body = (await res.json()) as { players?: unknown[] };
+        playerRows = (body.players ?? []).map(
+          (row) => normalizeCeloPlayerRow(row) as Player
+        );
+        if (CELO_DEBUG) {
+          console.log("[C-Lo room] players (server list)", playerRows.length);
+        }
+      } else if (CELO_DEBUG) {
+        console.warn("[C-Lo room] players server list failed", res.status);
+      }
+    }
 
     const ar = (roundsRes.data as Round[] | null) ?? [];
     const activeRound = ar[0] ?? null;
@@ -651,78 +676,12 @@ export default function CeloRoomPage() {
         (payload) => {
           lastRealtimeUpdateRef.current = Date.now();
           if (CELO_DEBUG) {
-            console.log("[RT] player change", payload);
-          }
-          const et = (payload as { eventType: string }).eventType;
-          const rowNew = (payload as { new: Record<string, unknown> | null }).new;
-          const rowOld = (payload as { old: Record<string, unknown> | null }).old;
-
-          const prev = playersRef.current;
-          let nextPlayers = prev;
-
-          if (et === "INSERT" && rowNew) {
-            if (String(rowNew.room_id ?? "") === roomId) {
-              const row = mergePlayerProfile(
-                undefined,
-                normalizeCeloPlayerRow(rowNew) as Player
-              );
-              const without = prev.filter(
-                (p) => p.id !== row.id && p.user_id !== row.user_id
-              );
-              nextPlayers = sortCeloPlayersBySeat([...without, row]);
-            }
-          } else if (et === "UPDATE" && rowNew) {
-            if (String(rowNew.room_id ?? "") === roomId) {
-              const uid = String(rowNew.user_id ?? "");
-              const id = String(rowNew.id ?? "");
-              const prevRow = prev.find(
-                (p) => (id && p.id === id) || (uid && p.user_id === uid)
-              );
-              const n = { ...rowNew } as Record<string, unknown>;
-              if (!("entry_sc" in n) && prevRow) {
-                n.entry_sc = prevRow.entry_sc;
-              }
-              if (!("bet_cents" in n) && prevRow) {
-                n.bet_cents = prevRow.bet_cents;
-              }
-              const row = mergePlayerProfile(
-                prevRow,
-                normalizeCeloPlayerRow(n) as Player
-              );
-              const has = prev.some(
-                (p) => p.user_id === row.user_id || p.id === row.id
-              );
-              nextPlayers = sortCeloPlayersBySeat(
-                has
-                  ? prev.map((p) =>
-                      p.user_id === row.user_id || p.id === row.id
-                        ? mergePlayerProfile(p, row)
-                        : p
-                    )
-                  : [...prev, row]
-              );
-            }
-          } else if (et === "DELETE" && rowOld) {
-            const oldId = String(rowOld.id ?? "");
-            const oldUid = String(rowOld.user_id ?? "");
-            nextPlayers = prev.filter(
-              (p) =>
-                !(
-                  (oldId && p.id === oldId) ||
-                  (oldUid && p.user_id === oldUid)
-                )
+            console.log(
+              "[RT] celo_room_players",
+              (payload as { eventType?: string }).eventType,
+              payload
             );
           }
-
-          commitCeloAggregateMerge(
-            {
-              players: nextPlayers,
-              updated_at: new Date().toISOString(),
-            },
-            "realtime",
-            { playersSnapshot: true },
-            prev
-          );
           setPlayersSnapshotReady(true);
           void refreshRoomPlayers(true);
           void fetchAll();
@@ -1008,6 +967,10 @@ export default function CeloRoomPage() {
     () => countStakedEntryPlayers(players, room?.banker_id ?? null),
     [players, room?.banker_id]
   );
+  const seatedPlayerCount = useMemo(
+    () => countSeatedCeloPlayerRoles(players),
+    [players]
+  );
 
   const CELO_TUMBLE: { variant: TumbleVariant; durationSec: number }[] = [
     { variant: "a", durationSec: 1.65 },
@@ -1015,14 +978,15 @@ export default function CeloRoomPage() {
     { variant: "c", durationSec: 1.95 },
   ];
 
-  /** Banker waiting to start: re-pull players so we do not miss entry rows if realtime lagged. */
+  /** Banker in waiting: re-pull seats if realtime lagged. */
   useEffect(() => {
-    if (!supabase || !roomId || !room || !isBanker || inProgress || stakedPlayerCount >= 1) return;
+    if (!supabase || !roomId || !room || !isBanker || inProgress) return;
+    if (String(room.status) !== "waiting" || seatedPlayerCount >= 1) return;
     const t = window.setInterval(() => {
-      void refreshRoomPlayers();
+      void refreshRoomPlayers(true);
     }, 3500);
     return () => window.clearInterval(t);
-  }, [supabase, roomId, room, isBanker, inProgress, stakedPlayerCount, refreshRoomPlayers]);
+  }, [supabase, roomId, room, isBanker, inProgress, seatedPlayerCount, refreshRoomPlayers]);
 
   const spectators = useMemo(
     () => players.filter((p) => p.role === "spectator").length,
@@ -1038,6 +1002,8 @@ export default function CeloRoomPage() {
     [players]
   );
 
+  const myEntrySc = Math.floor(Number(myRow?.entry_sc ?? 0));
+
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
@@ -1049,14 +1015,27 @@ export default function CeloRoomPage() {
     if (isBanker && !inProgress && !playersSnapshotReady) {
       return "Syncing table…";
     }
-    if (isBanker && stakedPlayerCount < 1) {
-      return "Need at least one player with a posted entry to start";
+    const rts = String(room.status ?? "");
+    if (rts === "entry_phase" && isBanker) {
+      return stakedPlayerCount < 1
+        ? "Waiting for players to post entries…"
+        : "When ready, begin rolls to open the felt.";
     }
-    if (isBanker) return "Start a round when ready";
+    if (rts === "waiting" && isBanker && seatedPlayerCount < 1) {
+      return "No players seated yet. You can open entries now.";
+    }
+    if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc === 0) {
+      return "Post your entry to join this round’s pot.";
+    }
+    if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc > 0) {
+      return "Entry posted. Waiting for the banker to begin rolls…";
+    }
+    if (rts === "waiting" && !isBanker) {
+      return "Waiting for the banker to open the entry window…";
+    }
+    if (isBanker) return "Open the entry window when a player is seated.";
     return "Waiting for banker";
   })();
-
-  const myEntrySc = Math.floor(Number(myRow?.entry_sc ?? 0));
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -1080,36 +1059,54 @@ export default function CeloRoomPage() {
     myEntrySc > 0
   );
   const canRoll = canRollBanker || canRollPlayer;
-  const mustStart = !!(room && isBanker && !inProgress);
-  const canStartRound = mustStart && (stakedPlayerCount >= 1) && !rollingAction;
+  const roomPhase = String(room?.status ?? "");
+  const showOpenEntry =
+    !!room && isBanker && !inProgress && roomPhase === "waiting";
+  const showBeginRolls =
+    !!room && isBanker && !inProgress && roomPhase === "entry_phase";
+  const canStartRound =
+    showOpenEntry && !rollingAction;
+  const canBeginRolls =
+    showBeginRolls && stakedPlayerCount >= 1 && !rollingAction;
   const startRoundDisabledReason = (() => {
-    if (!mustStart || !isBanker) return null;
+    if (!showOpenEntry) return null;
     if (rollingAction) return "round_action_in_progress";
-    if (stakedPlayerCount < 1) return "no_staked_non_banker_player";
+    return null;
+  })();
+  const beginRollsDisabledReason = (() => {
+    if (!showBeginRolls) return null;
+    if (rollingAction) return "round_action_in_progress";
+    if (stakedPlayerCount < 1) return "no_posted_entries";
     return null;
   })();
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
-    console.log("[C-Lo room] start eligibility (dev)", {
+    console.log("[C-Lo room] start entry / begin (dev)", {
       roomId,
       players: players.length,
+      seatedPlayerCount,
       stakedPlayerCount,
       roomStatus: room?.status,
       roundStatus: round?.status,
       playersSnapshotReady,
       canStartRound,
+      canBeginRolls,
       startRoundDisabledReason,
+      beginRollsDisabledReason,
     });
   }, [
     roomId,
     players.length,
+    seatedPlayerCount,
     stakedPlayerCount,
     room?.status,
     round?.status,
     playersSnapshotReady,
     canStartRound,
+    canBeginRolls,
     startRoundDisabledReason,
+    beginRollsDisabledReason,
   ]);
 
   useEffect(() => {
@@ -1212,7 +1209,11 @@ export default function CeloRoomPage() {
     }
     setStartRoundError(null);
     if (CELO_DEBUG) {
-      console.log("[C-Lo room] Start round click", { roomId: room.id, banker: room.banker_id, stakedPlayerCount });
+      console.log("[C-Lo room] Open entry phase", {
+        roomId: room.id,
+        banker: room.banker_id,
+        seatedPlayerCount,
+      });
     }
     setRollingAction(true);
     try {
@@ -1221,9 +1222,9 @@ export default function CeloRoomPage() {
         body: JSON.stringify({ room_id: room.id }),
       });
       const text = await res.text();
-      let j: { error?: string; round?: unknown } = {};
+      let j: { error?: string; room?: unknown } = {};
       try {
-        j = text ? (JSON.parse(text) as { error?: string }) : {};
+        j = text ? (JSON.parse(text) as { error?: string; room?: unknown }) : {};
       } catch {
         setStartRoundError("Invalid response from server");
         if (CELO_DEBUG) console.error("[C-Lo room] Start round bad JSON", text);
@@ -1235,14 +1236,67 @@ export default function CeloRoomPage() {
           setStartRoundError("Session expired. Please log in again.");
           return;
         }
-        setStartRoundError(j.error ?? "Could not start round");
+        setStartRoundError(j.error ?? "Could not open entry phase");
         return;
+      }
+      if (j.room && String((j.room as { id?: string }).id ?? "") === room.id) {
+        commitCeloAggregateMerge(
+          { room: j.room as Record<string, unknown>, updated_at: new Date().toISOString() },
+          "join"
+        );
       }
       await fetchAll();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Start round failed";
       setStartRoundError(msg);
       if (CELO_DEBUG) console.error("[C-Lo room] Start round exception", e);
+    } finally {
+      setRollingAction(false);
+    }
+  }
+
+  async function handleBeginRolls() {
+    if (!room || !canBeginRolls) return;
+    if (!supabase) {
+      setBeginRollsError("Not connected. Please refresh and try again.");
+      return;
+    }
+    setBeginRollsError(null);
+    setRollingAction(true);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/round/begin-rolls", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id }),
+      });
+      const text = await res.text();
+      let j: { error?: string; round?: unknown; room?: unknown } = {};
+      try {
+        j = text ? (JSON.parse(text) as typeof j) : {};
+      } catch {
+        setBeginRollsError("Invalid response from server");
+        return;
+      }
+      if (!res.ok) {
+        if (res.status === 401) {
+          setBeginRollsError("Session expired. Please log in again.");
+          return;
+        }
+        setBeginRollsError(j.error ?? "Could not begin rolls");
+        return;
+      }
+      if (j.round) {
+        commitCeloAggregateMerge(
+          {
+            currentRound: j.round as unknown as Record<string, unknown>,
+            room: j.room as Record<string, unknown> | undefined,
+            updated_at: new Date().toISOString(),
+          },
+          "join"
+        );
+      }
+      await fetchAll();
+    } catch (e) {
+      setBeginRollsError(e instanceof Error ? e.message : "Begin rolls failed");
     } finally {
       setRollingAction(false);
     }
@@ -1448,7 +1502,6 @@ export default function CeloRoomPage() {
       body: JSON.stringify({
         room_id: room.id,
         role: "player",
-        entry_sc: entryAmount,
       }),
     });
     let j: {
@@ -1551,11 +1604,78 @@ export default function CeloRoomPage() {
     }
   }
 
-  const feltW = "min(100%, 32rem)";
-  const feltH = "clamp(13.5rem, 34vw, 20rem)";
+  async function handlePostEntry() {
+    if (!room || !supabase || !me || joinInFlightRef.current) return;
+    if (String(room.status) !== "entry_phase" || myEntrySc > 0 || !isPlayer) return;
+    if (myBalance > 0 && entryAmount > myBalance) {
+      setJoinHint("Insufficient balance for this entry.");
+      return;
+    }
+    setJoinHint(null);
+    joinInFlightRef.current = true;
+    setJoinSubmitting(true);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/round/post-entry", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id, entry_sc: entryAmount }),
+      });
+      let j: { error?: string; player?: Record<string, unknown>; room?: Record<string, unknown> };
+      try {
+        j = (await res.json()) as typeof j;
+      } catch {
+        setJoinHint("Invalid response from server.");
+        return;
+      }
+      if (!res.ok) {
+        if (res.status === 401) {
+          setJoinHint("Session expired. Please sign in again.");
+          return;
+        }
+        setJoinHint(j.error ?? "Could not post entry");
+        return;
+      }
+      if (j.player) {
+        const row = mergePlayerProfile(
+          playersRef.current.find((p) => p.user_id === String((j.player as { user_id?: string }).user_id)),
+          normalizeCeloPlayerRow(j.player) as Player
+        );
+        const incomingPlayers = sortCeloPlayersBySeat([
+          ...playersRef.current.filter((p) => p.user_id !== row.user_id),
+          row,
+        ]);
+        const incomingRoom =
+          j.room && String((j.room as { id?: string }).id ?? "") === room.id
+            ? (j.room as Record<string, unknown>)
+            : undefined;
+        commitCeloAggregateMerge(
+          { players: incomingPlayers, room: incomingRoom, updated_at: new Date().toISOString() },
+          "join",
+          { playersSnapshot: true }
+        );
+      }
+      const { data: u } = await supabase
+        .from("users")
+        .select("gpay_coins")
+        .eq("id", me)
+        .maybeSingle();
+      setMyBalance(
+        Math.max(0, Math.floor((u as { gpay_coins?: number } | null)?.gpay_coins ?? 0))
+      );
+      bumpOptimisticAsRealtime();
+      await fetchAll();
+    } catch (e) {
+      setJoinHint(e instanceof Error ? e.message : "Could not post entry");
+    } finally {
+      joinInFlightRef.current = false;
+      setJoinSubmitting(false);
+    }
+  }
+
+  const feltW = "min(100%, 28rem)";
+  const feltH = "min(100%, max(13.5rem, 75vw))";
 
   const gamePanelClass =
-    "relative flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col self-center overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-b from-[#0f0a1c] via-[#0a0514] to-[#040208] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.12),0_4px_40px_rgba(120,50,200,0.12),0_24px_80px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5 md:p-6 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:opacity-40 before:shadow-[inset_0_0_60px_rgba(245,200,66,0.06),inset_0_-40px_80px_rgba(0,0,0,0.45)]";
+    "relative flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col self-center overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-b from-[#0f0a1c] via-[#0a0514] to-[#040208] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.12),0_4px_40px_rgba(120,50,200,0.12),0_24px_80px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5 md:p-6 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:opacity-40 before:shadow-[inset_0_0_60px_rgba(245,200,66,0.06),inset_0_-40px_80px_rgba(0,0,0,0.45)]";
   const rightRailClass =
     "hidden min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden md:flex md:max-w-[20rem] md:shrink-0 md:self-stretch lg:max-w-[22rem]";
 
@@ -1577,9 +1697,9 @@ export default function CeloRoomPage() {
           <div className="flex min-h-10 min-w-0 items-center gap-2">
             <Link
               href="/dashboard/games/celo"
-              className="shrink-0 min-h-touch rounded-lg px-1.5 text-base text-amber-300/90 transition hover:text-amber-200 sm:px-2.5 sm:text-lg"
+              className="shrink-0 min-h-touch rounded-lg px-2 text-sm text-amber-300/90 transition hover:text-amber-200 sm:text-base"
             >
-              ←
+              Back
             </Link>
             <span
               className={`min-w-0 flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
@@ -1637,9 +1757,22 @@ export default function CeloRoomPage() {
           )}
           {room && playersAtTable.length > 0 ? (
             <div className="mt-2 border-t border-white/5 pt-2">
+              <div className="flex items-center justify-between gap-2">
               <p className="font-mono text-[9px] uppercase tracking-widest text-zinc-500">
                 At the table
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void refreshRoomPlayers(true);
+                  void fetchAll();
+                }}
+                className="shrink-0 rounded-md border border-zinc-600/50 px-2 py-0.5 font-mono text-[9px] text-zinc-400 transition hover:border-amber-500/40 hover:text-amber-200/90"
+                title="Refresh seat list"
+              >
+                Refresh
+              </button>
+              </div>
               <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-300 sm:text-[11px]">
                 {playersAtTable.map((p) => {
                   const isRoomBanker =
@@ -1682,7 +1815,8 @@ export default function CeloRoomPage() {
         >
           <main className="relative z-0 order-1 flex min-w-0 flex-col md:order-none">
             <div className={gamePanelClass}>
-              <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-center border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
+              <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-1 sm:px-2">
+              <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-stretch border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
                 <div className="text-left">
                   <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200/60">
                     Prize pool
@@ -1732,12 +1866,11 @@ export default function CeloRoomPage() {
                   aria-hidden
                 />
                 <div
-                  className="relative"
+                  className="relative w-full max-w-[280px] md:max-w-[480px]"
                   style={{
                     width: feltW,
                     height: feltH,
-                    maxWidth: "32rem",
-                    minHeight: "13rem",
+                    minHeight: "12rem",
                     borderRadius: "50%",
                     background:
                       "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
@@ -1794,8 +1927,10 @@ export default function CeloRoomPage() {
                   <RollNameDisplay rollName={rollName} onComplete={() => setRollName(null)} />
                 </div>
                 {showIdleDice && !isRollingFaces && (
-                  <p className="mt-3 max-w-sm px-2 text-center font-mono text-[10px] uppercase tracking-widest text-amber-200/35">
-                    Awaiting the next throw
+                  <p
+                    className={`mt-4 text-center text-sm tracking-widest text-[#f5c842]/60 my-4 ${cinzel.className}`}
+                  >
+                    AWAITING THE NEXT THROW
                   </p>
                 )}
                 {isRollingFaces && (
@@ -1805,11 +1940,8 @@ export default function CeloRoomPage() {
                 )}
               </div>
 
-              <div className="mt-auto border-t border-white/5 pt-4">
-                <p className="mb-2 text-center font-mono text-[9px] uppercase tracking-widest text-zinc-500">
-                  Action
-                </p>
-                <div className="mx-auto flex w-full max-w-xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4">
+              <div className="mt-auto w-full max-w-3xl border-t border-white/5 pt-4">
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4">
                   <div className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-amber-400/10 bg-black/25 px-3 py-2 sm:max-w-[7.5rem] sm:flex-col sm:items-start sm:py-3">
                     <span className="font-mono text-[9px] uppercase text-zinc-500">Your balance</span>
                     <span className="font-mono text-sm font-bold text-amber-200">{myBalance.toLocaleString()} GPC</span>
@@ -1836,102 +1968,153 @@ export default function CeloRoomPage() {
                         </button>
                       </div>
                     )}
-                    {mustStart && isBanker && !canRoll && (
+                    {(showOpenEntry || showBeginRolls) && isBanker && !canRoll && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
-                        <button
-                          type="button"
-                          disabled={!canStartRound}
-                          onClick={() => void handleStart()}
-                          className={`w-full min-h-[48px] rounded-xl text-sm font-bold ${dm.className} transition ${
-                            canStartRound
-                              ? "text-zinc-950 enabled:hover:opacity-95"
-                              : "cursor-not-allowed text-zinc-500"
-                          }`}
-                          style={
-                            canStartRound
-                              ? {
-                                  background: "linear-gradient(135deg, #F5C842, #B8860B)",
-                                  boxShadow:
-                                    "0 0 0 1px rgba(0,0,0,0.2), 0 10px 28px rgba(245,200,66,0.2)",
-                                }
-                              : {
-                                  background: "linear-gradient(180deg, #3f3f46 0%, #27272a 100%)",
-                                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-                                }
-                          }
-                        >
-                          Start round
-                        </button>
-                        {stakedPlayerCount < 1 && playersSnapshotReady && (
-                          <p className="px-1 text-center text-xs text-amber-100/80">
-                            At least one player must post an entry before you can start.
-                          </p>
+                        {showOpenEntry && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={!canStartRound}
+                              onClick={() => void handleStart()}
+                              className={`w-full min-h-[48px] rounded-xl px-4 text-sm font-bold ${dm.className} transition-all ${
+                                canStartRound
+                                  ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] text-black shadow-[0_0_20px_rgba(245,200,66,0.4)] hover:scale-[1.02]"
+                                  : "cursor-not-allowed border border-purple-800/40 bg-purple-950/40 text-purple-200/80"
+                              }`}
+                            >
+                              {canStartRound
+                                ? "Start round (open entries)"
+                                : "Start round"}
+                            </button>
+                            {seatedPlayerCount < 1 && (
+                              <p className="px-1 text-center text-xs text-zinc-500">
+                                Waiting for players to join...
+                              </p>
+                            )}
+                            {startRoundError && (
+                              <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>
+                            )}
+                          </>
                         )}
-                        {stakedPlayerCount < 1 && !playersSnapshotReady && (
-                          <p className="px-1 text-center text-xs text-zinc-500">Syncing players…</p>
+                        {showBeginRolls && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={!canBeginRolls}
+                              onClick={() => void handleBeginRolls()}
+                              className={`w-full min-h-[48px] rounded-xl px-4 text-sm font-bold ${dm.className} transition-all ${
+                                canBeginRolls
+                                  ? "bg-gradient-to-r from-[#f5c842] to-[#d4a828] text-black shadow-[0_0_20px_rgba(245,200,66,0.4)] hover:scale-[1.02]"
+                                  : "cursor-not-allowed border border-purple-800/40 bg-purple-950/40 text-purple-200/80"
+                              }`}
+                            >
+                              {canBeginRolls
+                                ? "Begin rolls"
+                                : stakedPlayerCount < 1
+                                  ? "Waiting for players to post entries…"
+                                  : "Begin rolls"}
+                            </button>
+                            {beginRollsError && (
+                              <p className="px-1 text-center text-xs text-red-300">{beginRollsError}</p>
+                            )}
+                          </>
                         )}
-                        {startRoundError && <p className="px-1 text-center text-xs text-red-300">{startRoundError}</p>}
                       </div>
                     )}
-                    {room && !inProgress && isPlayer && myEntrySc > 0 && (
-                      <p className="text-center text-sm text-amber-200/90">
-                        You’re seated. Entry: {myEntrySc.toLocaleString()} GPC. Waiting for the round to
-                        start.
-                      </p>
-                    )}
-                    {room && !inProgress && !isBanker && myEntrySc === 0 && !isSpec && (
-                      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
-                        {joinHint && (
-                          <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
-                        )}
-                        <div className="flex flex-wrap justify-center gap-1.5">
-                          {[minE, minE * 2, minE * 5, bankVal(room)]
-                            .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
-                            .sort((a, b) => a - b)
-                            .map((amt) => (
-                              <button
-                                key={amt}
-                                type="button"
-                                onClick={() => {
-                                  setJoinHint(null);
-                                  setEntryAmount(amt);
-                                }}
-                                className="min-h-10 min-w-[3.5rem] rounded-lg border text-xs"
-                                style={{
-                                  borderColor: entryAmount === amt ? "rgba(245,200,66,0.7)" : "rgba(113,59,200,0.3)",
-                                  background: entryAmount === amt ? "rgba(245,200,66,0.12)" : "rgba(0,0,0,0.2)",
-                                  color: entryAmount === amt ? "#F5C842" : "#9CA3AF",
-                                }}
-                              >
-                                {amt}
-                              </button>
-                            ))}
+                    {room &&
+                      !inProgress &&
+                      isPlayer &&
+                      myEntrySc > 0 &&
+                      String(room.status) === "entry_phase" && (
+                        <p className="text-center text-sm text-amber-200/90">
+                          Your entry: {myEntrySc.toLocaleString()} GPC posted. Waiting for the banker
+                          to begin rolls…
+                        </p>
+                      )}
+                    {room &&
+                      !inProgress &&
+                      isPlayer &&
+                      myEntrySc === 0 &&
+                      String(room.status) === "waiting" && (
+                        <p className="text-center text-sm text-zinc-400">
+                          You have a seat. Waiting for the banker to open the entry window…
+                        </p>
+                      )}
+                    {room &&
+                      !inProgress &&
+                      !isBanker &&
+                      !isSpec &&
+                      !myRow &&
+                      (String(room.status) === "waiting" || String(room.status) === "entry_phase") && (
+                        <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+                          {joinHint && (
+                            <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
+                          )}
+                          <button
+                            type="button"
+                            disabled={joinSubmitting}
+                            aria-busy={joinSubmitting}
+                            onClick={() => {
+                              void handleJoin();
+                            }}
+                            className="w-full min-h-[44px] rounded-xl font-bold text-zinc-950 touch-manipulation"
+                            style={{
+                              background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                            }}
+                          >
+                            {joinSubmitting ? "Joining…" : "Take a seat (no charge yet)"}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          disabled={
-                            joinSubmitting || (myBalance > 0 && entryAmount > myBalance)
-                          }
-                          aria-busy={joinSubmitting}
-                          onClick={() => {
-                            void handleJoin();
-                          }}
-                          className="w-full min-h-12 rounded-xl font-bold text-zinc-950 touch-manipulation"
-                          style={{
-                            background: "linear-gradient(135deg, #F5C842, #B8860B)",
-                            borderRadius: 10,
-                            opacity:
-                              joinSubmitting || (myBalance > 0 && entryAmount > myBalance)
-                                ? 0.4
-                                : 1,
-                          }}
-                        >
-                          {joinSubmitting
-                            ? "Posting…"
-                            : `${!myRow ? "Join" : "Post"} ${entryAmount} GPC`}
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    {room &&
+                      !inProgress &&
+                      isPlayer &&
+                      myEntrySc === 0 &&
+                      !isSpec &&
+                      String(room.status) === "entry_phase" && (
+                        <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+                          {joinHint && (
+                            <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
+                          )}
+                          <div className="flex flex-wrap justify-center gap-1.5">
+                            {[minE, minE * 2, minE * 5, 2500, bankVal(room)]
+                              .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
+                              .sort((a, b) => a - b)
+                              .map((amt) => (
+                                <button
+                                  key={amt}
+                                  type="button"
+                                  data-selected={entryAmount === amt}
+                                  onClick={() => {
+                                    setJoinHint(null);
+                                    setEntryAmount(amt);
+                                  }}
+                                  className={`min-h-[44px] min-w-[3.5rem] rounded-xl border border-[#f5c842]/40 px-4 py-3 text-sm text-[#f5c842] transition hover:bg-[#f5c842]/10 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
+                                >
+                                  {amt}
+                                </button>
+                              ))}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={joinSubmitting || (myBalance > 0 && entryAmount > myBalance)}
+                            aria-busy={joinSubmitting}
+                            onClick={() => {
+                              void handlePostEntry();
+                            }}
+                            className="w-full min-h-[48px] rounded-xl font-bold text-zinc-950 touch-manipulation"
+                            style={{
+                              background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                              opacity:
+                                joinSubmitting || (myBalance > 0 && entryAmount > myBalance) ? 0.45 : 1,
+                            }}
+                          >
+                            {joinSubmitting
+                              ? "Posting…"
+                              : `Post entry — ${entryAmount} GPC`}
+                          </button>
+                        </div>
+                      )}
                     {isSpec && (
                       <p className="text-center text-sm text-zinc-400/95">You’re spectating this table.</p>
                     )}
@@ -1947,6 +2130,7 @@ export default function CeloRoomPage() {
                     </button>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           </main>
