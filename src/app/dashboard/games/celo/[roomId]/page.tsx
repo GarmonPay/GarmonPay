@@ -1080,6 +1080,25 @@ export default function CeloRoomPage() {
     return null;
   })();
 
+  const feltIdleLabel = (() => {
+    if (roomPhase === "waiting") {
+      return isBanker
+        ? "OPEN ENTRIES TO START THIS ROUND"
+        : "WAITING FOR BANKER TO OPEN ENTRIES";
+    }
+    if (roomPhase === "entry_phase") {
+      if (isBanker) {
+        return stakedPlayerCount > 0
+          ? "BEGIN ROLLS WHEN READY"
+          : "WAITING FOR PLAYERS TO POST ENTRIES";
+      }
+      if (isPlayer && myEntrySc > 0) return "ENTRY LOCKED - WAITING FOR BANKER";
+      if (isPlayer) return "POST YOUR ENTRY TO JOIN THIS ROUND";
+      return "ENTRY WINDOW IS OPEN";
+    }
+    return "AWAITING THE NEXT THROW";
+  })();
+
   useEffect(() => {
     if (!CELO_DEBUG) return;
     console.log("[C-Lo room] start entry / begin (dev)", {
@@ -1930,7 +1949,7 @@ export default function CeloRoomPage() {
                   <p
                     className={`mt-4 text-center text-sm tracking-widest text-[#f5c842]/60 my-4 ${cinzel.className}`}
                   >
-                    AWAITING THE NEXT THROW
+                    {feltIdleLabel}
                   </p>
                 )}
                 {isRollingFaces && (
