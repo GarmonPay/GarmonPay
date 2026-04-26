@@ -171,6 +171,7 @@ export default function CeloRoomPage() {
   const [joinHint, setJoinHint] = useState<string | null>(null);
   const [joinSubmitting, setJoinSubmitting] = useState(false);
   const joinInFlightRef = useRef(false);
+  const postEntryInFlightRef = useRef(false);
   const [rollError, setRollError] = useState<string | null>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
@@ -1067,7 +1068,10 @@ export default function CeloRoomPage() {
     [players]
   );
 
-  const myEntrySc = Math.floor(Number(myRow?.entry_sc ?? 0));
+  const myEntrySc = Math.max(
+    Math.floor(Number(myRow?.stake_amount_sc ?? 0)),
+    Math.floor(Number(myRow?.entry_sc ?? 0))
+  );
 
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
@@ -1129,6 +1133,22 @@ export default function CeloRoomPage() {
     isPlayer &&
     myEntrySc > 0
   );
+
+  const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(
+    String(room?.status ?? "")
+  );
+  const canPostEntry =
+    !!room &&
+    !!me &&
+    !isBanker &&
+    isPlayer &&
+    !inProgress &&
+    postEntryRoomOk &&
+    entryAmount > 0 &&
+    !(myBalance > 0 && entryAmount > myBalance) &&
+    myRow != null &&
+    myRow.entry_posted !== true &&
+    myEntrySc <= 0;
   const canRoll = canRollBanker || canRollPlayer;
   const roomPhase = String(room?.status ?? "");
   const startableRoomStatuses = ["waiting", "active", "entry_phase"];
@@ -1655,39 +1675,66 @@ export default function CeloRoomPage() {
   }
 
   async function handlePostEntry() {
-    if (!room || !supabase || !me || joinInFlightRef.current) return;
-    if (String(room.status) !== "entry_phase" || myEntrySc > 0 || !isPlayer) return;
-    if (myBalance > 0 && entryAmount > myBalance) {
-      setJoinHint("Insufficient balance for this entry.");
-      return;
-    }
+    if (!room || !supabase || !me || postEntryInFlightRef.current) return;
+    console.log("[C-Lo] post entry clicked", {
+      roomId: room.id,
+      userId: me,
+      selectedEntryAmount: entryAmount,
+      roomStatus: room?.status,
+      player: myRow ?? null,
+      playerEntryPosted: myRow?.entry_posted,
+      playerStake: myRow?.stake_amount_sc,
+      gpcBalance: myBalance,
+    });
+    if (!canPostEntry) return;
     setJoinHint(null);
-    joinInFlightRef.current = true;
+    postEntryInFlightRef.current = true;
     setJoinSubmitting(true);
     try {
-      const res = await fetchCeloApi(supabase, "/api/celo/round/post-entry", {
+      const res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
         method: "POST",
-        body: JSON.stringify({ room_id: room.id, entry_sc: entryAmount }),
+        body: JSON.stringify({ roomId: room.id, amount: entryAmount }),
       });
-      let j: { error?: string; player?: Record<string, unknown>; room?: Record<string, unknown> };
+      const text = await res.text();
+      let j: {
+        ok?: boolean;
+        error?: string;
+        player?: Record<string, unknown>;
+        room?: Record<string, unknown>;
+      } = {};
       try {
-        j = (await res.json()) as typeof j;
+        j = text ? (JSON.parse(text) as typeof j) : {};
       } catch {
         setJoinHint("Invalid response from server.");
+        console.error("[C-Lo] post entry response parse error", text);
         return;
       }
-      if (!res.ok) {
+      console.log("[C-Lo] post entry response", { status: res.status, body: j });
+      if (!res.ok || j.ok === false) {
         if (res.status === 401) {
           setJoinHint("Session expired. Please sign in again.");
           return;
         }
-        setJoinHint(j.error ?? "Could not post entry");
+        const errMsg = j.error ?? `Could not post entry (${res.status})`;
+        setJoinHint(errMsg);
+        console.error("[C-Lo] post entry failed", errMsg, j);
         return;
       }
+      bumpOptimisticAsRealtime();
+      const selected = entryAmount;
       if (j.player) {
+        const base = normalizeCeloPlayerRow(j.player) as Player;
+        const optimistic: Player = {
+          ...base,
+          entry_posted: true,
+          stake_amount_sc: selected,
+          status: "active",
+          entry_sc: selected,
+          bet_cents: selected,
+        };
         const row = mergePlayerProfile(
-          playersRef.current.find((p) => p.user_id === String((j.player as { user_id?: string }).user_id)),
-          normalizeCeloPlayerRow(j.player) as Player
+          playersRef.current.find((p) => p.user_id === optimistic.user_id),
+          optimistic
         );
         const incomingPlayers = sortCeloPlayersBySeat([
           ...playersRef.current.filter((p) => p.user_id !== row.user_id),
@@ -1698,7 +1745,11 @@ export default function CeloRoomPage() {
             ? (j.room as Record<string, unknown>)
             : undefined;
         commitCeloAggregateMerge(
-          { players: incomingPlayers, room: incomingRoom, updated_at: new Date().toISOString() },
+          {
+            players: incomingPlayers,
+            room: incomingRoom,
+            updated_at: new Date().toISOString(),
+          },
           "join",
           { playersSnapshot: true }
         );
@@ -1711,12 +1762,13 @@ export default function CeloRoomPage() {
       setMyBalance(
         Math.max(0, Math.floor((u as { gpay_coins?: number } | null)?.gpay_coins ?? 0))
       );
-      bumpOptimisticAsRealtime();
       await fetchAll();
     } catch (e) {
-      setJoinHint(e instanceof Error ? e.message : "Could not post entry");
+      const msg = e instanceof Error ? e.message : "Could not post entry";
+      setJoinHint(msg);
+      console.error("[C-Lo] post entry exception", e);
     } finally {
-      joinInFlightRef.current = false;
+      postEntryInFlightRef.current = false;
       setJoinSubmitting(false);
     }
   }
@@ -2122,7 +2174,7 @@ export default function CeloRoomPage() {
                           </div>
                           <button
                             type="button"
-                            disabled={joinSubmitting || (myBalance > 0 && entryAmount > myBalance)}
+                            disabled={joinSubmitting || !canPostEntry}
                             aria-busy={joinSubmitting}
                             onClick={() => {
                               void handlePostEntry();
@@ -2130,8 +2182,7 @@ export default function CeloRoomPage() {
                             className="w-full min-h-[48px] rounded-xl font-bold text-zinc-950 touch-manipulation"
                             style={{
                               background: "linear-gradient(135deg, #F5C842, #B8860B)",
-                              opacity:
-                                joinSubmitting || (myBalance > 0 && entryAmount > myBalance) ? 0.45 : 1,
+                              opacity: joinSubmitting || !canPostEntry ? 0.45 : 1,
                             }}
                           >
                             {joinSubmitting

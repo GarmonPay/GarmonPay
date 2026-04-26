@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { CELO_ROOM_PLAYERS_USER_EMBED } from "@/lib/celo-player-state";
+import {
+  CELO_ROOM_PLAYERS_USER_EMBED,
+  shapeCeloRoomStatePlayer,
+} from "@/lib/celo-player-state";
 
 const PLAYER_SELECT = `*,${CELO_ROOM_PLAYERS_USER_EMBED}`;
 
@@ -109,9 +112,16 @@ export async function GET(request: Request) {
     playerRolls = rolls ?? [];
   }
 
+  const bankerIdForShape = String(
+    (roomRaw as { banker_id?: string | null }).banker_id ?? ""
+  );
+  const playersShaped = (players ?? []).map((raw) =>
+    shapeCeloRoomStatePlayer(raw as Record<string, unknown>, bankerIdForShape || null)
+  );
+
   return NextResponse.json({
     room: roomRaw,
-    players: players ?? [],
+    players: playersShaped,
     activeRound: activeRound ?? null,
     playerRolls,
   });
