@@ -2,7 +2,19 @@ import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { createServerClient as createJwtClient } from "@/lib/supabase";
+
+const CELO_AUTH_JSON_MESSAGE = "Session expired. Please log in again.";
+
+/** 401 body for C-Lo routes; client maps this to the same user-facing string. */
+export function celoUnauthorizedJsonResponse() {
+  console.log("[C-Lo API] auth failed");
+  return NextResponse.json(
+    { ok: false, error: CELO_AUTH_JSON_MESSAGE },
+    { status: 401 }
+  );
+}
 
 export type CeloAuthContext = {
   user: User;
@@ -39,12 +51,31 @@ export async function getCeloApiClients() {
 }
 
 /**
- * Cookie session first (SSR), then `Authorization: Bearer` (required on some mobile / storage paths).
+ * Prefer `Authorization: Bearer` (sent by the client after `getFreshAccessToken` / refresh) so
+ * a fresh JWT is not shadowed by a stale cookie session on mobile Safari.
+ * Falls back to the SSR cookie session when no Bearer is present.
  */
 export async function getCeloAuth(
   request: Request,
   clients: NonNullable<Awaited<ReturnType<typeof getCeloApiClients>>>
 ): Promise<CeloAuthContext | null> {
+  const raw = request.headers.get("authorization");
+  const token = raw?.match(/^Bearer\s+(\S+)/i)?.[1]?.trim() ?? null;
+  if (token) {
+    const withJwt = createJwtClient(token);
+    if (withJwt) {
+      const { data: { user: fromBearer } } = await withJwt.auth.getUser();
+      if (fromBearer) {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[C-Lo API] authed (Bearer)", fromBearer.id);
+        }
+        return { user: fromBearer, adminClient: clients.adminClient };
+      }
+      if (process.env.NODE_ENV === "development") {
+        console.log("[C-Lo API] Bearer did not resolve to a user");
+      }
+    }
+  }
   const { data: { user: fromCookies } } = await clients.sessionClient.auth.getUser();
   if (fromCookies) {
     if (process.env.NODE_ENV === "development") {
@@ -52,25 +83,8 @@ export async function getCeloAuth(
     }
     return { user: fromCookies, adminClient: clients.adminClient };
   }
-  const raw = request.headers.get("authorization");
-  const token = raw?.match(/^Bearer\s+(\S+)/i)?.[1]?.trim() ?? null;
-  if (!token) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[C-Lo API] no user (no cookie session, no Bearer token)");
-    }
-    return null;
-  }
-  const withJwt = createJwtClient(token);
-  if (!withJwt) return null;
-  const { data: { user: fromBearer } } = await withJwt.auth.getUser();
-  if (!fromBearer) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[C-Lo API] Bearer did not resolve to a user");
-    }
-    return null;
-  }
   if (process.env.NODE_ENV === "development") {
-    console.log("[C-Lo API] authed (Bearer)", fromBearer.id);
+    console.log("[C-Lo API] no user (no valid Bearer, no cookie session)");
   }
-  return { user: fromBearer, adminClient: clients.adminClient };
+  return null;
 }

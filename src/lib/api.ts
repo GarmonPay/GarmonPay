@@ -2,6 +2,8 @@
  * API client for backend. All reward issuance happens on backend.
  */
 
+export { getFreshAccessToken, fetchCeloApi } from "./celo-api-fetch";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 /**

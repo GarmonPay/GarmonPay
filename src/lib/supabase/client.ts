@@ -2,6 +2,10 @@
  * Supabase client for backend connection.
  * Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
  * When not set, returns null so app works without Supabase.
+ *
+ * Browser C-Lo flows use `getFreshAccessToken` / `fetchCeloApi` (see
+ * `src/lib/celo-api-fetch.ts`) so mobile clients always send `Authorization: Bearer`
+ * after a session refresh, not only cookies.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";

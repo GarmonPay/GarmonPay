@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
+import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
 import { celoAccountingLog } from "@/lib/celo-accounting";
 import { validateEntry } from "@/lib/celo-engine";
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   }
   const auth = await getCeloAuth(request, clients);
   if (!auth) {
-    return jsonErr("Unauthorized", 401);
+    return celoUnauthorizedJsonResponse();
   }
   const { user, adminClient } = auth;
   const userId = user.id;

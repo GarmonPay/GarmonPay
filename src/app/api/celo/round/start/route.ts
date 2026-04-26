@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
+import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import {
   CELO_ROOM_PLAYERS_USER_EMBED,
   effectiveStakeSc,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
   const auth = await getCeloAuth(request, clients);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return celoUnauthorizedJsonResponse();
   }
   const { user, adminClient } = auth;
   const userId = user.id;

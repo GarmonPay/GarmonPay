@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
+import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { celoAccountingLog } from "@/lib/celo-accounting";
 import { CELO_ROOM_PLAYERS_USER_EMBED } from "@/lib/celo-player-state";
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   }
   const auth = await getCeloAuth(request, clients);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return celoUnauthorizedJsonResponse();
   }
   const { user, adminClient } = auth;
   const userId = user.id;

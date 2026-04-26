@@ -1,27 +1,79 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const CELO_AUTH_ERR = "Session expired. Please log in again.";
+
+const CELO_401_JSON = JSON.stringify({
+  ok: false,
+  error: CELO_AUTH_ERR,
+});
+
 /**
- * Calls a same-origin C-Lo API route with `credentials: include` and, when
- * `supabase.auth.getSession()` has an `access_token`, the `Authorization` header.
- * Use for mobile Safari and other clients where the cookie session is missing
- * or partitioned but the in-memory session still has a JWT.
+ * Refreshes the Supabase session when the access token is missing (common on
+ * mobile / partitioned storage) and returns a valid JWT for `Authorization: Bearer`.
+ */
+export async function getFreshAccessToken(supabase: SupabaseClient): Promise<string> {
+  const first = await supabase.auth.getSession();
+  if (first.error) {
+    console.log("[C-Lo Auth] getSession error (non-fatal)", first.error.message);
+  }
+  let session = first.data.session;
+  if (session?.access_token) {
+    console.log("[C-Lo Auth] session exists", { fromCache: true });
+    return session.access_token;
+  }
+  const refresh = await supabase.auth.refreshSession();
+  if (refresh.error) {
+    console.log("[C-Lo Auth] refreshSession error", refresh.error.message);
+  }
+  const second = await supabase.auth.getSession();
+  if (second.error) {
+    console.log("[C-Lo Auth] getSession error after refresh", second.error.message);
+  }
+  session = second.data.session ?? refresh.data.session;
+  if (session?.access_token) {
+    console.log("[C-Lo Auth] session exists", { fromCache: false });
+    return session.access_token;
+  }
+  throw new Error(CELO_AUTH_ERR);
+}
+
+/**
+ * Same-origin C-Lo API: always sends `Authorization: Bearer` after refreshing the session.
+ * `credentials: "include"` keeps cookie sessions working where they exist.
  */
 export async function fetchCeloApi(
   supabase: SupabaseClient,
   input: string,
   init: RequestInit
 ): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
+  let accessToken: string;
+  try {
+    accessToken = await getFreshAccessToken(supabase);
+  } catch (e) {
+    console.log("[C-Lo API] auth failed (no access token after refresh)", {
+      path: input,
+    });
+    return new Response(CELO_401_JSON, {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const h = new Headers(init.headers);
-  if (init.body && !h.has("Content-Type")) {
-    h.set("Content-Type", "application/json");
+  h.set("Content-Type", "application/json");
+  h.set("Authorization", `Bearer ${accessToken}`);
+  console.log("[C-Lo Auth] token sent", {
+    path: input,
+    tokenLength: accessToken.length,
+  });
+
+  const res = await fetch(input, { ...init, headers: h, credentials: "include" });
+  if (res.status === 401) {
+    console.log("[C-Lo API] auth failed", { path: input, status: res.status });
   }
-  if (session?.access_token) {
-    h.set("Authorization", `Bearer ${session.access_token}`);
-  }
-  return fetch(input, { ...init, headers: h, credentials: "include" });
+  return res;
 }
 
 export function alertCeloUnauthorized() {
-  alert("Session expired. Please log in again.");
+  alert(CELO_AUTH_ERR);
 }
