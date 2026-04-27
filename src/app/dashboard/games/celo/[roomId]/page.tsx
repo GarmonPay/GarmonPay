@@ -1857,6 +1857,9 @@ export default function CeloRoomPage() {
 
   async function handleDeleteRoom() {
     console.log("[C-Lo] DELETE ROOM CLICKED");
+    if (typeof window !== "undefined" && !window.confirm("Delete this C-Lo room? This cannot be undone.")) {
+      return;
+    }
     if (!supabase || !roomId) {
       alert("Not connected. Please refresh and try again.");
       return;
