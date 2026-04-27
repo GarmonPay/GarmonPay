@@ -39,6 +39,8 @@ import {
 } from "@/lib/celo/celoStateMerge";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
+/** Client hold so the roller still sees the result banner after HTTP returns past the server 4s pause. */
+const RESULT_DISPLAY_HOLD_MS = 4000;
 
 /*
 ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
@@ -89,91 +91,148 @@ type Round = {
   roll_animation_duration_ms?: number | null;
 };
 
-function buildCeloResultBannerText(
+type CeloResultBannerModel = {
+  title: string;
+  bankerTriplet: [number, number, number] | null;
+  bankerRollName: string | null;
+  playerTriplet: [number, number, number] | null;
+  playerRollName: string | null;
+  showPlayerRow: boolean;
+};
+
+/** Outcome line + dice for the result overlay (`rolls` newest-first). */
+function buildCeloResultBannerContent(
   round: Round,
   rolls: {
     outcome: string | null;
     roll_name?: string | null;
     roll_result?: string | null;
     point?: number | null;
-    user_id?: string | null;
+    dice?: unknown;
   }[]
-): { title: string; subtitle: string } {
+): CeloResultBannerModel {
   const bRes = String(round.banker_dice_result ?? "");
   const bName = String(round.banker_dice_name ?? "").trim();
   const bPt = round.banker_point;
-  const last = rolls[0];
+  const nameOr = (s: string, fallback: string) =>
+    s.trim().length ? s.trim() : fallback;
 
-  if (
-    round.push === true ||
-    (bRes === "point" && last?.outcome === "push")
-  ) {
+  const bankerTriplet = tripletFromDiceJson(round.banker_dice);
+  const decisive = rolls.find((r) =>
+    ["win", "loss", "push"].includes(String(r.outcome ?? "").toLowerCase())
+  );
+  const playerTriplet = decisive?.dice
+    ? tripletFromDiceJson(decisive.dice)
+    : null;
+  const pRollName = String(decisive?.roll_name ?? "").trim();
+
+  if (round.push === true || decisive?.outcome === "push") {
     const pt =
       typeof bPt === "number"
         ? bPt
-        : typeof last?.point === "number"
-          ? last.point
+        : typeof decisive?.point === "number"
+          ? decisive.point
           : "?";
     return {
-      title: `PUSH — Both rolled ${pt}. Stakes returned.`,
-      subtitle: "",
+      title: `PUSH — Both rolled point of ${pt}. Stakes refunded.`,
+      bankerTriplet,
+      bankerRollName: bName || null,
+      playerTriplet,
+      playerRollName: pRollName || null,
+      showPlayerRow: playerTriplet != null,
     };
   }
 
-  if (!last) {
-    if (bRes === "instant_win") {
-      return { title: `BANKER WINS — ${bName || "Banker"}`, subtitle: "" };
-    }
-    if (bRes === "instant_loss") {
+  if (bRes === "instant_win") {
+    return {
+      title: `BANKER WINS — ${nameOr(bName, "?")}`,
+      bankerTriplet,
+      bankerRollName: bName || null,
+      playerTriplet: null,
+      playerRollName: null,
+      showPlayerRow: false,
+    };
+  }
+  if (bRes === "instant_loss") {
+    return {
+      title: `PLAYER WINS — Banker rolled ${nameOr(bName, "?")}`,
+      bankerTriplet,
+      bankerRollName: bName || null,
+      playerTriplet: null,
+      playerRollName: null,
+      showPlayerRow: false,
+    };
+  }
+
+  const decisiveRollResult = String(decisive?.roll_result ?? "").toLowerCase();
+
+  if (
+    bRes === "point" &&
+    decisive &&
+    decisive.point != null &&
+    bPt != null &&
+    decisiveRollResult === "point"
+  ) {
+    const bp = bPt;
+    const pp = decisive.point;
+    if (String(decisive.outcome).toLowerCase() === "win") {
       return {
-        title: `PLAYERS WIN — Banker rolled ${bName || "out"}`,
-        subtitle: "",
+        title: `PLAYER WINS — ${pp} beats ${bp}`,
+        bankerTriplet,
+        bankerRollName: bName || null,
+        playerTriplet,
+        playerRollName: pRollName || null,
+        showPlayerRow: playerTriplet != null,
       };
     }
-    return { title: "Round complete", subtitle: "" };
+    if (String(decisive.outcome).toLowerCase() === "loss") {
+      return {
+        title: `BANKER WINS — ${bp} beats ${pp}`,
+        bankerTriplet,
+        bankerRollName: bName || null,
+        playerTriplet,
+        playerRollName: pRollName || null,
+        showPlayerRow: playerTriplet != null,
+      };
+    }
   }
-
-  const pname = String(last.roll_name ?? "").trim();
 
   if (
-    bRes === "point" &&
-    last.outcome === "win" &&
-    last.point != null &&
-    bPt != null
+    decisive &&
+    String(decisive.outcome).toLowerCase() === "win" &&
+    String(decisive.roll_result ?? "").toLowerCase() === "instant_win"
   ) {
     return {
-      title: `PLAYER WINS — Player ${last.point} beat Banker ${bPt}`,
-      subtitle: pname ? `(${pname})` : "",
+      title: `PLAYER WINS — ${nameOr(pRollName, "?")}`,
+      bankerTriplet,
+      bankerRollName: bName || null,
+      playerTriplet,
+      playerRollName: pRollName || null,
+      showPlayerRow: playerTriplet != null,
     };
   }
   if (
-    bRes === "point" &&
-    last.outcome === "loss" &&
-    last.point != null &&
-    bPt != null
+    decisive &&
+    String(decisive.outcome).toLowerCase() === "loss" &&
+    String(decisive.roll_result ?? "").toLowerCase() === "instant_loss"
   ) {
     return {
-      title: `BANKER WINS — Banker ${bPt} beat Player ${last.point}`,
-      subtitle: bName ? `Banker: ${bName}` : "",
-    };
-  }
-
-  if (last.outcome === "win" && last.roll_result === "instant_win") {
-    return {
-      title: `PLAYER WINS — ${pname || "Win"}`,
-      subtitle: "",
-    };
-  }
-  if (last.outcome === "loss" && last.roll_result === "instant_loss") {
-    return {
-      title: `BANKER WINS — ${pname || "House wins"}`,
-      subtitle: "Player rolled out",
+      title: `BANKER WINS — Player rolled ${nameOr(pRollName, "?")}`,
+      bankerTriplet,
+      bankerRollName: bName || null,
+      playerTriplet,
+      playerRollName: pRollName || null,
+      showPlayerRow: playerTriplet != null,
     };
   }
 
   return {
-    title: `Round complete${pname ? ` — ${pname}` : ""}`,
-    subtitle: "",
+    title: `Round complete${pRollName ? ` — ${pRollName}` : ""}`,
+    bankerTriplet,
+    bankerRollName: bName || null,
+    playerTriplet,
+    playerRollName: pRollName || null,
+    showPlayerRow: playerTriplet != null,
   };
 }
 
@@ -259,11 +318,12 @@ export default function CeloRoomPage() {
   const [celoTakeoverRoundId, setCeloTakeoverRoundId] = useState<string | null>(null);
   const [celoTakeoverSec, setCeloTakeoverSec] = useState<number | null>(null);
   const celoTimeoutPassSentRef = useRef(false);
-  const [resultBanner, setResultBanner] = useState<{
-    title: string;
-    subtitle: string;
-    celoOfferUserId: string | null;
-  } | null>(null);
+  const resultPauseVisualRef = useRef(false);
+  /** End timestamp (ms) for client-only result hold after roll HTTP returns late. 0 = off. */
+  const [localResultHoldEnd, setLocalResultHoldEnd] = useState(0);
+  /** Preserves completed round for banner/felt when merge cleared `round` before hold ends. */
+  const [heldDisplayRound, setHeldDisplayRound] = useState<Round | null>(null);
+  const [resultBanner, setResultBanner] = useState<CeloResultBannerModel | null>(null);
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -314,8 +374,8 @@ export default function CeloRoomPage() {
   const diceRef = useRef<[number, number, number] | null>(null);
   const feltTiedToRoundIdRef = useRef<string | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
-  /** Server adds ~1.5s roll animation; leave headroom for network + client work. */
-  const ROLL_HARD_TIMEOUT_MS = 12_000;
+  /** Server ~1.5s anim + 4s result display; leave headroom for network. */
+  const ROLL_HARD_TIMEOUT_MS = 20_000;
 
   useEffect(() => {
     return () => {
@@ -714,7 +774,11 @@ export default function CeloRoomPage() {
           );
         }
       }
-    } else if (!activeRound && !rollingActionRef.current) {
+    } else if (
+      !activeRound &&
+      !rollingActionRef.current &&
+      !resultPauseVisualRef.current
+    ) {
       if (isStaleFetch()) {
         console.log("[C-Lo] skipping stale fetch");
         return;
@@ -787,47 +851,6 @@ export default function CeloRoomPage() {
     supabase,
     fetchAll,
   ]);
-
-  useEffect(() => {
-    if (!supabase || !round || !me) return;
-    if (!round.player_celo_offer || !round.id) return;
-    const exp = round.player_celo_expires_at
-      ? new Date(String(round.player_celo_expires_at))
-      : null;
-    if (exp && exp < new Date()) return;
-    if (showCeloTakeover) return;
-    const offerRoundId = String(round.id);
-    const offerExpiresAt = round.player_celo_expires_at
-      ? String(round.player_celo_expires_at)
-      : null;
-    let cancel = false;
-    void (async () => {
-      const { data: myWin } = await supabase
-        .from("celo_player_rolls")
-        .select("dice")
-        .eq("round_id", offerRoundId)
-        .eq("user_id", me)
-        .eq("outcome", "win")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (cancel || !myWin) return;
-      const t = tripletFromDiceJson(myWin.dice);
-      if (!t) return;
-      const s = [...t].sort((a, b) => a - b);
-      if (s[0] !== 4 || s[1] !== 5 || s[2] !== 6) return;
-      setCeloTakeoverError(null);
-      setShowCeloTakeover(true);
-      setCeloTakeoverRoundId(offerRoundId);
-      celoTimeoutPassSentRef.current = false;
-      if (offerExpiresAt) {
-        setCeloTakeoverExpiresAt(offerExpiresAt);
-      }
-    })();
-    return () => {
-      cancel = true;
-    };
-  }, [supabase, me, showCeloTakeover, round]);
 
   const sendRoomChat = useCallback(async () => {
     const text = chatDraftRef.current.trim();
@@ -1257,11 +1280,78 @@ export default function CeloRoomPage() {
       room &&
       String(room.status).toLowerCase() !== "waiting"
   );
-  const inProgressForVisual = inProgress || resultPauseActive;
-  const roundHasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
+  /** Server pause and/or client hold so the roller still sees results after slow HTTP. */
+  const resultPauseVisual =
+    resultPauseActive || localResultHoldEnd > 0;
+  resultPauseVisualRef.current = resultPauseVisual;
+
+  useEffect(() => {
+    if (roomStatusLc === "waiting") {
+      setLocalResultHoldEnd(0);
+      setHeldDisplayRound(null);
+    }
+  }, [roomStatusLc]);
+
+  useEffect(() => {
+    if (localResultHoldEnd <= 0) return;
+    const ms = Math.max(0, localResultHoldEnd - Date.now());
+    const id = window.setTimeout(() => {
+      setLocalResultHoldEnd(0);
+      setHeldDisplayRound(null);
+    }, ms);
+    return () => window.clearTimeout(id);
+  }, [localResultHoldEnd]);
+
+  useEffect(() => {
+    if (!supabase || !round || !me) return;
+    if (!round.player_celo_offer || !round.id) return;
+    if (resultPauseVisual) return;
+    const exp = round.player_celo_expires_at
+      ? new Date(String(round.player_celo_expires_at))
+      : null;
+    if (exp && exp < new Date()) return;
+    if (showCeloTakeover) return;
+    const offerRoundId = String(round.id);
+    const offerExpiresAt = round.player_celo_expires_at
+      ? String(round.player_celo_expires_at)
+      : null;
+    let cancel = false;
+    void (async () => {
+      const { data: myWin } = await supabase
+        .from("celo_player_rolls")
+        .select("dice")
+        .eq("round_id", offerRoundId)
+        .eq("user_id", me)
+        .eq("outcome", "win")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancel || !myWin) return;
+      const t = tripletFromDiceJson(myWin.dice);
+      if (!t) return;
+      const s = [...t].sort((a, b) => a - b);
+      if (s[0] !== 4 || s[1] !== 5 || s[2] !== 6) return;
+      setCeloTakeoverError(null);
+      setShowCeloTakeover(true);
+      setCeloTakeoverRoundId(offerRoundId);
+      celoTimeoutPassSentRef.current = false;
+      if (offerExpiresAt) {
+        setCeloTakeoverExpiresAt(offerExpiresAt);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [supabase, me, showCeloTakeover, round, resultPauseVisual]);
+
+  const displayRound = round ?? heldDisplayRound;
+  const effectiveRoundStatus = round?.status ?? displayRound?.status;
+
+  const inProgressForVisual = inProgress || resultPauseVisual;
+  const roundHasBankerTriplet = !!tripletFromDiceJson(displayRound?.banker_dice);
   const bankerTripletLive = useMemo(
-    () => tripletFromDiceJson(round?.banker_dice),
-    [round?.banker_dice]
+    () => tripletFromDiceJson(displayRound?.banker_dice),
+    [displayRound?.banker_dice]
   );
   const feltTripletPresent = dice != null;
 
@@ -1271,7 +1361,7 @@ export default function CeloRoomPage() {
     () =>
       computeCeloVisualDiceMode({
         inProgress: inProgressForVisual,
-        roundStatus: round?.status,
+        roundStatus: effectiveRoundStatus,
         roundHasBankerTriplet,
         feltTripletPresent,
         currentPlayerHasFinalRoll: currentPlayerResolvedRoll,
@@ -1279,11 +1369,11 @@ export default function CeloRoomPage() {
         localRolling: rolling,
         serverBankerInFlight: round?.banker_roll_in_flight === true,
         serverPlayerInFlight: round?.roll_processing === true,
-        resultPauseActive,
+        resultPauseActive: resultPauseVisual,
       }),
     [
       inProgressForVisual,
-      round?.status,
+      effectiveRoundStatus,
       roundHasBankerTriplet,
       feltTripletPresent,
       currentPlayerResolvedRoll,
@@ -1291,7 +1381,7 @@ export default function CeloRoomPage() {
       rolling,
       round?.banker_roll_in_flight,
       round?.roll_processing,
-      resultPauseActive,
+      resultPauseVisual,
     ]
   );
 
@@ -1347,8 +1437,8 @@ export default function CeloRoomPage() {
       ];
     }
     if (
-      resultPauseActive &&
-      String(round?.status ?? "").toLowerCase() === "completed" &&
+      resultPauseVisual &&
+      String(displayRound?.status ?? "").toLowerCase() === "completed" &&
       bankerTripletLive &&
       !currentPlayerResolvedRoll
     ) {
@@ -1523,7 +1613,7 @@ export default function CeloRoomPage() {
     !isBanker &&
     isPlayer &&
     !inProgress &&
-    !resultPauseActive &&
+    !resultPauseVisual &&
     postEntryRoomOk &&
     entryAmount > 0 &&
     Number.isFinite(entryAmount) &&
@@ -1582,7 +1672,7 @@ export default function CeloRoomPage() {
     showStartRound &&
     stakedPlayerCount >= 1 &&
     !rollingAction &&
-    !resultPauseActive;
+    !resultPauseVisual;
   const startRoundDisabledReason = (() => {
     if (!showStartRound) return null;
     if (rollingAction) return "round_action_in_progress";
@@ -1662,13 +1752,23 @@ export default function CeloRoomPage() {
   }, [isBanker, round?.status, rollingAction, canRollBanker]);
 
   const rollDiceDisabled =
-    resultPauseActive ||
+    resultPauseVisual ||
     (round?.status === "banker_rolling" && isBanker
       ? !canRollBanker && !CELO_DEBUG
       : rollingAction);
 
+  const bannerRound =
+    round && String(round.status).toLowerCase() === "completed"
+      ? round
+      : heldDisplayRound;
+
   useEffect(() => {
-    if (!resultPauseActive || !round?.id || !supabase) {
+    if (
+      !resultPauseVisual ||
+      !bannerRound?.id ||
+      String(bannerRound.status).toLowerCase() !== "completed" ||
+      !supabase
+    ) {
       setResultBanner(null);
       return;
     }
@@ -1676,26 +1776,18 @@ export default function CeloRoomPage() {
     void (async () => {
       const { data: rolls } = await supabase
         .from("celo_player_rolls")
-        .select("outcome, roll_name, roll_result, point, user_id")
-        .eq("round_id", round.id)
+        .select("outcome, roll_name, roll_result, point, user_id, dice")
+        .eq("round_id", bannerRound.id)
         .order("created_at", { ascending: false })
         .limit(8);
       if (cancelled) return;
       const r = rolls ?? [];
-      const text = buildCeloResultBannerText(round, r);
-      const winR = r.find((x) => x.outcome === "win");
-      setResultBanner({
-        ...text,
-        celoOfferUserId:
-          round.player_celo_offer === true && winR?.user_id
-            ? String(winR.user_id)
-            : null,
-      });
+      setResultBanner(buildCeloResultBannerContent(bannerRound, r));
     })();
     return () => {
       cancelled = true;
     };
-  }, [resultPauseActive, supabase, round]);
+  }, [resultPauseVisual, supabase, bannerRound]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2026,24 +2118,7 @@ export default function CeloRoomPage() {
       setRollError(null);
       if (typeof j.newBalance === "number") setMyBalance(j.newBalance);
       if (j.canLowerBank) setShowLower(true);
-      if (
-        j.banker_takeover_offered &&
-        j.player_user_id != null &&
-        me != null &&
-        normalizeCeloUserId(String(j.player_user_id)) ===
-          normalizeCeloUserId(me)
-      ) {
-        setCeloTakeoverError(null);
-        setShowCeloTakeover(true);
-        setCeloTakeoverRoundId(String(round.id));
-        celoTimeoutPassSentRef.current = false;
-        const cr = (j.currentRound ?? j.round) as
-          | { player_celo_expires_at?: string }
-          | undefined;
-        if (cr?.player_celo_expires_at) {
-          setCeloTakeoverExpiresAt(String(cr.player_celo_expires_at));
-        }
-      } else if (j.player_can_become_banker) {
+      if (j.player_can_become_banker) {
         setBankerAcceptError(null);
         setShowBanker(true);
       }
@@ -2059,6 +2134,13 @@ export default function CeloRoomPage() {
         return undefined;
       })();
       const roundForMerge = rj.currentRound ?? rj.round;
+      const roundForMergeStatus = roundForMerge
+        ? String((roundForMerge as { status?: string }).status ?? "").toLowerCase()
+        : "";
+      if (roundForMergeStatus === "completed" && roundForMerge) {
+        setLocalResultHoldEnd(Date.now() + RESULT_DISPLAY_HOLD_MS);
+        setHeldDisplayRound(roundForMerge as Round);
+      }
       const rollRoundPatch: Record<string, unknown> | undefined =
         roundForMerge && String((roundForMerge as { id?: string }).id ?? round.id) === round.id
           ? roundForMerge
@@ -2772,7 +2854,7 @@ export default function CeloRoomPage() {
                     <span className="hidden text-[9px] text-zinc-500 sm:inline">{gpcToUsdDisplay(myBalance)}</span>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    {canRoll && (
+                    {canRoll && !resultPauseVisual && (
                       <div className="mx-auto w-full max-w-md">
                         {rollError && (
                           <p className="mb-2 text-center text-xs text-red-300/95">{rollError}</p>
@@ -2792,7 +2874,7 @@ export default function CeloRoomPage() {
                         </button>
                       </div>
                     )}
-                    {showStartRound && isBanker && !canRoll && (
+                    {showStartRound && isBanker && !canRoll && !resultPauseVisual && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
                         <button
                           type="button"
@@ -2989,121 +3071,69 @@ export default function CeloRoomPage() {
         />
       </div>
       </div>
-      {resultPauseActive && resultBanner && room && round?.id && (
+      {resultPauseVisual && resultBanner && room && bannerRound?.id && (
         <div
-          className="pointer-events-auto fixed inset-x-0 bottom-0 z-[20080] border-t border-amber-500/35 px-3 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.65)] sm:py-4"
-          style={{ background: "rgba(13,5,32,0.97)" }}
+          className="pointer-events-none fixed inset-0 z-[20080] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.78)" }}
+          role="status"
+          aria-live="polite"
         >
-          <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <div className="min-w-0 flex-1">
-              <p
-                className={`text-base font-bold leading-snug text-amber-100 sm:text-lg ${cinzel.className}`}
-              >
+          <div
+            className={`pointer-events-auto mx-auto max-w-lg rounded-2xl border border-amber-500/45 px-5 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-10 sm:py-9 ${cinzel.className}`}
+            style={{ background: "rgba(13,5,32,0.97)" }}
+          >
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex flex-wrap items-start justify-center gap-8 sm:gap-12">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-amber-200/70">
+                    Banker
+                  </span>
+                  <div className="flex gap-2 sm:gap-2.5">
+                    {(resultBanner.bankerTriplet ?? CELO_IDLE_DICE).map(
+                      (pip, i) => (
+                        <DiceFace
+                          key={`banner-b-${i}`}
+                          value={pip as 1 | 2 | 3 | 4 | 5 | 6}
+                          diceType={myDiceType}
+                          size={Math.min(88, diceSize + 18)}
+                        />
+                      )
+                    )}
+                  </div>
+                  {resultBanner.bankerRollName ? (
+                    <p className="max-w-[15rem] text-center text-sm font-semibold leading-snug text-amber-100/95">
+                      {resultBanner.bankerRollName}
+                    </p>
+                  ) : null}
+                </div>
+                {resultBanner.showPlayerRow && resultBanner.playerTriplet ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-amber-200/70">
+                      Player
+                    </span>
+                    <div className="flex gap-2 sm:gap-2.5">
+                      {resultBanner.playerTriplet.map((pip, i) => (
+                        <DiceFace
+                          key={`banner-p-${i}`}
+                          value={pip as 1 | 2 | 3 | 4 | 5 | 6}
+                          diceType={myDiceType}
+                          size={Math.min(88, diceSize + 18)}
+                        />
+                      ))}
+                    </div>
+                    {resultBanner.playerRollName ? (
+                      <p className="max-w-[15rem] text-center text-sm font-semibold leading-snug text-amber-100/95">
+                        {resultBanner.playerRollName}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <p className="max-w-xl text-xl font-bold leading-snug text-amber-50 sm:text-2xl">
                 {resultBanner.title}
               </p>
-              {resultBanner.subtitle ? (
-                <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-                  {resultBanner.subtitle}
-                </p>
-              ) : null}
             </div>
-            {resultBanner.celoOfferUserId &&
-              me &&
-              normalizeCeloUserId(resultBanner.celoOfferUserId) ===
-                normalizeCeloUserId(me) && (
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setCeloTakeoverError(null);
-                      if (!supabase || !room) return;
-                      const res = await fetchCeloApi(
-                        supabase,
-                        "/api/celo/banker-takeover",
-                        {
-                          method: "POST",
-                          body: JSON.stringify({
-                            room_id: room.id,
-                            round_id: round.id,
-                            accept: true,
-                          }),
-                        }
-                      );
-                      if (res.ok) {
-                        celoTimeoutPassSentRef.current = true;
-                        setShowCeloTakeover(false);
-                        setCeloTakeoverExpiresAt(null);
-                        setCeloTakeoverRoundId(null);
-                        void fetchAll();
-                        return;
-                      }
-                      if (res.status === 401) {
-                        alertCeloUnauthorized();
-                        return;
-                      }
-                      const e = (await res.json().catch(() => ({}))) as {
-                        error?: string;
-                      };
-                      setCeloTakeoverError(
-                        e.error ?? "Could not take the bank"
-                      );
-                    }}
-                    className="min-h-[40px] rounded-md px-4 text-sm font-bold"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #F5C842, #D4A017)",
-                      color: "#0A0A0A",
-                    }}
-                  >
-                    Take Banker
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setCeloTakeoverError(null);
-                      if (!supabase || !room) return;
-                      const res = await fetchCeloApi(
-                        supabase,
-                        "/api/celo/banker-takeover",
-                        {
-                          method: "POST",
-                          body: JSON.stringify({
-                            room_id: room.id,
-                            round_id: round.id,
-                            accept: false,
-                          }),
-                        }
-                      );
-                      if (res.ok) {
-                        celoTimeoutPassSentRef.current = true;
-                        setShowCeloTakeover(false);
-                        setCeloTakeoverExpiresAt(null);
-                        setCeloTakeoverRoundId(null);
-                        void fetchAll();
-                        return;
-                      }
-                      if (res.status === 401) {
-                        alertCeloUnauthorized();
-                        return;
-                      }
-                      void fetchAll();
-                    }}
-                    className="min-h-[40px] px-4 text-sm text-[#9CA3AF]"
-                  >
-                    Pass
-                  </button>
-                </div>
-              )}
           </div>
-          {celoTakeoverError &&
-            resultBanner.celoOfferUserId &&
-            me &&
-            normalizeCeloUserId(resultBanner.celoOfferUserId) ===
-              normalizeCeloUserId(me) && (
-              <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-300/95">
-                {celoTakeoverError}
-              </p>
-            )}
         </div>
       )}
       {showLower && room && (
