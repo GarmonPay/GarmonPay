@@ -23,6 +23,7 @@ function jsonErr(message: string, status: number) {
  * Body: { roomId, amount } (also accepts room_id + entry_sc for compatibility).
  */
 export async function POST(request: Request) {
+  console.log("[C-Lo PostEntry] HIT ROUTE");
   const clients = await getCeloApiClients();
   if (!clients) {
     return jsonErr("Server not configured", 500);
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     return jsonErr("amount must be a positive number", 400);
   }
 
-  console.log("[C-Lo PostEntry] request", { roomId, amount, userId });
+  console.log("[C-Lo PostEntry] roomId, userId, amount", { roomId, userId, amount });
 
   const { data: roomRaw, error: rErr } = await adminClient
     .from("celo_rooms")
@@ -151,59 +152,32 @@ export async function POST(request: Request) {
   const entryRef = `celo:post-entry:${roomId}:${userId}:${Date.now()}:${crypto.randomUUID()}`;
   celoAccountingLog("entry_debit_post", { roomId, userId, amount, reference: entryRef });
 
-  const { data: postEntryAtomicResult, error: postEntryAtomicErr } = await adminClient.rpc(
-    "celo_post_entry_atomic",
-    {
-      p_room_id: roomId,
-      p_user_id: userId,
-      p_amount: amount,
-      p_reference: entryRef,
-      p_description: "C-Lo table entry",
-      p_ledger_type: "celo_entry",
-    }
-  );
-  if (postEntryAtomicErr) {
-    console.error("[C-Lo PostEntry] celo_post_entry_atomic RPC failed", {
-      roomId,
-      userId,
-      amount,
-      reference: entryRef,
-      message: postEntryAtomicErr.message,
-      code: postEntryAtomicErr.code,
-      details: postEntryAtomicErr.details,
-    });
-    return jsonErr("Could not post entry", 500);
-  }
-  const atomic = (postEntryAtomicResult ?? {}) as {
-    success?: boolean;
-    message?: string;
-  };
-  if (atomic.success !== true) {
-    const m = String(atomic.message ?? "Could not post entry");
-    const lowered = m.toLowerCase();
-    const status =
-      lowered.includes("duplicate") ||
-      lowered.includes("insufficient") ||
-      lowered.includes("already posted") ||
-      lowered.includes("cannot post") ||
-      lowered.includes("not seated") ||
-      lowered.includes("player seat")
-        ? 400
-        : 500;
-    return jsonErr(m, status);
-  }
-
-  const { data: updated, error: uErr } = await adminClient
+  const { data: updatedPlayer, error } = await adminClient
     .from("celo_room_players")
-    .select(CELO_SELECT)
+    .update({
+      entry_posted: true,
+      stake_amount_sc: amount,
+      entry_sc: amount,
+      bet_cents: amount,
+      status: "active",
+      player_seat_status: "active",
+    })
     .eq("room_id", roomId)
     .eq("user_id", userId)
+    .select("*")
     .single();
-  if (uErr || !updated) {
-    return jsonErr("Entry posted but player row refresh failed", 500);
+
+  console.log("[C-Lo PostEntry] update error", error);
+  console.log("[C-Lo PostEntry] updated rows", updatedPlayer);
+
+  if (error) {
+    return jsonErr("Could not post entry", 500);
+  }
+  if (!updatedPlayer) {
+    throw new Error("Post entry update matched zero rows");
   }
 
-  console.log("[C-Lo PostEntry] updated player", updated);
+  const updated = updatedPlayer as Record<string, unknown>;
 
   let roomAfter = roomRaw as Record<string, unknown>;
   const nextRoomStatus =
