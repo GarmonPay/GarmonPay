@@ -21,6 +21,7 @@ export function didBankerWinCeloRound(
   playerRolls: PlayerRollLite[]
 ): boolean | null {
   if (!bankerDiceResult) return null;
+  if (playerRolls.some((r) => r.outcome === "push")) return null;
   if (bankerDiceResult === "instant_win") return true;
   if (bankerDiceResult === "instant_loss") return false;
   if (bankerDiceResult === "point") {
@@ -46,6 +47,7 @@ export function resolveSideBetCreatorWins(args: {
   playerRolls: PlayerRollLite[];
 }): boolean | null {
   const { betType, bankerDiceResult, bankerDiceName, playerRolls } = args;
+  if (playerRolls.some((r) => r.outcome === "push")) return null;
   const name = normName(bankerDiceName);
   const bankerOutcome = didBankerWinCeloRound(bankerDiceResult, playerRolls);
 

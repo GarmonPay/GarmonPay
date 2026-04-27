@@ -53,8 +53,11 @@ type RoundRow = {
   current_player_seat: number | null;
   roller_user_id?: string | null;
   banker_dice?: unknown;
+  banker_dice_result?: string | null;
   player_celo_offer?: boolean;
   player_celo_expires_at?: string | null;
+  /** True when the round ended in a point tie; stakes refunded. */
+  push?: boolean;
   /** Server: true while this banker throw is being processed (realtime tumble). */
   banker_roll_in_flight?: boolean;
   roll_processing?: boolean;
@@ -175,7 +178,7 @@ export async function POST(request: Request) {
       .select("id")
       .eq("round_id", round.id)
       .eq("user_id", userId)
-      .in("outcome", ["win", "loss"])
+      .in("outcome", ["win", "loss", "push"])
       .limit(1);
     if (finalRoll && finalRoll.length > 0) {
       return NextResponse.json({ error: "Already rolled" }, { status: 400 });
@@ -832,6 +835,152 @@ async function handlePlayerRoll(
   } = { roundOut: null, roomOut: null };
 
   try {
+    const bankerDiceResult = String(round.banker_dice_result ?? "");
+    if (
+      roll.result === "point" &&
+      roll.point != null &&
+      bankerDiceResult === "point" &&
+      Number(roll.point) === Number(bankerPoint)
+    ) {
+      const { data: refundRows } = await admin
+        .from("celo_room_players")
+        .select(
+          "id, user_id, entry_sc, stake_amount_sc, bet_cents, role, entry_posted, seat_number"
+        )
+        .eq("room_id", room.id)
+        .eq("role", "player");
+      for (const pr of refundRows ?? []) {
+        const prow = pr as PlayerRow;
+        if (prow.entry_posted !== true) continue;
+        const refundAmt = effectiveStakeSc(prow);
+        if (refundAmt <= 0) continue;
+        const refKey = `celo_push_refund_${round.id}_${prow.user_id}`;
+        const cr = await creditGpayIdempotent(
+          prow.user_id,
+          refundAmt,
+          "C-Lo push (point tie) — stake refund",
+          refKey,
+          "celo_payout"
+        );
+        if (!cr.success) {
+          return NextResponse.json(
+            { error: cr.message ?? "Push refund failed" },
+            { status: 500 }
+          );
+        }
+      }
+
+      const diceArr = [dice[0], dice[1], dice[2]] as [number, number, number];
+      const { data: ins, error: insErr } = await admin
+        .from("celo_player_rolls")
+        .insert({
+          round_id: round.id,
+          room_id: room.id,
+          user_id: userId,
+          dice: diceArr,
+          roll_name: roll.rollName,
+          roll_result: roll.result,
+          point: roll.point,
+          entry_sc: entry,
+          outcome: "push",
+          payout_sc: entry,
+          platform_fee_sc: 0,
+        })
+        .select("*")
+        .single();
+      if (insErr || !ins) {
+        return NextResponse.json(
+          {
+            ok: false as const,
+            error: insErr?.message ?? "Failed to save push roll",
+          },
+          { status: 500 }
+        );
+      }
+
+      const { data: finalizedPush } = await admin
+        .from("celo_rounds")
+        .update({
+          status: "completed",
+          completed_at: now,
+          push: true,
+        })
+        .eq("id", round.id)
+        .eq("room_id", room.id)
+        .eq("status", "player_rolling")
+        .select("id")
+        .maybeSingle();
+
+      if (finalizedPush) {
+        await admin
+          .from("celo_rooms")
+          .update({
+            total_rounds: (room.total_rounds ?? 0) + 1,
+            last_activity: now,
+            status: "waiting",
+          })
+          .eq("id", room.id);
+        await resetRoomEntries(admin, room.id);
+        await runCeloSideBetSettlementAfterRoundComplete(
+          admin,
+          room.id,
+          round.id,
+          feePct
+        );
+        celoAccountingLog("celo_round_push_complete", { roundId: round.id });
+      }
+
+      const { data: roundOutPush } = await admin
+        .from("celo_rounds")
+        .select("*")
+        .eq("id", round.id)
+        .maybeSingle();
+      const { data: roomOutPush } = await admin
+        .from("celo_rooms")
+        .select("*")
+        .eq("id", room.id)
+        .maybeSingle();
+      const { gpayCoins: coinsAfterPush } = await getUserCoins(userId);
+      const clientRollPush = buildClientPlayerRoll(
+        ins as Record<string, unknown>,
+        dice,
+        {
+          createdAt: now,
+          userId,
+          roomId: room.id,
+          roundId: round.id,
+        }
+      );
+      const roundPatchedPush =
+        roundOutPush == null
+          ? null
+          : {
+              ...(roundOutPush as Record<string, unknown>),
+              roll_processing: false,
+            };
+      return NextResponse.json({
+        ok: true as const,
+        push: true,
+        roll: clientRollPush,
+        round: roundPatchedPush,
+        room: roomOutPush,
+        currentRound: roundPatchedPush,
+        dice,
+        rollName: roll.rollName,
+        result: roll.result,
+        point: roll.point,
+        outcome: "push" as const,
+        payoutSc: entry,
+        newBalance: coinsAfterPush,
+        player_can_become_banker: false,
+        player_must_have_sc: room.current_bank_sc,
+        isCelo: roll.isCelo,
+        roundComplete: true,
+        banker_takeover_offered: false,
+        player_user_id: userId,
+      });
+    }
+
     if (roll.result === "instant_win") {
       const { net, fee } = calculatePayout(entry, feePct);
       const winRef = `celo_player_win_${round.id}_${userId}`;

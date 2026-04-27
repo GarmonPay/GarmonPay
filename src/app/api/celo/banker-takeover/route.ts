@@ -1,7 +1,29 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
 import { tripletFromDiceJson } from "@/lib/celo-room-dice";
+
+async function nextAvailablePlayerSeat(
+  admin: SupabaseClient,
+  roomId: string,
+  maxPlayers: number
+): Promise<number> {
+  const { data: seats } = await admin
+    .from("celo_room_players")
+    .select("seat_number")
+    .eq("room_id", roomId);
+  const used = new Set(
+    (seats ?? [])
+      .map((s) => s.seat_number as number | null)
+      .filter((n) => n != null)
+  );
+  const cap = Math.max(2, Math.min(99, maxPlayers || 10));
+  for (let s = 1; s < cap; s += 1) {
+    if (!used.has(s)) return s;
+  }
+  return 1;
+}
 
 /**
  * C-Lo: after a player hits 4-5-6, they can take banker for the next round (optional).
@@ -37,7 +59,7 @@ export async function POST(request: Request) {
 
   const { data: room, error: rErr } = await admin
     .from("celo_rooms")
-    .select("id, banker_id")
+    .select("id, banker_id, max_players")
     .eq("id", roomId)
     .maybeSingle();
   if (rErr || !room) {
@@ -101,15 +123,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You are already the banker" }, { status: 400 });
   }
 
+  const maxPlayers = Math.floor(
+    Number((room as { max_players?: number }).max_players) || 10
+  );
+  const nextSeat = await nextAvailablePlayerSeat(admin, roomId, maxPlayers);
+
   await admin.from("celo_rooms").update({ banker_id: userId }).eq("id", roomId);
   await admin
     .from("celo_room_players")
-    .update({ role: "player" })
+    .update({ role: "player", seat_number: nextSeat })
     .eq("room_id", roomId)
     .eq("user_id", roomBankerId);
   await admin
     .from("celo_room_players")
-    .update({ role: "banker" })
+    .update({ role: "banker", seat_number: 0 })
     .eq("room_id", roomId)
     .eq("user_id", userId);
   await admin

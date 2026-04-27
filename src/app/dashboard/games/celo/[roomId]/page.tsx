@@ -77,6 +77,8 @@ type Round = {
   roller_user_id?: string | null;
   player_celo_offer: boolean;
   player_celo_expires_at: string | null;
+  /** Point-tie round: stakes were refunded, no main winner. */
+  push?: boolean;
   /** Set when the banker has rolled; source of truth for their dice in this round. */
   banker_dice?: unknown;
   banker_dice_result?: string | null;
@@ -485,7 +487,7 @@ export default function CeloRoomPage() {
           .select("id")
           .eq("round_id", activeRound.id)
           .eq("user_id", uid)
-          .in("outcome", ["win", "loss"])
+          .in("outcome", ["win", "loss", "push"])
           .limit(1)
           .maybeSingle();
         if (isStaleFetch()) {
@@ -980,7 +982,11 @@ export default function CeloRoomPage() {
             const t = tripletFromDiceJson(n.dice);
             if (t) {
               setDice(t);
-              if (n.outcome === "win" || n.outcome === "loss") {
+              if (
+                n.outcome === "win" ||
+                n.outcome === "loss" ||
+                n.outcome === "push"
+              ) {
                 setCurrentPlayerResolvedRoll(true);
               }
               if (rollingRef.current) {

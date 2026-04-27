@@ -33,18 +33,34 @@ describe("evaluateRoll (authentic C-Lo rules)", () => {
     const r = d3(1, 1, 5);
     expect(r.result).toBe("point");
     expect(r.point).toBe(5);
+    expect(r.rollName).toBe("Pound");
   });
 
   it("1-1-2 is point 2 (Shorty)", () => {
     const r = d3(1, 1, 2);
     expect(r.result).toBe("point");
     expect(r.point).toBe(2);
+    expect(r.rollName).toBe("Shorty");
+  });
+
+  it("1-1-3 is point 3 (Girl)", () => {
+    const r = d3(1, 1, 3);
+    expect(r.result).toBe("point");
+    expect(r.point).toBe(3);
+    expect(r.rollName).toBe("Girl");
   });
 
   it("1-1-4 is point 4 (Zoe)", () => {
     const r = d3(1, 1, 4);
     expect(r.result).toBe("point");
     expect(r.point).toBe(4);
+    expect(r.rollName).toBe("Zoe");
+  });
+
+  it("2-2-1 is Dick (instant loss)", () => {
+    const r = d3(2, 2, 1);
+    expect(r.result).toBe("instant_loss");
+    expect(r.rollName).toBe("Dick");
   });
 
   it("5-5-6 is Head Crack (instant win)", () => {
