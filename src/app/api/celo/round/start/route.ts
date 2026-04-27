@@ -96,7 +96,6 @@ export async function POST(request: Request) {
     (s, p) => s + Math.floor(Number((p as { stake_amount_sc?: number }).stake_amount_sc ?? 0)),
     0
   );
-  const platformFee = Math.floor(prizePool * 0.1);
   const { count: prev } = await adminClient
     .from("celo_rounds")
     .select("id", { count: "exact", head: true })
@@ -110,7 +109,7 @@ export async function POST(request: Request) {
       banker_id: userId,
       status: "banker_rolling",
       prize_pool_sc: prizePool,
-      platform_fee_sc: platformFee,
+      platform_fee_sc: 0,
       bank_covered: false,
     })
     .select("*")
