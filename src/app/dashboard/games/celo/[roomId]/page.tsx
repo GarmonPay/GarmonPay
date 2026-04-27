@@ -177,6 +177,12 @@ export default function CeloRoomPage() {
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
   const [lowerBankError, setLowerBankError] = useState<string | null>(null);
   const [bankerAcceptError, setBankerAcceptError] = useState<string | null>(null);
+  const [lastFetchInfo, setLastFetchInfo] = useState<{
+    url: string;
+    status: string;
+    body: string;
+    error: string;
+  }>({ url: "", status: "", body: "", error: "" });
   const rollingRef = useRef(false);
   const rollingActionRef = useRef(false);
   const fetchTokenRef = useRef(0);
@@ -1806,13 +1812,28 @@ export default function CeloRoomPage() {
       roomId: room.id,
       amount: entryAmount,
     });
-    if (!canPostEntry) return;
+    if (!canPostEntry) {
+      setLastFetchInfo({
+        url: "(blocked)",
+        status: "canPostEntry=false",
+        body: "",
+        error: "",
+      });
+      return;
+    }
     setJoinHint(null);
     postEntryInFlightRef.current = true;
     setJoinSubmitting(true);
+    const postEntryUrl = "/api/celo/post-entry";
     try {
       const postBody = JSON.stringify({ roomId: room.id, amount: entryAmount });
-      let res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
+      setLastFetchInfo({
+        url: postEntryUrl,
+        status: "pending",
+        body: "",
+        error: "",
+      });
+      let res = await fetchCeloApi(supabase, postEntryUrl, {
         method: "POST",
         body: postBody,
       });
@@ -1824,9 +1845,15 @@ export default function CeloRoomPage() {
           !after.data.session?.access_token
         ) {
           setJoinHint("Session expired. Please sign in again.");
+          setLastFetchInfo({
+            url: postEntryUrl,
+            status: "401",
+            body: "",
+            error: refreshErr?.message ?? "Session refresh failed",
+          });
           return;
         }
-        res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
+        res = await fetchCeloApi(supabase, postEntryUrl, {
           method: "POST",
           body: postBody,
         });
@@ -1844,19 +1871,44 @@ export default function CeloRoomPage() {
       } catch {
         setJoinHint("Invalid response from server.");
         console.error("[C-Lo] post entry response parse error", text);
+        setLastFetchInfo({
+          url: postEntryUrl,
+          status: String(res.status),
+          body: text.slice(0, 200),
+          error: "JSON parse error",
+        });
         return;
       }
       console.log("[C-Lo] post entry response", { status: res.status, body: j });
+      const bodySnippet = JSON.stringify(j).slice(0, 200);
       if (!res.ok || j.ok === false) {
         if (res.status === 401) {
           setJoinHint("Session expired. Please sign in again.");
+          setLastFetchInfo({
+            url: postEntryUrl,
+            status: String(res.status),
+            body: bodySnippet,
+            error: j.error ?? "unauthorized",
+          });
           return;
         }
         const errMsg = j.error ?? `Could not post entry (${res.status})`;
         setJoinHint(errMsg);
         console.error("[C-Lo] post entry failed", errMsg, j);
+        setLastFetchInfo({
+          url: postEntryUrl,
+          status: String(res.status),
+          body: bodySnippet,
+          error: errMsg,
+        });
         return;
       }
+      setLastFetchInfo({
+        url: postEntryUrl,
+        status: String(res.status),
+        body: bodySnippet,
+        error: "",
+      });
       bumpOptimisticAsRealtime();
       const selected = entryAmount;
       if (j.player) {
@@ -1904,6 +1956,12 @@ export default function CeloRoomPage() {
       const msg = e instanceof Error ? e.message : "Could not post entry";
       setJoinHint(msg);
       console.error("[C-Lo] post entry exception", e);
+      setLastFetchInfo((prev) => ({
+        ...prev,
+        url: prev.url || postEntryUrl,
+        status: prev.status === "pending" ? "error" : prev.status,
+        error: msg,
+      }));
     } finally {
       postEntryInFlightRef.current = false;
       setJoinSubmitting(false);
@@ -1923,6 +1981,27 @@ export default function CeloRoomPage() {
       className={`relative flex w-full min-w-0 max-w-full flex-col overflow-x-hidden text-white ${dm.className}`}
       style={{ background: "radial-gradient(120% 80% at 50% 0%, #1a0a2e 0%, #05010F 45%, #020108 100%)" }}
     >
+      {process.env.NEXT_PUBLIC_DEBUG_CELO === "true" && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 99999,
+            background: "rgba(0,0,0,0.92)",
+            color: "#0f0",
+            fontFamily: "monospace",
+            fontSize: "10px",
+            padding: "8px",
+            lineHeight: "1.3",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+          }}
+        >
+          {`LINE 1: me=${me ?? "null"} | role=${myRow?.role ?? "null"} | banker=${String(isBanker)} | player=${String(isPlayer)}\nLINE 2: roomStatus=${room?.status ?? "null"} | roundStatus=${round?.status ?? "null"} | inProgress=${String(inProgress)}\nLINE 3: entryAmount=${entryAmount} | balance=${myBalance} | myEntrySc=${myEntrySc} | entryPosted=${String(myRow?.entry_posted ?? "null")}\nLINE 4: canPostEntry=${String(canPostEntry)} | joinSubmitting=${String(joinSubmitting)}\nLINE 5: lastFetch=${lastFetchInfo.url} -> ${lastFetchInfo.status}\nLINE 6: lastError=${lastFetchInfo.error || "none"}\nLINE 7: lastResponseBody=${lastFetchInfo.body ? lastFetchInfo.body : "none"}`}
+        </div>
+      )}
       {CELO_DEBUG && (
         <div
           className="pointer-events-none z-[300] font-mono text-[10px] text-amber-100/90"
