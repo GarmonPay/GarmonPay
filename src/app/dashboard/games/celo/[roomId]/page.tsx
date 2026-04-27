@@ -319,6 +319,10 @@ export default function CeloRoomPage() {
   const [celoTakeoverSec, setCeloTakeoverSec] = useState<number | null>(null);
   const celoTimeoutPassSentRef = useRef(false);
   const resultPauseVisualRef = useRef(false);
+  const randomWaitingPipsCacheRef = useRef<{
+    key: string;
+    pips: [number, number, number];
+  }>({ key: "", pips: [1, 1, 1] });
   /** End timestamp (ms) for client-only result hold after roll HTTP returns late. 0 = off. */
   const [localResultHoldEnd, setLocalResultHoldEnd] = useState(0);
   /** Preserves completed round for banner/felt when merge cleared `round` before hold ends. */
@@ -1418,6 +1422,35 @@ export default function CeloRoomPage() {
     visualDiceMode === "banker_tumble" || visualDiceMode === "player_tumble";
 
   const showIdleDice = !inProgressForVisual && !rolling;
+  /** Random pips for empty table in `waiting` only; not used during roll, result banner, or banker-dice preview. */
+  const canShowRandomIdleFelt =
+    roomStatusLc === "waiting" &&
+    !inProgressForVisual &&
+    !rolling &&
+    !isRollingFaces &&
+    dice == null &&
+    !resultPauseVisual;
+  const randomIdleSurfaceKey = `${roomId}:${
+    round?.id ?? "—"
+  }:${dice != null ? "hasDice" : "noDice"}:${
+    canShowRandomIdleFelt ? "idle" : "busy"
+  }`;
+  if (canShowRandomIdleFelt) {
+    const c = randomWaitingPipsCacheRef.current;
+    if (c.key !== randomIdleSurfaceKey) {
+      randomWaitingPipsCacheRef.current = {
+        key: randomIdleSurfaceKey,
+        pips: [
+          1 + Math.floor(Math.random() * 6),
+          1 + Math.floor(Math.random() * 6),
+          1 + Math.floor(Math.random() * 6),
+        ] as [number, number, number],
+      };
+    }
+  }
+  const randomWaitingPips = canShowRandomIdleFelt
+    ? randomWaitingPipsCacheRef.current.pips
+    : ([1, 1, 1] as [number, number, number]);
   const facePips: [number, number, number] = (() => {
     if (dice) {
       return [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])];
@@ -1446,6 +1479,13 @@ export default function CeloRoomPage() {
         bankerTripletLive[0],
         bankerTripletLive[1],
         bankerTripletLive[2],
+      ];
+    }
+    if (canShowRandomIdleFelt) {
+      return [
+        clampDie(randomWaitingPips[0]),
+        clampDie(randomWaitingPips[1]),
+        clampDie(randomWaitingPips[2]),
       ];
     }
     return CELO_IDLE_DICE;
