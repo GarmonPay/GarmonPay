@@ -183,6 +183,12 @@ export default function CeloRoomPage() {
     body: string;
     error: string;
   }>({ url: "", status: "", body: "", error: "" });
+  const [rollFetchInfo, setRollFetchInfo] = useState<{
+    url: string;
+    status: string;
+    body: string;
+    error: string;
+  }>({ url: "", status: "", body: "", error: "" });
   const rollingRef = useRef(false);
   const rollingActionRef = useRef(false);
   const fetchTokenRef = useRef(0);
@@ -1473,13 +1479,40 @@ export default function CeloRoomPage() {
   }
 
   async function handleRoll() {
-    if (!room || !round) return;
+    const rollRoomStatus = room?.status ?? null;
+    const rollRoundStatus = round?.status ?? null;
     const bankerRollBypass =
-      CELO_DEBUG && isBanker && round.status === "banker_rolling";
-    if (rollingAction && !bankerRollBypass) return;
+      CELO_DEBUG && isBanker && round?.status === "banker_rolling";
+    console.warn("[C-Lo UI] roll handler (predicates)", {
+      hasRoom: !!room,
+      hasRound: !!round,
+      hasSupabase: !!supabase,
+      rollingAction,
+      bankerRollBypass,
+      isBanker,
+      isPlayer,
+      roomStatus: rollRoomStatus,
+      roundStatus: rollRoundStatus,
+      inProgress,
+      canRollBanker,
+      canRollPlayer,
+      canRoll,
+      rollDiceDisabled,
+      postEntryInFlight: postEntryInFlightRef.current,
+      joinSubmitting,
+    });
+    if (!room || !round) {
+      setRollFetchInfo({ url: "(blocked)", status: !room ? "missing_room" : "missing_round", body: "", error: "" });
+      return;
+    }
+    if (rollingAction && !bankerRollBypass) {
+      setRollFetchInfo({ url: "(blocked)", status: "rolling_action_in_progress", body: "", error: "" });
+      return;
+    }
     if (!supabase) {
       console.error("[C-Lo] roll: blocked — no supabase client");
       setRollError("Please log in to roll.");
+      setRollFetchInfo({ url: "(blocked)", status: "missing_supabase", body: "", error: "Please log in to roll." });
       return;
     }
     setRollError(null);
@@ -1528,9 +1561,11 @@ export default function CeloRoomPage() {
     setRollName(null);
     setDice(null);
     let sawOkResponse = false;
+    const rollUrl = "/api/celo/round/roll";
     try {
+      setRollFetchInfo({ url: rollUrl, status: "pending", body: "", error: "" });
       const [fetchRes] = await Promise.all([
-        fetchCeloApi(supabase, "/api/celo/round/roll", {
+        fetchCeloApi(supabase, rollUrl, {
           method: "POST",
           body: JSON.stringify({ room_id: room.id, round_id: round.id }),
           signal: ac.signal,
@@ -1562,16 +1597,29 @@ export default function CeloRoomPage() {
             { status: res.status, textPreview: text.slice(0, 240) }
           );
           setRollError("Invalid response from server");
+          setRollFetchInfo({
+            url: rollUrl,
+            status: String(res.status),
+            body: text.slice(0, 200),
+            error: "JSON parse error",
+          });
           setRolling(false);
           return;
         }
       }
+      const rollBodySnippet = JSON.stringify(j).slice(0, 200);
       if (!res.ok) {
         if (res.status === 401) {
           setRollError("Session expired. Please log in again.");
         } else {
           setRollError((j as RollJson).error ?? "Could not complete roll");
         }
+        setRollFetchInfo({
+          url: rollUrl,
+          status: String(res.status),
+          body: rollBodySnippet,
+          error: (j as RollJson).error ?? (res.status === 401 ? "Session expired. Please log in again." : "Could not complete roll"),
+        });
         setRolling(false);
         console.error("[C-Lo] roll: HTTP not ok", {
           status: res.status,
@@ -1580,6 +1628,12 @@ export default function CeloRoomPage() {
         return;
       }
       sawOkResponse = true;
+      setRollFetchInfo({
+        url: rollUrl,
+        status: String(res.status),
+        body: rollBodySnippet,
+        error: "",
+      });
       if (j.dice?.length === 3) {
         setDice([j.dice[0], j.dice[1], j.dice[2]]);
         feltTiedToRoundIdRef.current = round.id;
@@ -1626,6 +1680,12 @@ export default function CeloRoomPage() {
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
         setRollError("Roll timed out — please retry");
+        setRollFetchInfo((prev) => ({
+          ...prev,
+          url: prev.url || rollUrl,
+          status: prev.status === "pending" ? "error" : prev.status,
+          error: "Roll timed out — please retry",
+        }));
         console.error("[C-Lo] roll: request aborted (network or 8s cap)", {
           roomId: room.id,
           roundId: round.id,
@@ -1635,7 +1695,14 @@ export default function CeloRoomPage() {
           roomId: room.id,
           roundId: round.id,
         });
-        setRollError(e instanceof Error ? e.message : "Roll failed");
+        const errMsg = e instanceof Error ? e.message : "Roll failed";
+        setRollError(errMsg);
+        setRollFetchInfo((prev) => ({
+          ...prev,
+          url: prev.url || rollUrl,
+          status: prev.status === "pending" ? "error" : prev.status,
+          error: errMsg,
+        }));
       }
       if (!sawOkResponse) setRolling(false);
     } finally {
@@ -1999,7 +2066,7 @@ export default function CeloRoomPage() {
             wordBreak: "break-all",
           }}
         >
-          {`LINE 1: me=${me ?? "null"} | role=${myRow?.role ?? "null"} | banker=${String(isBanker)} | player=${String(isPlayer)}\nLINE 2: roomStatus=${room?.status ?? "null"} | roundStatus=${round?.status ?? "null"} | inProgress=${String(inProgress)}\nLINE 3: entryAmount=${entryAmount} | balance=${myBalance} | myEntrySc=${myEntrySc} | entryPosted=${String(myRow?.entry_posted ?? "null")}\nLINE 4: canPostEntry=${String(canPostEntry)} | joinSubmitting=${String(joinSubmitting)}\nLINE 5: lastFetch=${lastFetchInfo.url} -> ${lastFetchInfo.status}\nLINE 6: lastError=${lastFetchInfo.error || "none"}\nLINE 7: lastResponseBody=${lastFetchInfo.body ? lastFetchInfo.body : "none"}`}
+          {`LINE 1: me=${me ?? "null"} | role=${myRow?.role ?? "null"} | banker=${String(isBanker)} | player=${String(isPlayer)}\nLINE 2: roomStatus=${room?.status ?? "null"} | roundStatus=${round?.status ?? "null"} | inProgress=${String(inProgress)}\nLINE 3: entryAmount=${entryAmount} | balance=${myBalance} | myEntrySc=${myEntrySc} | entryPosted=${String(myRow?.entry_posted ?? "null")}\nLINE 4: canPostEntry=${String(canPostEntry)} | joinSubmitting=${String(joinSubmitting)}\nLINE 5: lastFetch=${lastFetchInfo.url} -> ${lastFetchInfo.status}\nLINE 6: lastError=${lastFetchInfo.error || "none"}\nLINE 7: lastResponseBody=${lastFetchInfo.body ? lastFetchInfo.body : "none"}\nLINE 8: rollFetch=${rollFetchInfo.url} -> ${rollFetchInfo.status} | rollErr=${rollFetchInfo.error || "none"}\nLINE 9: bankerInFlight=${String(round?.banker_roll_in_flight ?? null)} | bankerDice=${JSON.stringify(round?.banker_dice ?? null).slice(0,20)}`}
         </div>
       )}
       {CELO_DEBUG && (
