@@ -965,12 +965,13 @@ export default function CeloRoomPage() {
     room?.banker_id ??
     players.find((p) => String(p.role ?? "").toLowerCase() === "banker")?.user_id ??
     null;
+  const myRoleLc = String(myRow?.role ?? "").toLowerCase();
   const isBanker =
-    myRow?.role === "banker" ||
+    myRoleLc === "banker" ||
     (me != null &&
       normalizeCeloUserId(me) === normalizeCeloUserId(bankerUserIdResolved));
-  const isPlayer = myRow?.role === "player";
-  const isSpec = myRow?.role === "spectator";
+  const isPlayer = myRoleLc === "player";
+  const isSpec = myRoleLc === "spectator";
   const minE = room ? minVal(room) : 1000;
   useEffect(() => {
     if (room) {
@@ -984,6 +985,7 @@ export default function CeloRoomPage() {
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
+  const roomStatusLc = String(room?.status ?? "").toLowerCase();
   const roundHasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
   const feltTripletPresent = dice != null;
 
@@ -1091,16 +1093,16 @@ export default function CeloRoomPage() {
     [players]
   );
 
-  const myEntrySc = Math.max(
+  const myEntryScRaw = Math.max(
     Math.floor(Number(myRow?.stake_amount_sc ?? 0)),
     Math.floor(Number(myRow?.entry_sc ?? 0))
   );
+  const myEntrySc = Number.isFinite(myEntryScRaw) ? myEntryScRaw : 0;
 
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
-    const rts = String(room.status ?? "");
-    if (rts === "rolling" && !round) {
+    if (roomStatusLc === "rolling" && !round) {
       return "Syncing round…";
     }
     if (inProgress && round) {
@@ -1111,24 +1113,34 @@ export default function CeloRoomPage() {
     if (isBanker && !inProgress && !playersSnapshotReady) {
       return "Syncing table…";
     }
-    if (rts === "entry_phase" && isBanker) {
+    if (roomStatusLc === "entry_phase" && isBanker) {
       return stakedPlayerCount < 1
         ? "Waiting for players to post entries…"
         : "When ready, start the round to open the felt.";
     }
-    if (rts === "waiting" && isBanker && seatedPlayerCount < 1) {
+    if (roomStatusLc === "waiting" && isBanker && seatedPlayerCount < 1) {
       return "No players seated yet. Players can post entries when seated.";
     }
-    if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc === 0) {
+    if (
+      (roomStatusLc === "entry_phase" || roomStatusLc === "active") &&
+      !isBanker &&
+      isPlayer &&
+      myEntrySc === 0
+    ) {
       return "Post your entry to join this round’s pot.";
     }
-    if (rts === "entry_phase" && !isBanker && isPlayer && myEntrySc > 0) {
+    if (roomStatusLc === "entry_phase" && !isBanker && isPlayer && myEntrySc > 0) {
       return "Entry posted. Waiting for the banker to start the round…";
     }
-    if ((rts === "waiting" || rts === "active") && !isBanker && isPlayer && myEntrySc > 0) {
+    if (
+      (roomStatusLc === "waiting" || roomStatusLc === "active") &&
+      !isBanker &&
+      isPlayer &&
+      myEntrySc > 0
+    ) {
       return "Entry posted. Waiting for the banker to start the round…";
     }
-    if (rts === "waiting" && !isBanker) {
+    if (roomStatusLc === "waiting" && !isBanker) {
       return "Waiting for the banker to start the round…";
     }
     if (isBanker) return "Start the round when at least one player has posted an entry.";
@@ -1157,9 +1169,10 @@ export default function CeloRoomPage() {
     myEntrySc > 0
   );
 
-  const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(
-    String(room?.status ?? "")
-  );
+  const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(roomStatusLc);
+  const postEntryBalanceOk = !(myBalance > 0 && entryAmount > myBalance);
+  const postEntryNotYetPosted =
+    myRow != null && myRow.entry_posted !== true && myEntrySc <= 0;
   const canPostEntry =
     !!room &&
     !!me &&
@@ -1168,36 +1181,52 @@ export default function CeloRoomPage() {
     !inProgress &&
     postEntryRoomOk &&
     entryAmount > 0 &&
-    !(myBalance > 0 && entryAmount > myBalance) &&
-    myRow != null &&
-    myRow.entry_posted !== true &&
-    myEntrySc <= 0;
+    Number.isFinite(entryAmount) &&
+    postEntryBalanceOk &&
+    postEntryNotYetPosted;
+  const postEntryUiRoomOk =
+    roomStatusLc === "entry_phase" ||
+    roomStatusLc === "waiting" ||
+    roomStatusLc === "active";
 
   useEffect(() => {
     console.log("[C-Lo UI] post entry disabled reason", {
       isBanker,
       roomStatus: room?.status,
+      roomStatusLc,
+      bankerUserIdResolved,
+      myRoleLc,
       selectedEntryAmount: entryAmount,
+      entryAmountFinite: Number.isFinite(entryAmount),
       alreadyPosted: myRow?.entry_posted,
       stake: myRow?.stake_amount_sc,
       hasRound: Boolean(round),
       inProgress,
+      postEntryRoomOk,
+      postEntryBalanceOk,
+      postEntryNotYetPosted,
       gpcBalance: myBalance,
       canPostEntry,
     });
   }, [
     isBanker,
     room?.status,
+    roomStatusLc,
+    bankerUserIdResolved,
+    myRoleLc,
     entryAmount,
     myRow?.entry_posted,
     myRow?.stake_amount_sc,
     round,
     inProgress,
+    postEntryRoomOk,
+    postEntryBalanceOk,
+    postEntryNotYetPosted,
     myBalance,
     canPostEntry,
   ]);
   const canRoll = canRollBanker || canRollPlayer;
-  const roomPhase = String(room?.status ?? "");
+  const roomPhase = roomStatusLc;
   const startableRoomStatuses = ["waiting", "active", "entry_phase"];
   const showStartRound =
     !!room &&
@@ -1722,6 +1751,27 @@ export default function CeloRoomPage() {
   }
 
   async function handlePostEntry() {
+    console.warn("[C-Lo UI] post entry handler (predicates)", {
+      canPostEntry,
+      hasRoom: !!room,
+      hasMe: !!me,
+      hasSupabase: !!supabase,
+      postEntryInFlight: postEntryInFlightRef.current,
+      isBanker,
+      isPlayer,
+      inProgress,
+      postEntryRoomOk,
+      postEntryUiRoomOk,
+      entryAmount,
+      entryAmountFinite: Number.isFinite(entryAmount),
+      postEntryBalanceOk,
+      postEntryNotYetPosted,
+      myEntrySc,
+      myRoleLc,
+      roomStatusLc,
+      bankerUserIdResolved,
+      joinSubmitting,
+    });
     console.log("[C-Lo UI] POST ENTRY BUTTON CLICKED");
     if (!room || !supabase || !me || postEntryInFlightRef.current) return;
     console.log("[C-Lo] post entry clicked", {
@@ -2160,9 +2210,7 @@ export default function CeloRoomPage() {
                       !inProgress &&
                       isPlayer &&
                       myEntrySc > 0 &&
-                      (String(room.status) === "entry_phase" ||
-                        String(room.status) === "waiting" ||
-                        String(room.status) === "active") && (
+                      postEntryUiRoomOk && (
                         <p className="text-center text-sm text-amber-200/90">
                           Your entry: {myEntrySc.toLocaleString()} GPC posted. Waiting for the banker
                           to start the round…
@@ -2196,12 +2244,11 @@ export default function CeloRoomPage() {
                       )}
                     {room &&
                       !inProgress &&
+                      !isBanker &&
                       isPlayer &&
                       myEntrySc === 0 &&
                       !isSpec &&
-                      (String(room.status) === "entry_phase" ||
-                        String(room.status) === "waiting" ||
-                        String(room.status) === "active") && (
+                      postEntryUiRoomOk && (
                         <div className="mx-auto flex w-full max-w-md flex-col gap-2">
                           {joinHint && (
                             <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
@@ -2227,7 +2274,8 @@ export default function CeloRoomPage() {
                           </div>
                           <button
                             type="button"
-                            disabled={joinSubmitting || !canPostEntry}
+                            disabled={joinSubmitting}
+                            aria-disabled={joinSubmitting || !canPostEntry}
                             aria-busy={joinSubmitting}
                             onClick={() => {
                               void handlePostEntry();
@@ -2236,6 +2284,8 @@ export default function CeloRoomPage() {
                             style={{
                               background: "linear-gradient(135deg, #F5C842, #B8860B)",
                               opacity: joinSubmitting || !canPostEntry ? 0.45 : 1,
+                              cursor:
+                                joinSubmitting || !canPostEntry ? "not-allowed" : "pointer",
                             }}
                           >
                             {joinSubmitting

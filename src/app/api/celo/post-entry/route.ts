@@ -130,7 +130,7 @@ export async function POST(request: Request) {
 
   console.log("[C-Lo PostEntry] existing player", pl);
 
-  if (String(pl.role) !== "player") {
+  if (String(pl.role ?? "").trim().toLowerCase() !== "player") {
     return jsonErr("Only players in a player seat can post an entry", 400);
   }
 
