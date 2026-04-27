@@ -34,7 +34,7 @@ export function evaluateRoll(
   if (a === 4 && b === 5 && c === 6) {
     return {
       dice,
-      rollName: "C-LO! 🎲",
+      rollName: "C-Lo",
       result: "instant_win",
       point: null,
       isCelo: true,
@@ -44,17 +44,9 @@ export function evaluateRoll(
 
   // Trips
   if (a === b && b === c) {
-    const names: Record<number, string> = {
-      1: "ACE OUT! 🎲",
-      2: "TRIP DEUCES! 🎲",
-      3: "TRIP THREES! 🎲",
-      4: "TRIP FOURS! 🎲",
-      5: "TRIP FIVES! 🎲",
-      6: "TRIP SIXES - THE BOSS! 👑",
-    };
     return {
       dice,
-      rollName: names[a] ?? "TRIPS! 🎲",
+      rollName: "Trips",
       result: "instant_win",
       point: null,
       isCelo: false,
@@ -80,7 +72,7 @@ export function evaluateRoll(
     if (odd === 6) {
       return {
         dice,
-        rollName: "HAND CRACK! 💥",
+        rollName: "Head Crack",
         result: "instant_win",
         point: null,
         isCelo: false,
@@ -90,25 +82,23 @@ export function evaluateRoll(
     if (odd === 1) {
       return {
         dice,
-        rollName: "DICK! 😂",
+        rollName: "Dick",
         result: "instant_loss",
         point: null,
         isCelo: false,
         isTrips: false,
       };
     }
-    const pointNames: Record<number, [string, string]> = {
-      5: ["POUND! 🔵", "POLICE! 🚔"],
-      4: ["ZOE! 🇭🇹", "HAITIAN! 🇭🇹"],
-      3: ["GIRL! 👧", "HOE! 😅"],
-      2: ["SHORTLY! 👶", "JIT! 👶"],
+    const pointNameByOdd: Record<number, string> = {
+      2: "Shorty",
+      3: "Girl",
+      4: "Zoe",
+      5: "Pound",
     };
-    if (pointNames[odd]) {
-      const [n0, n1] = pointNames[odd];
-      const name = [n0, n1][randomInt(0, 2)];
+    if (pointNameByOdd[odd]) {
       return {
         dice,
-        rollName: name,
+        rollName: pointNameByOdd[odd]!,
         result: "point",
         point: odd,
         isCelo: false,
@@ -117,11 +107,11 @@ export function evaluateRoll(
     }
   }
 
-  // Shit 1-2-3
+  // 1-2-3
   if (a === 1 && b === 2 && c === 3) {
     return {
       dice,
-      rollName: "SHIT! 💩",
+      rollName: "Trey",
       result: "instant_loss",
       point: null,
       isCelo: false,
@@ -132,7 +122,7 @@ export function evaluateRoll(
   // No count
   return {
     dice,
-    rollName: "No Count 🎲",
+    rollName: "No Count",
     result: "no_count",
     point: null,
     isCelo: false,

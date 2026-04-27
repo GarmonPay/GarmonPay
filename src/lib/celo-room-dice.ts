@@ -115,20 +115,29 @@ export function computeCeloVisualDiceMode(input: {
   rollingAction: boolean;
   /** Local client handleRoll() animation (min delay); prefer rollingAction to avoid stuck tumble. */
   localRolling: boolean;
+  serverBankerInFlight: boolean;
+  serverPlayerInFlight: boolean;
 }): CeloVisualDiceMode {
   const s = input.roundStatus ?? "";
   if (!input.inProgress) return "idle";
   if (s === "banker_rolling") {
-    if (input.rollingAction || input.localRolling) return "banker_tumble";
+    if (input.rollingAction || input.localRolling || input.serverBankerInFlight) {
+      return "banker_tumble";
+    }
     if (input.roundHasBankerTriplet || input.feltTripletPresent) {
       return "banker_settled";
     }
     return "idle";
   }
   if (s === "player_rolling") {
-    if (input.rollingAction || input.localRolling) return "player_tumble";
+    if (input.rollingAction || input.localRolling || input.serverPlayerInFlight) {
+      return "player_tumble";
+    }
     if (input.currentPlayerHasFinalRoll || input.feltTripletPresent) {
       return "player_settled";
+    }
+    if (input.roundHasBankerTriplet) {
+      return "banker_settled";
     }
     return "idle";
   }
