@@ -12,6 +12,7 @@ import {
   CELO_IDLE_DICE,
   clampDie,
   computeCeloVisualDiceMode,
+  extractDiceFromRoll,
   resolveCeloFeltDice,
   shouldClobberFeltTripletOnFetch,
   tripletFromDiceJson,
@@ -175,6 +176,7 @@ export default function CeloRoomPage() {
   const joinInFlightRef = useRef(false);
   const postEntryInFlightRef = useRef(false);
   const [rollError, setRollError] = useState<string | null>(null);
+  const [latestRollDebug, setLatestRollDebug] = useState<unknown>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
   const [lowerBankError, setLowerBankError] = useState<string | null>(null);
@@ -1031,6 +1033,7 @@ export default function CeloRoomPage() {
         roundHasBankerTriplet,
         feltTripletPresent,
         currentPlayerHasFinalRoll: currentPlayerResolvedRoll,
+        rollingAction,
         localRolling: rolling,
       }),
     [
@@ -1039,9 +1042,28 @@ export default function CeloRoomPage() {
       roundHasBankerTriplet,
       feltTripletPresent,
       currentPlayerResolvedRoll,
+      rollingAction,
       rolling,
     ]
   );
+
+  useEffect(() => {
+    if (!rollingAction) return;
+    const t = setTimeout(() => {
+      console.warn("[C-Lo] rollingAction safety timeout");
+      setRollingAction(false);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [rollingAction]);
+
+  useEffect(() => {
+    console.log("[C-Lo Dice] visual mode", {
+      rollingAction,
+      roundStatus: round?.status,
+      latestRoll: latestRollDebug,
+      diceValues: dice,
+    });
+  }, [rollingAction, round?.status, latestRollDebug, dice]);
 
   useEffect(() => {
     console.log("[C-Lo] state", {
@@ -1546,7 +1568,11 @@ export default function CeloRoomPage() {
       ac.abort();
     }, ROLL_HARD_TIMEOUT_MS);
     type RollJson = {
+      ok?: boolean;
       error?: string;
+      roll?: unknown;
+      /** Same as currentRound for player success responses. */
+      round?: Record<string, unknown> | null;
       dice?: number[];
       rollName?: string;
       outcome?: string;
@@ -1570,13 +1596,13 @@ export default function CeloRoomPage() {
       setRollingAction(false);
       void fetchAll();
     }, ROLL_HARD_TIMEOUT_MS);
-    setRollingAction(true);
-    setRolling(true);
-    setRollName(null);
-    setDice(null);
     let sawOkResponse = false;
     const rollUrl = "/api/celo/round/roll";
     try {
+      setRollingAction(true);
+      setRolling(true);
+      setRollName(null);
+      setDice(null);
       setRollFetchInfo({ url: rollUrl, status: "pending", body: "", error: "" });
       const [fetchRes] = await Promise.all([
         fetchCeloApi(supabase, rollUrl, {
@@ -1648,13 +1674,36 @@ export default function CeloRoomPage() {
         body: rollBodySnippet,
         error: "",
       });
-      if (j.dice?.length === 3) {
-        setDice([j.dice[0], j.dice[1], j.dice[2]]);
+      const rj = j as RollJson;
+      console.log("[C-Lo] roll response", { status: res.status, body: rj });
+      if (rj.ok === false) {
+        setRollError(rj.error ?? "Could not complete roll");
+        setRolling(false);
+        setRollingAction(false);
+        return;
+      }
+      setLatestRollDebug(rj.roll ?? rj);
+      const fromRoll = rj.roll != null ? extractDiceFromRoll(rj.roll) : null;
+      const fromTop = extractDiceFromRoll(rj);
+      const dArr = rj.dice;
+      const tripletRaw =
+        fromRoll ??
+        fromTop ??
+        (Array.isArray(dArr) && dArr.length >= 3
+          ? ([dArr[0], dArr[1], dArr[2]] as [number, number, number])
+          : null);
+      if (tripletRaw) {
+        setDice([
+          clampDie(tripletRaw[0]),
+          clampDie(tripletRaw[1]),
+          clampDie(tripletRaw[2]),
+        ]);
         feltTiedToRoundIdRef.current = round.id;
       } else {
-        console.error("[C-Lo] roll: ok but missing j.dice (expected 3)", { j, roundId: round.id });
+        console.error("[C-Lo] roll: ok but could not extract dice from response", { j: rj, roundId: round.id });
       }
       setRolling(false);
+      setRollingAction(false);
       if (j.rollName) {
         setTimeout(() => setRollName(j.rollName ?? null), 300);
       }
@@ -1666,8 +1715,8 @@ export default function CeloRoomPage() {
         setShowBanker(true);
       }
       const rollRoomFromApi =
-        j.room && String((j.room as { id?: string }).id ?? "") === room.id
-          ? j.room
+        rj.room && String((rj.room as { id?: string }).id ?? "") === room.id
+          ? rj.room
           : undefined;
       const rollRoomPatch: Record<string, unknown> | undefined = (() => {
         if (rollRoomFromApi) return { ...rollRoomFromApi };
@@ -1676,9 +1725,10 @@ export default function CeloRoomPage() {
         }
         return undefined;
       })();
+      const roundForMerge = rj.currentRound ?? rj.round;
       const rollRoundPatch: Record<string, unknown> | undefined =
-        j.currentRound && String((j.currentRound as { id?: string }).id ?? round.id) === round.id
-          ? j.currentRound
+        roundForMerge && String((roundForMerge as { id?: string }).id ?? round.id) === round.id
+          ? roundForMerge
           : undefined;
       commitCeloAggregateMerge(
         {

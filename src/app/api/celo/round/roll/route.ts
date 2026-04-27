@@ -685,6 +685,42 @@ async function handleBankerRoll(
   );
 }
 
+/** API-friendly roll payload (includes dice_1..3 for clients that do not read `dice` jsonb). */
+function buildClientPlayerRoll(
+  row: Record<string, unknown> | null,
+  dice: [number, number, number],
+  meta: {
+    createdAt: string;
+    userId: string;
+    roomId: string;
+    roundId: string;
+  }
+) {
+  const d1 = dice[0];
+  const d2 = dice[1];
+  const d3 = dice[2];
+  if (row) {
+    return {
+      ...row,
+      dice_1: d1,
+      dice_2: d2,
+      dice_3: d3,
+      roll_type: "player" as const,
+    };
+  }
+  return {
+    dice_1: d1,
+    dice_2: d2,
+    dice_3: d3,
+    user_id: meta.userId,
+    room_id: meta.roomId,
+    round_id: meta.roundId,
+    created_at: meta.createdAt,
+    roll_type: "player_reroll" as const,
+    outcome: "reroll" as const,
+  };
+}
+
 async function handlePlayerRoll(
   admin: SupabaseClient,
   ctx: {
@@ -699,6 +735,7 @@ async function handlePlayerRoll(
 ) {
   const { room, round, userId, player, dice, roll, feePct } = ctx;
   const now = new Date().toISOString();
+  let insertedRow: Record<string, unknown> | null = null;
   const bankerPoint = round.banker_point;
   if (bankerPoint == null) {
     return NextResponse.json(
@@ -802,20 +839,31 @@ async function handlePlayerRoll(
   }
   if (outcome !== "reroll") {
     const diceArr = [dice[0], dice[1], dice[2]];
-    await admin.from("celo_player_rolls").insert({
-      round_id: round.id,
-      room_id: room.id,
-      user_id: userId,
-      dice: diceArr,
-      roll_name: roll.rollName,
-      roll_result: roll.result,
-      point: roll.point,
-      entry_sc: entry,
-      outcome,
-      payout_sc: payoutSc,
-      platform_fee_sc:
-        outcome === "win" ? Math.floor((entry * 2 * feePct) / 100) : 0,
-    });
+    const { data: ins, error: insErr } = await admin
+      .from("celo_player_rolls")
+      .insert({
+        round_id: round.id,
+        room_id: room.id,
+        user_id: userId,
+        dice: diceArr,
+        roll_name: roll.rollName,
+        roll_result: roll.result,
+        point: roll.point,
+        entry_sc: entry,
+        outcome,
+        payout_sc: payoutSc,
+        platform_fee_sc:
+          outcome === "win" ? Math.floor((entry * 2 * feePct) / 100) : 0,
+      })
+      .select("*")
+      .single();
+    if (insErr || !ins) {
+      return NextResponse.json(
+        { ok: false as const, error: insErr?.message ?? "Failed to save player roll" },
+        { status: 500 }
+      );
+    }
+    insertedRow = ins as Record<string, unknown>;
     await admin
       .from("celo_room_players")
       .update({ entry_sc: 0, bet_cents: 0 })
@@ -890,7 +938,31 @@ async function handlePlayerRoll(
         .eq("id", round.id);
     }
   }
+
+  const { data: roundOut } = await admin
+    .from("celo_rounds")
+    .select("*")
+    .eq("id", round.id)
+    .maybeSingle();
+  const { data: roomOut } = await admin
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", room.id)
+    .maybeSingle();
+
+  const clientRoll = buildClientPlayerRoll(insertedRow, dice, {
+    createdAt: now,
+    userId,
+    roomId: room.id,
+    roundId: round.id,
+  });
+
   return NextResponse.json({
+    ok: true as const,
+    roll: clientRoll,
+    round: roundOut ?? null,
+    room: roomOut ?? null,
+    currentRound: roundOut ?? null,
     dice,
     rollName: roll.rollName,
     result: roll.result,

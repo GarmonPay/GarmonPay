@@ -41,6 +41,29 @@ export function shouldClobberFeltTripletOnFetch(p: {
   return true;
 }
 
+/**
+ * Parse dice from a roll row or API object (DB column `dice`, or dice_1..3, die1..3, d1..d3, or `dice` array).
+ */
+export function extractDiceFromRoll(row: unknown): [number, number, number] | null {
+  if (row == null || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  if (r.dice != null) {
+    const t = tripletFromDiceJson(r.dice);
+    if (t) return [t[0], t[1], t[2]];
+  }
+  const n = (v: unknown) => {
+    const x = Math.floor(Number(v));
+    return Number.isFinite(x) ? x : NaN;
+  };
+  const u1 = n(r.dice_1 ?? r.die1 ?? r.d1);
+  const u2 = n(r.dice_2 ?? r.die2 ?? r.d2);
+  const u3 = n(r.dice_3 ?? r.die3 ?? r.d3);
+  if (Number.isFinite(u1) && Number.isFinite(u2) && Number.isFinite(u3)) {
+    return [u1, u2, u3];
+  }
+  return null;
+}
+
 export function tripletFromDiceJson(
   raw: unknown
 ): [1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6] | null {
@@ -88,27 +111,26 @@ export function computeCeloVisualDiceMode(input: {
   feltTripletPresent: boolean;
   /** Current seat's player already has a win/loss row this round (authoritative). */
   currentPlayerHasFinalRoll: boolean;
-  /** Local client is mid handleRoll() animation window. */
+  /** True while POST /api/celo/round/roll is in flight (not the same as round phase). */
+  rollingAction: boolean;
+  /** Local client handleRoll() animation (min delay); prefer rollingAction to avoid stuck tumble. */
   localRolling: boolean;
 }): CeloVisualDiceMode {
   const s = input.roundStatus ?? "";
   if (!input.inProgress) return "idle";
   if (s === "banker_rolling") {
-    /** `banker_roll_in_flight` is animation-only on the server; do not gate felt UX on it. */
-    if (
-      input.localRolling ||
-      (!input.roundHasBankerTriplet && !input.feltTripletPresent)
-    ) {
-      return "banker_tumble";
+    if (input.rollingAction || input.localRolling) return "banker_tumble";
+    if (input.roundHasBankerTriplet || input.feltTripletPresent) {
+      return "banker_settled";
     }
-    return "banker_settled";
+    return "idle";
   }
   if (s === "player_rolling") {
-    if (input.localRolling) return "player_tumble";
+    if (input.rollingAction || input.localRolling) return "player_tumble";
     if (input.currentPlayerHasFinalRoll || input.feltTripletPresent) {
       return "player_settled";
     }
-    return "player_tumble";
+    return "idle";
   }
   if (s === "betting") return "banker_settled";
   return "idle";
