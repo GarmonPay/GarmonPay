@@ -15,7 +15,13 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 /** Browser/client Supabase client. Returns null if env not set. */
 export function createBrowserClient() {
   if (!url || !anonKey) return null;
-  return createClient(url, anonKey);
+  return createClient(url, anonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
 }
 
 /** Server-side client with optional user JWT. Returns null if env not set. */

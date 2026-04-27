@@ -668,6 +668,24 @@ export default function CeloRoomPage() {
   }, [router, roomId, supabase, fetchAll]);
 
   useEffect(() => {
+    if (!supabase) return;
+    const nextPath =
+      "/login?next=" + encodeURIComponent(`/dashboard/games/celo/${roomId}`);
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        router.replace(nextPath);
+        return;
+      }
+      if (event === "TOKEN_REFRESHED" && !session) {
+        router.replace(nextPath);
+      }
+    });
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [supabase, router, roomId]);
+
+  useEffect(() => {
     if (!supabase || !me) {
       setMyProfile(null);
       return;
@@ -1793,10 +1811,26 @@ export default function CeloRoomPage() {
     postEntryInFlightRef.current = true;
     setJoinSubmitting(true);
     try {
-      const res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
+      const postBody = JSON.stringify({ roomId: room.id, amount: entryAmount });
+      let res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
         method: "POST",
-        body: JSON.stringify({ roomId: room.id, amount: entryAmount }),
+        body: postBody,
       });
+      if (res.status === 401) {
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        const after = await supabase.auth.getSession();
+        if (
+          refreshErr ||
+          !after.data.session?.access_token
+        ) {
+          setJoinHint("Session expired. Please sign in again.");
+          return;
+        }
+        res = await fetchCeloApi(supabase, "/api/celo/post-entry", {
+          method: "POST",
+          body: postBody,
+        });
+      }
       const text = await res.text();
       console.log("[C-Lo UI] post entry raw response", { status: res.status, body: text });
       let j: {

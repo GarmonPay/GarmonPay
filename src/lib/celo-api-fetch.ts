@@ -11,13 +11,24 @@ const CELO_401_JSON = JSON.stringify({
  * Refreshes the Supabase session when the access token is missing (common on
  * mobile / partitioned storage) and returns a valid JWT for `Authorization: Bearer`.
  */
+function accessTokenLikelyExpired(session: {
+  access_token?: string;
+  expires_at?: number;
+} | null): boolean {
+  if (!session?.access_token) return true;
+  const exp = session.expires_at;
+  if (exp == null || !Number.isFinite(exp)) return false;
+  const skewSec = 60;
+  return exp * 1000 < Date.now() + skewSec * 1000;
+}
+
 export async function getFreshAccessToken(supabase: SupabaseClient): Promise<string> {
   const first = await supabase.auth.getSession();
   if (first.error) {
     console.log("[C-Lo Auth] getSession error (non-fatal)", first.error.message);
   }
   let session = first.data.session;
-  if (session?.access_token) {
+  if (session?.access_token && !accessTokenLikelyExpired(session)) {
     console.log("[C-Lo Auth] session exists", { fromCache: true });
     return session.access_token;
   }
