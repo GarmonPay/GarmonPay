@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
-import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
+import { getUserCoins } from "@/lib/coins";
 import { celoAccountingLog } from "@/lib/celo-accounting";
 import { validateEntry } from "@/lib/celo-engine";
 import {
@@ -148,45 +148,59 @@ export async function POST(request: Request) {
     return jsonErr("Insufficient GPay Coins for this entry", 400);
   }
 
-  const entryRef = `celo_entry_post_${roomId}_${userId}`;
+  const entryRef = `celo:post-entry:${roomId}:${userId}:${Date.now()}:${crypto.randomUUID()}`;
   celoAccountingLog("entry_debit_post", { roomId, userId, amount, reference: entryRef });
 
-  const debit = await debitGpayCoins(
-    userId,
-    amount,
-    "C-Lo table entry",
-    entryRef,
-    "celo_entry"
+  const { data: postEntryAtomicResult, error: postEntryAtomicErr } = await adminClient.rpc(
+    "celo_post_entry_atomic",
+    {
+      p_room_id: roomId,
+      p_user_id: userId,
+      p_amount: amount,
+      p_reference: entryRef,
+      p_description: "C-Lo table entry",
+      p_ledger_type: "celo_entry",
+    }
   );
-  if (!debit.success) {
-    return jsonErr(debit.message ?? "Debit failed", 400);
+  if (postEntryAtomicErr) {
+    console.error("[C-Lo PostEntry] celo_post_entry_atomic RPC failed", {
+      roomId,
+      userId,
+      amount,
+      reference: entryRef,
+      message: postEntryAtomicErr.message,
+      code: postEntryAtomicErr.code,
+      details: postEntryAtomicErr.details,
+    });
+    return jsonErr("Could not post entry", 500);
+  }
+  const atomic = (postEntryAtomicResult ?? {}) as {
+    success?: boolean;
+    message?: string;
+  };
+  if (atomic.success !== true) {
+    const m = String(atomic.message ?? "Could not post entry");
+    const lowered = m.toLowerCase();
+    const status =
+      lowered.includes("duplicate") ||
+      lowered.includes("insufficient") ||
+      lowered.includes("already posted") ||
+      lowered.includes("cannot post") ||
+      lowered.includes("not seated") ||
+      lowered.includes("player seat")
+        ? 400
+        : 500;
+    return jsonErr(m, status);
   }
 
   const { data: updated, error: uErr } = await adminClient
     .from("celo_room_players")
-    .update({
-      entry_sc: amount,
-      bet_cents: amount,
-      entry_posted: true,
-      stake_amount_sc: amount,
-      status: "active",
-      player_seat_status: "active",
-    })
+    .select(CELO_SELECT)
     .eq("room_id", roomId)
     .eq("user_id", userId)
-    .select(CELO_SELECT)
     .single();
-
   if (uErr || !updated) {
-    const refundRef = `celo_entry_refund_${roomId}_${userId}`;
-    await creditGpayIdempotent(
-      userId,
-      amount,
-      "C-Lo post-entry refund (update failed)",
-      refundRef,
-      "celo_bank_refund"
-    );
-    return jsonErr(uErr?.message ?? "Could not save entry", 500);
+    return jsonErr("Entry posted but player row refresh failed", 500);
   }
 
   console.log("[C-Lo PostEntry] updated player", updated);
