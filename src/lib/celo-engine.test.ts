@@ -74,4 +74,21 @@ describe("evaluateRoll (authentic C-Lo rules)", () => {
     expect(r.result).toBe("no_count");
     expect(r.rollName).toBe("No Count");
   });
+
+  /** Spot-check authentic street names for rules documentation / regression. */
+  it("cultural rollName map (sample)", () => {
+    const samples: [number, number, number, string][] = [
+      [3, 3, 3, "Trips"],
+      [4, 5, 6, "C-Lo"],
+      [1, 2, 3, "Trey"],
+      [6, 6, 5, "Pound"],
+      [4, 4, 6, "Head Crack"],
+      [6, 6, 2, "Shorty"],
+      [5, 5, 4, "Zoe"],
+      [4, 4, 3, "Girl"],
+    ];
+    for (const [a, b, c, name] of samples) {
+      expect(d3(a, b, c).rollName).toBe(name);
+    }
+  });
 });

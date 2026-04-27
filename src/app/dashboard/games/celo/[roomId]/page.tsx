@@ -81,12 +81,101 @@ type Round = {
   push?: boolean;
   /** Set when the banker has rolled; source of truth for their dice in this round. */
   banker_dice?: unknown;
+  banker_dice_name?: string | null;
   banker_dice_result?: string | null;
   banker_roll_in_flight?: boolean | null;
   roll_processing?: boolean | null;
   roll_animation_start_at?: string | null;
   roll_animation_duration_ms?: number | null;
 };
+
+function buildCeloResultBannerText(
+  round: Round,
+  rolls: {
+    outcome: string | null;
+    roll_name?: string | null;
+    roll_result?: string | null;
+    point?: number | null;
+    user_id?: string | null;
+  }[]
+): { title: string; subtitle: string } {
+  const bRes = String(round.banker_dice_result ?? "");
+  const bName = String(round.banker_dice_name ?? "").trim();
+  const bPt = round.banker_point;
+  const last = rolls[0];
+
+  if (
+    round.push === true ||
+    (bRes === "point" && last?.outcome === "push")
+  ) {
+    const pt =
+      typeof bPt === "number"
+        ? bPt
+        : typeof last?.point === "number"
+          ? last.point
+          : "?";
+    return {
+      title: `PUSH — Both rolled ${pt}. Stakes returned.`,
+      subtitle: "",
+    };
+  }
+
+  if (!last) {
+    if (bRes === "instant_win") {
+      return { title: `BANKER WINS — ${bName || "Banker"}`, subtitle: "" };
+    }
+    if (bRes === "instant_loss") {
+      return {
+        title: `PLAYERS WIN — Banker rolled ${bName || "out"}`,
+        subtitle: "",
+      };
+    }
+    return { title: "Round complete", subtitle: "" };
+  }
+
+  const pname = String(last.roll_name ?? "").trim();
+
+  if (
+    bRes === "point" &&
+    last.outcome === "win" &&
+    last.point != null &&
+    bPt != null
+  ) {
+    return {
+      title: `PLAYER WINS — Player ${last.point} beat Banker ${bPt}`,
+      subtitle: pname ? `(${pname})` : "",
+    };
+  }
+  if (
+    bRes === "point" &&
+    last.outcome === "loss" &&
+    last.point != null &&
+    bPt != null
+  ) {
+    return {
+      title: `BANKER WINS — Banker ${bPt} beat Player ${last.point}`,
+      subtitle: bName ? `Banker: ${bName}` : "",
+    };
+  }
+
+  if (last.outcome === "win" && last.roll_result === "instant_win") {
+    return {
+      title: `PLAYER WINS — ${pname || "Win"}`,
+      subtitle: "",
+    };
+  }
+  if (last.outcome === "loss" && last.roll_result === "instant_loss") {
+    return {
+      title: `BANKER WINS — ${pname || "House wins"}`,
+      subtitle: "Player rolled out",
+    };
+  }
+
+  return {
+    title: `Round complete${pname ? ` — ${pname}` : ""}`,
+    subtitle: "",
+  };
+}
 
 function bankVal(r: Room) {
   return r.current_bank_sc ?? r.current_bank_cents ?? 0;
@@ -170,6 +259,11 @@ export default function CeloRoomPage() {
   const [celoTakeoverRoundId, setCeloTakeoverRoundId] = useState<string | null>(null);
   const [celoTakeoverSec, setCeloTakeoverSec] = useState<number | null>(null);
   const celoTimeoutPassSentRef = useRef(false);
+  const [resultBanner, setResultBanner] = useState<{
+    title: string;
+    subtitle: string;
+    celoOfferUserId: string | null;
+  } | null>(null);
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -383,6 +477,24 @@ export default function CeloRoomPage() {
       );
       const ar = (roundsRes.data as Round[] | null) ?? [];
       activeRound = ar[0] ?? null;
+      const rs = String((incomingRoom as { status?: string })?.status ?? "");
+      if (
+        !activeRound &&
+        (rs === "rolling" || rs === "active") &&
+        roomRes.data &&
+        roundsRes.error == null
+      ) {
+        const { data: lastDone } = await supabase
+          .from("celo_rounds")
+          .select("*")
+          .eq("room_id", roomId)
+          .eq("status", "completed")
+          .order("round_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (isStaleFetch()) return;
+        if (lastDone) activeRound = lastDone as unknown as Round;
+      }
     } else {
       const body = (await stateRes.json()) as {
         room?: Record<string, unknown>;
@@ -436,6 +548,23 @@ export default function CeloRoomPage() {
       ) {
         activeRound = r2 as unknown as Round;
       }
+    }
+
+    if (
+      (roomStatusStr === "rolling" || roomStatusStr === "active") &&
+      !activeRound &&
+      supabase
+    ) {
+      const { data: lastCompleted } = await supabase
+        .from("celo_rounds")
+        .select("*")
+        .eq("room_id", roomId)
+        .eq("status", "completed")
+        .order("round_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (isStaleFetch()) return;
+      if (lastCompleted) activeRound = lastCompleted as unknown as Round;
     }
 
     if (isStaleFetch()) return;
@@ -1121,6 +1250,14 @@ export default function CeloRoomPage() {
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
+  /** Server delays room→waiting so everyone can see final dice/outcome first. */
+  const resultPauseActive = Boolean(
+    round &&
+      String(round.status).toLowerCase() === "completed" &&
+      room &&
+      String(room.status).toLowerCase() !== "waiting"
+  );
+  const inProgressForVisual = inProgress || resultPauseActive;
   const roundHasBankerTriplet = !!tripletFromDiceJson(round?.banker_dice);
   const bankerTripletLive = useMemo(
     () => tripletFromDiceJson(round?.banker_dice),
@@ -1133,7 +1270,7 @@ export default function CeloRoomPage() {
   const visualDiceMode = useMemo(
     () =>
       computeCeloVisualDiceMode({
-        inProgress,
+        inProgress: inProgressForVisual,
         roundStatus: round?.status,
         roundHasBankerTriplet,
         feltTripletPresent,
@@ -1142,9 +1279,10 @@ export default function CeloRoomPage() {
         localRolling: rolling,
         serverBankerInFlight: round?.banker_roll_in_flight === true,
         serverPlayerInFlight: round?.roll_processing === true,
+        resultPauseActive,
       }),
     [
-      inProgress,
+      inProgressForVisual,
       round?.status,
       roundHasBankerTriplet,
       feltTripletPresent,
@@ -1153,6 +1291,7 @@ export default function CeloRoomPage() {
       rolling,
       round?.banker_roll_in_flight,
       round?.roll_processing,
+      resultPauseActive,
     ]
   );
 
@@ -1188,7 +1327,7 @@ export default function CeloRoomPage() {
   const isRollingFaces =
     visualDiceMode === "banker_tumble" || visualDiceMode === "player_tumble";
 
-  const showIdleDice = !inProgress && !rolling;
+  const showIdleDice = !inProgressForVisual && !rolling;
   const facePips: [number, number, number] = (() => {
     if (dice) {
       return [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])];
@@ -1200,6 +1339,18 @@ export default function CeloRoomPage() {
       round?.status === "player_rolling" &&
       !currentPlayerResolvedRoll &&
       bankerTripletLive
+    ) {
+      return [
+        bankerTripletLive[0],
+        bankerTripletLive[1],
+        bankerTripletLive[2],
+      ];
+    }
+    if (
+      resultPauseActive &&
+      String(round?.status ?? "").toLowerCase() === "completed" &&
+      bankerTripletLive &&
+      !currentPlayerResolvedRoll
     ) {
       return [
         bankerTripletLive[0],
@@ -1372,6 +1523,7 @@ export default function CeloRoomPage() {
     !isBanker &&
     isPlayer &&
     !inProgress &&
+    !resultPauseActive &&
     postEntryRoomOk &&
     entryAmount > 0 &&
     Number.isFinite(entryAmount) &&
@@ -1427,7 +1579,10 @@ export default function CeloRoomPage() {
     !inProgress &&
     startableRoomStatuses.includes(roomPhase);
   const canStartRound =
-    showStartRound && stakedPlayerCount >= 1 && !rollingAction;
+    showStartRound &&
+    stakedPlayerCount >= 1 &&
+    !rollingAction &&
+    !resultPauseActive;
   const startRoundDisabledReason = (() => {
     if (!showStartRound) return null;
     if (rollingAction) return "round_action_in_progress";
@@ -1507,9 +1662,40 @@ export default function CeloRoomPage() {
   }, [isBanker, round?.status, rollingAction, canRollBanker]);
 
   const rollDiceDisabled =
-    round?.status === "banker_rolling" && isBanker
+    resultPauseActive ||
+    (round?.status === "banker_rolling" && isBanker
       ? !canRollBanker && !CELO_DEBUG
-      : rollingAction;
+      : rollingAction);
+
+  useEffect(() => {
+    if (!resultPauseActive || !round?.id || !supabase) {
+      setResultBanner(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data: rolls } = await supabase
+        .from("celo_player_rolls")
+        .select("outcome, roll_name, roll_result, point, user_id")
+        .eq("round_id", round.id)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (cancelled) return;
+      const r = rolls ?? [];
+      const text = buildCeloResultBannerText(round, r);
+      const winR = r.find((x) => x.outcome === "win");
+      setResultBanner({
+        ...text,
+        celoOfferUserId:
+          round.player_celo_offer === true && winR?.user_id
+            ? String(winR.user_id)
+            : null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resultPauseActive, supabase, round]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2803,6 +2989,123 @@ export default function CeloRoomPage() {
         />
       </div>
       </div>
+      {resultPauseActive && resultBanner && room && round?.id && (
+        <div
+          className="pointer-events-auto fixed inset-x-0 bottom-0 z-[20080] border-t border-amber-500/35 px-3 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.65)] sm:py-4"
+          style={{ background: "rgba(13,5,32,0.97)" }}
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="min-w-0 flex-1">
+              <p
+                className={`text-base font-bold leading-snug text-amber-100 sm:text-lg ${cinzel.className}`}
+              >
+                {resultBanner.title}
+              </p>
+              {resultBanner.subtitle ? (
+                <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
+                  {resultBanner.subtitle}
+                </p>
+              ) : null}
+            </div>
+            {resultBanner.celoOfferUserId &&
+              me &&
+              normalizeCeloUserId(resultBanner.celoOfferUserId) ===
+                normalizeCeloUserId(me) && (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCeloTakeoverError(null);
+                      if (!supabase || !room) return;
+                      const res = await fetchCeloApi(
+                        supabase,
+                        "/api/celo/banker-takeover",
+                        {
+                          method: "POST",
+                          body: JSON.stringify({
+                            room_id: room.id,
+                            round_id: round.id,
+                            accept: true,
+                          }),
+                        }
+                      );
+                      if (res.ok) {
+                        celoTimeoutPassSentRef.current = true;
+                        setShowCeloTakeover(false);
+                        setCeloTakeoverExpiresAt(null);
+                        setCeloTakeoverRoundId(null);
+                        void fetchAll();
+                        return;
+                      }
+                      if (res.status === 401) {
+                        alertCeloUnauthorized();
+                        return;
+                      }
+                      const e = (await res.json().catch(() => ({}))) as {
+                        error?: string;
+                      };
+                      setCeloTakeoverError(
+                        e.error ?? "Could not take the bank"
+                      );
+                    }}
+                    className="min-h-[40px] rounded-md px-4 text-sm font-bold"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #F5C842, #D4A017)",
+                      color: "#0A0A0A",
+                    }}
+                  >
+                    Take Banker
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCeloTakeoverError(null);
+                      if (!supabase || !room) return;
+                      const res = await fetchCeloApi(
+                        supabase,
+                        "/api/celo/banker-takeover",
+                        {
+                          method: "POST",
+                          body: JSON.stringify({
+                            room_id: room.id,
+                            round_id: round.id,
+                            accept: false,
+                          }),
+                        }
+                      );
+                      if (res.ok) {
+                        celoTimeoutPassSentRef.current = true;
+                        setShowCeloTakeover(false);
+                        setCeloTakeoverExpiresAt(null);
+                        setCeloTakeoverRoundId(null);
+                        void fetchAll();
+                        return;
+                      }
+                      if (res.status === 401) {
+                        alertCeloUnauthorized();
+                        return;
+                      }
+                      void fetchAll();
+                    }}
+                    className="min-h-[40px] px-4 text-sm text-[#9CA3AF]"
+                  >
+                    Pass
+                  </button>
+                </div>
+              )}
+          </div>
+          {celoTakeoverError &&
+            resultBanner.celoOfferUserId &&
+            me &&
+            normalizeCeloUserId(resultBanner.celoOfferUserId) ===
+              normalizeCeloUserId(me) && (
+              <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-300/95">
+                {celoTakeoverError}
+              </p>
+            )}
+        </div>
+      )}
       {showLower && room && (
         <div
           className="fixed inset-0 z-[20100] flex items-end justify-center p-0"

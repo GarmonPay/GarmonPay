@@ -38,6 +38,9 @@ export function shouldClobberFeltTripletOnFetch(p: {
   if (s === "player_rolling" && !p.hasPlayerFinalWinLoss && p.localFeltTiedToThisRound) {
     return false;
   }
+  if (s === "completed" && p.hasLocalFeltTriplet && p.localFeltTiedToThisRound) {
+    return false;
+  }
   return true;
 }
 
@@ -117,9 +120,23 @@ export function computeCeloVisualDiceMode(input: {
   localRolling: boolean;
   serverBankerInFlight: boolean;
   serverPlayerInFlight: boolean;
+  /** Round is completed but room not yet waiting — keep final dice on felt. */
+  resultPauseActive?: boolean;
 }): CeloVisualDiceMode {
   const s = input.roundStatus ?? "";
-  if (!input.inProgress) return "idle";
+  const paused =
+    input.resultPauseActive === true &&
+    String(s).toLowerCase() === "completed";
+  if (!input.inProgress && !paused) return "idle";
+  if (paused) {
+    if (input.currentPlayerHasFinalRoll || input.feltTripletPresent) {
+      return "player_settled";
+    }
+    if (input.roundHasBankerTriplet) {
+      return "banker_settled";
+    }
+    return "idle";
+  }
   if (s === "banker_rolling") {
     if (input.rollingAction || input.localRolling || input.serverBankerInFlight) {
       return "banker_tumble";

@@ -53,4 +53,17 @@ describe("shouldClobberFeltTripletOnFetch", () => {
       })
     ).toBe(true);
   });
+
+  it("does not clobber during completed-round result pause while local triplet is tied to round", () => {
+    expect(
+      shouldClobberFeltTripletOnFetch({
+        rollingActionInProgress: false,
+        activeStatus: "completed",
+        serverHasBankerTriplet: true,
+        hasPlayerFinalWinLoss: false,
+        hasLocalFeltTriplet: true,
+        localFeltTiedToThisRound: true,
+      })
+    ).toBe(false);
+  });
 });

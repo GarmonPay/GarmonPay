@@ -99,6 +99,24 @@ export async function GET(request: Request) {
     }
   }
 
+  /** Server keeps room on "rolling" for a few seconds after round=completed so clients can show results. */
+  if (
+    !activeRound &&
+    (roomStatus === "rolling" || roomStatus === "active")
+  ) {
+    const { data: lastCompleted } = await adminClient
+      .from("celo_rounds")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("status", "completed")
+      .order("round_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastCompleted) {
+      activeRound = lastCompleted;
+    }
+  }
+
   const roundId = activeRound && (activeRound as { id?: string }).id ? String((activeRound as { id: string }).id) : null;
 
   let playerRolls: unknown[] = [];

@@ -17,6 +17,12 @@ import {
 import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
 
 const ROLL_ANIMATION_MS = 1500;
+/** Pause after terminal round writes so clients can display final dice/outcome before reset. */
+const RESULT_DISPLAY_MS = 4000;
+
+async function delayBeforeRoomReset(): Promise<void> {
+  await new Promise((r) => setTimeout(r, RESULT_DISPLAY_MS));
+}
 
 function effectiveStakeSc(row: {
   entry_sc?: unknown;
@@ -481,6 +487,7 @@ async function handleBankerRoll(
       }
     );
     const newBank = Math.max(0, room.current_bank_sc + bankerWins);
+    await delayBeforeRoomReset();
     await admin
       .from("celo_rooms")
       .update({
@@ -625,6 +632,7 @@ async function handleBankerRoll(
       reason: "instant_loss",
     });
 
+    await delayBeforeRoomReset();
     await admin
       .from("celo_rooms")
       .update({
@@ -912,6 +920,7 @@ async function handlePlayerRoll(
         .maybeSingle();
 
       if (finalizedPush) {
+        await delayBeforeRoomReset();
         await admin
           .from("celo_rooms")
           .update({
@@ -1126,6 +1135,7 @@ async function handlePlayerRoll(
           .select("id")
           .maybeSingle();
         if (finalized) {
+          await delayBeforeRoomReset();
           await admin
             .from("celo_rooms")
             .update({
