@@ -16,6 +16,18 @@ import {
 } from "@/lib/celo-accounting";
 import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
 
+function effectiveStakeSc(row: {
+  entry_sc?: unknown;
+  bet_cents?: unknown;
+  stake_amount_sc?: unknown;
+}): number {
+  return Math.max(
+    Math.floor(Number(row?.entry_sc ?? 0)),
+    Math.floor(Number(row?.bet_cents ?? 0)),
+    Math.floor(Number(row?.stake_amount_sc ?? 0))
+  );
+}
+
 type RoomRow = {
   id: string;
   banker_id: string;
@@ -37,6 +49,7 @@ type RoundRow = {
   platform_fee_sc: number | null;
   banker_point: number | null;
   current_player_seat: number | null;
+  roller_user_id?: string | null;
   banker_dice?: unknown;
   player_celo_offer?: boolean;
   player_celo_expires_at?: string | null;
@@ -49,6 +62,9 @@ type PlayerRow = {
   user_id: string;
   role: string;
   entry_sc: number;
+  stake_amount_sc?: number;
+  bet_cents?: number;
+  entry_posted?: boolean;
   seat_number: number | null;
 };
 
@@ -75,7 +91,7 @@ export async function POST(request: Request) {
   }
   const { data: pRow, error: pErr } = await adminClient
     .from("celo_room_players")
-    .select("id, user_id, role, entry_sc, seat_number")
+    .select("id, user_id, role, entry_sc, stake_amount_sc, bet_cents, entry_posted, seat_number")
     .eq("room_id", roomId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -143,7 +159,7 @@ export async function POST(request: Request) {
     if (round.status !== "player_rolling") {
       return NextResponse.json({ error: "Not your turn" }, { status: 400 });
     }
-    if (Number(player.entry_sc) <= 0) {
+    if (effectiveStakeSc(player) <= 0 || player.entry_posted !== true) {
       return NextResponse.json(
         { error: "No entry this round" },
         { status: 400 }
@@ -481,12 +497,12 @@ async function handleBankerRoll(
   if (roll.result === "instant_loss") {
     const { data: staked } = await admin
       .from("celo_room_players")
-      .select("user_id, entry_sc, role")
+      .select("user_id, entry_sc, stake_amount_sc, bet_cents, role, entry_posted")
       .eq("room_id", room.id);
 
     for (const p of staked ?? []) {
       if (p.role !== "player") continue;
-      const e = Math.max(0, Math.floor(Number(p.entry_sc) || 0));
+      const e = effectiveStakeSc(p);
       if (e <= 0) continue;
       const { net, fee } = calculatePayout(e, feePct);
       const ref = `celo_round_players_win_${round.id}_${p.user_id}`;
@@ -627,6 +643,7 @@ async function handleBankerRoll(
       banker_roll_in_flight: false,
       status: "player_rolling",
       current_player_seat: firstSeat,
+      roller_user_id: staked[0]?.user_id ?? null,
     });
     console.log("[celo/roll] point: post celoUpdateRoundIfStatus", {
       roundId: round.id,
@@ -743,7 +760,7 @@ async function handlePlayerRoll(
       { status: 400 }
     );
   }
-  const entry = Math.max(0, Math.floor(Number(player.entry_sc) || 0));
+  const entry = effectiveStakeSc(player);
   let outcome: "win" | "loss" | "reroll" = "loss";
   let payoutSc = 0;
   let playerCanBecomeBanker = false;
@@ -866,7 +883,7 @@ async function handlePlayerRoll(
     insertedRow = ins as Record<string, unknown>;
     await admin
       .from("celo_room_players")
-      .update({ entry_sc: 0, bet_cents: 0 })
+      .update({ entry_sc: 0, bet_cents: 0, stake_amount_sc: 0 })
       .eq("id", player.id);
   }
   let newBalance: number | undefined;
@@ -878,12 +895,10 @@ async function handlePlayerRoll(
   if (outcome !== "reroll") {
     const { data: left } = await admin
       .from("celo_room_players")
-      .select("entry_sc, role, seat_number")
+      .select("entry_sc, stake_amount_sc, bet_cents, role, seat_number")
       .eq("room_id", room.id)
       .eq("role", "player");
-    const anyLeft = (left ?? []).some(
-      (p) => Math.floor(Number(p.entry_sc) || 0) > 0
-    );
+    const anyLeft = (left ?? []).some((p) => effectiveStakeSc(p) > 0);
     if (!anyLeft) {
       hasMore = false;
       const { data: finalized } = await admin
@@ -934,6 +949,7 @@ async function handlePlayerRoll(
         .from("celo_rounds")
         .update({
           current_player_seat: next?.seat_number ?? null,
+          roller_user_id: next?.user_id ?? null,
         })
         .eq("id", round.id);
     }
@@ -980,7 +996,7 @@ async function handlePlayerRoll(
 async function resetRoomEntries(admin: SupabaseClient, roomId: string) {
   await admin
     .from("celo_room_players")
-    .update({ entry_sc: 0, bet_cents: 0 })
+    .update({ entry_sc: 0, bet_cents: 0, stake_amount_sc: 0 })
     .eq("room_id", roomId);
 }
 
@@ -990,12 +1006,13 @@ async function getStakedPlayersOrdered(
 ): Promise<Pick<PlayerRow, "user_id" | "entry_sc" | "seat_number">[]> {
   const { data } = await admin
     .from("celo_room_players")
-    .select("user_id, entry_sc, seat_number, role")
+    .select("user_id, entry_sc, stake_amount_sc, bet_cents, seat_number, role, entry_posted")
     .eq("room_id", roomId);
   return (data ?? [])
     .filter(
       (p) =>
-        p.role === "player" && Math.floor(Number(p.entry_sc) || 0) > 0
+        p.role === "player" &&
+        effectiveStakeSc(p) > 0 && (p as PlayerRow).entry_posted === true
     )
     .sort(
       (a, b) =>
