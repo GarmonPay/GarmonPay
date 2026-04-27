@@ -263,8 +263,9 @@ async function handleBankerRoll(
 
   const dice = rollThreeDice();
   const roll = evaluateRoll(dice);
-  const now = new Date().toISOString();
   const diceArr = [dice[0], dice[1], dice[2]];
+  console.log("[C-Lo SERVER] banker roll", { dice: diceArr, rollName: roll.rollName, result: roll.result, point: roll.point });
+  const now = new Date().toISOString();
 
   if (roll.result === "no_count") {
     celoAccountingLog("banker_no_count_throw", {
@@ -751,6 +752,13 @@ async function handlePlayerRoll(
   }
 ) {
   const { room, round, userId, player, dice, roll, feePct } = ctx;
+  const diceArrPlayer = [dice[0], dice[1], dice[2]];
+  console.log("[C-Lo SERVER] player roll", {
+    dice: diceArrPlayer,
+    rollName: roll.rollName,
+    result: roll.result,
+    point: roll.point,
+  });
   const now = new Date().toISOString();
   let insertedRow: Record<string, unknown> | null = null;
   const bankerPoint = round.banker_point;
