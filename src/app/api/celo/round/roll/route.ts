@@ -925,6 +925,7 @@ async function handlePlayerRoll(
             status: "waiting",
           })
           .eq("id", room.id);
+        await resetRoomEntries(admin, room.id);
         await runCeloSideBetSettlementAfterRoundComplete(
           admin,
           room.id,
@@ -1004,8 +1005,16 @@ async function handlePlayerRoll(
 async function resetRoomEntries(admin: SupabaseClient, roomId: string) {
   await admin
     .from("celo_room_players")
-    .update({ entry_sc: 0, bet_cents: 0, stake_amount_sc: 0 })
-    .eq("room_id", roomId);
+    .update({
+      entry_sc: 0,
+      bet_cents: 0,
+      stake_amount_sc: 0,
+      entry_posted: false,
+      status: "seated",
+      player_seat_status: "seated",
+    })
+    .eq("room_id", roomId)
+    .neq("role", "banker");
 }
 
 async function getStakedPlayersOrdered(
