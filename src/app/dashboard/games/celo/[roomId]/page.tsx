@@ -2853,7 +2853,7 @@ export default function CeloRoomPage() {
       : resultBanner.kind === "push"
         ? "font-mono text-[10px] uppercase tracking-[0.25em] text-amber-200/75"
         : resultBanner.winnerSide === "banker"
-          ? `${cinzel.className} celo-banner-winner-pop text-xl font-extrabold tracking-wide text-transparent bg-gradient-to-br from-amber-50 via-amber-300 to-amber-600 bg-clip-text sm:text-2xl drop-shadow-[0_0_20px_rgba(245,200,66,0.38)]`
+          ? `${cinzel.className} celo-banner-winner-pop text-lg font-extrabold tracking-wide text-transparent bg-gradient-to-br from-amber-50 via-amber-300 to-amber-600 bg-clip-text sm:text-xl drop-shadow-[0_0_20px_rgba(245,200,66,0.38)]`
           : "font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500";
 
   const rbPlayerSeatTitleCls =
@@ -2862,7 +2862,7 @@ export default function CeloRoomPage() {
       : resultBanner.kind === "push"
         ? "font-mono text-[10px] uppercase tracking-[0.25em] text-amber-200/75"
         : resultBanner.winnerSide === "player"
-          ? `${cinzel.className} celo-banner-winner-pop text-xl font-extrabold tracking-wide text-transparent bg-gradient-to-br from-amber-50 via-amber-300 to-amber-600 bg-clip-text sm:text-2xl drop-shadow-[0_0_20px_rgba(245,200,66,0.38)]`
+          ? `${cinzel.className} celo-banner-winner-pop text-lg font-extrabold tracking-wide text-transparent bg-gradient-to-br from-amber-50 via-amber-300 to-amber-600 bg-clip-text sm:text-xl drop-shadow-[0_0_20px_rgba(245,200,66,0.38)]`
           : "font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500";
 
   const viewerSeesYouWin =
@@ -3439,53 +3439,57 @@ export default function CeloRoomPage() {
       </div>
       {resultPauseVisual && resultBanner && room && bannerRound?.id && (
         <div
-          className="pointer-events-none fixed inset-0 z-[20080] flex items-center justify-center p-4"
+          className="pointer-events-none fixed inset-0 z-[20080] flex items-center justify-center p-2 sm:p-3"
           style={{ background: "rgba(0,0,0,0.78)" }}
           role="status"
           aria-live="polite"
         >
           <div
-            className={`pointer-events-auto mx-auto max-w-lg rounded-2xl border border-amber-500/45 px-5 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-10 sm:py-9 ${dm.className}`}
+            className={`pointer-events-auto mx-auto max-h-[70vh] max-w-lg overflow-x-hidden overflow-y-auto rounded-2xl border border-amber-500/45 px-3 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-5 sm:py-5 ${dm.className}`}
             style={{ background: "rgba(13,5,32,0.97)" }}
           >
             <span className="sr-only">{resultBanner.title}</span>
-            <div className="flex flex-col items-center gap-6">
-              <div className="flex flex-wrap items-start justify-center gap-8 sm:gap-12">
-                <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex flex-wrap items-start justify-center gap-4 sm:gap-6">
+                <div className="flex flex-col items-center gap-1">
                   <span className={rbBankerSeatTitleCls}>{resultBanner.bankerLabel}</span>
-                  <div className="flex gap-2 sm:gap-2.5">
+                  <div className="flex gap-1.5 sm:gap-2">
                     {(resultBanner.bankerTriplet ?? CELO_IDLE_DICE).map(
                       (pip, i) => (
                         <DiceFace
                           key={`banner-b-${i}`}
                           value={pip as 1 | 2 | 3 | 4 | 5 | 6}
                           diceType={myDiceType}
-                          size={Math.min(88, diceSize + 18)}
+                          size={Math.round(
+                            Math.min(88, diceSize + 18) * 0.65
+                          )}
                         />
                       )
                     )}
                   </div>
                   {resultBanner.bankerRollName ? (
-                    <p className="max-w-[15rem] text-center text-sm font-semibold leading-snug text-amber-100/95">
+                    <p className="max-w-[14rem] text-center text-xs font-semibold leading-tight text-amber-100/95">
                       {resultBanner.bankerRollName}
                     </p>
                   ) : null}
                 </div>
                 {resultBanner.showPlayerRow && resultBanner.playerTriplet ? (
-                  <div className="flex flex-col items-center gap-2">
+                  <div className="flex flex-col items-center gap-1">
                     <span className={rbPlayerSeatTitleCls}>{resultBanner.playerLabel}</span>
-                    <div className="flex gap-2 sm:gap-2.5">
+                    <div className="flex gap-1.5 sm:gap-2">
                       {resultBanner.playerTriplet.map((pip, i) => (
                         <DiceFace
                           key={`banner-p-${i}`}
                           value={pip as 1 | 2 | 3 | 4 | 5 | 6}
                           diceType={myDiceType}
-                          size={Math.min(88, diceSize + 18)}
+                          size={Math.round(
+                            Math.min(88, diceSize + 18) * 0.65
+                          )}
                         />
                       ))}
                     </div>
                     {resultBanner.playerRollName ? (
-                      <p className="max-w-[15rem] text-center text-sm font-semibold leading-snug text-amber-100/95">
+                      <p className="max-w-[14rem] text-center text-xs font-semibold leading-tight text-amber-100/95">
                         {resultBanner.playerRollName}
                       </p>
                     ) : null}
@@ -3494,43 +3498,43 @@ export default function CeloRoomPage() {
               </div>
 
               {resultBanner.kind === "push" ? (
-                <div className="max-w-xl space-y-2">
+                <div className="max-w-xl space-y-1">
                   <p
-                    className={`text-xl font-bold leading-snug text-amber-50 sm:text-2xl ${cinzel.className}`}
+                    className={`text-lg font-bold leading-snug text-amber-50 sm:text-xl ${cinzel.className}`}
                   >
                     {resultBanner.detailLine}
                   </p>
-                  <p className="text-sm text-zinc-400">Stakes refunded.</p>
+                  <p className="text-xs text-zinc-400">Stakes refunded.</p>
                 </div>
               ) : (
-                <div className="flex max-w-xl flex-col items-center gap-3">
+                <div className="flex max-w-xl shrink-0 flex-col items-center gap-1.5 px-1">
                   {viewerSeesYouWin ? (
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex flex-col items-center gap-0.5">
                       <p
-                        className={`text-lg font-bold tracking-[0.15em] text-emerald-400/95 ${cinzel.className}`}
+                        className={`text-base font-bold tracking-[0.12em] text-emerald-400/95 sm:text-[1.0125rem] ${cinzel.className}`}
                       >
                         YOU WIN!
                       </p>
                       {viewerShowsGreenWinAmt ? (
-                        <p className="font-mono text-3xl font-bold leading-none text-emerald-400 sm:text-4xl">
+                        <p className="font-mono text-[1.7rem] font-bold leading-none text-emerald-400 sm:text-[2.125rem]">
                           +{resultBanner.winAmountSc!.toLocaleString()} GPC
                         </p>
                       ) : null}
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
+                  <div className="flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0">
                     <span
-                      className={`celo-banner-winner-pop inline-block ${cinzel.className} bg-gradient-to-br from-amber-50 via-amber-200 to-amber-500 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_22px_rgba(245,200,66,0.4)] sm:text-5xl`}
+                      className={`celo-banner-winner-pop inline-block ${cinzel.className} bg-gradient-to-br from-amber-50 via-amber-200 to-amber-500 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_22px_rgba(245,200,66,0.4)] sm:text-4xl`}
                     >
                       {resultBanner.headlineWinnerLabel}
                     </span>
                     <span
-                      className={`text-2xl font-bold text-amber-100/95 sm:text-3xl ${cinzel.className}`}
+                      className={`text-xl font-bold text-amber-100/95 sm:text-2xl ${cinzel.className}`}
                     >
                       WINS
                     </span>
                   </div>
-                  <p className="text-base font-semibold leading-snug tracking-wide text-amber-200/95 sm:text-lg">
+                  <p className="max-w-[min(100%,28rem)] px-0.5 text-center text-sm font-semibold leading-snug tracking-wide text-amber-200/95 sm:text-[0.98rem]">
                     {resultBanner.detailLine}
                   </p>
                 </div>
