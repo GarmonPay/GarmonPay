@@ -30,7 +30,7 @@ import {
   type CeloEntryPlayerFields,
 } from "@/lib/celo-player-state";
 import { resolveDisplayName, type UserDisplayProfile } from "@/lib/display-name";
-import { alertCeloUnauthorized, fetchCeloApi } from "@/lib/celo-api-fetch";
+import { alertCeloUnauthorized, fetchCeloApi, getFreshAccessToken } from "@/lib/celo-api-fetch";
 import {
   applyCeloStateUpdate,
   type CeloMergeOptions,
@@ -1855,6 +1855,36 @@ export default function CeloRoomPage() {
     }
   }
 
+  async function handleDeleteRoom() {
+    console.log("[C-Lo] DELETE ROOM CLICKED");
+    if (!supabase || !roomId) {
+      alert("Not connected. Please refresh and try again.");
+      return;
+    }
+    const token = await getFreshAccessToken(supabase);
+    const res = await fetch("/api/celo/room/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ roomId }),
+    });
+    let data: { ok?: boolean; error?: string } = {};
+    try {
+      data = (await res.json()) as typeof data;
+    } catch {
+      alert("Invalid response from server");
+      return;
+    }
+    console.log("[C-Lo] delete response", data);
+    if (!data.ok) {
+      alert(data.error ?? "Could not delete room");
+      return;
+    }
+    router.push("/dashboard/games/celo");
+  }
+
   async function handlePostEntry() {
     console.warn("[C-Lo UI] post entry handler (predicates)", {
       canPostEntry,
@@ -2100,6 +2130,15 @@ export default function CeloRoomPage() {
             >
               Back
             </Link>
+            {isBanker && room && (
+              <button
+                type="button"
+                onClick={() => void handleDeleteRoom()}
+                className="shrink-0 min-h-touch rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 sm:text-sm"
+              >
+                Delete Room
+              </button>
+            )}
             <span
               className={`min-w-0 flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
             >
