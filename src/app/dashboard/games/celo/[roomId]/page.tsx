@@ -72,6 +72,8 @@ type Round = {
   prize_pool_sc: number | null;
   banker_point: number | null;
   current_player_seat: number | null;
+  /** Some server flows set the active roller by user id; use with current_player_seat. */
+  roller_user_id?: string | null;
   player_celo_offer: boolean;
   player_celo_expires_at: string | null;
   /** Set when the banker has rolled; source of truth for their dice in this round. */
@@ -1190,13 +1192,25 @@ export default function CeloRoomPage() {
 
   const canRollBanker =
     isBanker && round?.status === "banker_rolling" && !rollingAction;
+  const mySeatNum =
+    myRow?.seat_number != null ? Number(myRow.seat_number) : -1;
+  const currentSeatNum = Number(round?.current_player_seat ?? -1);
+  const isMyTurn =
+    (Number.isFinite(mySeatNum) &&
+      Number.isFinite(currentSeatNum) &&
+      mySeatNum === currentSeatNum &&
+      currentSeatNum >= 0) ||
+    (round?.roller_user_id != null &&
+      me != null &&
+      normalizeCeloUserId(String(round.roller_user_id)) === normalizeCeloUserId(me));
   const canRollPlayer = !!(
     room &&
     round &&
     inProgress &&
     round.status === "player_rolling" &&
     isPlayer &&
-    myEntrySc > 0
+    isMyTurn &&
+    myRow?.entry_posted === true
   );
 
   const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(roomStatusLc);
@@ -2066,7 +2080,7 @@ export default function CeloRoomPage() {
             wordBreak: "break-all",
           }}
         >
-          {`LINE 1: me=${me ?? "null"} | role=${myRow?.role ?? "null"} | banker=${String(isBanker)} | player=${String(isPlayer)}\nLINE 2: roomStatus=${room?.status ?? "null"} | roundStatus=${round?.status ?? "null"} | inProgress=${String(inProgress)}\nLINE 3: entryAmount=${entryAmount} | balance=${myBalance} | myEntrySc=${myEntrySc} | entryPosted=${String(myRow?.entry_posted ?? "null")}\nLINE 4: canPostEntry=${String(canPostEntry)} | joinSubmitting=${String(joinSubmitting)}\nLINE 5: lastFetch=${lastFetchInfo.url} -> ${lastFetchInfo.status}\nLINE 6: lastError=${lastFetchInfo.error || "none"}\nLINE 7: lastResponseBody=${lastFetchInfo.body ? lastFetchInfo.body : "none"}\nLINE 8: rollFetch=${rollFetchInfo.url} -> ${rollFetchInfo.status} | rollErr=${rollFetchInfo.error || "none"}\nLINE 9: bankerInFlight=${String(round?.banker_roll_in_flight ?? null)} | bankerDice=${JSON.stringify(round?.banker_dice ?? null).slice(0,20)}`}
+          {`LINE 1: me=${me ?? "null"} | role=${myRow?.role ?? "null"} | banker=${String(isBanker)} | player=${String(isPlayer)}\nLINE 2: roomStatus=${room?.status ?? "null"} | roundStatus=${round?.status ?? "null"} | inProgress=${String(inProgress)}\nLINE 3: entryAmount=${entryAmount} | balance=${myBalance} | myEntrySc=${myEntrySc} | entryPosted=${String(myRow?.entry_posted ?? "null")}\nLINE 4: canPostEntry=${String(canPostEntry)} | joinSubmitting=${String(joinSubmitting)}\nLINE 5: lastFetch=${lastFetchInfo.url} -> ${lastFetchInfo.status}\nLINE 6: lastError=${lastFetchInfo.error || "none"}\nLINE 7: lastResponseBody=${lastFetchInfo.body ? lastFetchInfo.body : "none"}\nLINE 8: rollFetch=${rollFetchInfo.url} -> ${rollFetchInfo.status} | rollErr=${rollFetchInfo.error || "none"}\nLINE 9: bankerInFlight=${String(round?.banker_roll_in_flight ?? null)} | bankerDice=${JSON.stringify(round?.banker_dice ?? null).slice(0,20)}\nLINE 10: mySeat=${mySeatNum} | rollerSeat=${currentSeatNum} | rollerUserId=${round?.roller_user_id ?? "null"} | isMyTurn=${String(isMyTurn)}`}
         </div>
       )}
       {CELO_DEBUG && (
