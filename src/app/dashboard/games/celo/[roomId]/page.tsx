@@ -959,10 +959,7 @@ export default function CeloRoomPage() {
       }
       const rRow = activeRound as Round;
       const t = resolveCeloFeltDice(lastPr?.dice, rRow.banker_dice);
-      let applyTriplet = t;
-      if (activeRound.status === "player_rolling" && !hasCurrentPlayerFinal) {
-        applyTriplet = null;
-      }
+      const applyTriplet = t;
       const serverHasBankerTriplet = !!tripletFromDiceJson(
         (activeRound as Round).banker_dice
       );
@@ -1747,6 +1744,14 @@ export default function CeloRoomPage() {
       ];
     }
     if (isRollingFaces) {
+      const rollingTriplet = diceRef.current ?? bankerTripletForDisplay;
+      if (rollingTriplet) {
+        return [
+          clampDie(rollingTriplet[0]),
+          clampDie(rollingTriplet[1]),
+          clampDie(rollingTriplet[2]),
+        ];
+      }
       return CELO_IDLE_DICE;
     }
     if (
@@ -2092,6 +2097,18 @@ export default function CeloRoomPage() {
   }, [round?.id]);
 
   useEffect(() => {
+    // Hard reset room-scoped transient state when moving between rooms.
+    setResultBannerData(null);
+    setResultBannerModel(null);
+    setRollName(null);
+    setDice(null);
+    setMessages([]);
+    setCurrentPlayerResolvedRoll(false);
+    lastBankerTripletRef.current = null;
+    feltTiedToRoundIdRef.current = null;
+  }, [roomId]);
+
+  useEffect(() => {
     return () => {
       if (noCountRevealTimeoutRef.current) {
         clearTimeout(noCountRevealTimeoutRef.current);
@@ -2389,7 +2406,6 @@ export default function CeloRoomPage() {
       setRollingAction(true);
       setRolling(true);
       setRollName(null);
-      setDice(null);
       setRollFetchInfo({ url: rollUrl, status: "pending", body: "", error: "" });
       const [fetchRes] = await Promise.all([
         fetchCeloApi(supabase, rollUrl, {
@@ -3908,28 +3924,43 @@ export default function CeloRoomPage() {
           >
             <p className="text-3xl">🎲</p>
             <p className={`mt-2 text-xl text-[#F5C842] ${cinzel.className}`}>
-              Take the bank?
+              Stop the Bank
             </p>
             {bankerAcceptError && (
               <p className="mt-2 text-sm text-red-300/95">{bankerAcceptError}</p>
             )}
             <p className="mt-1 text-sm text-[#9CA3AF]">
-              Cover {bankVal(room).toLocaleString()} GPC
+              Cover {bankVal(room).toLocaleString()} GPC to take full-bank action.
+            </p>
+            <p className="mt-1 text-xs font-mono text-amber-200/80">
+              {myBalance >= bankVal(room)
+                ? "Eligible to stop the bank."
+                : `Need ${(bankVal(room) - myBalance).toLocaleString()} more GPC to cover.`}
             </p>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
+                disabled={myBalance < bankVal(room) || !round?.id}
                 onClick={async () => {
                   setBankerAcceptError(null);
                   if (!supabase) {
                     setBankerAcceptError("Connect to the app to take the bank.");
                     return;
                   }
-                  const res = await fetchCeloApi(supabase, "/api/celo/banker/accept", {
+                  if (!round?.id) {
+                    setBankerAcceptError("Round not eligible for stop-the-bank yet.");
+                    return;
+                  }
+                  if (myBalance < bankVal(room)) {
+                    setBankerAcceptError("Insufficient balance to cover full bank.");
+                    return;
+                  }
+                  const res = await fetchCeloApi(supabase, "/api/celo/banker-takeover", {
                     method: "POST",
                     body: JSON.stringify({
                       room_id: room.id,
                       round_id: round?.id,
+                      accept: true,
                     }),
                   });
                   if (res.ok) {
@@ -3948,9 +3979,10 @@ export default function CeloRoomPage() {
                 style={{
                   background: "linear-gradient(135deg, #F5C842, #D4A017)",
                   color: "#0A0A0A",
+                  opacity: myBalance < bankVal(room) || !round?.id ? 0.5 : 1,
                 }}
               >
-                Become banker
+                Stop the Bank — {bankVal(room).toLocaleString()} GPC
               </button>
               <button
                 type="button"

@@ -8,25 +8,29 @@ export async function insertCeloPlatformFee(
   opts?: { userId?: string; roundId?: string; idempotencyKey?: string }
 ): Promise<void> {
   if (!Number.isFinite(amountSc) || amountSc <= 0) return;
-  const row: Record<string, unknown> = {
-    source: "celo_game",
-    amount_cents: Math.max(0, Math.floor(amountSc)),
-    description: label,
-  };
-  if (opts?.userId) row.user_id = opts.userId;
-  if (opts?.roundId) row.source_id = opts.roundId;
-  if (opts?.idempotencyKey) row.idempotency_key = opts.idempotencyKey;
-  const { error } = await supabase.from("platform_earnings").insert(row);
+  const safeAmount = Math.max(0, Math.floor(amountSc));
+  const fallbackKey = opts?.roundId
+    ? `celo_fee:${opts.roundId}:${label}`
+    : undefined;
+  const { data, error } = await supabase.rpc("celo_record_platform_fee", {
+    p_round_id: opts?.roundId ?? null,
+    p_fee_type: label,
+    p_amount_cents: safeAmount,
+    p_description: label,
+    p_user_id: opts?.userId ?? null,
+    p_idempotency_key: opts?.idempotencyKey ?? fallbackKey ?? null,
+  });
   if (error) {
-    const code = (error as { code?: string }).code;
-    if (code === "23505") {
-      celoAccountingAuditLog("platform_earnings_insert_duplicate_ignored", {
-        idempotencyKey: opts?.idempotencyKey,
-        roundId: opts?.roundId,
-        label,
-      });
-      return;
-    }
-    console.error("[celo] platform_earnings insert failed:", error.message);
+    console.error("[celo] platform fee rpc failed:", error.message);
+    return;
+  }
+  const inserted =
+    (data as { inserted?: boolean } | null | undefined)?.inserted ?? true;
+  if (!inserted) {
+    celoAccountingAuditLog("platform_earnings_insert_duplicate_ignored", {
+      idempotencyKey: opts?.idempotencyKey ?? fallbackKey,
+      roundId: opts?.roundId,
+      label,
+    });
   }
 }

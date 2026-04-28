@@ -121,6 +121,7 @@ type RoundRow = {
   id: string;
   room_id: string;
   status: string;
+  settlement_version?: number | null;
   banker_id: string | null;
   prize_pool_sc: number | null;
   platform_fee_sc: number | null;
@@ -563,22 +564,15 @@ async function handleBankerRoll(
       reason: "instant_win",
     });
 
-    for (const p of stakedIw ?? []) {
-      if (p.role !== "player") continue;
-      const e = effectiveStakeSc(p);
-      if (e <= 0) continue;
-      const { fee } = calculateNetWin(e);
-      await insertCeloPlatformFee(
-        admin,
-        fee,
-        `C-Lo platform fee (round ${round.id})`,
-        {
-          userId: p.user_id,
-          roundId: round.id,
-          idempotencyKey: `celo_pf_${round.id}_banker_iw_${p.user_id}`,
-        }
-      );
-    }
+    await insertCeloPlatformFee(
+      admin,
+      totalPlatformFee,
+      "banker_instant_win",
+      {
+        roundId: round.id,
+        idempotencyKey: `celo_fee_round_${round.id}_banker_instant_win`,
+      }
+    );
     const newBank = await adjustRoomBank(admin, room.id, bankerWins);
     await delayBeforeRoomReset();
     await admin
@@ -621,6 +615,7 @@ async function handleBankerRoll(
       .select("user_id, entry_sc, stake_amount_sc, bet_cents, role, entry_posted")
       .eq("room_id", room.id);
 
+    let totalStakeFromBank = 0;
     let totalNetFromBank = 0;
     let totalPlatformFee = 0;
 
@@ -629,6 +624,7 @@ async function handleBankerRoll(
       const e = effectiveStakeSc(p);
       if (e <= 0) continue;
       const { net, fee } = calculateNetWin(e);
+      totalStakeFromBank += e;
       totalNetFromBank += net;
       totalPlatformFee += fee;
       const creditAmt = e + net;
@@ -659,16 +655,6 @@ async function handleBankerRoll(
           { status: 500 }
         );
       }
-      await insertCeloPlatformFee(
-        admin,
-        fee,
-        `C-Lo fee (round ${round.id} player)`,
-        {
-          userId: p.user_id,
-          roundId: round.id,
-          idempotencyKey: `celo_pf_${round.id}_instant_loss_${p.user_id}`,
-        }
-      );
     }
 
     const { data: finalized } = await admin
@@ -733,7 +719,22 @@ async function handleBankerRoll(
       reason: "instant_loss",
     });
 
-    await adjustRoomBank(admin, room.id, -totalNetFromBank);
+    await adjustRoomBank(
+      admin,
+      room.id,
+      Number(round.settlement_version ?? 1) >= 2
+        ? -totalStakeFromBank
+        : -totalNetFromBank
+    );
+    await insertCeloPlatformFee(
+      admin,
+      totalPlatformFee,
+      "banker_instant_loss",
+      {
+        roundId: round.id,
+        idempotencyKey: `celo_fee_round_${round.id}_banker_instant_loss`,
+      }
+    );
 
     await delayBeforeRoomReset();
     await admin
@@ -894,6 +895,7 @@ async function handlePlayerRoll(
   }
 ) {
   const { room, round, userId, player, dice, roll, feePct } = ctx;
+  const settlementV2 = Number(round.settlement_version ?? 1) >= 2;
 
   if (round.banker_point == null) {
     return NextResponse.json(
@@ -1119,17 +1121,7 @@ async function handlePlayerRoll(
           { status: 500 }
         );
       }
-      await insertCeloPlatformFee(
-        admin,
-        fee,
-        `C-Lo fee (player win ${round.id})`,
-        {
-          userId,
-          roundId: round.id,
-          idempotencyKey: `celo_pf_${round.id}_player_win_${userId}`,
-        }
-      );
-      await adjustRoomBank(admin, room.id, -net);
+      await adjustRoomBank(admin, room.id, settlementV2 ? -entry : -net);
       await applyRoundAccountingDelta(admin, round.id, -net, fee);
       outcome = "win";
       payoutSc = creditAmt;
@@ -1173,17 +1165,7 @@ async function handlePlayerRoll(
             { status: 500 }
           );
         }
-        await insertCeloPlatformFee(
-          admin,
-          fee,
-          `C-Lo fee (point win ${round.id})`,
-          {
-            userId,
-            roundId: round.id,
-            idempotencyKey: `celo_pf_${round.id}_point_win_${userId}`,
-          }
-        );
-        await adjustRoomBank(admin, room.id, -net);
+        await adjustRoomBank(admin, room.id, settlementV2 ? -entry : -net);
         await applyRoundAccountingDelta(admin, round.id, -net, fee);
         outcome = "win";
         payoutSc = creditAmt;
@@ -1195,16 +1177,6 @@ async function handlePlayerRoll(
     }
     if (outcome === "loss") {
       const { net, fee } = calculateNetWin(entry);
-      await insertCeloPlatformFee(
-        admin,
-        fee,
-        `C-Lo platform fee (banker wins ${round.id})`,
-        {
-          userId,
-          roundId: round.id,
-          idempotencyKey: `celo_pf_${round.id}_player_loss_${userId}`,
-        }
-      );
       await adjustRoomBank(admin, room.id, net);
       await applyRoundAccountingDelta(admin, round.id, net, fee);
     }
@@ -1282,6 +1254,15 @@ async function handlePlayerRoll(
           .select("id")
           .maybeSingle();
         if (finalized) {
+          await insertCeloPlatformFee(
+            admin,
+            pf,
+            "player_phase_main",
+            {
+              roundId: round.id,
+              idempotencyKey: `celo_fee_round_${round.id}_player_phase_main`,
+            }
+          );
           await delayBeforeRoomReset();
           await admin
             .from("celo_rooms")

@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       room_id: roomId,
       round_number: roundNumber,
       banker_id: userId,
+      settlement_version: 2,
       status: "banker_rolling",
       prize_pool_sc: prizePool,
       platform_fee_sc: platformFee,
