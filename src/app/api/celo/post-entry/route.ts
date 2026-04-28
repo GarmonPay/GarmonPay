@@ -152,62 +152,61 @@ export async function POST(request: Request) {
   const entryRef = `celo:post-entry:${roomId}:${userId}:${Date.now()}:${crypto.randomUUID()}`;
   celoAccountingLog("entry_debit_post", { roomId, userId, amount, reference: entryRef });
 
-  const { data: updatedPlayer, error } = await adminClient
+  const { data: rpcResult, error: rpcError } = await adminClient.rpc(
+    "celo_post_entry_atomic",
+    {
+      p_room_id: roomId,
+      p_user_id: userId,
+      p_amount: amount,
+      p_reference: entryRef,
+    }
+  );
+
+  type RpcPayload = { success?: boolean; message?: string };
+  const payload = rpcResult as RpcPayload | null;
+
+  if (rpcError) {
+    console.error("[C-Lo PostEntry] RPC error", rpcError);
+    return jsonErr(rpcError.message ?? "Could not post entry", 400);
+  }
+
+  if (!payload || payload.success !== true) {
+    const msg =
+      typeof payload?.message === "string" && payload.message.trim()
+        ? payload.message
+        : "Could not post entry";
+    console.log("[C-Lo PostEntry] RPC logical failure", payload);
+    return jsonErr(msg, 400);
+  }
+
+  const { data: roomAfterRow, error: roomFetchErr } = await adminClient
+    .from("celo_rooms")
+    .select("*")
+    .eq("id", roomId)
+    .maybeSingle();
+  const { data: playerAfter, error: playerFetchErr } = await adminClient
     .from("celo_room_players")
-    .update({
-      entry_posted: true,
-      stake_amount_sc: amount,
-      entry_sc: amount,
-      bet_cents: amount,
-      status: "active",
-      player_seat_status: "active",
-    })
+    .select(CELO_SELECT)
     .eq("room_id", roomId)
     .eq("user_id", userId)
-    .select("*")
-    .single();
+    .maybeSingle();
 
-  console.log("[C-Lo PostEntry] update error", error);
-  console.log("[C-Lo PostEntry] updated rows", updatedPlayer);
-
-  if (error) {
-    return jsonErr("Could not post entry", 500);
-  }
-  if (!updatedPlayer) {
-    throw new Error("Post entry update matched zero rows");
-  }
-
-  const updated = updatedPlayer as Record<string, unknown>;
-
-  let roomAfter = roomRaw as Record<string, unknown>;
-  const nextRoomStatus =
-    rs === "waiting" ? "active" : rs === "active" ? "active" : "entry_phase";
-  if (rs === "waiting" || rs === "entry_phase") {
-    const { data: patched, error: roomUpErr } = await adminClient
-      .from("celo_rooms")
-      .update({
-        status: nextRoomStatus,
-        last_activity: new Date().toISOString(),
-      })
-      .eq("id", roomId)
-      .select("*")
-      .single();
-    if (!roomUpErr && patched) {
-      roomAfter = patched as Record<string, unknown>;
-    }
-  } else {
-    const { data: touched } = await adminClient
-      .from("celo_rooms")
-      .update({ last_activity: new Date().toISOString() })
-      .eq("id", roomId)
-      .select("*")
-      .single();
-    if (touched) roomAfter = touched as Record<string, unknown>;
+  if (roomFetchErr || playerFetchErr || !roomAfterRow || !playerAfter) {
+    console.error("[C-Lo PostEntry] post-RPC fetch failed", {
+      roomFetchErr,
+      playerFetchErr,
+      roomAfterRow,
+      playerAfter,
+    });
+    return jsonErr("Entry posted but room state could not be loaded", 500);
   }
 
-  const bankerId = String((roomAfter as { banker_id?: string }).banker_id ?? room.banker_id ?? "");
+  const roomAfter = roomAfterRow as Record<string, unknown>;
+  const bankerId = String(
+    (roomAfter as { banker_id?: string }).banker_id ?? room.banker_id ?? ""
+  );
   const playerOut = shapeCeloRoomStatePlayer(
-    updated as Record<string, unknown>,
+    playerAfter as Record<string, unknown>,
     bankerId || null
   );
 
