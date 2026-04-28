@@ -1207,6 +1207,17 @@ export default function CeloRoomPage() {
             console.log("[RT] room update", rowNew);
           }
           if (rowNew && String(rowNew.id ?? "") === roomId) {
+            const prevSt = String(roomRef.current?.status ?? "").toLowerCase();
+            const nextSt = String(rowNew.status ?? "").toLowerCase();
+            const clearStaleResultBanner =
+              ((prevSt === "waiting" || prevSt === "entry_phase") &&
+                (nextSt === "active" || nextSt === "rolling")) ||
+              (prevSt === "active" && nextSt === "rolling");
+            if (clearStaleResultBanner) {
+              setHeldDisplayRound(null);
+              setLocalResultHoldEnd(0);
+              setResultBanner(null);
+            }
             commitCeloAggregateMerge(
               {
                 room: rowNew,
@@ -1496,12 +1507,13 @@ export default function CeloRoomPage() {
     resultPauseActive || localResultHoldEnd > 0;
   resultPauseVisualRef.current = resultPauseVisual;
 
+  /** Only clear the client result hold after the server pause window; avoids wiping the banker's banner when room→waiting arrives before HTTP returns. */
   useEffect(() => {
-    if (roomStatusLc === "waiting") {
+    if (roomStatusLc === "waiting" && Date.now() > localResultHoldEnd) {
       setLocalResultHoldEnd(0);
       setHeldDisplayRound(null);
     }
-  }, [roomStatusLc]);
+  }, [roomStatusLc, localResultHoldEnd]);
 
   useEffect(() => {
     if (localResultHoldEnd <= 0) return;
@@ -2705,6 +2717,9 @@ export default function CeloRoomPage() {
       });
       return;
     }
+    setHeldDisplayRound(null);
+    setLocalResultHoldEnd(0);
+    setResultBanner(null);
     setJoinHint(null);
     postEntryInFlightRef.current = true;
     setJoinSubmitting(true);

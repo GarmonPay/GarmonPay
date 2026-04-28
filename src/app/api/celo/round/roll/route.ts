@@ -66,24 +66,43 @@ async function applyRoundAccountingDelta(
   deltaPnL: number,
   deltaFee: number
 ): Promise<void> {
-  const { data: cur } = await admin
-    .from("celo_rounds")
-    .select("banker_winnings_sc, platform_fee_sc")
-    .eq("id", roundId)
-    .maybeSingle();
-  const prevPnL = Math.floor(
-    Number((cur as { banker_winnings_sc?: number })?.banker_winnings_sc ?? 0)
-  );
-  const prevFee = Math.floor(
-    Number((cur as { platform_fee_sc?: number })?.platform_fee_sc ?? 0)
-  );
-  await admin
-    .from("celo_rounds")
-    .update({
-      banker_winnings_sc: prevPnL + deltaPnL,
-      platform_fee_sc: prevFee + deltaFee,
-    })
-    .eq("id", roundId);
+  const { error: rpcErr } = await admin.rpc("celo_increment_round_banker_accounting", {
+    p_round_id: roundId,
+    p_delta_pnl: deltaPnL,
+    p_delta_fee: deltaFee,
+  });
+  if (rpcErr) {
+    celoAccountingLog("round_banker_accounting_rpc_error", {
+      roundId,
+      message: rpcErr.message,
+      code: rpcErr.code,
+    });
+    const { data: cur } = await admin
+      .from("celo_rounds")
+      .select("banker_winnings_sc, platform_fee_sc")
+      .eq("id", roundId)
+      .maybeSingle();
+    const prevPnL = Math.floor(
+      Number((cur as { banker_winnings_sc?: number })?.banker_winnings_sc ?? 0)
+    );
+    const prevFee = Math.floor(
+      Number((cur as { platform_fee_sc?: number })?.platform_fee_sc ?? 0)
+    );
+    const { error: upErr } = await admin
+      .from("celo_rounds")
+      .update({
+        banker_winnings_sc: prevPnL + deltaPnL,
+        platform_fee_sc: prevFee + deltaFee,
+      })
+      .eq("id", roundId);
+    if (upErr) {
+      celoAccountingLog("round_banker_accounting_fallback_error", {
+        roundId,
+        message: upErr.message,
+      });
+      throw new Error(upErr.message);
+    }
+  }
 }
 
 type RoomRow = {
@@ -1239,9 +1258,25 @@ async function handlePlayerRoll(
       const anyLeft = (left ?? []).some((p) => effectiveStakeSc(p) > 0);
       if (!anyLeft) {
         hasMore = false;
+        const { data: accSnap } = await admin
+          .from("celo_rounds")
+          .select("banker_winnings_sc, platform_fee_sc")
+          .eq("id", round.id)
+          .maybeSingle();
+        const bw = Math.floor(
+          Number((accSnap as { banker_winnings_sc?: number })?.banker_winnings_sc ?? 0)
+        );
+        const pf = Math.floor(
+          Number((accSnap as { platform_fee_sc?: number })?.platform_fee_sc ?? 0)
+        );
         const { data: finalized } = await admin
           .from("celo_rounds")
-          .update({ status: "completed", completed_at: now })
+          .update({
+            status: "completed",
+            completed_at: now,
+            banker_winnings_sc: bw,
+            platform_fee_sc: pf,
+          })
           .eq("id", round.id)
           .eq("status", "player_rolling")
           .select("id")
