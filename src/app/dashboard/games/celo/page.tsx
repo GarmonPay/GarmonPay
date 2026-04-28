@@ -220,11 +220,10 @@ export default function CeloLobbyPage() {
     >
       <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6">
         <section
-          className="relative overflow-hidden pt-6 sm:pt-8 md:pt-9"
+          className="relative mt-4 overflow-hidden px-4 pb-5 pt-9 sm:px-6 sm:pb-6 sm:pt-10 md:px-8 md:pb-6 md:pt-12"
           style={{
             background: "linear-gradient(160deg, #0D0520 0%, #05010F 60%)",
             borderRadius: 16,
-            padding: "16px 14px 20px",
             border: "1px solid rgba(245, 200, 66, 0.1)",
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
@@ -244,20 +243,18 @@ export default function CeloLobbyPage() {
             }}
           />
           <p
-            className="text-center font-mono text-[11px] text-[#A855F7]"
+            className="text-center font-mono text-[10px] leading-normal text-[#A855F7] sm:text-[11px]"
             style={{ letterSpacing: "0.15em" }}
           >
             🎲 MIAMI STREET DICE
           </p>
           <h1
-            className={`text-center font-black ${cinzel.className}`}
+            className={`text-center text-5xl font-black leading-[0.92] sm:text-7xl md:text-8xl ${cinzel.className}`}
             style={{
-              fontSize: "clamp(48px, 12vw, 100px)",
-              lineHeight: 0.9,
               background: "linear-gradient(135deg, #F5C842, #D4A017)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
-              margin: "0 0 4px",
+              margin: "2px 0 6px",
             }}
           >
             C-LO
