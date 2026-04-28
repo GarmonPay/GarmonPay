@@ -147,15 +147,19 @@ export function computeCeloVisualDiceMode(input: {
     return "idle";
   }
   if (s === "player_rolling") {
-    if (input.rollingAction || input.localRolling || input.serverPlayerInFlight) {
+    // Player has a final roll committed → show their settled dice
+    if (input.currentPlayerHasFinalRoll) return "player_settled";
+
+    // Player is actively rolling now → show their tumble
+    if (input.rollingAction || input.localRolling || input.serverPlayerInFlight)
       return "player_tumble";
-    }
-    if (input.currentPlayerHasFinalRoll || input.feltTripletPresent) {
-      return "player_settled";
-    }
-    if (input.roundHasBankerTriplet) {
-      return "banker_settled";
-    }
+
+    // Local felt has a triplet (e.g. just-rolled state held briefly) → show it
+    if (input.feltTripletPresent) return "player_settled";
+
+    // Banker has rolled → show banker dice persistently while waiting for player
+    if (input.roundHasBankerTriplet) return "banker_settled";
+
     return "idle";
   }
   if (s === "betting") return "banker_settled";

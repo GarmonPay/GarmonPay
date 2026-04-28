@@ -526,6 +526,11 @@ export default function CeloRoomPage() {
     key: string;
     pips: [number, number, number];
   }>({ key: "", pips: [1, 1, 1] });
+  /** Survives brief realtime lag when `round.banker_dice` arrives after `player_rolling`. */
+  const lastBankerTripletRef = useRef<[number, number, number] | null>(null);
+  const noCountRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const confettiFiredForRoundRef = useRef<string | null>(null);
   const [resultBannerData, setResultBannerData] = useState<{
     roundId: string;
@@ -551,6 +556,11 @@ export default function CeloRoomPage() {
   const postEntryInFlightRef = useRef(false);
   const [rollError, setRollError] = useState<string | null>(null);
   const [latestRollDebug, setLatestRollDebug] = useState<unknown>(null);
+  /** Brief UX hold after a no_count reroll so players read the message before tumbling again. */
+  const [noCountReveal, setNoCountReveal] = useState<{
+    dice: [number, number, number];
+    rollName: string;
+  } | null>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
   const [lowerBankError, setLowerBankError] = useState<string | null>(null);
@@ -1617,6 +1627,8 @@ export default function CeloRoomPage() {
     () => tripletFromDiceJson(displayRound?.banker_dice),
     [displayRound?.banker_dice]
   );
+  const bankerTripletForDisplay =
+    bankerTripletLive ?? lastBankerTripletRef.current;
   const feltTripletPresent = dice != null;
 
   const bankerRollInFlight = round?.banker_roll_in_flight === true;
@@ -1715,19 +1727,27 @@ export default function CeloRoomPage() {
     if (dice) {
       return [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])];
     }
-    if (isRollingFaces) {
-      return CELO_IDLE_DICE;
+    if (currentPlayerResolvedRoll && round) {
+      const fromLatest = extractDiceFromRoll(latestRollDebug);
+      const t = resolveCeloFeltDice(fromLatest, round.banker_dice);
+      if (t) {
+        return [clampDie(t[0]), clampDie(t[1]), clampDie(t[2])];
+      }
     }
     if (
       round?.status === "player_rolling" &&
       !currentPlayerResolvedRoll &&
-      bankerTripletLive
+      bankerTripletForDisplay &&
+      !isRollingFaces
     ) {
       return [
-        bankerTripletLive[0],
-        bankerTripletLive[1],
-        bankerTripletLive[2],
+        clampDie(bankerTripletForDisplay[0]),
+        clampDie(bankerTripletForDisplay[1]),
+        clampDie(bankerTripletForDisplay[2]),
       ];
+    }
+    if (isRollingFaces) {
+      return CELO_IDLE_DICE;
     }
     if (
       bannerOverlayVisible &&
@@ -2049,6 +2069,38 @@ export default function CeloRoomPage() {
   }, [round?.id]);
 
   useEffect(() => {
+    if (round?.id) {
+      const trip = tripletFromDiceJson(round.banker_dice);
+      if (trip) {
+        lastBankerTripletRef.current = trip;
+      }
+    }
+  }, [round?.id, round?.banker_dice]);
+
+  useEffect(() => {
+    return () => {
+      lastBankerTripletRef.current = null;
+    };
+  }, [round?.id]);
+
+  useEffect(() => {
+    setNoCountReveal(null);
+    if (noCountRevealTimeoutRef.current) {
+      clearTimeout(noCountRevealTimeoutRef.current);
+      noCountRevealTimeoutRef.current = null;
+    }
+  }, [round?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (noCountRevealTimeoutRef.current) {
+        clearTimeout(noCountRevealTimeoutRef.current);
+        noCountRevealTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!CELO_DEBUG) return;
     console.log("[C-Lo] roll check", {
       isBanker,
@@ -2060,6 +2112,7 @@ export default function CeloRoomPage() {
 
   const rollDiceDisabled =
     bannerOverlayVisible ||
+    noCountReveal != null ||
     (round?.status === "banker_rolling" && isBanker
       ? !canRollBanker && !CELO_DEBUG
       : rollingAction);
@@ -2272,6 +2325,15 @@ export default function CeloRoomPage() {
       setRollFetchInfo({ url: "(blocked)", status: "missing_supabase", body: "", error: "Please log in to roll." });
       return;
     }
+    if (noCountReveal) {
+      setRollFetchInfo({
+        url: "(blocked)",
+        status: "no_count_reveal",
+        body: "",
+        error: "",
+      });
+      return;
+    }
     setRollError(null);
     if (rollWatchdogRef.current) {
       clearTimeout(rollWatchdogRef.current);
@@ -2296,6 +2358,7 @@ export default function CeloRoomPage() {
       round?: Record<string, unknown> | null;
       dice?: number[];
       rollName?: string;
+      /** Server: win | loss | reroll | push | … */
       outcome?: string;
       canLowerBank?: boolean;
       player_can_become_banker?: boolean;
@@ -2416,6 +2479,61 @@ export default function CeloRoomPage() {
         (Array.isArray(dArr) && dArr.length >= 3
           ? ([dArr[0], dArr[1], dArr[2]] as [number, number, number])
           : null);
+      const outcomeLc = String(rj.outcome ?? "").toLowerCase();
+
+      if (outcomeLc === "reroll" && tripletRaw) {
+        const trip: [number, number, number] = [
+          clampDie(tripletRaw[0]),
+          clampDie(tripletRaw[1]),
+          clampDie(tripletRaw[2]),
+        ];
+        setDice(trip);
+        feltTiedToRoundIdRef.current = round.id;
+        const rn = String(rj.rollName ?? "No Count");
+        setRollName(null);
+        setNoCountReveal({ dice: trip, rollName: rn });
+        setRolling(false);
+        setRollingAction(false);
+        setRollError(null);
+        const rollRoomFromApi =
+          rj.room && String((rj.room as { id?: string }).id ?? "") === room.id
+            ? rj.room
+            : undefined;
+        const rollRoomPatch: Record<string, unknown> | undefined = (() => {
+          if (rollRoomFromApi) return { ...rollRoomFromApi };
+          if (typeof j.newBank === "number") {
+            return { current_bank_sc: j.newBank };
+          }
+          return undefined;
+        })();
+        const roundForMerge = rj.currentRound ?? rj.round;
+        const rollRoundPatch: Record<string, unknown> | undefined =
+          roundForMerge &&
+          String((roundForMerge as { id?: string }).id ?? round.id) === round.id
+            ? roundForMerge
+            : undefined;
+        commitCeloAggregateMerge(
+          {
+            room: rollRoomPatch,
+            currentRound: rollRoundPatch,
+            updated_at: new Date().toISOString(),
+          },
+          "roll"
+        );
+        lastRealtimeUpdateRef.current = Date.now();
+        if (noCountRevealTimeoutRef.current) {
+          clearTimeout(noCountRevealTimeoutRef.current);
+        }
+        noCountRevealTimeoutRef.current = setTimeout(() => {
+          noCountRevealTimeoutRef.current = null;
+          setNoCountReveal(null);
+          setDice(null);
+          setRollName(null);
+          void fetchAll();
+        }, 1500);
+        return;
+      }
+
       if (tripletRaw) {
         setDice([
           clampDie(tripletRaw[0]),
@@ -2450,9 +2568,6 @@ export default function CeloRoomPage() {
         return undefined;
       })();
       const roundForMerge = rj.currentRound ?? rj.round;
-      const roundForMergeStatus = roundForMerge
-        ? String((roundForMerge as { status?: string }).status ?? "").toLowerCase()
-        : "";
       const rollRoundPatch: Record<string, unknown> | undefined =
         roundForMerge && String((roundForMerge as { id?: string }).id ?? round.id) === round.id
           ? roundForMerge
@@ -3211,7 +3326,24 @@ export default function CeloRoomPage() {
                       />
                     ))}
                   </div>
-                  <RollNameDisplay rollName={rollName} onComplete={() => setRollName(null)} />
+                  <RollNameDisplay
+                    rollName={noCountReveal ? null : rollName}
+                    onComplete={() => setRollName(null)}
+                  />
+                  {noCountReveal ? (
+                    <div className="mt-3 flex flex-col items-center gap-1 px-2">
+                      <p
+                        className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
+                      >
+                        NO COUNT — Roll Again
+                      </p>
+                      {noCountReveal.rollName ? (
+                        <p className="text-center font-mono text-xs text-amber-100/75">
+                          {noCountReveal.rollName}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 {showIdleDice && !isRollingFaces && (
                   <p
