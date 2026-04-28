@@ -8,6 +8,12 @@ import {
 
 const STARTABLE_ROOM_STATUSES = new Set(["waiting", "active", "entry_phase"]);
 
+function isMissingSettlementVersionError(err: { message?: string; code?: string } | null): boolean {
+  const msg = String(err?.message ?? "").toLowerCase();
+  if (!msg.includes("settlement_version")) return false;
+  return msg.includes("schema cache") || msg.includes("column");
+}
+
 /**
  * Banker starts the round: creates celo_rounds (banker_rolling) and sets room to rolling.
  * Requires at least one staked non-banker player (posted entry).
@@ -101,7 +107,9 @@ export async function POST(request: Request) {
     .select("id", { count: "exact", head: true })
     .eq("room_id", roomId);
   const roundNumber = (prev ?? 0) + 1;
-  const { data: round, error: insErr } = await adminClient
+  let round: Record<string, unknown> | null = null;
+  let insErr: { message?: string; code?: string } | null = null;
+  ({ data: round, error: insErr } = await adminClient
     .from("celo_rounds")
     .insert({
       room_id: roomId,
@@ -114,7 +122,22 @@ export async function POST(request: Request) {
       bank_covered: false,
     })
     .select("*")
-    .single();
+    .single());
+  if (insErr && isMissingSettlementVersionError(insErr)) {
+    ({ data: round, error: insErr } = await adminClient
+      .from("celo_rounds")
+      .insert({
+        room_id: roomId,
+        round_number: roundNumber,
+        banker_id: userId,
+        status: "banker_rolling",
+        prize_pool_sc: prizePool,
+        platform_fee_sc: 0,
+        bank_covered: false,
+      })
+      .select("*")
+      .single());
+  }
   if (insErr || !round) {
     return NextResponse.json(
       { error: insErr?.message ?? "Could not start round" },

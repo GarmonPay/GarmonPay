@@ -10,6 +10,12 @@ import {
 /**
  * After entry_phase: at least one posted entry → create the round and move to rolling.
  */
+function isMissingSettlementVersionError(err: { message?: string; code?: string } | null): boolean {
+  const msg = String(err?.message ?? "").toLowerCase();
+  if (!msg.includes("settlement_version")) return false;
+  return msg.includes("schema cache") || msg.includes("column");
+}
+
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
   if (!clients) {
@@ -87,7 +93,9 @@ export async function POST(request: Request) {
     .select("id", { count: "exact", head: true })
     .eq("room_id", roomId);
   const roundNumber = (prev ?? 0) + 1;
-  const { data: round, error: insErr } = await adminClient
+  let round: Record<string, unknown> | null = null;
+  let insErr: { message?: string; code?: string } | null = null;
+  ({ data: round, error: insErr } = await adminClient
     .from("celo_rounds")
     .insert({
       room_id: roomId,
@@ -100,7 +108,22 @@ export async function POST(request: Request) {
       bank_covered: false,
     })
     .select("*")
-    .single();
+    .single());
+  if (insErr && isMissingSettlementVersionError(insErr)) {
+    ({ data: round, error: insErr } = await adminClient
+      .from("celo_rounds")
+      .insert({
+        room_id: roomId,
+        round_number: roundNumber,
+        banker_id: userId,
+        status: "banker_rolling",
+        prize_pool_sc: prizePool,
+        platform_fee_sc: platformFee,
+        bank_covered: false,
+      })
+      .select("*")
+      .single());
+  }
   if (insErr || !round) {
     return NextResponse.json(
       { error: insErr?.message ?? "Could not start round" },
