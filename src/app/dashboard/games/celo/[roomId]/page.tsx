@@ -39,9 +39,6 @@ import {
 } from "@/lib/celo/celoStateMerge";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
-/** Client hold so the roller still sees the result banner after HTTP returns past the server 4s pause. */
-const RESULT_DISPLAY_HOLD_MS = 4000;
-
 /*
 ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
 NO EXCEPTIONS (realtime, fetch, join, roll)
@@ -158,6 +155,13 @@ type CeloResultBannerModel = {
   playerTriplet: [number, number, number] | null;
   playerRollName: string | null;
   showPlayerRow: boolean;
+};
+
+/** Single source of truth for the result overlay — auto-dismisses via expiresAt. */
+type ResultBannerSession = {
+  roundId: string;
+  expiresAt: number;
+  model: CeloResultBannerModel;
 };
 
 type RollRowForBanner = {
@@ -524,19 +528,18 @@ export default function CeloRoomPage() {
   const [celoTakeoverRoundId, setCeloTakeoverRoundId] = useState<string | null>(null);
   const [celoTakeoverSec, setCeloTakeoverSec] = useState<number | null>(null);
   const celoTimeoutPassSentRef = useRef(false);
-  const resultPauseVisualRef = useRef(false);
+  const resultBannerSessionRef = useRef<ResultBannerSession | null>(null);
   const randomWaitingPipsCacheRef = useRef<{
     key: string;
     pips: [number, number, number];
   }>({ key: "", pips: [1, 1, 1] });
   const confettiFiredForRoundRef = useRef<string | null>(null);
-  /** End timestamp (ms) for client-only result hold after roll HTTP returns late. 0 = off. */
-  const [localResultHoldEnd, setLocalResultHoldEnd] = useState(0);
-  /** Preserves completed round for banner/felt when merge cleared `round` before hold ends. */
-  const [heldDisplayRound, setHeldDisplayRound] = useState<Round | null>(null);
-  const [resultBanner, setResultBanner] = useState<CeloResultBannerModel | null>(null);
-  /** Hides overlay when server pause sticks (completed + room not waiting) after hold/timer/backdrop. */
-  const [clientBannerDismissed, setClientBannerDismissed] = useState(false);
+  const [resultBannerSession, setResultBannerSession] =
+    useState<ResultBannerSession | null>(null);
+  /** After auto-dismiss, suppress re-opening while `round` stays completed in state. */
+  const dismissedBannerRoundRef = useRef<string | null>(null);
+  const prevRoundIdForBannerRef = useRef<string | undefined>(undefined);
+  resultBannerSessionRef.current = resultBannerSession;
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -990,7 +993,7 @@ export default function CeloRoomPage() {
     } else if (
       !activeRound &&
       !rollingActionRef.current &&
-      !resultPauseVisualRef.current
+      !resultBannerSessionRef.current
     ) {
       if (isStaleFetch()) {
         console.log("[C-Lo] skipping stale fetch");
@@ -1216,10 +1219,8 @@ export default function CeloRoomPage() {
                 (nextSt === "active" || nextSt === "rolling")) ||
               (prevSt === "active" && nextSt === "rolling");
             if (clearStaleResultBanner) {
-              setHeldDisplayRound(null);
-              setLocalResultHoldEnd(0);
-              setResultBanner(null);
-              setClientBannerDismissed(true);
+              setResultBannerSession(null);
+              dismissedBannerRoundRef.current = null;
             }
             commitCeloAggregateMerge(
               {
@@ -1498,56 +1499,92 @@ export default function CeloRoomPage() {
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
-  /** Server delays room→waiting so everyone can see final dice/outcome first. */
-  const resultPauseActive = Boolean(
-    round &&
-      String(round.status).toLowerCase() === "completed" &&
-      room &&
-      String(room.status).toLowerCase() !== "waiting"
-  );
-  /** Server pause and/or client hold so the roller still sees results after slow HTTP. */
-  const resultPauseVisual =
-    !clientBannerDismissed && (resultPauseActive || localResultHoldEnd > 0);
-  resultPauseVisualRef.current = resultPauseVisual;
+  /** Result overlay: single session with expiresAt — always gone within 4s of opens. */
+  const bannerOverlayVisible = resultBannerSession != null;
 
   useEffect(() => {
-    setClientBannerDismissed(false);
+    const id = round?.id;
+    const prev = prevRoundIdForBannerRef.current;
+    if (prev !== undefined && id !== undefined && prev !== id) {
+      setResultBannerSession(null);
+      dismissedBannerRoundRef.current = null;
+    }
+    prevRoundIdForBannerRef.current = id;
   }, [round?.id]);
 
-  /** Only clear the client result hold after the server pause window; avoids wiping the banker's banner when room→waiting arrives before HTTP returns. */
   useEffect(() => {
-    if (roomStatusLc === "waiting" && Date.now() > localResultHoldEnd) {
-      setLocalResultHoldEnd(0);
-      setHeldDisplayRound(null);
-      setResultBanner(null);
-      setClientBannerDismissed(true);
+    const rs = String(room?.status ?? "").toLowerCase();
+    if (rs === "rolling") {
+      setResultBannerSession(null);
+      dismissedBannerRoundRef.current = null;
     }
-  }, [roomStatusLc, localResultHoldEnd]);
+  }, [room?.status]);
 
-  /** Force-clear hold when the 4s window elapses (also clears stuck server-pause-only overlay via clientBannerDismissed). */
   useEffect(() => {
-    if (localResultHoldEnd === 0) return;
-    const remaining = localResultHoldEnd - Date.now();
+    if (!supabase || !round?.id) return;
+    const st = String(round.status ?? "").toLowerCase();
+    if (st !== "completed") return;
+    if (!round.banker_dice) return;
+    if (dismissedBannerRoundRef.current === round.id) return;
+    if (resultBannerSessionRef.current?.roundId === round.id) return;
+
+    let cancelled = false;
+    void (async () => {
+      const { data: rolls } = await supabase
+        .from("celo_player_rolls")
+        .select("outcome, roll_name, roll_result, point, user_id, dice, payout_sc")
+        .eq("round_id", round.id)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (cancelled) return;
+      if (dismissedBannerRoundRef.current === round.id) return;
+      const model = buildCeloResultBannerContent(
+        round,
+        rolls ?? [],
+        players,
+        room?.banker_id ?? null
+      );
+      setResultBannerSession({
+        roundId: round.id,
+        expiresAt: Date.now() + 4000,
+        model,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- round fields listed; whole `round` would rerun too often
+  }, [
+    supabase,
+    round?.id,
+    round?.status,
+    round?.banker_dice,
+    round?.banker_dice_result,
+    round?.banker_point,
+    round?.push,
+    players,
+    room?.banker_id,
+  ]);
+
+  useEffect(() => {
+    if (!resultBannerSession) return;
+    const remaining = resultBannerSession.expiresAt - Date.now();
     if (remaining <= 0) {
-      setLocalResultHoldEnd(0);
-      setHeldDisplayRound(null);
-      setResultBanner(null);
-      setClientBannerDismissed(true);
+      dismissedBannerRoundRef.current = resultBannerSession.roundId;
+      setResultBannerSession(null);
       return;
     }
     const timer = window.setTimeout(() => {
-      setLocalResultHoldEnd(0);
-      setHeldDisplayRound(null);
-      setResultBanner(null);
-      setClientBannerDismissed(true);
+      dismissedBannerRoundRef.current = resultBannerSession.roundId;
+      setResultBannerSession(null);
     }, remaining);
     return () => window.clearTimeout(timer);
-  }, [localResultHoldEnd]);
+  }, [resultBannerSession]);
 
   useEffect(() => {
     if (!supabase || !round || !me) return;
     if (!round.player_celo_offer || !round.id) return;
-    if (resultPauseVisual) return;
+    if (bannerOverlayVisible) return;
     const exp = round.player_celo_expires_at
       ? new Date(String(round.player_celo_expires_at))
       : null;
@@ -1584,12 +1621,12 @@ export default function CeloRoomPage() {
     return () => {
       cancel = true;
     };
-  }, [supabase, me, showCeloTakeover, round, resultPauseVisual]);
+  }, [supabase, me, showCeloTakeover, round, bannerOverlayVisible]);
 
-  const displayRound = round ?? heldDisplayRound;
+  const displayRound = round;
   const effectiveRoundStatus = round?.status ?? displayRound?.status;
 
-  const inProgressForVisual = inProgress || resultPauseVisual;
+  const inProgressForVisual = inProgress || bannerOverlayVisible;
   const roundHasBankerTriplet = !!tripletFromDiceJson(displayRound?.banker_dice);
   const bankerTripletLive = useMemo(
     () => tripletFromDiceJson(displayRound?.banker_dice),
@@ -1611,7 +1648,7 @@ export default function CeloRoomPage() {
         localRolling: rolling,
         serverBankerInFlight: round?.banker_roll_in_flight === true,
         serverPlayerInFlight: round?.roll_processing === true,
-        resultPauseActive: resultPauseVisual,
+        resultPauseActive: bannerOverlayVisible,
       }),
     [
       inProgressForVisual,
@@ -1623,7 +1660,7 @@ export default function CeloRoomPage() {
       rolling,
       round?.banker_roll_in_flight,
       round?.roll_processing,
-      resultPauseVisual,
+      bannerOverlayVisible,
     ]
   );
 
@@ -1667,7 +1704,7 @@ export default function CeloRoomPage() {
     !rolling &&
     !isRollingFaces &&
     dice == null &&
-    !resultPauseVisual;
+    !bannerOverlayVisible;
   const randomIdleSurfaceKey = `${roomId}:${
     round?.id ?? "—"
   }:${dice != null ? "hasDice" : "noDice"}:${
@@ -1708,7 +1745,7 @@ export default function CeloRoomPage() {
       ];
     }
     if (
-      resultPauseVisual &&
+      bannerOverlayVisible &&
       String(displayRound?.status ?? "").toLowerCase() === "completed" &&
       bankerTripletLive &&
       !currentPlayerResolvedRoll
@@ -1898,7 +1935,7 @@ export default function CeloRoomPage() {
     !isBanker &&
     isPlayer &&
     !inProgress &&
-    !resultPauseVisual &&
+    !bannerOverlayVisible &&
     postEntryRoomOk &&
     entryAmount > 0 &&
     Number.isFinite(entryAmount) &&
@@ -1957,7 +1994,7 @@ export default function CeloRoomPage() {
     showStartRound &&
     stakedPlayerCount >= 1 &&
     !rollingAction &&
-    !resultPauseVisual;
+    !bannerOverlayVisible;
   const startRoundDisabledReason = (() => {
     if (!showStartRound) return null;
     if (rollingAction) return "round_action_in_progress";
@@ -2037,57 +2074,19 @@ export default function CeloRoomPage() {
   }, [isBanker, round?.status, rollingAction, canRollBanker]);
 
   const rollDiceDisabled =
-    resultPauseVisual ||
+    bannerOverlayVisible ||
     (round?.status === "banker_rolling" && isBanker
       ? !canRollBanker && !CELO_DEBUG
       : rollingAction);
 
-  const bannerRound =
-    round && String(round.status).toLowerCase() === "completed"
-      ? round
-      : heldDisplayRound;
-
   useEffect(() => {
-    if (
-      !resultPauseVisual ||
-      !bannerRound?.id ||
-      String(bannerRound.status).toLowerCase() !== "completed" ||
-      !supabase
-    ) {
-      setResultBanner(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data: rolls } = await supabase
-        .from("celo_player_rolls")
-        .select("outcome, roll_name, roll_result, point, user_id, dice, payout_sc")
-        .eq("round_id", bannerRound.id)
-        .order("created_at", { ascending: false })
-        .limit(8);
-      if (cancelled) return;
-      const r = rolls ?? [];
-      setResultBanner(
-        buildCeloResultBannerContent(
-          bannerRound,
-          r,
-          players,
-          room?.banker_id ?? null
-        )
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [resultPauseVisual, supabase, bannerRound, players, room?.banker_id]);
-
-  useEffect(() => {
-    if (!resultPauseVisual) {
+    if (!bannerOverlayVisible) {
       confettiFiredForRoundRef.current = null;
       return;
     }
-    if (!resultBanner?.celebrate || resultBanner.kind !== "win") return;
-    const rid = bannerRound?.id;
+    const model = resultBannerSession?.model;
+    if (!model?.celebrate || model.kind !== "win") return;
+    const rid = resultBannerSession?.roundId;
     if (!rid || confettiFiredForRoundRef.current === rid) return;
     confettiFiredForRoundRef.current = rid;
     let cancelled = false;
@@ -2118,12 +2117,7 @@ export default function CeloRoomPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    resultPauseVisual,
-    resultBanner?.celebrate,
-    resultBanner?.kind,
-    bannerRound?.id,
-  ]);
+  }, [bannerOverlayVisible, resultBannerSession]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2191,6 +2185,8 @@ export default function CeloRoomPage() {
 
   async function handleStart() {
     if (!room || !canStartRound) return;
+    setResultBannerSession(null);
+    dismissedBannerRoundRef.current = null;
     if (!supabase) {
       setStartRoundError("Not connected. Please refresh and try again.");
       return;
@@ -2473,11 +2469,6 @@ export default function CeloRoomPage() {
       const roundForMergeStatus = roundForMerge
         ? String((roundForMerge as { status?: string }).status ?? "").toLowerCase()
         : "";
-      if (roundForMergeStatus === "completed" && roundForMerge) {
-        setClientBannerDismissed(false);
-        setLocalResultHoldEnd(Date.now() + RESULT_DISPLAY_HOLD_MS);
-        setHeldDisplayRound(roundForMerge as Round);
-      }
       const rollRoundPatch: Record<string, unknown> | undefined =
         roundForMerge && String((roundForMerge as { id?: string }).id ?? round.id) === round.id
           ? roundForMerge
@@ -2737,10 +2728,8 @@ export default function CeloRoomPage() {
       });
       return;
     }
-    setHeldDisplayRound(null);
-    setLocalResultHoldEnd(0);
-    setResultBanner(null);
-    setClientBannerDismissed(true);
+    setResultBannerSession(null);
+    dismissedBannerRoundRef.current = null;
     setJoinHint(null);
     postEntryInFlightRef.current = true;
     setJoinSubmitting(true);
@@ -2887,6 +2876,8 @@ export default function CeloRoomPage() {
       setJoinSubmitting(false);
     }
   }
+
+  const resultBanner = resultBannerSession?.model ?? null;
 
   const rbBankerSeatTitleCls =
     resultBanner == null
@@ -3261,7 +3252,7 @@ export default function CeloRoomPage() {
                     <span className="hidden text-[9px] text-zinc-500 sm:inline">{gpcToUsdDisplay(myBalance)}</span>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    {canRoll && !resultPauseVisual && (
+                    {canRoll && !bannerOverlayVisible && (
                       <div className="mx-auto w-full max-w-md">
                         {rollError && (
                           <p className="mb-2 text-center text-xs text-red-300/95">{rollError}</p>
@@ -3281,7 +3272,7 @@ export default function CeloRoomPage() {
                         </button>
                       </div>
                     )}
-                    {showStartRound && isBanker && !canRoll && !resultPauseVisual && (
+                    {showStartRound && isBanker && !canRoll && !bannerOverlayVisible && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
                         <button
                           type="button"
@@ -3478,7 +3469,7 @@ export default function CeloRoomPage() {
         />
       </div>
       </div>
-      {resultPauseVisual && resultBanner && room && bannerRound?.id && (
+      {resultBannerSession && resultBanner && room && (
         <div
           className="fixed inset-0 z-[20080] flex cursor-pointer items-center justify-center p-2 sm:p-3"
           style={{ background: "rgba(0,0,0,0.78)" }}
@@ -3486,18 +3477,18 @@ export default function CeloRoomPage() {
           tabIndex={0}
           aria-label="Dismiss result"
           onClick={() => {
-            setLocalResultHoldEnd(0);
-            setHeldDisplayRound(null);
-            setResultBanner(null);
-            setClientBannerDismissed(true);
+            if (resultBannerSession) {
+              dismissedBannerRoundRef.current = resultBannerSession.roundId;
+            }
+            setResultBannerSession(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              setLocalResultHoldEnd(0);
-              setHeldDisplayRound(null);
-              setResultBanner(null);
-              setClientBannerDismissed(true);
+              if (resultBannerSession) {
+                dismissedBannerRoundRef.current = resultBannerSession.roundId;
+              }
+              setResultBannerSession(null);
             }
           }}
         >
