@@ -535,6 +535,8 @@ export default function CeloRoomPage() {
   /** Preserves completed round for banner/felt when merge cleared `round` before hold ends. */
   const [heldDisplayRound, setHeldDisplayRound] = useState<Round | null>(null);
   const [resultBanner, setResultBanner] = useState<CeloResultBannerModel | null>(null);
+  /** Hides overlay when server pause sticks (completed + room not waiting) after hold/timer/backdrop. */
+  const [clientBannerDismissed, setClientBannerDismissed] = useState(false);
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -1217,6 +1219,7 @@ export default function CeloRoomPage() {
               setHeldDisplayRound(null);
               setLocalResultHoldEnd(0);
               setResultBanner(null);
+              setClientBannerDismissed(true);
             }
             commitCeloAggregateMerge(
               {
@@ -1504,25 +1507,41 @@ export default function CeloRoomPage() {
   );
   /** Server pause and/or client hold so the roller still sees results after slow HTTP. */
   const resultPauseVisual =
-    resultPauseActive || localResultHoldEnd > 0;
+    !clientBannerDismissed && (resultPauseActive || localResultHoldEnd > 0);
   resultPauseVisualRef.current = resultPauseVisual;
+
+  useEffect(() => {
+    setClientBannerDismissed(false);
+  }, [round?.id]);
 
   /** Only clear the client result hold after the server pause window; avoids wiping the banker's banner when room→waiting arrives before HTTP returns. */
   useEffect(() => {
     if (roomStatusLc === "waiting" && Date.now() > localResultHoldEnd) {
       setLocalResultHoldEnd(0);
       setHeldDisplayRound(null);
+      setResultBanner(null);
+      setClientBannerDismissed(true);
     }
   }, [roomStatusLc, localResultHoldEnd]);
 
+  /** Force-clear hold when the 4s window elapses (also clears stuck server-pause-only overlay via clientBannerDismissed). */
   useEffect(() => {
-    if (localResultHoldEnd <= 0) return;
-    const ms = Math.max(0, localResultHoldEnd - Date.now());
-    const id = window.setTimeout(() => {
+    if (localResultHoldEnd === 0) return;
+    const remaining = localResultHoldEnd - Date.now();
+    if (remaining <= 0) {
       setLocalResultHoldEnd(0);
       setHeldDisplayRound(null);
-    }, ms);
-    return () => window.clearTimeout(id);
+      setResultBanner(null);
+      setClientBannerDismissed(true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLocalResultHoldEnd(0);
+      setHeldDisplayRound(null);
+      setResultBanner(null);
+      setClientBannerDismissed(true);
+    }, remaining);
+    return () => window.clearTimeout(timer);
   }, [localResultHoldEnd]);
 
   useEffect(() => {
@@ -2455,6 +2474,7 @@ export default function CeloRoomPage() {
         ? String((roundForMerge as { status?: string }).status ?? "").toLowerCase()
         : "";
       if (roundForMergeStatus === "completed" && roundForMerge) {
+        setClientBannerDismissed(false);
         setLocalResultHoldEnd(Date.now() + RESULT_DISPLAY_HOLD_MS);
         setHeldDisplayRound(roundForMerge as Round);
       }
@@ -2720,6 +2740,7 @@ export default function CeloRoomPage() {
     setHeldDisplayRound(null);
     setLocalResultHoldEnd(0);
     setResultBanner(null);
+    setClientBannerDismissed(true);
     setJoinHint(null);
     postEntryInFlightRef.current = true;
     setJoinSubmitting(true);
@@ -3459,14 +3480,33 @@ export default function CeloRoomPage() {
       </div>
       {resultPauseVisual && resultBanner && room && bannerRound?.id && (
         <div
-          className="pointer-events-none fixed inset-0 z-[20080] flex items-center justify-center p-2 sm:p-3"
+          className="fixed inset-0 z-[20080] flex cursor-pointer items-center justify-center p-2 sm:p-3"
           style={{ background: "rgba(0,0,0,0.78)" }}
-          role="status"
-          aria-live="polite"
+          role="button"
+          tabIndex={0}
+          aria-label="Dismiss result"
+          onClick={() => {
+            setLocalResultHoldEnd(0);
+            setHeldDisplayRound(null);
+            setResultBanner(null);
+            setClientBannerDismissed(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setLocalResultHoldEnd(0);
+              setHeldDisplayRound(null);
+              setResultBanner(null);
+              setClientBannerDismissed(true);
+            }
+          }}
         >
           <div
-            className={`pointer-events-auto mx-auto max-h-[70vh] max-w-lg overflow-x-hidden overflow-y-auto rounded-2xl border border-amber-500/45 px-3 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-5 sm:py-5 ${dm.className}`}
+            className={`pointer-events-auto mx-auto max-h-[70vh] max-w-lg cursor-default overflow-x-hidden overflow-y-auto rounded-2xl border border-amber-500/45 px-3 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-5 sm:py-5 ${dm.className}`}
             style={{ background: "rgba(13,5,32,0.97)" }}
+            role="status"
+            aria-live="polite"
+            onClick={(e) => e.stopPropagation()}
           >
             <span className="sr-only">{resultBanner.title}</span>
             <div className="flex flex-col items-center gap-3">
