@@ -298,6 +298,10 @@ function buildCeloResultBannerContent(
   ) {
     const bp = bPt;
     const pp = decisive.point;
+    const bpN = Math.floor(Number(bp));
+    const ppN = Math.floor(Number(pp));
+    /** Point-vs-point: show numeric points (e.g. "5 beats 4"), not slang roll names ("Pound beats Zoe"). */
+    const pointBeatDetailWin = `${ppN} beats ${bpN}`;
     const pay = Math.floor(Number(decisive.payout_sc ?? 0));
     if (String(decisive.outcome).toLowerCase() === "win" && bankerUid) {
       const wUid = decisive.user_id?.trim()
@@ -308,7 +312,7 @@ function buildCeloResultBannerContent(
         wUid ?? rollerUid ?? decisive.user_id
       );
       return {
-        title: `${playerTag} WINS — ${ucCulture(pRollName || "?")} beats ${ucCulture(bName)}`,
+        title: `${playerTag} WINS — ${pointBeatDetailWin}`,
         kind: "win",
         celebrate: true,
         winnerSide: "player",
@@ -319,7 +323,7 @@ function buildCeloResultBannerContent(
         bankerLabel: bankerTag,
         playerLabel: playerTag,
         headlineWinnerLabel: hl,
-        detailLine: `${ucCulture(pRollName || String(pp))} beats ${ucCulture(bName)}`,
+        detailLine: pointBeatDetailWin,
         bankerTriplet,
         bankerRollName: bName || null,
         playerTriplet,
@@ -332,8 +336,9 @@ function buildCeloResultBannerContent(
         ? String(decisive.user_id)
         : rollerUid;
       const take = estimatedBankerTakeSc(round);
+      const pointBeatDetailLoss = `${bpN} beats ${ppN}`;
       return {
-        title: `${bankerTag} WINS — ${ucCulture(bName)} beats ${ucCulture(pRollName || String(pp))}`,
+        title: `${bankerTag} WINS — ${pointBeatDetailLoss}`,
         kind: "win",
         celebrate: true,
         winnerSide: "banker",
@@ -344,7 +349,7 @@ function buildCeloResultBannerContent(
         bankerLabel: bankerTag,
         playerLabel: playerTag,
         headlineWinnerLabel: bankerTag,
-        detailLine: `${ucCulture(bName)} beats ${ucCulture(pRollName || String(pp))}`,
+        detailLine: pointBeatDetailLoss,
         bankerTriplet,
         bankerRollName: bName || null,
         playerTriplet,
