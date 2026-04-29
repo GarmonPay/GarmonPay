@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
 import { realDiceTripletFromUnknown } from "@/lib/celo-room-dice";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 async function nextAvailablePlayerSeat(
   admin: SupabaseClient,
@@ -59,11 +60,14 @@ export async function POST(request: Request) {
 
   const { data: room, error: rErr } = await admin
     .from("celo_rooms")
-    .select("id, banker_id, max_players")
+    .select("id, banker_id, max_players, paused_at")
     .eq("id", roomId)
     .maybeSingle();
   if (rErr || !room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  }
+  if (isRoomPauseBlockingActions(room as { paused_at?: string | null })) {
+    return NextResponse.json({ error: "Room is paused" }, { status: 400 });
   }
   const rawBanker = (room as { banker_id: string | null }).banker_id;
   if (rawBanker == null || String(rawBanker).trim() === "") {

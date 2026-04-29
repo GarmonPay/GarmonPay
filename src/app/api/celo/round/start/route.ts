@@ -5,6 +5,7 @@ import {
   isStakedNonBankerForStartRound,
   normalizeCeloUserId,
 } from "@/lib/celo-player-state";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 const STARTABLE_ROOM_STATUSES = new Set(["waiting", "active", "entry_phase"]);
 
@@ -55,7 +56,11 @@ export async function POST(request: Request) {
     current_bank_sc?: number | null;
     current_bank_cents?: number | null;
     bank_busted?: boolean | null;
+    paused_at?: string | null;
   };
+  if (isRoomPauseBlockingActions(room)) {
+    return NextResponse.json({ error: "Room is paused" }, { status: 400 });
+  }
   if (!room.banker_id) {
     return NextResponse.json(
       { error: "No banker assigned to this table" },

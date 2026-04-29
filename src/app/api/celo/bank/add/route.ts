@@ -3,6 +3,7 @@ import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/
 import { debitGpayCoins } from "@/lib/coins";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
 import { validateEntry } from "@/lib/celo-engine";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 /**
  * Banker adds GPC from personal balance to the table bank (between rounds).
@@ -55,7 +56,12 @@ export async function POST(request: Request) {
     minimum_entry_sc: number | null;
     min_bet_cents: number | null;
     bank_busted?: boolean | null;
+    paused_at?: string | null;
   };
+
+  if (isRoomPauseBlockingActions(room)) {
+    return NextResponse.json({ error: "Room is paused" }, { status: 400 });
+  }
 
   const action = "bank_add_attempt";
 

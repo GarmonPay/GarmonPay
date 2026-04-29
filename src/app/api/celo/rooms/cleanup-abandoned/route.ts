@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
 import { insertCeloPlatformFee } from "@/lib/celo-platform-fee";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
+import { processExpiredPauseRoom } from "@/lib/celo-pause-cleanup";
 
 export const runtime = "nodejs";
 
@@ -118,6 +119,27 @@ async function runAbandonmentCleanup(request: Request) {
   const cutoff = new Date(Date.now() - IDLE_MS).toISOString();
   const now = new Date().toISOString();
 
+  const pauseProcessed: string[] = [];
+  const pauseSkipped: Array<{ roomId: string; reason: string }> = [];
+  const { data: pauseExpired } = await admin
+    .from("celo_rooms")
+    .select("id, banker_id, paused_at, pause_expires_at, paused_by, status")
+    .not("paused_at", "is", null)
+    .lt("pause_expires_at", now)
+    .neq("status", "cancelled");
+
+  for (const prow of pauseExpired ?? []) {
+    const pid = String((prow as { id?: string }).id ?? "");
+    if (!pid) continue;
+    const res = await processExpiredPauseRoom(
+      admin,
+      prow as { id: string; banker_id: string | null; paused_by?: string | null },
+      now
+    );
+    if (res.ok) pauseProcessed.push(pid);
+    else pauseSkipped.push({ roomId: pid, reason: res.reason ?? "unknown" });
+  }
+
   const { data: candidates, error: qErr } = await admin
     .from("celo_rooms")
     .select(
@@ -125,7 +147,8 @@ async function runAbandonmentCleanup(request: Request) {
     )
     .in("status", ["waiting", "active", "rolling", "entry_phase"])
     .lt("last_activity", cutoff)
-    .or("abandonment_fee_charged.is.null,abandonment_fee_charged.eq.false");
+    .or("abandonment_fee_charged.is.null,abandonment_fee_charged.eq.false")
+    .is("paused_at", null);
 
   if (qErr) {
     return NextResponse.json(
@@ -284,5 +307,7 @@ async function runAbandonmentCleanup(request: Request) {
     cutoff,
     processed,
     skipped,
+    pauseTimeoutProcessed: pauseProcessed,
+    pauseTimeoutSkipped: pauseSkipped,
   });
 }

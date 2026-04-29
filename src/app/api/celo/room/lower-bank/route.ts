@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -39,7 +40,11 @@ export async function POST(request: Request) {
     minimum_entry_sc: number | null;
     min_bet_cents: number | null;
     bank_busted?: boolean | null;
+    paused_at?: string | null;
   };
+  if (isRoomPauseBlockingActions(room)) {
+    return NextResponse.json({ error: "Room is paused" }, { status: 400 });
+  }
   if (room.bank_busted === true) {
     return NextResponse.json(
       { error: "Bank is busted. Assign a new banker before changing the bank." },

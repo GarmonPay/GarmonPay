@@ -11,6 +11,7 @@ import {
 } from "@/lib/celo-accounting";
 import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
 import { handleCeloBankBustAndBankerTransfer } from "@/lib/celo-bank-bust";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 const ROLL_ANIMATION_MS = 1500;
 /** Pause after terminal round writes so clients can display final dice/outcome before reset. */
@@ -279,6 +280,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
   const room = roomRaw as RoomRow;
+  if (
+    isRoomPauseBlockingActions(
+      room as { paused_at?: string | null; pause_expires_at?: string | null }
+    )
+  ) {
+    return NextResponse.json({ error: "Room is paused" }, { status: 400 });
+  }
   const roundIdArg = body.round_id ? String(body.round_id) : null;
   let round: RoundRow | null = null;
   if (roundIdArg) {

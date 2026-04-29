@@ -3,6 +3,7 @@ import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/
 import { getUserCoins } from "@/lib/coins";
 import { celoAccountingLog } from "@/lib/celo-accounting";
 import { validatePlayerStake } from "@/lib/celo-engine";
+import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 import {
   CELO_ROOM_PLAYERS_USER_EMBED,
   normalizeCeloUserId,
@@ -72,7 +73,13 @@ export async function POST(request: Request) {
     banker_id: string | null;
     current_bank_sc?: number | null;
     current_bank_cents?: number | null;
+    paused_at?: string | null;
+    pause_expires_at?: string | null;
   };
+
+  if (isRoomPauseBlockingActions(room)) {
+    return jsonErr("Room is paused", 400);
+  }
 
   const rs = String(room.status ?? "");
   if (BLOCKED_ROOM.has(rs)) {

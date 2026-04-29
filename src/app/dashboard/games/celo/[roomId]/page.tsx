@@ -17,6 +17,10 @@ import {
   resolveCeloFeltDice,
   shouldClobberFeltTripletOnFetch,
 } from "@/lib/celo-room-dice";
+import {
+  isRoomPauseActive,
+  isRoomPauseBlockingActions,
+} from "@/lib/celo-pause";
 import DiceFace, { type DiceType, type TumbleVariant } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
@@ -66,6 +70,10 @@ type Room = {
   total_rounds: number;
   abandoned_at?: string | null;
   abandonment_fee_charged?: boolean | null;
+  paused_at?: string | null;
+  pause_expires_at?: string | null;
+  paused_by?: string | null;
+  pause_reason?: string | null;
 };
 
 type Player = CeloEntryPlayerFields;
@@ -544,6 +552,9 @@ export default function CeloRoomPage() {
   const [rolling, setRolling] = useState(false);
   const [rollingAction, setRollingAction] = useState(false);
   const [startRoundSubmitting, setStartRoundSubmitting] = useState(false);
+  const [pauseTick, setPauseTick] = useState(0);
+  const [pauseUiBusy, setPauseUiBusy] = useState(false);
+  const [pauseVoteBusy, setPauseVoteBusy] = useState(false);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
   const [diceModal, setDiceModal] = useState(false);
@@ -1720,6 +1731,24 @@ export default function CeloRoomPage() {
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
+  const roomPausedBlocking = isRoomPauseBlockingActions(room);
+  const roomPauseActive = isRoomPauseActive(room);
+
+  useEffect(() => {
+    if (!room?.paused_at) return;
+    const id = window.setInterval(() => setPauseTick((x) => x + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [room?.paused_at]);
+
+  const pauseRemainingSec =
+    room?.pause_expires_at != null
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(room.pause_expires_at).getTime() - Date.now()) / 1000
+          )
+        )
+      : 0;
 
   useEffect(() => {
     if (!room?.id) return;
@@ -2342,6 +2371,7 @@ export default function CeloRoomPage() {
     isPlayer &&
     !inProgress &&
     !bannerOverlayVisible &&
+    !roomPausedBlocking &&
     postEntryRoomOk &&
     entryAmount > 0 &&
     postEntryStakeRangeOk &&
@@ -2397,6 +2427,24 @@ export default function CeloRoomPage() {
     )
   );
   const roomInLiveRound = roomStatusLc === "rolling";
+  const rollSideQuiet =
+    round?.roll_processing !== true && round?.banker_roll_in_flight !== true;
+  const canOfferBankerPause =
+    isBanker &&
+    ["waiting", "active"].includes(roomStatusLc) &&
+    !hasActiveRound &&
+    !roomInLiveRound &&
+    rollSideQuiet &&
+    !bannerOverlayVisible &&
+    !roomPausedBlocking;
+  const canOfferPlayerPauseVote =
+    isPlayer &&
+    ["waiting", "active", "entry_phase"].includes(roomStatusLc) &&
+    !hasActiveRound &&
+    !roomInLiveRound &&
+    rollSideQuiet &&
+    !bannerOverlayVisible &&
+    !roomPausedBlocking;
   const showStartRoundPanel =
     !!room &&
     isBanker &&
@@ -2405,7 +2453,8 @@ export default function CeloRoomPage() {
     ["waiting", "active", "entry_phase"].includes(roomPhase) &&
     bankVal(room) > 0 &&
     room.bank_busted !== true &&
-    !bannerOverlayVisible;
+    !bannerOverlayVisible &&
+    !roomPausedBlocking;
   const canStartRound =
     showStartRoundPanel &&
     stakedPlayerCount >= 1 &&
@@ -2680,6 +2729,7 @@ export default function CeloRoomPage() {
   }, [isBanker, round?.status, rollingAction, canRollBanker]);
 
   const rollDiceDisabled =
+    roomPausedBlocking ||
     bannerOverlayVisible ||
     noCountReveal != null ||
     (round?.status === "banker_rolling" && isBanker
@@ -2854,6 +2904,121 @@ export default function CeloRoomPage() {
       if (CELO_DEBUG) console.error("[C-Lo room] Start round exception", e);
     } finally {
       setStartRoundSubmitting(false);
+    }
+  }
+
+  async function handlePauseRoom() {
+    if (!room || !supabase || !canOfferBankerPause) return;
+    setPauseUiBusy(true);
+    setRollError(null);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/pause", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id }),
+      });
+      const text = await res.text();
+      let j: { error?: string; room?: Record<string, unknown> } = {};
+      try {
+        j = text ? (JSON.parse(text) as typeof j) : {};
+      } catch {
+        setRollError("Invalid pause response");
+        return;
+      }
+      if (!res.ok) {
+        setRollError(j.error ?? "Could not pause room");
+        return;
+      }
+      if (j.room) {
+        bumpOptimisticAsRealtime();
+        commitCeloAggregateMerge(
+          {
+            room: j.room,
+            updated_at: new Date().toISOString(),
+          },
+          "join"
+        );
+      }
+      await fetchAll();
+    } finally {
+      setPauseUiBusy(false);
+    }
+  }
+
+  async function handleResumeRoom() {
+    if (!room || !supabase || !isBanker || !room.paused_at) return;
+    setPauseUiBusy(true);
+    setRollError(null);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/resume", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id }),
+      });
+      const text = await res.text();
+      let j: { error?: string; room?: Record<string, unknown> } = {};
+      try {
+        j = text ? (JSON.parse(text) as typeof j) : {};
+      } catch {
+        setRollError("Invalid resume response");
+        return;
+      }
+      if (!res.ok) {
+        setRollError(j.error ?? "Could not resume room");
+        return;
+      }
+      if (j.room) {
+        bumpOptimisticAsRealtime();
+        commitCeloAggregateMerge(
+          {
+            room: j.room,
+            updated_at: new Date().toISOString(),
+          },
+          "join"
+        );
+      }
+      await fetchAll();
+    } finally {
+      setPauseUiBusy(false);
+    }
+  }
+
+  async function handlePauseVote(vote: "request" | "approve") {
+    if (!room || !supabase || !canOfferPlayerPauseVote) return;
+    setPauseVoteBusy(true);
+    setRollError(null);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/pause-vote", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id, vote }),
+      });
+      const text = await res.text();
+      let j: {
+        error?: string;
+        room?: Record<string, unknown>;
+        pausedByMajority?: boolean;
+      } = {};
+      try {
+        j = text ? (JSON.parse(text) as typeof j) : {};
+      } catch {
+        setRollError("Invalid vote response");
+        return;
+      }
+      if (!res.ok) {
+        setRollError(j.error ?? "Could not record pause vote");
+        return;
+      }
+      if (j.room) {
+        bumpOptimisticAsRealtime();
+        commitCeloAggregateMerge(
+          {
+            room: j.room,
+            updated_at: new Date().toISOString(),
+          },
+          "join"
+        );
+      }
+      await fetchAll();
+    } finally {
+      setPauseVoteBusy(false);
     }
   }
 
@@ -3652,7 +3817,8 @@ export default function CeloRoomPage() {
   const stopBankButtonEnabled =
     stopBankModalEligible &&
     myBalance >= stopBankCoverSc &&
-    round?.id != null;
+    round?.id != null &&
+    !roomPausedBlocking;
   const stopBankModalOpen =
     showBanker &&
     room != null &&
@@ -3717,6 +3883,46 @@ export default function CeloRoomPage() {
               >
                 Delete Room
               </button>
+            )}
+            {isBanker && room && canOfferBankerPause && (
+              <button
+                type="button"
+                disabled={pauseUiBusy}
+                onClick={() => void handlePauseRoom()}
+                className="shrink-0 min-h-touch rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/50 sm:text-sm disabled:opacity-50"
+              >
+                Pause
+              </button>
+            )}
+            {isBanker && room && Boolean(room.paused_at) && (
+              <button
+                type="button"
+                disabled={pauseUiBusy}
+                onClick={() => void handleResumeRoom()}
+                className="shrink-0 min-h-touch rounded-lg border border-emerald-500/50 bg-emerald-950/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-900/40 sm:text-sm disabled:opacity-50"
+              >
+                Resume
+              </button>
+            )}
+            {isPlayer && room && canOfferPlayerPauseVote && (
+              <>
+                <button
+                  type="button"
+                  disabled={pauseVoteBusy}
+                  onClick={() => void handlePauseVote("request")}
+                  className="shrink-0 min-h-touch rounded-lg border border-zinc-600 px-2 py-1.5 text-[10px] font-semibold text-zinc-200 sm:text-xs disabled:opacity-50"
+                >
+                  Request pause
+                </button>
+                <button
+                  type="button"
+                  disabled={pauseVoteBusy}
+                  onClick={() => void handlePauseVote("approve")}
+                  className="shrink-0 min-h-touch rounded-lg border border-amber-600/60 px-2 py-1.5 text-[10px] font-semibold text-amber-100 sm:text-xs disabled:opacity-50"
+                >
+                  Vote pause
+                </button>
+              </>
             )}
             <span
               className={`min-w-0 flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
@@ -3821,6 +4027,33 @@ export default function CeloRoomPage() {
             </div>
           ) : null}
         </header>
+        {room?.paused_at && roomPauseActive && (
+          <div
+            className="mt-2 rounded-xl border border-amber-500/40 bg-amber-950/50 px-3 py-2.5 text-center sm:px-4"
+            role="status"
+          >
+            <p className={`text-sm font-bold text-amber-100 sm:text-base ${cinzel.className}`}>
+              Room Paused
+            </p>
+            <p className="mt-0.5 text-xs text-amber-200/85">
+              {room.banker_id &&
+              room.paused_by &&
+              normalizeCeloUserId(room.paused_by) === normalizeCeloUserId(room.banker_id)
+                ? "Paused by banker"
+                : "Paused by players"}
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-amber-300/90">
+              {pauseRemainingSec > 0
+                ? `Auto-close in ${Math.floor(pauseRemainingSec / 60)}:${String(pauseRemainingSec % 60).padStart(2, "0")}`
+                : "Time expired — room may close shortly"}
+            </p>
+          </div>
+        )}
+        {room?.paused_at && !roomPauseActive && roomPausedBlocking && (
+          <div className="mt-2 rounded-xl border border-zinc-600/50 bg-black/40 px-3 py-2 text-center text-xs text-zinc-400">
+            Pause window ended — finalizing table…
+          </div>
+        )}
         {roomFetchError && (
           <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/50 px-3 py-2 text-center text-xs text-red-200">
             {roomFetchError}
@@ -3858,7 +4091,8 @@ export default function CeloRoomPage() {
                   {isBanker &&
                     room?.last_round_was_celo &&
                     bankVal(room) > 0 &&
-                    room.bank_busted !== true && (
+                    room.bank_busted !== true &&
+                    !roomPausedBlocking && (
                     <button
                       type="button"
                       onClick={() => {
