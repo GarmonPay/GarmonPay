@@ -17,7 +17,7 @@ import { handleCeloBankBustAndBankerTransfer } from "@/lib/celo-bank-bust";
 import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 import { nextPlayerRollDeadlineIso } from "@/lib/celo-player-roll-constants";
 import {
-  buildCeloClientPlayerRoll as buildClientPlayerRoll,
+  buildCeloClientPlayerRoll,
   effectiveCeloStakeSc as effectiveStakeSc,
   finishOrAdvanceAfterPlayerResolvingRoll,
   getCeloStakedPlayersOrdered as getStakedPlayersOrdered,
@@ -1064,7 +1064,7 @@ async function handlePlayerRoll(
         .eq("id", room.id)
         .maybeSingle();
       const { gpayCoins: coinsAfterPush } = await getUserCoins(userId);
-      const clientRollPush = buildClientPlayerRoll(
+      const clientRollPush = buildCeloClientPlayerRoll(
         ins as Record<string, unknown>,
         dice,
         {
@@ -1269,7 +1269,7 @@ async function handlePlayerRoll(
       .eq("id", room.id)
       .maybeSingle();
     body = { roundOut: (roundOut as Record<string, unknown>) ?? null, roomOut: (roomOut as Record<string, unknown>) ?? null };
-    const clientRoll = buildClientPlayerRoll(insertedRow, dice, {
+    const clientRoll = buildCeloClientPlayerRoll(insertedRow, dice, {
       createdAt: now,
       userId,
       roomId: room.id,
