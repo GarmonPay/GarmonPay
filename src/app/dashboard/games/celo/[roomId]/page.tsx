@@ -39,6 +39,8 @@ import {
 } from "@/lib/celo/celoStateMerge";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
+/** Wait after dice are settled before point / roll-name / settlement popups (ms). */
+const CELO_RESULT_REVEAL_DELAY_MS = 3000;
 /*
 ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
 NO EXCEPTIONS (realtime, fetch, join, roll)
@@ -565,6 +567,19 @@ export default function CeloRoomPage() {
   const noCountRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const shownRollResultIdsRef = useRef<Set<string>>(new Set());
+  const shownSettlementResultIdsRef = useRef<Set<string>>(new Set());
+  const pendingRollRevealIdRef = useRef<string | null>(null);
+  const rollResultRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const pendingSettlementIdRef = useRef<string | null>(null);
+  const settlementBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const bannerDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const confettiFiredForRoundRef = useRef<string | null>(null);
   const [resultBannerData, setResultBannerData] = useState<{
     roundId: string;
@@ -664,6 +679,77 @@ export default function CeloRoomPage() {
   useEffect(() => {
     diceRef.current = dice;
   }, [dice]);
+
+  const scheduleRollResultReveal = useCallback(
+    (resultId: string, callback: () => void, log?: { settlementId?: string | null }) => {
+      if (shownRollResultIdsRef.current.has(resultId)) return;
+      if (pendingRollRevealIdRef.current === resultId) return;
+      pendingRollRevealIdRef.current = resultId;
+      if (rollResultRevealTimerRef.current) {
+        clearTimeout(rollResultRevealTimerRef.current);
+      }
+      rollResultRevealTimerRef.current = setTimeout(() => {
+        rollResultRevealTimerRef.current = null;
+        pendingRollRevealIdRef.current = null;
+        if (shownRollResultIdsRef.current.has(resultId)) return;
+        shownRollResultIdsRef.current.add(resultId);
+        const curRound = roundRef.current;
+        const diceTrip = realDiceTripletFromUnknown(diceRef.current);
+        console.log("[C-Lo result timing]", {
+          roomId,
+          roundId: curRound?.id,
+          roundStatus: curRound?.status,
+          resultId,
+          settlementId: log?.settlementId ?? null,
+          diceSettled: !!diceTrip,
+          delayMs: CELO_RESULT_REVEAL_DELAY_MS,
+          shownRollResults: Array.from(shownRollResultIdsRef.current),
+          shownSettlements: Array.from(shownSettlementResultIdsRef.current),
+        });
+        callback();
+      }, CELO_RESULT_REVEAL_DELAY_MS);
+    },
+    [roomId]
+  );
+
+  const scheduleSettlementBannerReveal = useCallback(
+    (settlementId: string, roundId: string, onShow: () => void) => {
+      if (shownSettlementResultIdsRef.current.has(settlementId)) return;
+      if (pendingSettlementIdRef.current === settlementId) return;
+      pendingSettlementIdRef.current = settlementId;
+      if (settlementBannerTimerRef.current) {
+        clearTimeout(settlementBannerTimerRef.current);
+      }
+      settlementBannerTimerRef.current = setTimeout(() => {
+        settlementBannerTimerRef.current = null;
+        pendingSettlementIdRef.current = null;
+        if (shownSettlementResultIdsRef.current.has(settlementId)) return;
+        const still = roundRef.current;
+        if (
+          !still ||
+          still.id !== roundId ||
+          String(still.status ?? "").toLowerCase() !== "completed"
+        ) {
+          return;
+        }
+        const diceTrip = realDiceTripletFromUnknown(diceRef.current);
+        console.log("[C-Lo result timing]", {
+          roomId,
+          roundId: still.id,
+          roundStatus: still.status,
+          resultId: null,
+          settlementId,
+          diceSettled: !!diceTrip,
+          delayMs: CELO_RESULT_REVEAL_DELAY_MS,
+          shownRollResults: Array.from(shownRollResultIdsRef.current),
+          shownSettlements: Array.from(shownSettlementResultIdsRef.current),
+        });
+        shownSettlementResultIdsRef.current.add(settlementId);
+        onShow();
+      }, CELO_RESULT_REVEAL_DELAY_MS);
+    },
+    [roomId]
+  );
 
   const rememberRealFeltDice = useCallback((t: [number, number, number]) => {
     lastRealTripletRef.current = t;
@@ -1439,7 +1525,14 @@ export default function CeloRoomPage() {
         (payload) => {
           lastRealtimeUpdateRef.current = Date.now();
           const et = (payload as { eventType: string }).eventType;
-          const n = (payload as { new: { dice?: unknown; outcome?: string } | null }).new;
+          const n = (payload as {
+            new: {
+              dice?: unknown;
+              outcome?: string;
+              roll_name?: string;
+              user_id?: string;
+            } | null;
+          }).new;
           if (CELO_DEBUG) {
             console.log("[C-Lo room] realtime celo_player_rolls", et, n ?? (payload as { old?: unknown }).old);
             console.log("[C-Lo room] dice sync: player_rolls event → merge triplet if present");
@@ -1457,6 +1550,21 @@ export default function CeloRoomPage() {
               }
               if (rollingRef.current) {
                 setRolling(false);
+              }
+              const rName = String(n.roll_name ?? "").trim();
+              const uid = n.user_id != null ? String(n.user_id).trim() : "";
+              if (
+                rName &&
+                uid &&
+                (n.outcome === "win" ||
+                  n.outcome === "loss" ||
+                  n.outcome === "push")
+              ) {
+                const rid = roundRef.current?.id;
+                if (rid) {
+                  const resultId = `${rid}:player:${uid}:${t[0]}-${t[1]}-${t[2]}`;
+                  scheduleRollResultReveal(resultId, () => setRollName(rName));
+                }
               }
             }
           }
@@ -1486,6 +1594,7 @@ export default function CeloRoomPage() {
     refreshRoomPlayers,
     commitCeloAggregateMerge,
     rememberRealFeltDice,
+    scheduleRollResultReveal,
   ]);
 
   /** If the roll fetch path misses the JSON body, still clear local rolling when this round row updates. */
@@ -1634,26 +1743,84 @@ export default function CeloRoomPage() {
     return t ? `${t[0]}-${t[1]}-${t[2]}` : "";
   }, [round?.banker_dice]);
 
-  /** Result overlay: exactly 4s after a completed round with banker dice, then cleared. */
+  /** Result overlay: after CELO_RESULT_REVEAL_DELAY_MS + 4s display from settlement schedule. */
   const bannerOverlayVisible = resultBannerData != null;
 
   useEffect(() => {
     const st = String(round?.status ?? "").toLowerCase();
-    if (st !== "completed" || !round?.id || !bankerDiceReadyKey) {
+    const rid = round?.id;
+    if (!rid || st !== "completed") {
+      if (settlementBannerTimerRef.current) {
+        clearTimeout(settlementBannerTimerRef.current);
+        settlementBannerTimerRef.current = null;
+      }
+      pendingSettlementIdRef.current = null;
       setResultBannerData(null);
       return;
     }
-    setResultBannerData({ roundId: round.id });
-    const timer = window.setTimeout(() => setResultBannerData(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [round?.status, round?.id, bankerDiceReadyKey]);
+    if (!bankerDiceReadyKey) {
+      return;
+    }
+    const trip = realDiceTripletFromUnknown(round.banker_dice);
+    if (!trip) {
+      return;
+    }
+    const settlementId = `${rid}:settlement`;
+    scheduleSettlementBannerReveal(settlementId, rid, () => {
+      setResultBannerData({ roundId: rid });
+      if (bannerDismissTimerRef.current) {
+        clearTimeout(bannerDismissTimerRef.current);
+      }
+      bannerDismissTimerRef.current = setTimeout(() => {
+        bannerDismissTimerRef.current = null;
+        setResultBannerData(null);
+      }, 4000);
+    });
+  }, [
+    round?.id,
+    round?.status,
+    round?.banker_dice,
+    bankerDiceReadyKey,
+    scheduleSettlementBannerReveal,
+  ]);
 
   useEffect(() => {
     const rs = String(room?.status ?? "").toLowerCase();
     if (rs === "rolling") {
+      if (settlementBannerTimerRef.current) {
+        clearTimeout(settlementBannerTimerRef.current);
+        settlementBannerTimerRef.current = null;
+      }
+      pendingSettlementIdRef.current = null;
+      if (bannerDismissTimerRef.current) {
+        clearTimeout(bannerDismissTimerRef.current);
+        bannerDismissTimerRef.current = null;
+      }
       setResultBannerData(null);
     }
   }, [room?.status]);
+
+  /** Spectators / late sync: banker roll name after real dice + name on round row. */
+  useEffect(() => {
+    const r = round;
+    if (!r?.id) return;
+    const st = String(r.status ?? "").toLowerCase();
+    if (st === "completed") return;
+    if (r.banker_roll_in_flight === true) return;
+    const trip = realDiceTripletFromUnknown(r.banker_dice);
+    const name = String(r.banker_dice_name ?? "").trim();
+    if (!trip || !name) return;
+    const resultId = `${r.id}:banker:${trip[0]}-${trip[1]}-${trip[2]}`;
+    scheduleRollResultReveal(resultId, () => setRollName(name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- round snapshot fields listed
+  }, [
+    round?.id,
+    round?.status,
+    round?.banker_dice,
+    round?.banker_dice_name,
+    round?.banker_roll_in_flight,
+    scheduleRollResultReveal,
+  ]);
 
   useEffect(() => {
     if (!resultBannerData || !supabase || !round?.id) {
@@ -2294,6 +2461,23 @@ export default function CeloRoomPage() {
       clearTimeout(noCountRevealTimeoutRef.current);
       noCountRevealTimeoutRef.current = null;
     }
+    setResultBannerData(null);
+    setResultBannerModel(null);
+    setRollName(null);
+    if (rollResultRevealTimerRef.current) {
+      clearTimeout(rollResultRevealTimerRef.current);
+      rollResultRevealTimerRef.current = null;
+    }
+    if (settlementBannerTimerRef.current) {
+      clearTimeout(settlementBannerTimerRef.current);
+      settlementBannerTimerRef.current = null;
+    }
+    if (bannerDismissTimerRef.current) {
+      clearTimeout(bannerDismissTimerRef.current);
+      bannerDismissTimerRef.current = null;
+    }
+    pendingRollRevealIdRef.current = null;
+    pendingSettlementIdRef.current = null;
   }, [round?.id]);
 
   useEffect(() => {
@@ -2316,6 +2500,18 @@ export default function CeloRoomPage() {
       if (noCountRevealTimeoutRef.current) {
         clearTimeout(noCountRevealTimeoutRef.current);
         noCountRevealTimeoutRef.current = null;
+      }
+      if (rollResultRevealTimerRef.current) {
+        clearTimeout(rollResultRevealTimerRef.current);
+        rollResultRevealTimerRef.current = null;
+      }
+      if (settlementBannerTimerRef.current) {
+        clearTimeout(settlementBannerTimerRef.current);
+        settlementBannerTimerRef.current = null;
+      }
+      if (bannerDismissTimerRef.current) {
+        clearTimeout(bannerDismissTimerRef.current);
+        bannerDismissTimerRef.current = null;
       }
     };
   }, []);
@@ -2758,8 +2954,15 @@ export default function CeloRoomPage() {
       }
       setRolling(false);
       setRollingAction(false);
-      if (j.rollName) {
-        setTimeout(() => setRollName(j.rollName ?? null), 300);
+      if (tripletRaw && j.rollName) {
+        const name = String(j.rollName).trim();
+        if (name) {
+          const uid = String(rj.player_user_id ?? me ?? "").trim();
+          const resultId = isBanker
+            ? `${round.id}:banker:${tripletRaw[0]}-${tripletRaw[1]}-${tripletRaw[2]}`
+            : `${round.id}:player:${uid || "unknown"}:${tripletRaw[0]}-${tripletRaw[1]}-${tripletRaw[2]}`;
+          scheduleRollResultReveal(resultId, () => setRollName(name));
+        }
       }
       setRollError(null);
       if (typeof j.newBalance === "number") setMyBalance(j.newBalance);
@@ -2794,7 +2997,6 @@ export default function CeloRoomPage() {
       );
       lastRealtimeUpdateRef.current = Date.now();
       await fetchAll();
-      setTimeout(() => setRollName(null), 2800);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
         setRollError("Roll timed out — please retry");
