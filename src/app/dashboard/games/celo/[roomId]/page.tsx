@@ -506,6 +506,14 @@ function normalizeChatRow(raw: unknown): ChatRow {
   };
 }
 
+function randomDiceTriplet(): [number, number, number] {
+  return [
+    Math.floor(Math.random() * 6) + 1,
+    Math.floor(Math.random() * 6) + 1,
+    Math.floor(Math.random() * 6) + 1,
+  ];
+}
+
 function mergePlayerProfile(prev: Player | undefined, next: Player): Player {
   if (!prev) return next;
   return {
@@ -545,6 +553,15 @@ export default function CeloRoomPage() {
   const resultBannerDataRef = useRef<{ roundId: string } | null>(null);
   /** Survives brief realtime lag when `round.banker_dice` arrives after `player_rolling`. */
   const lastBankerTripletRef = useRef<number[] | null>(null);
+  /** Last authoritative dice triplet for this room session (continuity between rounds). */
+  const lastRealTripletRef = useRef<[number, number, number] | null>(null);
+  const [lastRealTriplet, setLastRealTriplet] = useState<
+    [number, number, number] | null
+  >(null);
+  /** Visual-only idle dice before the first real banker roll ever in this room (banker client). */
+  const [firstBankerVisualDice, setFirstBankerVisualDice] = useState<
+    [number, number, number] | null
+  >(null);
   const noCountRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -647,6 +664,13 @@ export default function CeloRoomPage() {
   useEffect(() => {
     diceRef.current = dice;
   }, [dice]);
+
+  const rememberRealFeltDice = useCallback((t: [number, number, number]) => {
+    lastRealTripletRef.current = t;
+    setLastRealTriplet(t);
+    setFirstBankerVisualDice(null);
+    setDice([t[0], t[1], t[2]]);
+  }, []);
 
   const bumpOptimisticAsRealtime = useCallback(() => {
     lastRealtimeUpdateRef.current = Date.now();
@@ -981,7 +1005,7 @@ export default function CeloRoomPage() {
         (activeRound as Round).banker_dice
       );
       if (applyTriplet) {
-        setDice(applyTriplet);
+        rememberRealFeltDice(applyTriplet);
         feltTiedToRoundIdRef.current = null;
       } else {
         const clobber = shouldClobberFeltTripletOnFetch({
@@ -993,7 +1017,12 @@ export default function CeloRoomPage() {
           localFeltTiedToThisRound: feltTiedToRoundIdRef.current === activeRound.id,
         });
         if (clobber) {
-          setDice(null);
+          const keep = lastRealTripletRef.current;
+          if (keep) {
+            setDice([keep[0], keep[1], keep[2]]);
+          } else {
+            setDice(null);
+          }
           feltTiedToRoundIdRef.current = null;
         } else if (CELO_DEBUG) {
           console.log(
@@ -1016,7 +1045,48 @@ export default function CeloRoomPage() {
         console.log("[C-Lo] skipping stale fetch");
         return;
       }
-      setDice(null);
+      const keep = lastRealTripletRef.current;
+      if (keep) {
+        setDice([keep[0], keep[1], keep[2]]);
+      } else {
+        const { data: lastDone } = await supabase
+          .from("celo_rounds")
+          .select("id, banker_dice")
+          .eq("room_id", roomId)
+          .eq("status", "completed")
+          .order("round_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (isStaleFetch()) {
+          console.log("[C-Lo] skipping stale fetch");
+          return;
+        }
+        let hydrated: [number, number, number] | null = null;
+        if (lastDone && (lastDone as { id?: string }).id) {
+          const rid = String((lastDone as { id: string }).id);
+          const { data: lastPr } = await supabase
+            .from("celo_player_rolls")
+            .select("dice")
+            .eq("round_id", rid)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (isStaleFetch()) {
+            console.log("[C-Lo] skipping stale fetch");
+            return;
+          }
+          const t = resolveCeloFeltDice(
+            lastPr?.dice,
+            (lastDone as { banker_dice?: unknown }).banker_dice
+          );
+          if (t) hydrated = t;
+        }
+        if (hydrated) {
+          rememberRealFeltDice(hydrated);
+        } else {
+          setDice(null);
+        }
+      }
       feltTiedToRoundIdRef.current = null;
     }
 
@@ -1039,7 +1109,7 @@ export default function CeloRoomPage() {
         fetchToken: myToken,
       });
     }
-  }, [supabase, roomId, commitCeloAggregateMerge, me]);
+  }, [supabase, roomId, commitCeloAggregateMerge, me, rememberRealFeltDice]);
 
   useEffect(() => {
     if (!showCeloTakeover || !celoTakeoverExpiresAt) {
@@ -1343,7 +1413,9 @@ export default function CeloRoomPage() {
                   );
                 }
               } else if (n.banker_dice == null) {
-                setDice(null);
+                const k = lastRealTripletRef.current;
+                if (k) setDice([k[0], k[1], k[2]]);
+                else setDice(null);
               }
               if (
                 n.banker_dice != null &&
@@ -1351,7 +1423,7 @@ export default function CeloRoomPage() {
                 n.banker_roll_in_flight !== true
               ) {
                 const trip = realDiceTripletFromUnknown(n.banker_dice);
-                if (trip) setDice(trip);
+                if (trip) rememberRealFeltDice(trip);
                 if (rollingRef.current) {
                   setRolling(false);
                 }
@@ -1375,7 +1447,7 @@ export default function CeloRoomPage() {
           if ((et === "INSERT" || et === "UPDATE") && n?.dice) {
             const t = realDiceTripletFromUnknown(n.dice);
             if (t) {
-              setDice(t);
+              rememberRealFeltDice(t);
               if (
                 n.outcome === "win" ||
                 n.outcome === "loss" ||
@@ -1407,7 +1479,14 @@ export default function CeloRoomPage() {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [supabase, roomId, fetchAll, refreshRoomPlayers, commitCeloAggregateMerge]);
+  }, [
+    supabase,
+    roomId,
+    fetchAll,
+    refreshRoomPlayers,
+    commitCeloAggregateMerge,
+    rememberRealFeltDice,
+  ]);
 
   /** If the roll fetch path misses the JSON body, still clear local rolling when this round row updates. */
   useEffect(() => {
@@ -1429,7 +1508,7 @@ export default function CeloRoomPage() {
           lastRealtimeUpdateRef.current = Date.now();
           if (n.banker_dice != null && n.banker_roll_in_flight !== true) {
             const trip = realDiceTripletFromUnknown(n.banker_dice);
-            if (trip) setDice(trip);
+            if (trip) rememberRealFeltDice(trip);
             if (rollingRef.current) {
               if (CELO_DEBUG) {
                 console.log(
@@ -1448,7 +1527,7 @@ export default function CeloRoomPage() {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [supabase, round?.id]);
+  }, [supabase, round?.id, rememberRealFeltDice]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !roomId) return;
@@ -1514,6 +1593,35 @@ export default function CeloRoomPage() {
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
+
+  useEffect(() => {
+    const isBankerSeat =
+      me != null &&
+      room?.banker_id != null &&
+      normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id);
+    const hasRealEver = lastRealTriplet != null;
+    const roomSt = String(room?.status ?? "").toLowerCase();
+    const roundSt = String(round?.status ?? "").toLowerCase();
+    const shouldShowFirstBankerVisualDice =
+      isBankerSeat &&
+      !hasRealEver &&
+      firstBankerVisualDice == null &&
+      (roundSt === "banker_rolling" ||
+        roomSt === "waiting" ||
+        roomSt === "active" ||
+        roomSt === "entry_phase");
+
+    if (shouldShowFirstBankerVisualDice) {
+      setFirstBankerVisualDice(randomDiceTriplet());
+    }
+  }, [
+    me,
+    room?.banker_id,
+    room?.status,
+    round?.status,
+    firstBankerVisualDice,
+    lastRealTriplet,
+  ]);
   const bankerDiceReadyKey = useMemo(() => {
     const t = realDiceTripletFromUnknown(round?.banker_dice);
     return t ? `${t[0]}-${t[1]}-${t[2]}` : "";
@@ -1644,7 +1752,10 @@ export default function CeloRoomPage() {
   );
   const bankerTripletForDisplay =
     bankerTripletLive ?? lastBankerTripletRef.current;
-  const feltTripletPresent = dice != null && isRealDiceValues(dice);
+  const feltTripletPresent =
+    (dice != null && isRealDiceValues(dice)) ||
+    (lastRealTriplet != null && isRealDiceValues(lastRealTriplet)) ||
+    firstBankerVisualDice != null;
 
   const bankerRollInFlight = round?.banker_roll_in_flight === true;
 
@@ -1692,6 +1803,17 @@ export default function CeloRoomPage() {
   const showIdleDice = !inProgressForVisual && !rolling;
 
   const facePips: [number, number, number] | null = (() => {
+    if (isRollingFaces) {
+      const rollingTriplet = diceRef.current ?? bankerTripletForDisplay;
+      if (rollingTriplet && isRealDiceValues(rollingTriplet)) {
+        return [
+          clampDie(rollingTriplet[0]),
+          clampDie(rollingTriplet[1]),
+          clampDie(rollingTriplet[2]),
+        ];
+      }
+      return null;
+    }
     if (dice && isRealDiceValues(dice)) {
       return [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])];
     }
@@ -1705,25 +1827,13 @@ export default function CeloRoomPage() {
     if (
       round?.status === "player_rolling" &&
       !currentPlayerResolvedRoll &&
-      bankerTripletForDisplay &&
-      !isRollingFaces
+      bankerTripletForDisplay
     ) {
       return [
         clampDie(bankerTripletForDisplay[0]),
         clampDie(bankerTripletForDisplay[1]),
         clampDie(bankerTripletForDisplay[2]),
       ];
-    }
-    if (isRollingFaces) {
-      const rollingTriplet = diceRef.current ?? bankerTripletForDisplay;
-      if (rollingTriplet && isRealDiceValues(rollingTriplet)) {
-        return [
-          clampDie(rollingTriplet[0]),
-          clampDie(rollingTriplet[1]),
-          clampDie(rollingTriplet[2]),
-        ];
-      }
-      return null;
     }
     if (
       bannerOverlayVisible &&
@@ -1737,10 +1847,50 @@ export default function CeloRoomPage() {
         bankerTripletLive[2],
       ];
     }
+    if (lastRealTriplet && isRealDiceValues(lastRealTriplet)) {
+      return [
+        clampDie(lastRealTriplet[0]),
+        clampDie(lastRealTriplet[1]),
+        clampDie(lastRealTriplet[2]),
+      ];
+    }
+    if (firstBankerVisualDice) {
+      return [
+        clampDie(firstBankerVisualDice[0]),
+        clampDie(firstBankerVisualDice[1]),
+        clampDie(firstBankerVisualDice[2]),
+      ];
+    }
     return null;
   })();
 
+  const displayDice = facePips;
+
   const useBlankRollingDice = isRollingFaces && facePips == null;
+
+  useEffect(() => {
+    if (!CELO_DEBUG) return;
+    console.log("[C-Lo dice continuity]", {
+      roomId,
+      roundId: round?.id,
+      roundStatus: round?.status,
+      feltDice: dice,
+      lastRealTriplet: lastRealTripletRef.current,
+      firstBankerVisualDice,
+      displayDice,
+      isRolling: rolling,
+      isRollingFaces,
+    });
+  }, [
+    roomId,
+    round?.id,
+    round?.status,
+    dice,
+    firstBankerVisualDice,
+    displayDice,
+    rolling,
+    isRollingFaces,
+  ]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2116,10 +2266,6 @@ export default function CeloRoomPage() {
   }, [round?.id]);
 
   useEffect(() => {
-    lastBankerTripletRef.current = null;
-  }, [round?.id]);
-
-  useEffect(() => {
     if (round?.id) {
       const trip = realDiceTripletFromUnknown(round.banker_dice);
       if (trip) {
@@ -2127,12 +2273,6 @@ export default function CeloRoomPage() {
       }
     }
   }, [round?.id, round?.banker_dice]);
-
-  useEffect(() => {
-    return () => {
-      lastBankerTripletRef.current = null;
-    };
-  }, [round?.id]);
 
   useEffect(() => {
     setNoCountReveal(null);
@@ -2151,6 +2291,9 @@ export default function CeloRoomPage() {
     setMessages([]);
     setCurrentPlayerResolvedRoll(false);
     lastBankerTripletRef.current = null;
+    lastRealTripletRef.current = null;
+    setLastRealTriplet(null);
+    setFirstBankerVisualDice(null);
     feltTiedToRoundIdRef.current = null;
   }, [roomId]);
 
@@ -2546,7 +2689,7 @@ export default function CeloRoomPage() {
 
       if (outcomeLc === "reroll" && tripletRaw) {
         const trip = tripletRaw;
-        setDice(trip);
+        rememberRealFeltDice(trip);
         feltTiedToRoundIdRef.current = round.id;
         const rn = String(rj.rollName ?? "No Count");
         setRollName(null);
@@ -2594,7 +2737,7 @@ export default function CeloRoomPage() {
       }
 
       if (tripletRaw) {
-        setDice([tripletRaw[0], tripletRaw[1], tripletRaw[2]]);
+        rememberRealFeltDice(tripletRaw);
         feltTiedToRoundIdRef.current = round.id;
       } else {
         console.error("[C-Lo] roll: ok but could not extract dice from response", { j: rj, roundId: round.id });
