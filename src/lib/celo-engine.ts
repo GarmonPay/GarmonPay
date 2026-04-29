@@ -152,6 +152,29 @@ export function validateEntry(amount: number, minimum: number) {
   return { valid: true, error: null as string | null };
 }
 
+/**
+ * Player table stake: any whole GPC from room minimum up to the current bank (not limited to min multiples).
+ */
+export function validatePlayerStake(
+  stakeSc: number,
+  minEntrySc: number,
+  currentBankSc: number
+): { valid: boolean; error: string | null } {
+  if (!Number.isInteger(stakeSc) || !Number.isFinite(stakeSc) || stakeSc <= 0) {
+    return { valid: false, error: "Bet must be a positive whole number of GPC." };
+  }
+  if (stakeSc < minEntrySc) {
+    return { valid: false, error: "Bet must be at least the room minimum." };
+  }
+  if (currentBankSc <= 0) {
+    return { valid: false, error: "Table bank is empty." };
+  }
+  if (stakeSc > currentBankSc) {
+    return { valid: false, error: "Bet cannot exceed the current bank." };
+  }
+  return { valid: true, error: null };
+}
+
 export function comparePoints(
   playerPoint: number,
   bankerPoint: number

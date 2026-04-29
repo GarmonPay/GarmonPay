@@ -152,6 +152,7 @@ export async function POST(request: Request) {
       prize_pool_sc: prizePool,
       platform_fee_sc: 0,
       bank_covered: false,
+      bank_at_round_start_sc: curBank,
     })
     .select("*")
     .single());
@@ -166,6 +167,7 @@ export async function POST(request: Request) {
         prize_pool_sc: prizePool,
         platform_fee_sc: 0,
         bank_covered: false,
+        bank_at_round_start_sc: curBank,
       })
       .select("*")
       .single());

@@ -60,6 +60,64 @@ async function adjustRoomBank(
   return next;
 }
 
+/** Player won: debit bank, then bust / banker transfer if bank emptied or full bank-cover win. */
+async function playerWinDebitBankAndMaybeBust(
+  admin: SupabaseClient,
+  ctx: {
+    room: RoomRow;
+    round: RoundRow;
+    userId: string;
+    entry: number;
+    settlementV2: boolean;
+    action: string;
+  }
+): Promise<{ net: number; fee: number; finalBankSc: number; bankStopped: boolean }> {
+  const { room, round, userId, entry, settlementV2, action } = ctx;
+  const { net, fee } = calculateNetWin(entry);
+  const bankAtRoundStartSc = Math.floor(
+    Number(
+      (round as { bank_at_round_start_sc?: number | null }).bank_at_round_start_sc ??
+        room.current_bank_sc ??
+        0
+    )
+  );
+  let finalBankSc = await adjustRoomBank(
+    admin,
+    room.id,
+    settlementV2 ? -entry : -net
+  );
+  const coverBankStop =
+    bankAtRoundStartSc > 0 && entry >= bankAtRoundStartSc;
+  const bankStopped = finalBankSc <= 0 || coverBankStop;
+  if (coverBankStop && finalBankSc > 0) {
+    finalBankSc = await adjustRoomBank(admin, room.id, -finalBankSc);
+  }
+  const grossWinSc = entry + net;
+  if (bankStopped) {
+    await handleCeloBankBustAndBankerTransfer({
+      admin,
+      roomId: room.id,
+      newBankSc: finalBankSc,
+      bustWinnerUserId: userId,
+      action,
+    });
+  }
+  const oldBankerId = room.banker_id ?? null;
+  console.log("[C-Lo bank stop settlement]", {
+    roomId: room.id,
+    roundId: round.id,
+    oldBankerId,
+    winnerUserId: userId,
+    bankAtRoundStartSc,
+    winningStakeSc: entry,
+    grossWinSc,
+    platformFeeSc: fee,
+    finalBankSc,
+    bankStopped,
+  });
+  return { net, fee, finalBankSc, bankStopped };
+}
+
 /** Player-phase only: cumulative banker P&L and platform fees as each staked roll settles. */
 async function applyRoundAccountingDelta(
   admin: SupabaseClient,
@@ -123,6 +181,8 @@ type RoundRow = {
   room_id: string;
   status: string;
   settlement_version?: number | null;
+  /** Snapshot when round started; full-cover detection uses stake vs this, not fee-adjusted bank. */
+  bank_at_round_start_sc?: number | null;
   banker_id: string | null;
   prize_pool_sc: number | null;
   platform_fee_sc: number | null;
@@ -1145,16 +1205,12 @@ async function handlePlayerRoll(
           { status: 500 }
         );
       }
-      const nbInst = await adjustRoomBank(
-        admin,
-        room.id,
-        settlementV2 ? -entry : -net
-      );
-      await handleCeloBankBustAndBankerTransfer({
-        admin,
-        roomId: room.id,
-        newBankSc: nbInst,
-        bustWinnerUserId: userId,
+      await playerWinDebitBankAndMaybeBust(admin, {
+        room,
+        round,
+        userId,
+        entry,
+        settlementV2,
         action: "player_instant_win",
       });
       await applyRoundAccountingDelta(admin, round.id, -net, fee);
@@ -1200,16 +1256,12 @@ async function handlePlayerRoll(
             { status: 500 }
           );
         }
-        const nbPt = await adjustRoomBank(
-          admin,
-          room.id,
-          settlementV2 ? -entry : -net
-        );
-        await handleCeloBankBustAndBankerTransfer({
-          admin,
-          roomId: room.id,
-          newBankSc: nbPt,
-          bustWinnerUserId: userId,
+        await playerWinDebitBankAndMaybeBust(admin, {
+          room,
+          round,
+          userId,
+          entry,
+          settlementV2,
           action: "player_point_win",
         });
         await applyRoundAccountingDelta(admin, round.id, -net, fee);

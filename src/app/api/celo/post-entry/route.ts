@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { getUserCoins } from "@/lib/coins";
 import { celoAccountingLog } from "@/lib/celo-accounting";
-import { validateEntry } from "@/lib/celo-engine";
+import { validatePlayerStake } from "@/lib/celo-engine";
 import {
   CELO_ROOM_PLAYERS_USER_EMBED,
   normalizeCeloUserId,
@@ -43,16 +43,17 @@ export async function POST(request: Request) {
   }
 
   const roomId = String(body.roomId ?? body.room_id ?? "").trim();
-  const amount = Math.floor(Number(body.amount ?? body.entry_sc ?? NaN));
+  const rawAmount = Number(body.amount ?? body.entry_sc ?? NaN);
+  const stakeSc = Math.floor(rawAmount);
 
   if (!roomId) {
     return jsonErr("room_id required", 400);
   }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return jsonErr("amount must be a positive number", 400);
+  if (!Number.isFinite(rawAmount) || !Number.isInteger(rawAmount) || stakeSc <= 0) {
+    return jsonErr("amount must be a positive whole number of GPC", 400);
   }
 
-  console.log("[C-Lo PostEntry] roomId, userId, amount", { roomId, userId, amount });
+  console.log("[C-Lo PostEntry] roomId, userId, amount", { roomId, userId, amount: stakeSc });
 
   const { data: roomRaw, error: rErr } = await adminClient
     .from("celo_rooms")
@@ -69,6 +70,8 @@ export async function POST(request: Request) {
     minimum_entry_sc: number | null;
     min_bet_cents: number | null;
     banker_id: string | null;
+    current_bank_sc?: number | null;
+    current_bank_cents?: number | null;
   };
 
   const rs = String(room.status ?? "");
@@ -101,13 +104,33 @@ export async function POST(request: Request) {
     return jsonErr("The banker cannot post a player entry", 403);
   }
 
-  const minEntry = Math.max(
+  const minEntrySc = Math.max(
     500,
     room.minimum_entry_sc ?? room.min_bet_cents ?? 100
   );
-  const ve = validateEntry(amount, minEntry);
+  const currentBankSc = Math.max(
+    0,
+    Math.floor(
+      Number(room.current_bank_sc ?? room.current_bank_cents ?? 0)
+    )
+  );
+
+  const { gpayCoins: playerBalanceSc } = await getUserCoins(userId);
+  console.log("[C-Lo bank stop validation]", {
+    roomId,
+    userId,
+    minEntrySc,
+    currentBankSc,
+    requestedStakeSc: stakeSc,
+    playerBalanceSc,
+  });
+
+  const ve = validatePlayerStake(stakeSc, minEntrySc, currentBankSc);
   if (!ve.valid) {
     return jsonErr(ve.error ?? "Invalid entry amount", 400);
+  }
+  if (stakeSc > playerBalanceSc) {
+    return jsonErr("Insufficient GPC balance.", 400);
   }
 
   const { data: row, error: pErr } = await adminClient
@@ -144,20 +167,15 @@ export async function POST(request: Request) {
     return jsonErr("You already posted an entry for this round", 400);
   }
 
-  const { gpayCoins } = await getUserCoins(userId);
-  if (gpayCoins < amount) {
-    return jsonErr("Insufficient GPay Coins for this entry", 400);
-  }
-
   const entryRef = `celo:post-entry:${roomId}:${userId}:${Date.now()}:${crypto.randomUUID()}`;
-  celoAccountingLog("entry_debit_post", { roomId, userId, amount, reference: entryRef });
+  celoAccountingLog("entry_debit_post", { roomId, userId, amount: stakeSc, reference: entryRef });
 
   const { data: rpcResult, error: rpcError } = await adminClient.rpc(
     "celo_post_entry_atomic",
     {
       p_room_id: roomId,
       p_user_id: userId,
-      p_amount: amount,
+      p_amount: stakeSc,
       p_reference: entryRef,
     }
   );

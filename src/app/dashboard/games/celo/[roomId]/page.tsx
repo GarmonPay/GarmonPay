@@ -1580,11 +1580,18 @@ export default function CeloRoomPage() {
   const isPlayer = myRoleLc === "player";
   const isSpec = myRoleLc === "spectator";
   const minE = room ? minVal(room) : 1000;
+  const maxStakeSc = room ? bankVal(room) : 0;
   useEffect(() => {
-    if (room) {
-      const m = minVal(room);
-      setEntryAmount((e) => (e < m ? m : e));
-    }
+    if (!room) return;
+    const m = minVal(room);
+    const cap = bankVal(room);
+    setEntryAmount((e) => {
+      const x = Math.floor(Number(e));
+      if (!Number.isFinite(x)) return m;
+      if (x < m) return m;
+      if (cap > 0 && x > cap) return cap;
+      return x;
+    });
   }, [room]);
 
   const prize = round?.prize_pool_sc ?? 0;
@@ -2102,7 +2109,14 @@ export default function CeloRoomPage() {
   );
 
   const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(roomStatusLc);
-  const postEntryBalanceOk = !(myBalance > 0 && entryAmount > myBalance);
+  const entryStakeInt = Math.floor(Number(entryAmount));
+  const postEntryStakeRangeOk =
+    Number.isFinite(entryAmount) &&
+    Number.isInteger(entryAmount) &&
+    entryStakeInt >= minE &&
+    maxStakeSc > 0 &&
+    entryStakeInt <= maxStakeSc;
+  const postEntryBalanceOk = !(myBalance > 0 && entryStakeInt > myBalance);
   const postEntryNotYetPosted =
     myRow != null && myRow.entry_posted !== true && myEntrySc <= 0;
   const canPostEntry =
@@ -2114,7 +2128,7 @@ export default function CeloRoomPage() {
     !bannerOverlayVisible &&
     postEntryRoomOk &&
     entryAmount > 0 &&
-    Number.isFinite(entryAmount) &&
+    postEntryStakeRangeOk &&
     postEntryBalanceOk &&
     postEntryNotYetPosted;
   const postEntryUiRoomOk =
@@ -3031,7 +3045,10 @@ export default function CeloRoomPage() {
     setJoinSubmitting(true);
     const postEntryUrl = "/api/celo/post-entry";
     try {
-      const postBody = JSON.stringify({ roomId: room.id, amount: entryAmount });
+      const postBody = JSON.stringify({
+        roomId: room.id,
+        amount: Math.floor(entryAmount),
+      });
       setLastFetchInfo({
         url: postEntryUrl,
         status: "pending",
@@ -3704,9 +3721,22 @@ export default function CeloRoomPage() {
                           {joinHint && (
                             <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
                           )}
+                          <p className="text-center text-xs text-amber-200/80">
+                            Min {minE.toLocaleString()} GPC. You can bet up to the bank amount (
+                            {maxStakeSc.toLocaleString()} GPC max).
+                          </p>
                           <div className="flex flex-wrap justify-center gap-1.5">
-                            {[minE, minE * 2, minE * 5, 2500, bankVal(room)]
-                              .filter((x, i, a) => x > 0 && a.indexOf(x) === i)
+                            {Array.from(
+                              new Set(
+                                [
+                                  minE,
+                                  minE * 2,
+                                  minE * 5,
+                                  Math.min(maxStakeSc, 2500),
+                                  maxStakeSc,
+                                ].filter((x) => x >= minE && x <= maxStakeSc && x > 0)
+                              )
+                            )
                               .sort((a, b) => a - b)
                               .map((amt) => (
                                 <button
@@ -3719,10 +3749,49 @@ export default function CeloRoomPage() {
                                   }}
                                   className={`min-h-[44px] min-w-[3.5rem] rounded-xl border border-[#f5c842]/40 px-4 py-3 text-sm text-[#f5c842] transition hover:bg-[#f5c842]/10 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
                                 >
-                                  {amt}
+                                  {amt.toLocaleString()}
                                 </button>
                               ))}
+                            <button
+                              type="button"
+                              data-selected={entryAmount === maxStakeSc && maxStakeSc > 0}
+                              onClick={() => {
+                                setJoinHint(null);
+                                setEntryAmount(Math.min(maxStakeSc, Math.max(minE, myBalance)));
+                              }}
+                              disabled={maxStakeSc <= 0}
+                              className={`min-h-[44px] rounded-xl border border-amber-500/60 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 ${cinzel.className}`}
+                            >
+                              Cover bank
+                            </button>
                           </div>
+                          <label className="mx-auto flex w-full max-w-xs flex-col gap-1 text-left">
+                            <span className="text-xs text-zinc-400">
+                              Bet amount (GPC)
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={minE}
+                              max={maxStakeSc > 0 ? maxStakeSc : minE}
+                              step={1}
+                              value={entryAmount}
+                              onChange={(ev) => {
+                                const raw = ev.target.value;
+                                if (raw === "") {
+                                  setEntryAmount(minE);
+                                  return;
+                                }
+                                const v = Number(raw);
+                                if (!Number.isFinite(v)) return;
+                                const whole = Math.floor(v);
+                                setEntryAmount(
+                                  clamp(whole, minE, maxStakeSc > 0 ? maxStakeSc : minE)
+                                );
+                              }}
+                              className="min-h-[44px] rounded-xl border border-[#f5c842]/35 bg-black/40 px-3 text-[#f5c842] outline-none focus:ring-2 focus:ring-[#f5c842]/40"
+                            />
+                          </label>
                           <button
                             type="button"
                             disabled={joinSubmitting}
