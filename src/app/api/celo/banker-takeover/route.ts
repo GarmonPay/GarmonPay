@@ -65,7 +65,14 @@ export async function POST(request: Request) {
   if (rErr || !room) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
-  const roomBankerId = String((room as { banker_id: string }).banker_id);
+  const rawBanker = (room as { banker_id: string | null }).banker_id;
+  if (rawBanker == null || String(rawBanker).trim() === "") {
+    return NextResponse.json(
+      { error: "This table has no banker to replace" },
+      { status: 400 }
+    );
+  }
+  const roomBankerId = String(rawBanker);
 
   const { data: round, error: roundErr } = await admin
     .from("celo_rounds")
@@ -128,7 +135,10 @@ export async function POST(request: Request) {
   );
   const nextSeat = await nextAvailablePlayerSeat(admin, roomId, maxPlayers);
 
-  await admin.from("celo_rooms").update({ banker_id: userId }).eq("id", roomId);
+  await admin
+    .from("celo_rooms")
+    .update({ banker_id: userId, bank_busted: false })
+    .eq("id", roomId);
   await admin
     .from("celo_room_players")
     .update({ role: "player", seat_number: nextSeat })

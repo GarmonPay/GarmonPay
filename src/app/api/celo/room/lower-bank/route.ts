@@ -38,7 +38,20 @@ export async function POST(request: Request) {
     current_bank_sc: number;
     minimum_entry_sc: number | null;
     min_bet_cents: number | null;
+    bank_busted?: boolean | null;
   };
+  if (room.bank_busted === true) {
+    return NextResponse.json(
+      { error: "Bank is busted. Assign a new banker before changing the bank." },
+      { status: 400 }
+    );
+  }
+  if (Math.floor(Number(room.current_bank_sc ?? 0)) <= 0) {
+    return NextResponse.json(
+      { error: "Bank is empty. You cannot lower an empty bank." },
+      { status: 400 }
+    );
+  }
   if (room.banker_id !== userId) {
     return NextResponse.json(
       { error: "Only the banker can lower the bank" },

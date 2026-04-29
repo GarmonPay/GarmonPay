@@ -10,6 +10,7 @@ import {
   celoUpdateRoundIfStatus,
 } from "@/lib/celo-accounting";
 import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
+import { handleCeloBankBustAndBankerTransfer } from "@/lib/celo-bank-bust";
 
 const ROLL_ANIMATION_MS = 1500;
 /** Pause after terminal round writes so clients can display final dice/outcome before reset. */
@@ -612,12 +613,17 @@ async function handleBankerRoll(
   if (roll.result === "instant_loss") {
     const { data: staked } = await admin
       .from("celo_room_players")
-      .select("user_id, entry_sc, stake_amount_sc, bet_cents, role, entry_posted")
+      .select(
+        "user_id, entry_sc, stake_amount_sc, bet_cents, role, entry_posted, seat_number"
+      )
       .eq("room_id", room.id);
 
     let totalStakeFromBank = 0;
     let totalNetFromBank = 0;
     let totalPlatformFee = 0;
+    let bustWinnerInstantLoss: string | null = null;
+    let bustBestCredit = -1;
+    let bustBestSeat = 9999;
 
     for (const p of staked ?? []) {
       if (p.role !== "player") continue;
@@ -628,6 +634,17 @@ async function handleBankerRoll(
       totalNetFromBank += net;
       totalPlatformFee += fee;
       const creditAmt = e + net;
+      const sn = Math.floor(
+        Number((p as { seat_number?: number | null }).seat_number ?? 9999)
+      );
+      if (
+        creditAmt > bustBestCredit ||
+        (creditAmt === bustBestCredit && sn < bustBestSeat)
+      ) {
+        bustBestCredit = creditAmt;
+        bustBestSeat = sn;
+        bustWinnerInstantLoss = String(p.user_id);
+      }
       const ref = `celo_round_players_win_${round.id}_${p.user_id}`;
       celoAccountingLog("instant_loss_payout_attempt", {
         roundId: round.id,
@@ -719,13 +736,20 @@ async function handleBankerRoll(
       reason: "instant_loss",
     });
 
-    await adjustRoomBank(
+    const newBankAfterLoss = await adjustRoomBank(
       admin,
       room.id,
       Number(round.settlement_version ?? 1) >= 2
         ? -totalStakeFromBank
         : -totalNetFromBank
     );
+    await handleCeloBankBustAndBankerTransfer({
+      admin,
+      roomId: room.id,
+      newBankSc: newBankAfterLoss,
+      bustWinnerUserId: bustWinnerInstantLoss,
+      action: "banker_instant_loss",
+    });
     await insertCeloPlatformFee(
       admin,
       totalPlatformFee,
@@ -1121,7 +1145,18 @@ async function handlePlayerRoll(
           { status: 500 }
         );
       }
-      await adjustRoomBank(admin, room.id, settlementV2 ? -entry : -net);
+      const nbInst = await adjustRoomBank(
+        admin,
+        room.id,
+        settlementV2 ? -entry : -net
+      );
+      await handleCeloBankBustAndBankerTransfer({
+        admin,
+        roomId: room.id,
+        newBankSc: nbInst,
+        bustWinnerUserId: userId,
+        action: "player_instant_win",
+      });
       await applyRoundAccountingDelta(admin, round.id, -net, fee);
       outcome = "win";
       payoutSc = creditAmt;
@@ -1165,7 +1200,18 @@ async function handlePlayerRoll(
             { status: 500 }
           );
         }
-        await adjustRoomBank(admin, room.id, settlementV2 ? -entry : -net);
+        const nbPt = await adjustRoomBank(
+          admin,
+          room.id,
+          settlementV2 ? -entry : -net
+        );
+        await handleCeloBankBustAndBankerTransfer({
+          admin,
+          roomId: room.id,
+          newBankSc: nbPt,
+          bustWinnerUserId: userId,
+          action: "player_point_win",
+        });
         await applyRoundAccountingDelta(admin, round.id, -net, fee);
         outcome = "win";
         payoutSc = creditAmt;

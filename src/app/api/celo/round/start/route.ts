@@ -47,7 +47,39 @@ export async function POST(request: Request) {
   if (rErr || !roomRaw) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
-  const room = roomRaw as { banker_id: string; id: string; status: string; total_rounds?: number };
+  const room = roomRaw as {
+    banker_id: string | null;
+    id: string;
+    status: string;
+    total_rounds?: number;
+    current_bank_sc?: number | null;
+    current_bank_cents?: number | null;
+    bank_busted?: boolean | null;
+  };
+  if (!room.banker_id) {
+    return NextResponse.json(
+      { error: "No banker assigned to this table" },
+      { status: 400 }
+    );
+  }
+  if (room.bank_busted === true) {
+    return NextResponse.json(
+      { error: "Bank is busted. Assign a banker before starting a round." },
+      { status: 400 }
+    );
+  }
+  const curBank = Math.max(
+    0,
+    Math.floor(
+      Number(room.current_bank_sc ?? room.current_bank_cents ?? 0)
+    )
+  );
+  if (curBank <= 0) {
+    return NextResponse.json(
+      { error: "Table bank is empty. Fund the bank before starting a round." },
+      { status: 400 }
+    );
+  }
   if (normalizeCeloUserId(room.banker_id) !== normalizeCeloUserId(userId)) {
     return NextResponse.json(
       { error: "Only the banker can start a round" },

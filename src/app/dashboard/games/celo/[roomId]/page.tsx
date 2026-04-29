@@ -51,7 +51,9 @@ type Room = {
   id: string;
   name: string;
   status: string;
-  banker_id: string;
+  banker_id: string | null;
+  /** True when the bank hit zero and no banker is assigned (see server migration). */
+  bank_busted?: boolean | null;
   max_players: number;
   current_bank_sc: number | null;
   current_bank_cents: number | null;
@@ -1485,8 +1487,7 @@ export default function CeloRoomPage() {
     (p) => me != null && normalizeCeloUserId(p.user_id) === normalizeCeloUserId(me)
   );
   /**
-   * Some realtime room patches may briefly omit banker_id, so derive banker user id
-   * from seated rows as a fallback to keep banker gating/status correct.
+   * Prefer `room.banker_id` (server); fallback only when realtime omits it briefly.
    */
   const bankerUserIdResolved =
     room?.banker_id ??
@@ -1494,9 +1495,9 @@ export default function CeloRoomPage() {
     null;
   const myRoleLc = String(myRow?.role ?? "").toLowerCase();
   const isBanker =
-    myRoleLc === "banker" ||
-    (me != null &&
-      normalizeCeloUserId(me) === normalizeCeloUserId(bankerUserIdResolved));
+    me != null &&
+    room?.banker_id != null &&
+    normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id);
   const isPlayer = myRoleLc === "player";
   const isSpec = myRoleLc === "spectator";
   const minE = room ? minVal(room) : 1000;
@@ -1853,6 +1854,17 @@ export default function CeloRoomPage() {
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
+    if (room.bank_busted === true && (room.banker_id == null || room.banker_id === "")) {
+      return "Waiting for new banker";
+    }
+    if (
+      room.bank_busted !== true &&
+      room.banker_id != null &&
+      bankVal(room) <= 0 &&
+      !inProgress
+    ) {
+      return "Bank busted — banker changed";
+    }
     if (roomStatusLc === "rolling" && !round) {
       return "Syncing round…";
     }
@@ -2008,11 +2020,16 @@ export default function CeloRoomPage() {
     showStartRound &&
     stakedPlayerCount >= 1 &&
     !rollingAction &&
-    !bannerOverlayVisible;
+    !bannerOverlayVisible &&
+    !!room &&
+    bankVal(room) > 0 &&
+    room.bank_busted !== true;
   const startRoundDisabledReason = (() => {
     if (!showStartRound) return null;
     if (rollingAction) return "round_action_in_progress";
     if (stakedPlayerCount < 1) return "no_posted_entries";
+    if (room?.bank_busted === true) return "bank_busted";
+    if (room && bankVal(room) <= 0) return "bank_empty";
     return null;
   })();
 
@@ -2038,6 +2055,27 @@ export default function CeloRoomPage() {
     }
     return "AWAITING THE NEXT THROW";
   })();
+
+  useEffect(() => {
+    if (!room || !CELO_DEBUG) return;
+    console.log("[C-Lo banker bank rule]", {
+      roomId: room.id,
+      bankerId: room.banker_id,
+      userId: me,
+      currentBankSc: bankVal(room),
+      bankBusted: room.bank_busted ?? false,
+      winnerUserId: null,
+      action: "client_room_snapshot",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- log when stable room id / bank fields change
+  }, [
+    room?.id,
+    room?.banker_id,
+    room?.bank_busted,
+    room?.current_bank_sc,
+    room?.current_bank_cents,
+    me,
+  ]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -3165,7 +3203,9 @@ export default function CeloRoomPage() {
               <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-300 sm:text-[11px]">
                 {playersAtTable.map((p) => {
                   const isRoomBanker =
-                    String(room.banker_id) === p.user_id || p.role === "banker";
+                    (room.banker_id != null &&
+                      String(room.banker_id) === p.user_id) ||
+                    p.role === "banker";
                   return (
                     <li key={p.id} className="flex min-w-0 max-w-full items-baseline gap-1">
                       <span className="shrink-0 text-zinc-500">
@@ -3225,7 +3265,10 @@ export default function CeloRoomPage() {
                     {room ? bankVal(room).toLocaleString() : 0}{" "}
                     <span className="text-sm font-normal text-amber-100/50">GPC</span>
                   </p>
-                  {isBanker && room?.last_round_was_celo && (
+                  {isBanker &&
+                    room?.last_round_was_celo &&
+                    bankVal(room) > 0 &&
+                    room.bank_busted !== true && (
                     <button
                       type="button"
                       onClick={() => {
@@ -3438,8 +3481,24 @@ export default function CeloRoomPage() {
                             ? "Start round"
                             : stakedPlayerCount < 1
                               ? "Waiting for players to post entries…"
-                              : "Start round"}
+                              : room.bank_busted === true
+                                ? "Waiting for new banker…"
+                                : bankVal(room) <= 0
+                                  ? "Fund the bank before starting…"
+                                  : "Start round"}
                         </button>
+                        {room.bank_busted === true && (
+                          <p className="px-1 text-center text-xs text-amber-200/85">
+                            Waiting for new banker.
+                          </p>
+                        )}
+                        {room.bank_busted !== true &&
+                          bankVal(room) <= 0 &&
+                          stakedPlayerCount >= 1 && (
+                          <p className="px-1 text-center text-xs text-amber-200/85">
+                            Bank busted — add GPC to the bank (server: waiting) before starting.
+                          </p>
+                        )}
                         {stakedPlayerCount < 1 && seatedPlayerCount >= 1 && (
                           <p className="px-1 text-center text-xs text-zinc-500">
                             Players must post entries before the round can start.
