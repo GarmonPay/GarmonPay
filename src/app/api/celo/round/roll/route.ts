@@ -71,8 +71,16 @@ async function playerWinDebitBankAndMaybeBust(
     settlementV2: boolean;
     action: string;
   }
-): Promise<{ net: number; fee: number; finalBankSc: number; bankStopped: boolean }> {
+): Promise<{
+  net: number;
+  fee: number;
+  finalBankSc: number;
+  bankStopped: boolean;
+  oldBankerId: string | null;
+  newBankerId: string | null;
+}> {
   const { room, round, userId, entry, settlementV2, action } = ctx;
+  const oldBankerId = room.banker_id ? String(room.banker_id) : null;
   const { net, fee } = calculateNetWin(entry);
   const bankAtRoundStartSc = Math.floor(
     Number(
@@ -93,6 +101,7 @@ async function playerWinDebitBankAndMaybeBust(
     finalBankSc = await adjustRoomBank(admin, room.id, -finalBankSc);
   }
   const grossWinSc = entry + net;
+  let newBankerId: string | null = null;
   if (bankStopped) {
     await handleCeloBankBustAndBankerTransfer({
       admin,
@@ -101,8 +110,14 @@ async function playerWinDebitBankAndMaybeBust(
       bustWinnerUserId: userId,
       action,
     });
+    const { data: roomAfterBust } = await admin
+      .from("celo_rooms")
+      .select("banker_id")
+      .eq("id", room.id)
+      .maybeSingle();
+    const nb = (roomAfterBust as { banker_id?: string | null } | null)?.banker_id;
+    newBankerId = nb != null && String(nb).trim() !== "" ? String(nb) : null;
   }
-  const oldBankerId = room.banker_id ?? null;
   console.log("[C-Lo bank stop settlement]", {
     roomId: room.id,
     roundId: round.id,
@@ -114,8 +129,9 @@ async function playerWinDebitBankAndMaybeBust(
     platformFeeSc: fee,
     finalBankSc,
     bankStopped,
+    newBankerId,
   });
-  return { net, fee, finalBankSc, bankStopped };
+  return { net, fee, finalBankSc, bankStopped, oldBankerId, newBankerId };
 }
 
 /** Player-phase only: cumulative banker P&L and platform fees as each staked roll settles. */
@@ -1025,6 +1041,9 @@ async function handlePlayerRoll(
   let outcome: "win" | "loss" | "reroll" = "loss";
   let payoutSc = 0;
   let playerCanBecomeBanker = false;
+  let bankStoppedAfterWin = false;
+  let bankStopOldBankerId: string | null = null;
+  let bankStopNewBankerId: string | null = null;
   const bankerTakeoverOffered = roll.isCelo && roll.result === "instant_win";
   let body: {
     roundOut: Record<string, unknown> | null;
@@ -1205,7 +1224,7 @@ async function handlePlayerRoll(
           { status: 500 }
         );
       }
-      await playerWinDebitBankAndMaybeBust(admin, {
+      const settleIw = await playerWinDebitBankAndMaybeBust(admin, {
         room,
         round,
         userId,
@@ -1213,11 +1232,14 @@ async function handlePlayerRoll(
         settlementV2,
         action: "player_instant_win",
       });
+      bankStoppedAfterWin = settleIw.bankStopped;
+      bankStopOldBankerId = settleIw.oldBankerId;
+      bankStopNewBankerId = settleIw.newBankerId;
       await applyRoundAccountingDelta(admin, round.id, -net, fee);
       outcome = "win";
       payoutSc = creditAmt;
-      playerCanBecomeBanker = roll.isCelo;
-      if (roll.isCelo) {
+      playerCanBecomeBanker = roll.isCelo && !settleIw.bankStopped;
+      if (roll.isCelo && !settleIw.bankStopped) {
         await admin
           .from("celo_rounds")
           .update({
@@ -1256,7 +1278,7 @@ async function handlePlayerRoll(
             { status: 500 }
           );
         }
-        await playerWinDebitBankAndMaybeBust(admin, {
+        const settlePt = await playerWinDebitBankAndMaybeBust(admin, {
           room,
           round,
           userId,
@@ -1264,6 +1286,9 @@ async function handlePlayerRoll(
           settlementV2,
           action: "player_point_win",
         });
+        bankStoppedAfterWin = settlePt.bankStopped;
+        bankStopOldBankerId = settlePt.oldBankerId;
+        bankStopNewBankerId = settlePt.newBankerId;
         await applyRoundAccountingDelta(admin, round.id, -net, fee);
         outcome = "win";
         payoutSc = creditAmt;
@@ -1431,6 +1456,32 @@ async function handlePlayerRoll(
         ? null
         : { ...body.roundOut, roll_processing: false };
 
+    const roomOutSc = Math.max(
+      0,
+      Math.floor(
+        Number(
+          (body.roomOut as { current_bank_sc?: number } | null)?.current_bank_sc ??
+            room.current_bank_sc ??
+            0
+        )
+      )
+    );
+    const bankStopMessage =
+      bankStoppedAfterWin && bankStopNewBankerId
+        ? "You stopped the bank. You are now the banker."
+        : null;
+    if (bankStoppedAfterWin) {
+      console.log("[C-Lo bank stop message]", {
+        roomId: room.id,
+        roundId: round.id,
+        oldBankerId: bankStopOldBankerId,
+        newBankerId: bankStopNewBankerId,
+        currentUserId: userId,
+        currentBankSc: roomOutSc,
+        bankStopped: true,
+        modalWouldOpen: false,
+      });
+    }
     return NextResponse.json({
       ok: true as const,
       roll: clientRoll,
@@ -1445,11 +1496,15 @@ async function handlePlayerRoll(
       payoutSc: outcome === "reroll" ? 0 : payoutSc,
       newBalance,
       player_can_become_banker: playerCanBecomeBanker,
-      player_must_have_sc: room.current_bank_sc,
+      player_must_have_sc: roomOutSc,
       isCelo: roll.isCelo,
       roundComplete: outcome === "reroll" ? false : !hasMore,
-      banker_takeover_offered: bankerTakeoverOffered,
+      banker_takeover_offered: bankerTakeoverOffered && !bankStoppedAfterWin,
       player_user_id: userId,
+      bankStopped: bankStoppedAfterWin,
+      oldBankerId: bankStopOldBankerId,
+      newBankerId: bankStopNewBankerId,
+      message: bankStopMessage,
     });
   } finally {
     await clearPlayerRollProcessing(admin, round.id);

@@ -546,6 +546,11 @@ export default function CeloRoomPage() {
   const [diceModal, setDiceModal] = useState(false);
   const [showLower, setShowLower] = useState(false);
   const [showBanker, setShowBanker] = useState(false);
+  /** One-shot message when the table bank is stopped and a new banker is seated. */
+  const [bankStopBannerText, setBankStopBannerText] = useState<string | null>(null);
+  const shownBankStopMessagesRef = useRef<Set<string>>(new Set());
+  const prevBankerIdForStopMsgRef = useRef<string | null>(null);
+  const prevBankScForStopMsgRef = useRef<number>(0);
   const [showCeloTakeover, setShowCeloTakeover] = useState(false);
   const [celoTakeoverError, setCeloTakeoverError] = useState<string | null>(null);
   const [celoTakeoverExpiresAt, setCeloTakeoverExpiresAt] = useState<string | null>(null);
@@ -2496,6 +2501,81 @@ export default function CeloRoomPage() {
   }, [roomId]);
 
   useEffect(() => {
+    shownBankStopMessagesRef.current = new Set();
+    prevBankerIdForStopMsgRef.current = null;
+    prevBankScForStopMsgRef.current = 0;
+    setBankStopBannerText(null);
+  }, [roomId]);
+
+  useEffect(() => {
+    const sc = Math.max(
+      0,
+      Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0))
+    );
+    if (sc <= 0) {
+      setShowBanker(false);
+    }
+  }, [room?.current_bank_sc, room?.current_bank_cents]);
+
+  useEffect(() => {
+    if (!room?.id) return;
+    const currentBankSc = Math.max(
+      0,
+      Math.floor(Number(room.current_bank_sc ?? room.current_bank_cents ?? 0))
+    );
+    const bid =
+      room.banker_id != null && String(room.banker_id).trim() !== ""
+        ? String(room.banker_id)
+        : null;
+    const prevBid = prevBankerIdForStopMsgRef.current;
+    const shouldAnnounce =
+      prevBid != null &&
+      bid != null &&
+      prevBid !== bid &&
+      currentBankSc <= 0 &&
+      room.bank_busted !== true &&
+      me != null;
+
+    if (shouldAnnounce) {
+      const msgId = `${room.id}:bank-stop:${prevBid}:${bid}`;
+      if (!shownBankStopMessagesRef.current.has(msgId)) {
+        shownBankStopMessagesRef.current.add(msgId);
+        const isNewBankerMe =
+          normalizeCeloUserId(bid) === normalizeCeloUserId(me);
+        const name = celoBannerSeatLabel(players, bid);
+        const text = isNewBankerMe
+          ? "You stopped the bank. You are now the banker."
+          : `${name} stopped the bank and is now the banker.`;
+        console.log("[C-Lo bank stop message]", {
+          roomId: room.id,
+          roundId: round?.id ?? null,
+          oldBankerId: prevBid,
+          newBankerId: bid,
+          currentUserId: me,
+          currentBankSc,
+          bankStopped: true,
+          modalOpen: showBanker,
+        });
+        setBankStopBannerText(text);
+        window.setTimeout(() => setBankStopBannerText(null), 7000);
+      }
+    }
+
+    prevBankerIdForStopMsgRef.current = bid;
+    prevBankScForStopMsgRef.current = currentBankSc;
+  }, [
+    room?.id,
+    room?.banker_id,
+    room?.current_bank_sc,
+    room?.current_bank_cents,
+    room?.bank_busted,
+    players,
+    me,
+    round?.id,
+    showBanker,
+  ]);
+
+  useEffect(() => {
     return () => {
       if (noCountRevealTimeoutRef.current) {
         clearTimeout(noCountRevealTimeoutRef.current);
@@ -2785,6 +2865,10 @@ export default function CeloRoomPage() {
       banker_takeover_offered?: boolean;
       player_user_id?: string;
       isCelo?: boolean;
+      bankStopped?: boolean;
+      oldBankerId?: string | null;
+      newBankerId?: string | null;
+      message?: string | null;
     };
     rollWatchdogRef.current = setTimeout(() => {
       rollWatchdogRef.current = null;
@@ -2967,9 +3051,35 @@ export default function CeloRoomPage() {
       setRollError(null);
       if (typeof j.newBalance === "number") setMyBalance(j.newBalance);
       if (j.canLowerBank) setShowLower(true);
-      if (j.player_can_become_banker) {
+      const apiRoomForBank = rj.room as
+        | {
+            current_bank_sc?: number;
+            current_bank_cents?: number;
+            bank_busted?: boolean;
+          }
+        | undefined;
+      const bankAfterRoll = Math.max(
+        0,
+        Math.floor(
+          Number(
+            apiRoomForBank?.current_bank_sc ??
+              apiRoomForBank?.current_bank_cents ??
+              j.newBank ??
+              0
+          )
+        )
+      );
+      const roomBusted = apiRoomForBank?.bank_busted === true;
+      if (
+        rj.player_can_become_banker === true &&
+        bankAfterRoll > 0 &&
+        !roomBusted &&
+        !isBanker
+      ) {
         setBankerAcceptError(null);
         setShowBanker(true);
+      } else {
+        setShowBanker(false);
       }
       const rollRoomFromApi =
         rj.room && String((rj.room as { id?: string }).id ?? "") === room.id
@@ -2997,6 +3107,34 @@ export default function CeloRoomPage() {
       );
       lastRealtimeUpdateRef.current = Date.now();
       await fetchAll();
+      if (rj.bankStopped === true && rj.newBankerId) {
+        const nid = String(rj.newBankerId);
+        const oid =
+          rj.oldBankerId != null && String(rj.oldBankerId).trim() !== ""
+            ? String(rj.oldBankerId)
+            : "none";
+        const msgId = `${room.id}:bank-stop:${oid}:${nid}`;
+        if (!shownBankStopMessagesRef.current.has(msgId)) {
+          shownBankStopMessagesRef.current.add(msgId);
+          const isWinner =
+            me != null && normalizeCeloUserId(nid) === normalizeCeloUserId(me);
+          const bannerText = isWinner
+            ? String(rj.message ?? "You stopped the bank. You are now the banker.")
+            : "Bank stopped. New banker selected.";
+          console.log("[C-Lo bank stop message]", {
+            roomId: room.id,
+            roundId: round.id,
+            oldBankerId: rj.oldBankerId ?? null,
+            newBankerId: nid,
+            currentUserId: me,
+            currentBankSc: bankAfterRoll,
+            bankStopped: true,
+            modalOpen: showBanker,
+          });
+          setBankStopBannerText(bannerText);
+          window.setTimeout(() => setBankStopBannerText(null), 7000);
+        }
+      }
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
         setRollError("Roll timed out — please retry");
@@ -3429,6 +3567,23 @@ export default function CeloRoomPage() {
     resultBanner.winAmountSc != null &&
     resultBanner.winAmountSc > 0 &&
     !resultBanner.multiPlayerWin;
+
+  const stopBankCoverSc = Math.max(
+    0,
+    Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0))
+  );
+  const stopBankModalEligible =
+    stopBankCoverSc > 0 &&
+    room?.bank_busted !== true &&
+    !isBanker;
+  const stopBankButtonEnabled =
+    stopBankModalEligible &&
+    myBalance >= stopBankCoverSc &&
+    round?.id != null;
+  const stopBankModalOpen =
+    showBanker &&
+    room != null &&
+    stopBankModalEligible;
 
   const feltW = "min(100%, 28rem)";
   const feltH = "min(100%, max(13.5rem, 75vw))";
@@ -4092,9 +4247,23 @@ export default function CeloRoomPage() {
         />
       </div>
       </div>
+      {bankStopBannerText != null && (
+        <div
+          className="pointer-events-none fixed inset-x-4 bottom-28 z-[22000] flex justify-center sm:bottom-32"
+          role="status"
+        >
+          <div
+            className={`max-w-lg rounded-xl border border-amber-400/40 bg-[#0D0520]/98 px-4 py-3 text-center shadow-lg shadow-black/50 ${cinzel.className}`}
+          >
+            <p className="text-sm font-bold leading-snug text-amber-100 sm:text-base">
+              {bankStopBannerText}
+            </p>
+          </div>
+        </div>
+      )}
       {resultBannerData != null && resultBanner != null && room && (
         <div
-          className="fixed inset-0 z-[20080] flex cursor-pointer items-center justify-center p-2 sm:p-3"
+          className="fixed inset-0 z-[22500] flex cursor-pointer items-center justify-center p-2 sm:p-3"
           style={{ background: "rgba(0,0,0,0.78)" }}
           role="button"
           tabIndex={0}
@@ -4412,7 +4581,7 @@ export default function CeloRoomPage() {
           </div>
         </div>
       )}
-      {showBanker && room && (
+      {stopBankModalOpen && room && (
         <div
           className="fixed inset-0 z-[20100] flex items-end justify-center"
           style={{ background: "rgba(0,0,0,0.6)" }}
@@ -4429,17 +4598,17 @@ export default function CeloRoomPage() {
               <p className="mt-2 text-sm text-red-300/95">{bankerAcceptError}</p>
             )}
             <p className="mt-1 text-sm text-[#9CA3AF]">
-              Cover {bankVal(room).toLocaleString()} GPC to take full-bank action.
+              Cover {stopBankCoverSc.toLocaleString()} GPC to take full-bank action.
             </p>
             <p className="mt-1 text-xs font-mono text-amber-200/80">
-              {myBalance >= bankVal(room)
+              {myBalance >= stopBankCoverSc
                 ? "Eligible to stop the bank."
-                : `Need ${(bankVal(room) - myBalance).toLocaleString()} more GPC to cover.`}
+                : `Need ${(stopBankCoverSc - myBalance).toLocaleString()} more GPC to cover.`}
             </p>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                disabled={myBalance < bankVal(room) || !round?.id}
+                disabled={!stopBankButtonEnabled}
                 onClick={async () => {
                   setBankerAcceptError(null);
                   if (!supabase) {
@@ -4450,7 +4619,12 @@ export default function CeloRoomPage() {
                     setBankerAcceptError("Round not eligible for stop-the-bank yet.");
                     return;
                   }
-                  if (myBalance < bankVal(room)) {
+                  if (stopBankCoverSc <= 0) {
+                    setBankerAcceptError("The table bank is empty.");
+                    setShowBanker(false);
+                    return;
+                  }
+                  if (myBalance < stopBankCoverSc) {
                     setBankerAcceptError("Insufficient balance to cover full bank.");
                     return;
                   }
@@ -4478,10 +4652,10 @@ export default function CeloRoomPage() {
                 style={{
                   background: "linear-gradient(135deg, #F5C842, #D4A017)",
                   color: "#0A0A0A",
-                  opacity: myBalance < bankVal(room) || !round?.id ? 0.5 : 1,
+                  opacity: !stopBankButtonEnabled ? 0.5 : 1,
                 }}
               >
-                Stop the Bank — {bankVal(room).toLocaleString()} GPC
+                Stop the Bank — {stopBankCoverSc.toLocaleString()} GPC
               </button>
               <button
                 type="button"
