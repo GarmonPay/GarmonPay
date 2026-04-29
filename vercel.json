@@ -8,6 +8,10 @@
     {
       "path": "/api/celo/rooms/cleanup-abandoned",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/celo/cron/player-timeouts",
+      "schedule": "* * * * *"
     }
   ],
   "headers": [
