@@ -7,6 +7,9 @@ import { insertCeloPlatformFee } from "@/lib/celo-platform-fee";
 import {
   celoAccountingAuditLog,
   celoAccountingLog,
+  celoApplyRoundBankerAccountingDelta,
+  celoAdjustRoomBank,
+  celoStakeNetAndPlatformFee,
   celoUpdateRoundIfStatus,
 } from "@/lib/celo-accounting";
 import { runCeloSideBetSettlementAfterRoundComplete } from "@/lib/celo-sidebet-settlement";
@@ -33,34 +36,6 @@ function effectiveStakeSc(row: {
   );
 }
 
-const PLATFORM_FEE_RATE = 0.1;
-
-/** Per-stake: F = floor(S * fee rate), N = S - F (matched net bank moves on win/loss). */
-function calculateNetWin(stakeSc: number): { net: number; fee: number } {
-  const stake = Math.max(0, Math.floor(stakeSc));
-  const fee = Math.floor(stake * PLATFORM_FEE_RATE);
-  return { net: stake - fee, fee };
-}
-
-async function adjustRoomBank(
-  admin: SupabaseClient,
-  roomId: string,
-  deltaNetSc: number
-): Promise<number> {
-  const { data: row } = await admin
-    .from("celo_rooms")
-    .select("current_bank_sc")
-    .eq("id", roomId)
-    .maybeSingle();
-  const cur = Math.max(
-    0,
-    Math.floor(Number((row as { current_bank_sc?: number })?.current_bank_sc ?? 0))
-  );
-  const next = Math.max(0, cur + deltaNetSc);
-  await admin.from("celo_rooms").update({ current_bank_sc: next }).eq("id", roomId);
-  return next;
-}
-
 /** Player won: debit bank, then bust / banker transfer if bank emptied or full bank-cover win. */
 async function playerWinDebitBankAndMaybeBust(
   admin: SupabaseClient,
@@ -82,7 +57,7 @@ async function playerWinDebitBankAndMaybeBust(
 }> {
   const { room, round, userId, entry, settlementV2, action } = ctx;
   const oldBankerId = room.banker_id ? String(room.banker_id) : null;
-  const { net, fee } = calculateNetWin(entry);
+  const { net, fee } = celoStakeNetAndPlatformFee(entry);
   const bankAtRoundStartSc = Math.floor(
     Number(
       (round as { bank_at_round_start_sc?: number | null }).bank_at_round_start_sc ??
@@ -90,7 +65,7 @@ async function playerWinDebitBankAndMaybeBust(
         0
     )
   );
-  let finalBankSc = await adjustRoomBank(
+  let finalBankSc = await celoAdjustRoomBank(
     admin,
     room.id,
     settlementV2 ? -entry : -net
@@ -99,7 +74,7 @@ async function playerWinDebitBankAndMaybeBust(
     bankAtRoundStartSc > 0 && entry >= bankAtRoundStartSc;
   const bankStopped = finalBankSc <= 0 || coverBankStop;
   if (coverBankStop && finalBankSc > 0) {
-    finalBankSc = await adjustRoomBank(admin, room.id, -finalBankSc);
+    finalBankSc = await celoAdjustRoomBank(admin, room.id, -finalBankSc);
   }
   const grossWinSc = entry + net;
   let newBankerId: string | null = null;
@@ -133,52 +108,6 @@ async function playerWinDebitBankAndMaybeBust(
     newBankerId,
   });
   return { net, fee, finalBankSc, bankStopped, oldBankerId, newBankerId };
-}
-
-/** Player-phase only: cumulative banker P&L and platform fees as each staked roll settles. */
-async function applyRoundAccountingDelta(
-  admin: SupabaseClient,
-  roundId: string,
-  deltaPnL: number,
-  deltaFee: number
-): Promise<void> {
-  const { error: rpcErr } = await admin.rpc("celo_increment_round_banker_accounting", {
-    p_round_id: roundId,
-    p_delta_pnl: deltaPnL,
-    p_delta_fee: deltaFee,
-  });
-  if (rpcErr) {
-    celoAccountingLog("round_banker_accounting_rpc_error", {
-      roundId,
-      message: rpcErr.message,
-      code: rpcErr.code,
-    });
-    const { data: cur } = await admin
-      .from("celo_rounds")
-      .select("banker_winnings_sc, platform_fee_sc")
-      .eq("id", roundId)
-      .maybeSingle();
-    const prevPnL = Math.floor(
-      Number((cur as { banker_winnings_sc?: number })?.banker_winnings_sc ?? 0)
-    );
-    const prevFee = Math.floor(
-      Number((cur as { platform_fee_sc?: number })?.platform_fee_sc ?? 0)
-    );
-    const { error: upErr } = await admin
-      .from("celo_rounds")
-      .update({
-        banker_winnings_sc: prevPnL + deltaPnL,
-        platform_fee_sc: prevFee + deltaFee,
-      })
-      .eq("id", roundId);
-    if (upErr) {
-      celoAccountingLog("round_banker_accounting_fallback_error", {
-        roundId,
-        message: upErr.message,
-      });
-      throw new Error(upErr.message);
-    }
-  }
 }
 
 type RoomRow = {
@@ -521,7 +450,7 @@ async function handleBankerRoll(
       if (p.role !== "player") continue;
       const e = effectiveStakeSc(p);
       if (e <= 0) continue;
-      const { net, fee } = calculateNetWin(e);
+      const { net, fee } = celoStakeNetAndPlatformFee(e);
       bankerWins += net;
       totalPlatformFee += fee;
     }
@@ -658,7 +587,7 @@ async function handleBankerRoll(
         idempotencyKey: `celo_fee_round_${round.id}_banker_instant_win`,
       }
     );
-    const newBank = await adjustRoomBank(admin, room.id, bankerWins);
+    const newBank = await celoAdjustRoomBank(admin, room.id, bankerWins);
     await delayBeforeRoomReset();
     await admin
       .from("celo_rooms")
@@ -713,7 +642,7 @@ async function handleBankerRoll(
       if (p.role !== "player") continue;
       const e = effectiveStakeSc(p);
       if (e <= 0) continue;
-      const { net, fee } = calculateNetWin(e);
+      const { net, fee } = celoStakeNetAndPlatformFee(e);
       totalStakeFromBank += e;
       totalNetFromBank += net;
       totalPlatformFee += fee;
@@ -820,7 +749,7 @@ async function handleBankerRoll(
       reason: "instant_loss",
     });
 
-    const newBankAfterLoss = await adjustRoomBank(
+    const newBankAfterLoss = await celoAdjustRoomBank(
       admin,
       room.id,
       Number(round.settlement_version ?? 1) >= 2
@@ -1209,7 +1138,7 @@ async function handlePlayerRoll(
     }
 
     if (roll.result === "instant_win") {
-      const { net, fee } = calculateNetWin(entry);
+      const { net, fee } = celoStakeNetAndPlatformFee(entry);
       const creditAmt = entry + net;
       const winRef = `celo_player_win_${round.id}_${userId}`;
       celoAccountingLog("player_roll_instant_win_payout_attempt", {
@@ -1243,7 +1172,7 @@ async function handlePlayerRoll(
       bankStoppedAfterWin = settleIw.bankStopped;
       bankStopOldBankerId = settleIw.oldBankerId;
       bankStopNewBankerId = settleIw.newBankerId;
-      await applyRoundAccountingDelta(admin, round.id, -net, fee);
+      await celoApplyRoundBankerAccountingDelta(admin, round.id, -net, fee);
       outcome = "win";
       payoutSc = creditAmt;
       playerCanBecomeBanker = roll.isCelo && !settleIw.bankStopped;
@@ -1263,7 +1192,7 @@ async function handlePlayerRoll(
     } else if (roll.result === "point" && roll.point != null) {
       const cmp = comparePoints(roll.point, bankerPoint);
       if (cmp === "win") {
-        const { net, fee } = calculateNetWin(entry);
+        const { net, fee } = celoStakeNetAndPlatformFee(entry);
         const creditAmt = entry + net;
         const ptRef = `celo_player_point_${round.id}_${userId}`;
         celoAccountingLog("player_roll_point_win_payout_attempt", {
@@ -1297,7 +1226,7 @@ async function handlePlayerRoll(
         bankStoppedAfterWin = settlePt.bankStopped;
         bankStopOldBankerId = settlePt.oldBankerId;
         bankStopNewBankerId = settlePt.newBankerId;
-        await applyRoundAccountingDelta(admin, round.id, -net, fee);
+        await celoApplyRoundBankerAccountingDelta(admin, round.id, -net, fee);
         outcome = "win";
         payoutSc = creditAmt;
       } else {
@@ -1307,14 +1236,14 @@ async function handlePlayerRoll(
       outcome = "reroll";
     }
     if (outcome === "loss") {
-      const { net, fee } = calculateNetWin(entry);
-      await adjustRoomBank(admin, room.id, net);
-      await applyRoundAccountingDelta(admin, round.id, net, fee);
+      const { net, fee } = celoStakeNetAndPlatformFee(entry);
+      await celoAdjustRoomBank(admin, room.id, net);
+      await celoApplyRoundBankerAccountingDelta(admin, round.id, net, fee);
     }
     if (outcome !== "reroll") {
       const feeForRoll =
         outcome === "win" || outcome === "loss"
-          ? calculateNetWin(entry).fee
+          ? celoStakeNetAndPlatformFee(entry).fee
           : 0;
       const diceArr = [dice[0], dice[1], dice[2]];
       const { data: ins, error: insErr } = await admin
