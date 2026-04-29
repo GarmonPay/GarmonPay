@@ -174,7 +174,8 @@ export function computeCeloVisualDiceMode(input: {
     if (input.roundHasBankerTriplet || input.feltTripletPresent) {
       return "banker_settled";
     }
-    return "idle";
+    // No banker dice yet (e.g. immediately after Start Round) — keep tumble UX.
+    return "banker_tumble";
   }
   if (s === "player_rolling") {
     // Player has a final roll committed → show their settled dice

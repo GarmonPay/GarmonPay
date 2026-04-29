@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/membership-renewal",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/celo/rooms/cleanup-abandoned",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [

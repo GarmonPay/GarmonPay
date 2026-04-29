@@ -64,6 +64,8 @@ type Room = {
   last_round_was_celo: boolean;
   banker_celo_at: string | null;
   total_rounds: number;
+  abandoned_at?: string | null;
+  abandonment_fee_charged?: boolean | null;
 };
 
 type Player = CeloEntryPlayerFields;
@@ -541,6 +543,7 @@ export default function CeloRoomPage() {
   const [dice, setDice] = useState<number[] | null>(null);
   const [rolling, setRolling] = useState(false);
   const [rollingAction, setRollingAction] = useState(false);
+  const [startRoundSubmitting, setStartRoundSubmitting] = useState(false);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
   const [diceModal, setDiceModal] = useState(false);
@@ -565,10 +568,13 @@ export default function CeloRoomPage() {
   const [lastRealTriplet, setLastRealTriplet] = useState<
     [number, number, number] | null
   >(null);
-  /** Visual-only idle dice before the first real banker roll ever in this room (banker client). */
-  const [firstBankerVisualDice, setFirstBankerVisualDice] = useState<
+  /** Visual-only dice before any real server/felt triplet (never persisted or used for outcomes). */
+  const [roomVisualDice, setRoomVisualDice] = useState<
     [number, number, number] | null
   >(null);
+  const [abandonmentNotice, setAbandonmentNotice] = useState<string | null>(
+    null
+  );
   const noCountRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -759,7 +765,7 @@ export default function CeloRoomPage() {
   const rememberRealFeltDice = useCallback((t: [number, number, number]) => {
     lastRealTripletRef.current = t;
     setLastRealTriplet(t);
-    setFirstBankerVisualDice(null);
+    setRoomVisualDice(null);
     setDice([t[0], t[1], t[2]]);
   }, []);
 
@@ -1716,33 +1722,46 @@ export default function CeloRoomPage() {
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
 
   useEffect(() => {
-    const isBankerSeat =
-      me != null &&
-      room?.banker_id != null &&
-      normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id);
-    const hasRealEver = lastRealTriplet != null;
-    const roomSt = String(room?.status ?? "").toLowerCase();
-    const roundSt = String(round?.status ?? "").toLowerCase();
-    const shouldShowFirstBankerVisualDice =
-      isBankerSeat &&
-      !hasRealEver &&
-      firstBankerVisualDice == null &&
-      (roundSt === "banker_rolling" ||
-        roomSt === "waiting" ||
-        roomSt === "active" ||
-        roomSt === "entry_phase");
-
-    if (shouldShowFirstBankerVisualDice) {
-      setFirstBankerVisualDice(randomDiceTriplet());
+    if (!room?.id) return;
+    const feltReal = dice != null ? realDiceTripletFromUnknown(dice) : null;
+    if (
+      !lastRealTripletRef.current &&
+      !feltReal &&
+      roomVisualDice == null
+    ) {
+      setRoomVisualDice(randomDiceTriplet());
     }
-  }, [
-    me,
-    room?.banker_id,
-    room?.status,
-    round?.status,
-    firstBankerVisualDice,
-    lastRealTriplet,
-  ]);
+  }, [room?.id, dice, roomVisualDice]);
+
+  useEffect(() => {
+    if (!room?.id) return;
+    const st = String(room.status ?? "").toLowerCase();
+    if (st !== "cancelled" || !room.abandoned_at) {
+      setAbandonmentNotice(null);
+      return;
+    }
+    const bankerUid =
+      room.banker_id != null && String(room.banker_id).trim() !== ""
+        ? String(room.banker_id)
+        : null;
+    const iAmBanker =
+      me != null &&
+      bankerUid != null &&
+      normalizeCeloUserId(me) === normalizeCeloUserId(bankerUid);
+    if (iAmBanker) {
+      setAbandonmentNotice(
+        "Room was closed for inactivity. A 500 GPC abandonment fee was charged."
+      );
+      return;
+    }
+    if (isPlayer) {
+      setAbandonmentNotice(
+        "Banker abandoned the room. Your entry was refunded."
+      );
+      return;
+    }
+    setAbandonmentNotice(null);
+  }, [room?.id, room?.status, room?.abandoned_at, room?.banker_id, me, isPlayer]);
   const bankerDiceReadyKey = useMemo(() => {
     const t = realDiceTripletFromUnknown(round?.banker_dice);
     return t ? `${t[0]}-${t[1]}-${t[2]}` : "";
@@ -1934,7 +1953,7 @@ export default function CeloRoomPage() {
   const feltTripletPresent =
     (dice != null && isRealDiceValues(dice)) ||
     (lastRealTriplet != null && isRealDiceValues(lastRealTriplet)) ||
-    firstBankerVisualDice != null;
+    roomVisualDice != null;
 
   const bankerRollInFlight = round?.banker_roll_in_flight === true;
 
@@ -1983,7 +2002,19 @@ export default function CeloRoomPage() {
 
   const facePips: [number, number, number] | null = (() => {
     if (isRollingFaces) {
-      const rollingTriplet = diceRef.current ?? bankerTripletForDisplay;
+      const dRef = diceRef.current;
+      const fromRef =
+        dRef != null && isRealDiceValues(dRef) ? dRef : null;
+      const fromBanker =
+        bankerTripletForDisplay != null &&
+        isRealDiceValues(bankerTripletForDisplay)
+          ? bankerTripletForDisplay
+          : null;
+      const rollingTriplet =
+        fromRef ??
+        fromBanker ??
+        roomVisualDice ??
+        lastRealTripletRef.current;
       if (rollingTriplet && isRealDiceValues(rollingTriplet)) {
         return [
           clampDie(rollingTriplet[0]),
@@ -2033,19 +2064,21 @@ export default function CeloRoomPage() {
         clampDie(lastRealTriplet[2]),
       ];
     }
-    if (firstBankerVisualDice) {
+    if (roomVisualDice) {
       return [
-        clampDie(firstBankerVisualDice[0]),
-        clampDie(firstBankerVisualDice[1]),
-        clampDie(firstBankerVisualDice[2]),
+        clampDie(roomVisualDice[0]),
+        clampDie(roomVisualDice[1]),
+        clampDie(roomVisualDice[2]),
       ];
     }
     return null;
   })();
 
-  const displayDice = facePips;
-
-  const useBlankRollingDice = isRollingFaces && facePips == null;
+  const displayDice =
+    realDiceTripletFromUnknown(dice) ??
+    lastRealTripletRef.current ??
+    roomVisualDice ??
+    facePips;
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2055,7 +2088,7 @@ export default function CeloRoomPage() {
       roundStatus: round?.status,
       feltDice: dice,
       lastRealTriplet: lastRealTripletRef.current,
-      firstBankerVisualDice,
+      roomVisualDice,
       displayDice,
       isRolling: rolling,
       isRollingFaces,
@@ -2065,11 +2098,22 @@ export default function CeloRoomPage() {
     round?.id,
     round?.status,
     dice,
-    firstBankerVisualDice,
+    roomVisualDice,
     displayDice,
     rolling,
     isRollingFaces,
   ]);
+
+  useEffect(() => {
+    console.log("[C-Lo dice rolling visibility]", {
+      roomId,
+      isRolling: rolling,
+      displayDice,
+      roomVisualDice,
+      feltDice: dice,
+      lastRealTriplet: lastRealTripletRef.current,
+    });
+  }, [roomId, rolling, displayDice, roomVisualDice, dice]);
 
   useEffect(() => {
     if (!CELO_DEBUG) return;
@@ -2346,28 +2390,57 @@ export default function CeloRoomPage() {
   ]);
   const canRoll = canRollBanker || canRollPlayer;
   const roomPhase = roomStatusLc;
-  const startableRoomStatuses = ["waiting", "active", "entry_phase"];
-  const showStartRound =
+  const hasActiveRound = !!(
+    round &&
+    ["banker_rolling", "player_rolling", "betting"].includes(
+      String(round.status ?? "").toLowerCase()
+    )
+  );
+  const roomInLiveRound = roomStatusLc === "rolling";
+  const showStartRoundPanel =
     !!room &&
     isBanker &&
-    !inProgress &&
-    startableRoomStatuses.includes(roomPhase);
-  const canStartRound =
-    showStartRound &&
-    stakedPlayerCount >= 1 &&
-    !rollingAction &&
-    !bannerOverlayVisible &&
-    !!room &&
+    !hasActiveRound &&
+    !roomInLiveRound &&
+    ["waiting", "active", "entry_phase"].includes(roomPhase) &&
     bankVal(room) > 0 &&
-    room.bank_busted !== true;
+    room.bank_busted !== true &&
+    !bannerOverlayVisible;
+  const canStartRound =
+    showStartRoundPanel &&
+    stakedPlayerCount >= 1 &&
+    !startRoundSubmitting;
   const startRoundDisabledReason = (() => {
-    if (!showStartRound) return null;
-    if (rollingAction) return "round_action_in_progress";
+    if (!showStartRoundPanel) return null;
+    if (startRoundSubmitting) return "start_round_submitting";
     if (stakedPlayerCount < 1) return "no_posted_entries";
     if (room?.bank_busted === true) return "bank_busted";
     if (room && bankVal(room) <= 0) return "bank_empty";
     return null;
   })();
+
+  useEffect(() => {
+    const hasPostedPlayer = stakedPlayerCount >= 1;
+    console.log("[C-Lo start round visibility]", {
+      roomId,
+      isBanker,
+      hasPostedPlayer,
+      hasActiveRound,
+      roomStatus: room?.status,
+      currentRoundStatus: round?.status,
+      canShowStartRound: showStartRoundPanel && hasPostedPlayer,
+      canStartRound,
+    });
+  }, [
+    roomId,
+    isBanker,
+    stakedPlayerCount,
+    hasActiveRound,
+    room?.status,
+    round?.status,
+    showStartRoundPanel,
+    canStartRound,
+  ]);
 
   const feltIdleLabel = (() => {
     if (roomPhase === "rolling" && !round) {
@@ -2496,7 +2569,7 @@ export default function CeloRoomPage() {
     lastBankerTripletRef.current = null;
     lastRealTripletRef.current = null;
     setLastRealTriplet(null);
-    setFirstBankerVisualDice(null);
+    setRoomVisualDice(null);
     feltTiedToRoundIdRef.current = null;
   }, [roomId]);
 
@@ -2733,7 +2806,7 @@ export default function CeloRoomPage() {
         stakedPlayerCount,
       });
     }
-    setRollingAction(true);
+    setStartRoundSubmitting(true);
     try {
       const res = await fetchCeloApi(supabase, "/api/celo/round/start", {
         method: "POST",
@@ -2780,7 +2853,7 @@ export default function CeloRoomPage() {
       setStartRoundError(msg);
       if (CELO_DEBUG) console.error("[C-Lo room] Start round exception", e);
     } finally {
-      setRollingAction(false);
+      setStartRoundSubmitting(false);
     }
   }
 
@@ -3890,36 +3963,22 @@ export default function CeloRoomPage() {
                         : "0 10px 24px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {useBlankRollingDice
+                    {facePips
                       ? [0, 1, 2].map((i) => (
                           <DiceFace
-                            key={`${round?.id ?? "r"}-${visualDiceMode}-blank-d${i}-t`}
-                            value={2}
-                            blank
+                            key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
+                            value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
                             diceType={myDiceType}
                             size={diceSize}
-                            rolling
+                            rolling={isRollingFaces}
                             delay={[0, 80, 160][i]}
                             variant={CELO_TUMBLE[i]!.variant}
                             durationSec={CELO_TUMBLE[i]!.durationSec}
                           />
                         ))
-                      : facePips
-                        ? [0, 1, 2].map((i) => (
-                            <DiceFace
-                              key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
-                              value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                              diceType={myDiceType}
-                              size={diceSize}
-                              rolling={isRollingFaces}
-                              delay={[0, 80, 160][i]}
-                              variant={CELO_TUMBLE[i]!.variant}
-                              durationSec={CELO_TUMBLE[i]!.durationSec}
-                            />
-                          ))
-                        : (
-                            <CeloDiceEmptyState diceSize={diceSize} />
-                          )}
+                      : (
+                          <CeloDiceEmptyState diceSize={diceSize} />
+                        )}
                   </div>
                   <RollNameDisplay
                     rollName={noCountReveal ? null : rollName}
@@ -3982,7 +4041,7 @@ export default function CeloRoomPage() {
                         </button>
                       </div>
                     )}
-                    {showStartRound && isBanker && !canRoll && !bannerOverlayVisible && (
+                    {showStartRoundPanel && !canRoll && (
                       <div className="mx-auto flex w-full max-w-md flex-col gap-1.5">
                         <button
                           type="button"
@@ -4257,6 +4316,20 @@ export default function CeloRoomPage() {
           >
             <p className="text-sm font-bold leading-snug text-amber-100 sm:text-base">
               {bankStopBannerText}
+            </p>
+          </div>
+        </div>
+      )}
+      {abandonmentNotice != null && (
+        <div
+          className="pointer-events-none fixed inset-x-4 bottom-28 z-[22001] flex justify-center sm:bottom-32"
+          role="status"
+        >
+          <div
+            className={`max-w-lg rounded-xl border border-rose-500/35 bg-[#1a0a0f]/98 px-4 py-3 text-center shadow-lg shadow-black/50 ${dm.className}`}
+          >
+            <p className="text-sm font-semibold leading-snug text-rose-100 sm:text-base">
+              {abandonmentNotice}
             </p>
           </div>
         </div>
