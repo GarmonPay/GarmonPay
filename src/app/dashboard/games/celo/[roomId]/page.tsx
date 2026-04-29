@@ -41,6 +41,7 @@ import {
   type CeloMergeOptions,
   type CeloMergeSource,
 } from "@/lib/celo/celoStateMerge";
+import { CELO_PLAYER_ROLL_TIMEOUT_MS } from "@/lib/celo-player-roll-constants";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
 /** Wait after dice are settled before point / roll-name / settlement popups (ms). */
@@ -101,6 +102,8 @@ type Round = {
   roll_animation_start_at?: string | null;
   roll_animation_duration_ms?: number | null;
   platform_fee_sc?: number | null;
+  /** UTC instant by which the current seat must submit a roll (`player_rolling`). */
+  player_roll_deadline_at?: string | null;
 };
 
 function celoUidShort(uid: string): string {
@@ -664,8 +667,8 @@ export default function CeloRoomPage() {
   const diceRef = useRef<number[] | null>(null);
   const feltTiedToRoundIdRef = useRef<string | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
-  /** Server ~1.5s anim + 4s result display; leave headroom for network. */
-  const ROLL_HARD_TIMEOUT_MS = 20_000;
+  /** Roll API: 30s product clock + bank animation / network slack. */
+  const ROLL_HARD_TIMEOUT_MS = CELO_PLAYER_ROLL_TIMEOUT_MS + 25_000;
 
   useEffect(() => {
     return () => {
@@ -1218,6 +1221,61 @@ export default function CeloRoomPage() {
       });
     }
   }, [supabase, roomId, commitCeloAggregateMerge, me, rememberRealFeltDice]);
+
+  /** Server applies the same banker-win + platform-fee settlement as a normal loss. */
+  useEffect(() => {
+    if (!supabase || !room?.id || !round?.id) return;
+    if (round.status !== "player_rolling" || !round.player_roll_deadline_at) return;
+    const deadlineMs = new Date(String(round.player_roll_deadline_at)).getTime();
+    if (!Number.isFinite(deadlineMs)) return;
+    const delay = Math.max(0, deadlineMs - Date.now()) + 300;
+    if (delay > 600_000) return;
+    const tid = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetchCeloApi(supabase, "/api/celo/round/roll", {
+            method: "POST",
+            body: JSON.stringify({
+              room_id: room.id,
+              round_id: round.id,
+              action: "timeout_forfeit",
+            }),
+          });
+          if (res.ok) {
+            await fetchAll();
+            return;
+          }
+          const txt = await res.text();
+          let err = "";
+          try {
+            err = String((JSON.parse(txt) as { error?: string }).error ?? "");
+          } catch {
+            err = txt.slice(0, 80);
+          }
+          const el = err.toLowerCase();
+          if (
+            CELO_DEBUG &&
+            !el.includes("not expired") &&
+            !el.includes("in progress") &&
+            !el.includes("not available")
+          ) {
+            console.warn("[C-Lo] player roll timeout POST", res.status, err);
+          }
+        } catch (e) {
+          if (CELO_DEBUG) console.warn("[C-Lo] player roll timeout fetch", e);
+        }
+      })();
+    }, delay);
+    return () => window.clearTimeout(tid);
+  }, [
+    supabase,
+    room?.id,
+    round?.id,
+    round?.status,
+    round?.player_roll_deadline_at,
+    fetchAll,
+    room,
+  ]);
 
   useEffect(() => {
     if (!showCeloTakeover || !celoTakeoverExpiresAt) {
@@ -3078,7 +3136,7 @@ export default function CeloRoomPage() {
     rollFetchAbortRef.current = ac;
     const hardTimeout = setTimeout(() => {
       if (ac.signal.aborted) return;
-      console.error("[C-Lo] roll: aborting fetch (hard 8s)", {
+      console.error("[C-Lo] roll: aborting fetch (hard timeout)", {
         roomId: room.id,
         roundId: round.id,
       });
@@ -3111,8 +3169,8 @@ export default function CeloRoomPage() {
     rollWatchdogRef.current = setTimeout(() => {
       rollWatchdogRef.current = null;
       if (!rollingRef.current) return;
-      console.warn("[C-Lo] watchdog fired (rolling still true after 8s cap)");
-      console.error("[C-Lo] roll: watchdog — rolling still true after 8s", {
+      console.warn("[C-Lo] watchdog fired (rolling still true after hard timeout)");
+      console.error("[C-Lo] roll: watchdog — rolling still true after hard timeout", {
         roomId: room.id,
         roundId: round.id,
       });
@@ -4138,6 +4196,12 @@ export default function CeloRoomPage() {
                   <p className="mt-2.5 text-xs leading-relaxed text-amber-100/90 sm:text-sm">
                     Roll higher than the banker&apos;s point to win, lower to lose, or match
                     to push.
+                  </p>
+                  <p className="mt-3 text-[11px] leading-relaxed text-amber-200/75 sm:text-xs">
+                    When it is your seat to roll, you have {CELO_PLAYER_ROLL_TIMEOUT_MS / 1000}{" "}
+                    seconds. If the timer expires, you forfeit your stake to the banker; the
+                    platform fee applies on that banker win (same as a normal loss), then play
+                    moves to the next seat or the round ends.
                   </p>
                 </div>
               )}
