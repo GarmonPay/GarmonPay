@@ -18,6 +18,10 @@ interface Props {
   diceType?: DiceType;
   size?: number;
   rolling?: boolean;
+  /**
+   * Neutral “no result yet” cube — tumbling works; no pip faces (avoids fake 1–6 reads).
+   */
+  blank?: boolean;
   /** Stagger (ms) — start the tumble a bit after siblings. */
   delay?: number;
   /** three sets of waypoints for unsynchronized motion */
@@ -300,18 +304,32 @@ function tumbleVariantCss(id: string, variant: TumbleVariant): string {
         ${jC}`;
 }
 
+const BLANK_FACE =
+  "linear-gradient(145deg, #3f3f46 0%, #27272a 45%, #18181b 100%)";
+const BLANK_RIM =
+  "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.35) 100%)";
+
 export default function DiceFace({
   value,
   diceType = "standard",
   size = 64,
   rolling = false,
+  blank = false,
   delay = 0,
   variant = "a",
   durationSec = 1.8,
 }: Props) {
   const id = useId().replace(/:/g, "");
   const slug = `d3d-${id}`;
-  const s = STYLES[diceType];
+  const s = blank
+    ? {
+        face: BLANK_FACE,
+        rim: BLANK_RIM,
+        dot: "#71717a",
+        dotGlow: "rgba(113,113,122,0.2)",
+        pipShadow: "none",
+      }
+    : STYLES[diceType];
   const r = Math.round(size * 0.1);
   const pipSize = Math.round(size * 0.16);
   const pad = Math.round(size * 0.11);
@@ -487,7 +505,9 @@ export default function DiceFace({
                         background: s.face,
                       }}
                     />
-                    <PipsOnFace v={pval} st={s} pipSize={pipSize} pad={pad} />
+                    {!blank && (
+                      <PipsOnFace v={pval} st={s} pipSize={pipSize} pad={pad} />
+                    )}
                     <div
                       className="pointer-events-none absolute rounded-[inherit]"
                       style={{

@@ -6,8 +6,38 @@ export function clampDie(n: unknown): 1 | 2 | 3 | 4 | 5 | 6 {
   return v as 1 | 2 | 3 | 4 | 5 | 6;
 }
 
-/** Shown before a round and as the face during tumble before pips are known. */
-export const CELO_IDLE_DICE: [1, 1, 1] = [1, 1, 1];
+/** True only for three integer pips 1–6 from the server (never a placeholder). */
+export function isRealDiceValues(values: unknown): values is number[] {
+  return (
+    Array.isArray(values) &&
+    values.length === 3 &&
+    values.every((v) => {
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 1 && n <= 6;
+    })
+  );
+}
+
+/**
+ * Parse `banker_dice`, roll `dice` JSON, etc. — returns null unless all three
+ * values are real integer pips (no clamping to fake defaults).
+ */
+export function realDiceTripletFromUnknown(
+  raw: unknown
+): [number, number, number] | null {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    try {
+      return realDiceTripletFromUnknown(JSON.parse(raw) as unknown);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(raw) || raw.length < 3) return null;
+  const t = [raw[0], raw[1], raw[2]];
+  if (!isRealDiceValues(t)) return null;
+  return [Number(t[0]), Number(t[1]), Number(t[2])];
+}
 
 /**
  * Invariant: a background fetchAll must not call setDice(null) while we already hold
@@ -51,12 +81,12 @@ export function extractDiceFromRoll(row: unknown): [number, number, number] | nu
   if (row == null || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
   if (r.dice != null) {
-    const t = tripletFromDiceJson(r.dice);
-    if (t) return [t[0], t[1], t[2]];
+    const t = realDiceTripletFromUnknown(r.dice);
+    if (t) return t;
   }
   const n = (v: unknown) => {
-    const x = Math.floor(Number(v));
-    return Number.isFinite(x) ? x : NaN;
+    const x = Number(v);
+    return Number.isInteger(x) && x >= 1 && x <= 6 ? x : NaN;
   };
   const u1 = n(r.dice_1 ?? r.die1 ?? r.d1);
   const u2 = n(r.dice_2 ?? r.die2 ?? r.d2);
@@ -91,10 +121,10 @@ export function tripletFromDiceJson(
 export function resolveCeloFeltDice(
   lastPlayerRollDice: unknown,
   roundBankerDice: unknown
-): [1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6] | null {
-  const fromPlayer = tripletFromDiceJson(lastPlayerRollDice);
+): [number, number, number] | null {
+  const fromPlayer = realDiceTripletFromUnknown(lastPlayerRollDice);
   if (fromPlayer) return fromPlayer;
-  return tripletFromDiceJson(roundBankerDice);
+  return realDiceTripletFromUnknown(roundBankerDice);
 }
 
 /** Explicit mode for felt UX / dev logs (single source of truth for animation). */

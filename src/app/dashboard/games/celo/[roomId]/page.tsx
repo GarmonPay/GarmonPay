@@ -9,13 +9,13 @@ import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
 import {
-  CELO_IDLE_DICE,
   clampDie,
   computeCeloVisualDiceMode,
   extractDiceFromRoll,
+  isRealDiceValues,
+  realDiceTripletFromUnknown,
   resolveCeloFeltDice,
   shouldClobberFeltTripletOnFetch,
-  tripletFromDiceJson,
 } from "@/lib/celo-room-dice";
 import DiceFace, { type DiceType, type TumbleVariant } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
@@ -126,6 +126,25 @@ function ucCulture(s: string): string {
   return s.trim().toUpperCase();
 }
 
+/** Inactive dice slot — no fake pips before a server roll. */
+function CeloDiceEmptyState({ diceSize }: { diceSize: number }) {
+  const delayCls = ["", "delay-150", "delay-300"] as const;
+  return (
+    <div
+      className="flex items-center justify-center gap-2 opacity-60 md:gap-3"
+      aria-hidden
+    >
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className={`animate-pulse rounded-md bg-neutral-800/90 shadow-inner ring-1 ring-white/10 ${delayCls[i]}`}
+          style={{ width: diceSize, height: diceSize }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function estimatedBankerTakeSc(round: Round): number | null {
   const pool = round.prize_pool_sc;
   if (typeof pool !== "number" || !Number.isFinite(pool)) return null;
@@ -183,12 +202,12 @@ function buildCeloResultBannerContent(
   const nameOr = (s: string, fallback: string) =>
     s.trim().length ? s.trim() : fallback;
 
-  const bankerTriplet = tripletFromDiceJson(round.banker_dice);
+  const bankerTriplet = realDiceTripletFromUnknown(round.banker_dice);
   const decisive = rolls.find((r) =>
     ["win", "loss", "push"].includes(String(r.outcome ?? "").toLowerCase())
   );
   const playerTriplet = decisive?.dice
-    ? tripletFromDiceJson(decisive.dice)
+    ? realDiceTripletFromUnknown(decisive.dice)
     : null;
   const pRollName = String(decisive?.roll_name ?? "").trim();
 
@@ -507,7 +526,7 @@ export default function CeloRoomPage() {
   const [round, setRound] = useState<Round | null>(null);
   const [myBalance, setMyBalance] = useState(0);
   const [rollName, setRollName] = useState<string | null>(null);
-  const [dice, setDice] = useState<[number, number, number] | null>(null);
+  const [dice, setDice] = useState<number[] | null>(null);
   const [rolling, setRolling] = useState(false);
   const [rollingAction, setRollingAction] = useState(false);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
@@ -522,12 +541,8 @@ export default function CeloRoomPage() {
   const [celoTakeoverSec, setCeloTakeoverSec] = useState<number | null>(null);
   const celoTimeoutPassSentRef = useRef(false);
   const resultBannerDataRef = useRef<{ roundId: string } | null>(null);
-  const randomWaitingPipsCacheRef = useRef<{
-    key: string;
-    pips: [number, number, number];
-  }>({ key: "", pips: [1, 1, 1] });
   /** Survives brief realtime lag when `round.banker_dice` arrives after `player_rolling`. */
-  const lastBankerTripletRef = useRef<[number, number, number] | null>(null);
+  const lastBankerTripletRef = useRef<number[] | null>(null);
   const noCountRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -558,7 +573,7 @@ export default function CeloRoomPage() {
   const [latestRollDebug, setLatestRollDebug] = useState<unknown>(null);
   /** Brief UX hold after a no_count reroll so players read the message before tumbling again. */
   const [noCountReveal, setNoCountReveal] = useState<{
-    dice: [number, number, number];
+    dice: number[];
     rollName: string;
   } | null>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
@@ -590,7 +605,7 @@ export default function CeloRoomPage() {
   const chatDraftRef = useRef("");
   const rollWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rollFetchAbortRef = useRef<AbortController | null>(null);
-  const diceRef = useRef<[number, number, number] | null>(null);
+  const diceRef = useRef<number[] | null>(null);
   const feltTiedToRoundIdRef = useRef<string | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
   /** Server ~1.5s anim + 4s result display; leave headroom for network. */
@@ -960,7 +975,7 @@ export default function CeloRoomPage() {
       const rRow = activeRound as Round;
       const t = resolveCeloFeltDice(lastPr?.dice, rRow.banker_dice);
       const applyTriplet = t;
-      const serverHasBankerTriplet = !!tripletFromDiceJson(
+      const serverHasBankerTriplet = !!realDiceTripletFromUnknown(
         (activeRound as Round).banker_dice
       );
       if (applyTriplet) {
@@ -972,7 +987,7 @@ export default function CeloRoomPage() {
           activeStatus: activeRound.status,
           serverHasBankerTriplet,
           hasPlayerFinalWinLoss: hasCurrentPlayerFinal,
-          hasLocalFeltTriplet: tripletFromDiceJson(diceRef.current) != null,
+          hasLocalFeltTriplet: realDiceTripletFromUnknown(diceRef.current) != null,
           localFeltTiedToThisRound: feltTiedToRoundIdRef.current === activeRound.id,
         });
         if (clobber) {
@@ -1333,7 +1348,7 @@ export default function CeloRoomPage() {
                 (p.eventType === "UPDATE" || p.eventType === "INSERT") &&
                 n.banker_roll_in_flight !== true
               ) {
-                const trip = tripletFromDiceJson(n.banker_dice);
+                const trip = realDiceTripletFromUnknown(n.banker_dice);
                 if (trip) setDice(trip);
                 if (rollingRef.current) {
                   setRolling(false);
@@ -1356,7 +1371,7 @@ export default function CeloRoomPage() {
             console.log("[C-Lo room] dice sync: player_rolls event → merge triplet if present");
           }
           if ((et === "INSERT" || et === "UPDATE") && n?.dice) {
-            const t = tripletFromDiceJson(n.dice);
+            const t = realDiceTripletFromUnknown(n.dice);
             if (t) {
               setDice(t);
               if (
@@ -1411,7 +1426,7 @@ export default function CeloRoomPage() {
           if (!n) return;
           lastRealtimeUpdateRef.current = Date.now();
           if (n.banker_dice != null && n.banker_roll_in_flight !== true) {
-            const trip = tripletFromDiceJson(n.banker_dice);
+            const trip = realDiceTripletFromUnknown(n.banker_dice);
             if (trip) setDice(trip);
             if (rollingRef.current) {
               if (CELO_DEBUG) {
@@ -1499,7 +1514,7 @@ export default function CeloRoomPage() {
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
   const bankerDiceReadyKey = useMemo(() => {
-    const t = tripletFromDiceJson(round?.banker_dice);
+    const t = realDiceTripletFromUnknown(round?.banker_dice);
     return t ? `${t[0]}-${t[1]}-${t[2]}` : "";
   }, [round?.banker_dice]);
 
@@ -1598,7 +1613,7 @@ export default function CeloRoomPage() {
         .limit(1)
         .maybeSingle();
       if (cancel || !myWin) return;
-      const t = tripletFromDiceJson(myWin.dice);
+      const t = realDiceTripletFromUnknown(myWin.dice);
       if (!t) return;
       const s = [...t].sort((a, b) => a - b);
       if (s[0] !== 4 || s[1] !== 5 || s[2] !== 6) return;
@@ -1619,14 +1634,16 @@ export default function CeloRoomPage() {
   const effectiveRoundStatus = round?.status ?? displayRound?.status;
 
   const inProgressForVisual = inProgress || bannerOverlayVisible;
-  const roundHasBankerTriplet = !!tripletFromDiceJson(displayRound?.banker_dice);
+  const roundHasBankerTriplet = !!realDiceTripletFromUnknown(
+    displayRound?.banker_dice
+  );
   const bankerTripletLive = useMemo(
-    () => tripletFromDiceJson(displayRound?.banker_dice),
+    () => realDiceTripletFromUnknown(displayRound?.banker_dice),
     [displayRound?.banker_dice]
   );
   const bankerTripletForDisplay =
     bankerTripletLive ?? lastBankerTripletRef.current;
-  const feltTripletPresent = dice != null;
+  const feltTripletPresent = dice != null && isRealDiceValues(dice);
 
   const bankerRollInFlight = round?.banker_roll_in_flight === true;
 
@@ -1667,61 +1684,14 @@ export default function CeloRoomPage() {
     return () => clearTimeout(t);
   }, [rollingAction]);
 
-  useEffect(() => {
-    console.log("[C-Lo Dice] visual mode", {
-      rollingAction,
-      roundStatus: round?.status,
-      latestRoll: latestRollDebug,
-      diceValues: dice,
-    });
-  }, [rollingAction, round?.status, latestRollDebug, dice]);
-
-  useEffect(() => {
-    console.log("[C-Lo] state", {
-      isRolling: rolling,
-      dice,
-      bankerDice: round?.banker_dice,
-      roundId: round?.id,
-      mode: visualDiceMode,
-    });
-  }, [rolling, dice, round?.banker_dice, round?.id, visualDiceMode]);
-
   /** Tumble animation: waiting on banker write, waiting on current player final, or local roll window. */
   const isRollingFaces =
     visualDiceMode === "banker_tumble" || visualDiceMode === "player_tumble";
 
   const showIdleDice = !inProgressForVisual && !rolling;
-  /** Random idle pips whenever no roll/tumble, no result banner, and felt has no live triplet. */
-  const canShowRandomIdleFelt =
-    !bannerOverlayVisible &&
-    !rolling &&
-    !rollingAction &&
-    !isRollingFaces &&
-    dice == null &&
-    !inProgress;
-  const randomIdleSurfaceKey = `${roomId}:${
-    round?.id ?? "—"
-  }:${dice != null ? "hasDice" : "noDice"}:${
-    canShowRandomIdleFelt ? "idle" : "busy"
-  }`;
-  if (canShowRandomIdleFelt) {
-    const c = randomWaitingPipsCacheRef.current;
-    if (c.key !== randomIdleSurfaceKey) {
-      randomWaitingPipsCacheRef.current = {
-        key: randomIdleSurfaceKey,
-        pips: [
-          1 + Math.floor(Math.random() * 6),
-          1 + Math.floor(Math.random() * 6),
-          1 + Math.floor(Math.random() * 6),
-        ] as [number, number, number],
-      };
-    }
-  }
-  const randomWaitingPips = canShowRandomIdleFelt
-    ? randomWaitingPipsCacheRef.current.pips
-    : ([1, 1, 1] as [number, number, number]);
-  const facePips: [number, number, number] = (() => {
-    if (dice) {
+
+  const facePips: [number, number, number] | null = (() => {
+    if (dice && isRealDiceValues(dice)) {
       return [clampDie(dice[0]), clampDie(dice[1]), clampDie(dice[2])];
     }
     if (currentPlayerResolvedRoll && round) {
@@ -1745,14 +1715,14 @@ export default function CeloRoomPage() {
     }
     if (isRollingFaces) {
       const rollingTriplet = diceRef.current ?? bankerTripletForDisplay;
-      if (rollingTriplet) {
+      if (rollingTriplet && isRealDiceValues(rollingTriplet)) {
         return [
           clampDie(rollingTriplet[0]),
           clampDie(rollingTriplet[1]),
           clampDie(rollingTriplet[2]),
         ];
       }
-      return CELO_IDLE_DICE;
+      return null;
     }
     if (
       bannerOverlayVisible &&
@@ -1766,15 +1736,49 @@ export default function CeloRoomPage() {
         bankerTripletLive[2],
       ];
     }
-    if (canShowRandomIdleFelt) {
-      return [
-        clampDie(randomWaitingPips[0]),
-        clampDie(randomWaitingPips[1]),
-        clampDie(randomWaitingPips[2]),
-      ];
-    }
-    return CELO_IDLE_DICE;
+    return null;
   })();
+
+  const useBlankRollingDice = isRollingFaces && facePips == null;
+
+  useEffect(() => {
+    if (!CELO_DEBUG) return;
+    const bankerDice =
+      realDiceTripletFromUnknown(round?.banker_dice) ??
+      lastBankerTripletRef.current;
+    const playerDice =
+      dice != null &&
+      isRealDiceValues(dice) &&
+      String(round?.status ?? "").toLowerCase() === "player_rolling"
+        ? dice
+        : currentPlayerResolvedRoll && dice != null && isRealDiceValues(dice)
+          ? dice
+          : null;
+    console.log("[C-Lo dice]", {
+      bankerDice,
+      playerDice,
+      roundStatus: round?.status,
+    });
+  }, [round?.status, round?.banker_dice, dice, currentPlayerResolvedRoll]);
+
+  useEffect(() => {
+    console.log("[C-Lo Dice] visual mode", {
+      rollingAction,
+      roundStatus: round?.status,
+      latestRoll: latestRollDebug,
+      diceValues: dice,
+    });
+  }, [rollingAction, round?.status, latestRollDebug, dice]);
+
+  useEffect(() => {
+    console.log("[C-Lo] state", {
+      isRolling: rolling,
+      dice,
+      bankerDice: round?.banker_dice,
+      roundId: round?.id,
+      mode: visualDiceMode,
+    });
+  }, [rolling, dice, round?.banker_dice, round?.id, visualDiceMode]);
   const stakedPlayerCount = useMemo(() => {
     const n = players.filter((p) => {
       const bankerRow =
@@ -2074,8 +2078,12 @@ export default function CeloRoomPage() {
   }, [round?.id]);
 
   useEffect(() => {
+    lastBankerTripletRef.current = null;
+  }, [round?.id]);
+
+  useEffect(() => {
     if (round?.id) {
-      const trip = tripletFromDiceJson(round.banker_dice);
+      const trip = realDiceTripletFromUnknown(round.banker_dice);
       if (trip) {
         lastBankerTripletRef.current = trip;
       }
@@ -2489,20 +2497,17 @@ export default function CeloRoomPage() {
       const fromRoll = rj.roll != null ? extractDiceFromRoll(rj.roll) : null;
       const fromTop = extractDiceFromRoll(rj);
       const dArr = rj.dice;
-      const tripletRaw =
+      const candidate =
         fromRoll ??
         fromTop ??
         (Array.isArray(dArr) && dArr.length >= 3
-          ? ([dArr[0], dArr[1], dArr[2]] as [number, number, number])
+          ? [dArr[0], dArr[1], dArr[2]]
           : null);
+      const tripletRaw = realDiceTripletFromUnknown(candidate);
       const outcomeLc = String(rj.outcome ?? "").toLowerCase();
 
       if (outcomeLc === "reroll" && tripletRaw) {
-        const trip: [number, number, number] = [
-          clampDie(tripletRaw[0]),
-          clampDie(tripletRaw[1]),
-          clampDie(tripletRaw[2]),
-        ];
+        const trip = tripletRaw;
         setDice(trip);
         feltTiedToRoundIdRef.current = round.id;
         const rn = String(rj.rollName ?? "No Count");
@@ -2551,11 +2556,7 @@ export default function CeloRoomPage() {
       }
 
       if (tripletRaw) {
-        setDice([
-          clampDie(tripletRaw[0]),
-          clampDie(tripletRaw[1]),
-          clampDie(tripletRaw[2]),
-        ]);
+        setDice([tripletRaw[0], tripletRaw[1], tripletRaw[2]]);
         feltTiedToRoundIdRef.current = round.id;
       } else {
         console.error("[C-Lo] roll: ok but could not extract dice from response", { j: rj, roundId: round.id });
@@ -3329,18 +3330,36 @@ export default function CeloRoomPage() {
                         : "0 10px 24px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {[0, 1, 2].map((i) => (
-                      <DiceFace
-                        key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
-                        value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                        diceType={myDiceType}
-                        size={diceSize}
-                        rolling={isRollingFaces}
-                        delay={[0, 80, 160][i]}
-                        variant={CELO_TUMBLE[i]!.variant}
-                        durationSec={CELO_TUMBLE[i]!.durationSec}
-                      />
-                    ))}
+                    {useBlankRollingDice
+                      ? [0, 1, 2].map((i) => (
+                          <DiceFace
+                            key={`${round?.id ?? "r"}-${visualDiceMode}-blank-d${i}-t`}
+                            value={2}
+                            blank
+                            diceType={myDiceType}
+                            size={diceSize}
+                            rolling
+                            delay={[0, 80, 160][i]}
+                            variant={CELO_TUMBLE[i]!.variant}
+                            durationSec={CELO_TUMBLE[i]!.durationSec}
+                          />
+                        ))
+                      : facePips
+                        ? [0, 1, 2].map((i) => (
+                            <DiceFace
+                              key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
+                              value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
+                              diceType={myDiceType}
+                              size={diceSize}
+                              rolling={isRollingFaces}
+                              delay={[0, 80, 160][i]}
+                              variant={CELO_TUMBLE[i]!.variant}
+                              durationSec={CELO_TUMBLE[i]!.durationSec}
+                            />
+                          ))
+                        : (
+                            <CeloDiceEmptyState diceSize={diceSize} />
+                          )}
                   </div>
                   <RollNameDisplay
                     rollName={noCountReveal ? null : rollName}
@@ -3630,18 +3649,25 @@ export default function CeloRoomPage() {
                 <div className="flex flex-col items-center gap-1">
                   <span className={rbBankerSeatTitleCls}>{resultBanner.bankerLabel}</span>
                   <div className="flex gap-1.5 sm:gap-2">
-                    {(resultBanner.bankerTriplet ?? CELO_IDLE_DICE).map(
-                      (pip, i) => (
-                        <DiceFace
-                          key={`banner-b-${i}`}
-                          value={pip as 1 | 2 | 3 | 4 | 5 | 6}
-                          diceType={myDiceType}
-                          size={Math.round(
-                            Math.min(88, diceSize + 18) * 0.65
-                          )}
-                        />
-                      )
-                    )}
+                    {resultBanner.bankerTriplet &&
+                    isRealDiceValues(resultBanner.bankerTriplet)
+                      ? resultBanner.bankerTriplet.map((pip, i) => (
+                          <DiceFace
+                            key={`banner-b-${i}`}
+                            value={pip as 1 | 2 | 3 | 4 | 5 | 6}
+                            diceType={myDiceType}
+                            size={Math.round(
+                              Math.min(88, diceSize + 18) * 0.65
+                            )}
+                          />
+                        ))
+                      : (
+                          <CeloDiceEmptyState
+                            diceSize={Math.round(
+                              Math.min(88, diceSize + 18) * 0.65
+                            )}
+                          />
+                        )}
                   </div>
                   {resultBanner.bankerRollName ? (
                     <p className="max-w-[14rem] text-center text-xs font-semibold leading-tight text-amber-100/95">

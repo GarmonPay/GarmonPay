@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { celoUnauthorizedJsonResponse, getCeloApiClients, getCeloAuth } from "@/lib/celo-api-clients";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
-import { tripletFromDiceJson } from "@/lib/celo-room-dice";
+import { realDiceTripletFromUnknown } from "@/lib/celo-room-dice";
 
 async function nextAvailablePlayerSeat(
   admin: SupabaseClient,
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       { status: 403 }
     );
   }
-  const trip = tripletFromDiceJson(pr.dice);
+  const trip = realDiceTripletFromUnknown(pr.dice);
   if (!trip) {
     return NextResponse.json({ error: "C-Lo roll not found" }, { status: 400 });
   }
