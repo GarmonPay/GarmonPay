@@ -1813,11 +1813,20 @@ export default function CeloRoomPage() {
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
   const roomPausedBlocking = isRoomPauseBlockingActions(room);
   const roomPauseActive = isRoomPauseActive(room);
+  const hasActiveRound = !!(
+    round &&
+    ["banker_rolling", "player_rolling", "betting"].includes(
+      String(round.status ?? "").toLowerCase()
+    )
+  );
   const needsBankSetup = Boolean(
     room &&
       isCurrentBanker &&
       Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
-      (room.bank_busted === true || roomStatusLc === "waiting")
+      room.bank_busted === true &&
+      !hasActiveRound &&
+      roomStatusLc !== "cancelled" &&
+      roomStatusLc !== "closed"
   );
 
   useEffect(() => {
@@ -2351,7 +2360,7 @@ export default function CeloRoomPage() {
       Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
       roomStatusLc === "waiting"
     ) {
-      return "New banker is setting up the bank.";
+      return "Bank was stopped. Waiting for the new banker to fund the bank.";
     }
     if (room.bank_busted === true && (room.banker_id == null || room.banker_id === "")) {
       return "Waiting for new banker";
@@ -2517,12 +2526,6 @@ export default function CeloRoomPage() {
   ]);
   const canRoll = canRollBanker || canRollPlayer;
   const roomPhase = roomStatusLc;
-  const hasActiveRound = !!(
-    round &&
-    ["banker_rolling", "player_rolling", "betting"].includes(
-      String(round.status ?? "").toLowerCase()
-    )
-  );
   const roomInLiveRound = roomStatusLc === "rolling";
   const rollSideQuiet =
     round?.roll_processing !== true && round?.banker_roll_in_flight !== true;
@@ -2631,6 +2634,33 @@ export default function CeloRoomPage() {
     room?.current_bank_sc,
     room?.current_bank_cents,
     me,
+  ]);
+
+  useEffect(() => {
+    if (!room) return;
+    const currentUserId = me ? normalizeCeloUserId(me) : null;
+    const roomBankerId = room.banker_id ? normalizeCeloUserId(room.banker_id) : null;
+    const oldBankerId = prevBankerIdForStopMsgRef.current;
+    const newBankerId = room.banker_id ?? null;
+    console.log("[C-Lo takeover setup visibility]", {
+      roomId: room.id,
+      currentUserId,
+      roomBankerId: room.banker_id,
+      oldBankerId,
+      newBankerId,
+      isCurrentBanker,
+      bankBusted: room.bank_busted,
+      currentBankSc: room.current_bank_sc,
+      needsNewBankerSetup: needsBankSetup,
+    });
+  }, [
+    room?.id,
+    room?.banker_id,
+    room?.bank_busted,
+    room?.current_bank_sc,
+    me,
+    isCurrentBanker,
+    needsBankSetup,
   ]);
 
   useEffect(() => {

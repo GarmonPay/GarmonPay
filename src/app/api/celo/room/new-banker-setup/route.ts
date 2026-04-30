@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     normalizeCeloUserId(room.banker_id) !== normalizeCeloUserId(userId)
   ) {
     return NextResponse.json(
-      { error: "Only the current banker can run new banker setup" },
+      { error: "Only the current banker can set up this bank." },
       { status: 403 }
     );
   }

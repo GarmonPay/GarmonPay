@@ -1328,6 +1328,7 @@ async function handlePlayerRoll(
       bankStopped: bankStoppedAfterWin,
       oldBankerId: bankStopOldBankerId,
       newBankerId: bankStopNewBankerId,
+      setupRequired: bankStoppedAfterWin === true,
       message: bankStopMessage,
     });
   } finally {
