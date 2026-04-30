@@ -51,7 +51,23 @@ export function evaluateRoll(
     return out;
   };
 
-  // Any order 1-2-3 → automatic loss (must run before pair/trips logic)
+  // 1) Triples first — 1,1,1 is ACE OUT (auto win), not pair+1 loss
+  if (a === b && b === c) {
+    const rollName =
+      a === 1
+        ? "ACE OUT • AUTOMATIC WIN"
+        : `TRIPS ${a} • AUTOMATIC WIN`;
+    return logResult({
+      dice,
+      rollName,
+      result: "instant_win",
+      point: null,
+      isCelo: false,
+      isTrips: true,
+    });
+  }
+
+  // 2) 1-2-3 any order — DICK (auto loss)
   if (a === 1 && b === 2 && c === 3) {
     return logResult({
       dice,
@@ -63,11 +79,11 @@ export function evaluateRoll(
     });
   }
 
-  // Any order 4-5-6 → C-Lo (automatic win)
+  // 3) 4-5-6 any order — C-Lo (auto win)
   if (a === 4 && b === 5 && c === 6) {
     return logResult({
       dice,
-      rollName: "C-Lo",
+      rollName: "C-LO • AUTOMATIC WIN",
       result: "instant_win",
       point: null,
       isCelo: true,
@@ -75,75 +91,40 @@ export function evaluateRoll(
     });
   }
 
-  // Trips
-  if (a === b && b === c) {
-    return logResult({
-      dice,
-      rollName: "Trips",
-      result: "instant_win",
-      point: null,
-      isCelo: false,
-      isTrips: true,
-    });
-  }
-
-  // Pair + odd
-  let pair: number | null = null;
-  let odd: number | null = null;
+  // 4) Pair + singleton: singleton 1 — DICE / automatic loss (e.g. 6,6,1)
+  let singleton: number | null = null;
   if (a === b) {
-    pair = a;
-    odd = c;
+    singleton = c;
   } else if (b === c) {
-    pair = b;
-    odd = a;
+    singleton = a;
   } else if (a === c) {
-    pair = a;
-    odd = b;
+    singleton = b;
   }
 
-  if (pair !== null && odd !== null) {
-    if (odd === 6) {
+  if (singleton !== null) {
+    if (singleton === 1) {
       return logResult({
         dice,
-        rollName: "Head Crack",
-        result: "instant_win",
-        point: null,
-        isCelo: false,
-        isTrips: false,
-      });
-    }
-    if (odd === 1) {
-      return logResult({
-        dice,
-        rollName: "Dick",
+        rollName: "DICE • AUTOMATIC LOSS",
         result: "instant_loss",
         point: null,
         isCelo: false,
         isTrips: false,
       });
     }
-    const pointNameByOdd: Record<number, string> = {
-      2: "Shorty",
-      3: "Girl",
-      4: "Zoe",
-      5: "Pound",
-    };
-    if (pointNameByOdd[odd]) {
-      return logResult({
-        dice,
-        rollName: pointNameByOdd[odd]!,
-        result: "point",
-        point: odd,
-        isCelo: false,
-        isTrips: false,
-      });
-    }
+    return logResult({
+      dice,
+      rollName: `POINT ${singleton}`,
+      result: "point",
+      point: singleton,
+      isCelo: false,
+      isTrips: false,
+    });
   }
 
-  // No count
   return logResult({
     dice,
-    rollName: "No Count",
+    rollName: "NO POINT • REROLL",
     result: "no_count",
     point: null,
     isCelo: false,

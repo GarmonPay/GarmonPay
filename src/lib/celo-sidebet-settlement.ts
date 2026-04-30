@@ -66,7 +66,11 @@ export function resolveSideBetCreatorWins(args: {
     }
     case "shit": {
       if (bankerDiceResult !== "instant_loss") return false;
-      return name.includes("SHIT");
+      return (
+        name.includes("SHIT") ||
+        name.includes("DICK") ||
+        name.includes("DICE")
+      );
     }
     case "trips": {
       if (bankerDiceResult !== "instant_win") return false;

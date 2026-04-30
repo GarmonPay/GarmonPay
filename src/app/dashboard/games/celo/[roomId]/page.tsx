@@ -3595,7 +3595,7 @@ export default function CeloRoomPage() {
         const trip = tripletRaw;
         rememberRealFeltDice(trip);
         feltTiedToRoundIdRef.current = round.id;
-        const rn = String(rj.rollName ?? "No Count");
+        const rn = String(rj.rollName ?? "NO POINT • REROLL");
         setRollName(null);
         setRollPoint(null);
         setNoCountReveal({ dice: trip, rollName: rn });
@@ -4646,7 +4646,7 @@ export default function CeloRoomPage() {
                       <p
                         className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
                       >
-                        NO COUNT — Roll Again
+                        NO POINT — Roll Again
                       </p>
                       {noCountReveal.rollName ? (
                         <p className="text-center font-mono text-xs text-amber-100/75">

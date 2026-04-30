@@ -4,43 +4,33 @@ import { evaluateRoll } from "./celo-engine";
 const d3 = (a: number, b: number, c: number) =>
   evaluateRoll([a, b, c] as [1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6, 1 | 2 | 3 | 4 | 5 | 6]);
 
-describe("evaluateRoll (authentic C-Lo rules)", () => {
-  it("1-1-1 is instant_win trips", () => {
+describe("evaluateRoll (C-Lo classification)", () => {
+  it("[6,6,1] => DICE auto_loss", () => {
+    const r = d3(6, 6, 1);
+    expect(r.result).toBe("instant_loss");
+    expect(r.rollName).toBe("DICE • AUTOMATIC LOSS");
+  });
+
+  it("[5,5,1] => DICE auto_loss", () => {
+    const r = d3(5, 5, 1);
+    expect(r.result).toBe("instant_loss");
+    expect(r.rollName).toBe("DICE • AUTOMATIC LOSS");
+  });
+
+  it("[2,2,1] => DICE auto_loss", () => {
+    const r = d3(2, 2, 1);
+    expect(r.result).toBe("instant_loss");
+    expect(r.rollName).toBe("DICE • AUTOMATIC LOSS");
+  });
+
+  it("[1,1,1] => ACE OUT auto_win", () => {
     const r = d3(1, 1, 1);
     expect(r.result).toBe("instant_win");
-    expect(r.rollName).toBe("Trips");
+    expect(r.rollName).toBe("ACE OUT • AUTOMATIC WIN");
+    expect(r.isTrips).toBe(true);
   });
 
-  it("2-2-2 and 6-6-6 are instant_win Trips", () => {
-    expect(d3(2, 2, 2).rollName).toBe("Trips");
-    expect(d3(6, 6, 6).rollName).toBe("Trips");
-  });
-
-  it("4-5-6 is C-Lo instant win", () => {
-    const r = d3(4, 5, 6);
-    expect(r.result).toBe("instant_win");
-    expect(r.isCelo).toBe(true);
-    expect(r.rollName).toBe("C-Lo");
-  });
-
-  it("4-5-6 is C-Lo in any order", () => {
-    const permutations: [number, number, number][] = [
-      [4, 5, 6],
-      [4, 6, 5],
-      [5, 4, 6],
-      [5, 6, 4],
-      [6, 4, 5],
-      [6, 5, 4],
-    ];
-    for (const [x, y, z] of permutations) {
-      const r = d3(x, y, z);
-      expect(r.result).toBe("instant_win");
-      expect(r.rollName).toBe("C-Lo");
-      expect(r.isCelo).toBe(true);
-    }
-  });
-
-  it("1-2-3 is DICK automatic loss in any order", () => {
+  it("[1,2,3] any order => DICK auto_loss", () => {
     const permutations: [number, number, number][] = [
       [1, 2, 3],
       [1, 3, 2],
@@ -56,66 +46,52 @@ describe("evaluateRoll (authentic C-Lo rules)", () => {
     }
   });
 
-  it("1-1-5 is point 5 (Pound)", () => {
-    const r = d3(1, 1, 5);
-    expect(r.result).toBe("point");
-    expect(r.point).toBe(5);
-    expect(r.rollName).toBe("Pound");
+  it("[4,5,6] any order => C-LO auto_win", () => {
+    const permutations: [number, number, number][] = [
+      [4, 5, 6],
+      [4, 6, 5],
+      [5, 4, 6],
+      [5, 6, 4],
+      [6, 4, 5],
+      [6, 5, 4],
+    ];
+    for (const [x, y, z] of permutations) {
+      const r = d3(x, y, z);
+      expect(r.result).toBe("instant_win");
+      expect(r.rollName).toBe("C-LO • AUTOMATIC WIN");
+      expect(r.isCelo).toBe(true);
+    }
   });
 
-  it("1-1-2 is point 2 (Shorty)", () => {
-    const r = d3(1, 1, 2);
-    expect(r.result).toBe("point");
-    expect(r.point).toBe(2);
-    expect(r.rollName).toBe("Shorty");
-  });
-
-  it("1-1-3 is point 3 (Girl)", () => {
-    const r = d3(1, 1, 3);
-    expect(r.result).toBe("point");
-    expect(r.point).toBe(3);
-    expect(r.rollName).toBe("Girl");
-  });
-
-  it("1-1-4 is point 4 (Zoe)", () => {
-    const r = d3(1, 1, 4);
+  it("[6,6,4] => POINT 4", () => {
+    const r = d3(6, 6, 4);
     expect(r.result).toBe("point");
     expect(r.point).toBe(4);
-    expect(r.rollName).toBe("Zoe");
+    expect(r.rollName).toBe("POINT 4");
   });
 
-  it("2-2-1 is Dick (instant loss)", () => {
-    const r = d3(2, 2, 1);
-    expect(r.result).toBe("instant_loss");
-    expect(r.rollName).toBe("Dick");
-  });
-
-  it("5-5-6 is Head Crack (instant win)", () => {
+  it("[5,5,6] => POINT 6 (pair + non-1 singleton)", () => {
     const r = d3(5, 5, 6);
-    expect(r.result).toBe("instant_win");
-    expect(r.rollName).toBe("Head Crack");
+    expect(r.result).toBe("point");
+    expect(r.point).toBe(6);
+    expect(r.rollName).toBe("POINT 6");
   });
 
-  it("1-2-4 is no count", () => {
+  it("[1,1,6] => POINT 6 (pair of 1s + singleton 6)", () => {
+    const r = d3(1, 1, 6);
+    expect(r.result).toBe("point");
+    expect(r.point).toBe(6);
+    expect(r.rollName).toBe("POINT 6");
+  });
+
+  it("non-pair junk => NO POINT reroll", () => {
     const r = d3(1, 2, 4);
     expect(r.result).toBe("no_count");
-    expect(r.rollName).toBe("No Count");
+    expect(r.rollName).toBe("NO POINT • REROLL");
   });
 
-  /** Spot-check authentic street names for rules documentation / regression. */
-  it("cultural rollName map (sample)", () => {
-    const samples: [number, number, number, string][] = [
-      [3, 3, 3, "Trips"],
-      [4, 5, 6, "C-Lo"],
-      [1, 2, 3, "DICK • AUTOMATIC LOSS"],
-      [6, 6, 5, "Pound"],
-      [4, 4, 6, "Head Crack"],
-      [6, 6, 2, "Shorty"],
-      [5, 5, 4, "Zoe"],
-      [4, 4, 3, "Girl"],
-    ];
-    for (const [a, b, c, name] of samples) {
-      expect(d3(a, b, c).rollName).toBe(name);
-    }
+  it("other triples => TRIPS n • AUTOMATIC WIN", () => {
+    expect(d3(2, 2, 2).rollName).toBe("TRIPS 2 • AUTOMATIC WIN");
+    expect(d3(6, 6, 6).rollName).toBe("TRIPS 6 • AUTOMATIC WIN");
   });
 });

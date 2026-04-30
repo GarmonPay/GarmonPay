@@ -58,6 +58,11 @@ const STYLES: Record<
     size: 64,
     mobileSize: 42,
   },
+  DICE: {
+    color: "#EF4444",
+    size: 64,
+    mobileSize: 42,
+  },
   POUND: { color: "#3B82F6", size: 60, mobileSize: 40 },
   POLICE: { color: "#3B82F6", size: 60, mobileSize: 40 },
   ZOE: { color: "#10B981", size: 60, mobileSize: 40 },
@@ -70,6 +75,13 @@ const STYLES: Record<
 
 function getStyle(rollName: string) {
   const upper = rollName.toUpperCase();
+  if (upper.includes("NO POINT")) {
+    return {
+      color: "#9CA3AF",
+      size: 28,
+      mobileSize: 22,
+    };
+  }
   for (const [key, val] of Object.entries(STYLES)) {
     if (upper.includes(key)) {
       if (upper.includes("AUTOMATIC LOSS") || upper.includes("AUTOMATIC WIN")) {
@@ -117,7 +129,9 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
     setScale(0.9);
     setShowPointLine(false);
 
-    const isNoCount = rollName.toLowerCase().includes("no count");
+    const isNoCount =
+      rollName.toLowerCase().includes("no count") ||
+      rollName.toLowerCase().includes("no point");
     const holdMs = isNoCount ? 1200 : 2600;
     const showPointTimerMs = 1000;
 
@@ -235,7 +249,11 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
             }}
           >
             {rollName}
-            {typeof point === "number" && Number.isFinite(point) ? ` • POINT ${point}` : ""}
+            {typeof point === "number" &&
+            Number.isFinite(point) &&
+            !/\bPOINT\s*\d+/i.test(rollName)
+              ? ` • POINT ${point}`
+              : ""}
           </div>
           <div
             style={{
