@@ -148,22 +148,41 @@ function ucCulture(s: string): string {
   return s.trim().toUpperCase();
 }
 
-/** Inactive dice slot — no fake pips before a server roll. */
+/** Inactive dice slot — purple/gold shimmer only (no black pulse boxes). */
 function CeloDiceEmptyState({ diceSize }: { diceSize: number }) {
-  const delayCls = ["", "delay-150", "delay-300"] as const;
+  const r = Math.max(6, Math.round(diceSize * 0.1));
   return (
-    <div
-      className="flex items-center justify-center gap-2 opacity-60 md:gap-3"
-      aria-hidden
-    >
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className={`animate-pulse rounded-md bg-neutral-800/90 shadow-inner ring-1 ring-white/10 ${delayCls[i]}`}
-          style={{ width: diceSize, height: diceSize }}
-        />
-      ))}
-    </div>
+    <>
+      <style>{`
+        @keyframes celo-felt-empty-shimmer {
+          0%, 100% { opacity: 0.7; filter: brightness(1); }
+          50% { opacity: 1; filter: brightness(1.08); }
+        }
+      `}</style>
+      <div
+        className="flex items-center justify-center gap-2 md:gap-3"
+        aria-hidden
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="flex-shrink-0"
+            style={{
+              width: diceSize,
+              height: diceSize,
+              borderRadius: r,
+              background:
+                "linear-gradient(145deg, rgba(139,92,246,0.5) 0%, rgba(88,28,135,0.45) 42%, rgba(245,200,66,0.22) 100%)",
+              border: "1px solid rgba(253,224,71,0.22)",
+              boxShadow:
+                "0 0 16px rgba(167,139,250,0.4), inset 0 1px 0 rgba(253,224,71,0.18)",
+              animation: "celo-felt-empty-shimmer 1.5s ease-in-out infinite",
+              animationDelay: `${i * 140}ms`,
+            }}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -4637,7 +4656,7 @@ export default function CeloRoomPage() {
                     style={{
                       opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
                       boxShadow: isRollingFaces
-                        ? "0 6px 20px rgba(0,0,0,0.4)"
+                        ? "0 8px 28px rgba(124,58,237,0.28), 0 4px 18px rgba(245,200,66,0.14)"
                         : "0 10px 24px rgba(0,0,0,0.5)",
                     }}
                   >

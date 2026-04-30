@@ -14,7 +14,8 @@ export type DiceType =
 export type TumbleVariant = "a" | "b" | "c";
 
 interface Props {
-  value: 1 | 2 | 3 | 4 | 5 | 6;
+  /** Settled pip face; invalid/null shows a non-black shimmer (unless `blank`). */
+  value?: 1 | 2 | 3 | 4 | 5 | 6 | null;
   diceType?: DiceType;
   size?: number;
   rolling?: boolean;
@@ -304,10 +305,56 @@ function tumbleVariantCss(id: string, variant: TumbleVariant): string {
         ${jC}`;
 }
 
+/** Rolling “neutral” cube — purple/gold brand feel, never flat black. */
 const BLANK_FACE =
-  "linear-gradient(145deg, #3f3f46 0%, #27272a 45%, #18181b 100%)";
+  "linear-gradient(145deg, #8B5CF6 0%, #6D28D9 38%, #5B21B6 68%, #4C1D95 100%)";
 const BLANK_RIM =
-  "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.35) 100%)";
+  "linear-gradient(180deg, rgba(253,224,71,0.42) 0%, rgba(91,33,182,0.55) 55%, rgba(49,46,129,0.65) 100%)";
+
+const SHIMMER_STYLE = `
+@keyframes celo-dice-slot-shimmer {
+  0%, 100% { opacity: 0.72; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.12); }
+}
+`;
+
+function DiceValueShimmer({ size }: { size: number }) {
+  const r = Math.round(size * 0.1);
+  return (
+    <div
+      className="relative flex flex-shrink-0 items-center justify-center"
+      style={{
+        width: size * 1.1,
+        height: size * 1.1,
+        margin: "0 2px",
+      }}
+      aria-hidden
+    >
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: r,
+          background:
+            "linear-gradient(145deg, rgba(139,92,246,0.58) 0%, rgba(88,28,135,0.52) 45%, rgba(245,200,66,0.32) 100%)",
+          border: "1px solid rgba(253,224,71,0.28)",
+          boxShadow:
+            "0 0 18px rgba(167,139,250,0.5), 0 0 28px rgba(245,200,66,0.15), inset 0 1px 0 rgba(253,224,71,0.22)",
+          animation: "celo-dice-slot-shimmer 1.35s ease-in-out infinite",
+        }}
+      />
+    </div>
+  );
+}
+
+function isValidDie(v: unknown): v is 1 | 2 | 3 | 4 | 5 | 6 {
+  return (
+    typeof v === "number" &&
+    Number.isInteger(v) &&
+    v >= 1 &&
+    v <= 6
+  );
+}
 
 export default function DiceFace({
   value,
@@ -319,14 +366,21 @@ export default function DiceFace({
   variant = "a",
   durationSec = 1.8,
 }: Props) {
+  const dieOk = blank || isValidDie(value);
+  const resolvedPip: 1 | 2 | 3 | 4 | 5 | 6 = blank
+    ? 1
+    : isValidDie(value)
+      ? value
+      : 1;
+
   const id = useId().replace(/:/g, "");
   const slug = `d3d-${id}`;
   const s = blank
     ? {
         face: BLANK_FACE,
         rim: BLANK_RIM,
-        dot: "#71717a",
-        dotGlow: "rgba(113,113,122,0.2)",
+        dot: "#E9D5FF",
+        dotGlow: "rgba(233,213,255,0.35)",
         pipShadow: "none",
       }
     : STYLES[diceType];
@@ -334,7 +388,7 @@ export default function DiceFace({
   const pipSize = Math.round(size * 0.16);
   const pad = Math.round(size * 0.11);
   const hz = size / 2;
-  const fin = FINAL[value] ?? { rx: 0, ry: 0 };
+  const fin = FINAL[resolvedPip] ?? { rx: 0, ry: 0 };
   const settledT = `translate3d(0,0,0) rotateX(${fin.rx}deg) rotateY(${fin.ry}deg) rotateZ(0deg)`;
   const wobble0 = `translate3d(0,0,0) rotateX(${fin.rx + 5}deg) rotateY(${fin.ry}deg) rotateZ(0deg)`;
   const wobble1 = `translate3d(0,0,0) rotateX(${fin.rx}deg) rotateY(${fin.ry + 4}deg) rotateZ(0deg)`;
@@ -351,9 +405,19 @@ export default function DiceFace({
     wasRolling.current = rolling;
   }, [rolling]);
 
+  if (!blank && !dieOk) {
+    return (
+      <>
+        <style>{`${SHIMMER_STYLE}`}</style>
+        <DiceValueShimmer size={size} />
+      </>
+    );
+  }
+
   return (
     <>
       <style>{`
+        ${SHIMMER_STYLE}
         ${variantCss}
         @keyframes ${slug}-nudge {
           0%   { transform: ${wobble0}; }
@@ -491,9 +555,13 @@ export default function DiceFace({
                         WebkitBackfaceVisibility: "hidden",
                         backfaceVisibility: "hidden",
                         background: s.rim,
-                        border: "1px solid rgba(0,0,0,0.38)",
+                        border: blank
+                          ? "1px solid rgba(253,224,71,0.32)"
+                          : "1px solid rgba(0,0,0,0.38)",
                         borderRadius: r,
-                        boxShadow: "0 0 0 0.5px rgba(0,0,0,0.2)",
+                        boxShadow: blank
+                          ? "0 0 10px rgba(167,139,250,0.35), 0 0 0 0.5px rgba(245,200,66,0.12)"
+                          : "0 0 0 0.5px rgba(0,0,0,0.2)",
                       } as React.CSSProperties
                     }
                   >
@@ -512,8 +580,12 @@ export default function DiceFace({
                       className="pointer-events-none absolute rounded-[inherit]"
                       style={{
                         inset: 0,
-                        background:
-                          "linear-gradient(125deg, rgba(255,255,255,0.18) 0%, transparent 40%, rgba(0,0,0,0.1) 100%)",
+                        background: blank
+                          ? "linear-gradient(125deg, rgba(255,255,255,0.22) 0%, transparent 38%, rgba(245,200,66,0.12) 55%, rgba(76,29,149,0.2) 100%)"
+                          : "linear-gradient(125deg, rgba(255,255,255,0.18) 0%, transparent 40%, rgba(0,0,0,0.1) 100%)",
+                        boxShadow: blank
+                          ? "inset 0 0 12px rgba(167,139,250,0.25)"
+                          : undefined,
                       }}
                     />
                   </div>

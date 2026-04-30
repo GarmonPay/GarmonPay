@@ -21,6 +21,12 @@ function isMissingSettlementVersionError(err: { message?: string; code?: string 
   return msg.includes("schema cache") || msg.includes("column");
 }
 
+function isMissingIdlePreviewDiceColumnError(err: { message?: string; code?: string } | null): boolean {
+  const msg = String(err?.message ?? "").toLowerCase();
+  if (!msg.includes("idle_preview_dice")) return false;
+  return msg.includes("schema cache") || msg.includes("column") || msg.includes("could not find");
+}
+
 /**
  * Banker starts the round: creates celo_rounds (banker_rolling) and sets room to rolling.
  * Requires at least one staked non-banker player (posted entry).
@@ -151,41 +157,59 @@ export async function POST(request: Request) {
     .eq("room_id", roomId);
   const roundNumber = (prev ?? 0) + 1;
   const idlePreviewDice = generateCeloIdlePreviewDiceTriplet();
+  const insertBase = {
+    room_id: roomId,
+    round_number: roundNumber,
+    banker_id: userId,
+    status: "banker_rolling" as const,
+    prize_pool_sc: prizePool,
+    platform_fee_sc: 0,
+    bank_covered: false,
+    bank_at_round_start_sc: curBank,
+  };
   let round: Record<string, unknown> | null = null;
   let insErr: { message?: string; code?: string } | null = null;
+
   ({ data: round, error: insErr } = await adminClient
     .from("celo_rounds")
     .insert({
-      room_id: roomId,
-      round_number: roundNumber,
-      banker_id: userId,
+      ...insertBase,
       settlement_version: 2,
-      status: "banker_rolling",
-      prize_pool_sc: prizePool,
-      platform_fee_sc: 0,
-      bank_covered: false,
-      bank_at_round_start_sc: curBank,
       idle_preview_dice: idlePreviewDice,
     })
     .select("*")
     .single());
+
+  if (insErr && isMissingIdlePreviewDiceColumnError(insErr)) {
+    ({ data: round, error: insErr } = await adminClient
+      .from("celo_rounds")
+      .insert({
+        ...insertBase,
+        settlement_version: 2,
+      })
+      .select("*")
+      .single());
+  }
+
   if (insErr && isMissingSettlementVersionError(insErr)) {
     ({ data: round, error: insErr } = await adminClient
       .from("celo_rounds")
       .insert({
-        room_id: roomId,
-        round_number: roundNumber,
-        banker_id: userId,
-        status: "banker_rolling",
-        prize_pool_sc: prizePool,
-        platform_fee_sc: 0,
-        bank_covered: false,
-        bank_at_round_start_sc: curBank,
+        ...insertBase,
         idle_preview_dice: idlePreviewDice,
       })
       .select("*")
       .single());
   }
+
+  if (insErr && isMissingIdlePreviewDiceColumnError(insErr)) {
+    ({ data: round, error: insErr } = await adminClient
+      .from("celo_rounds")
+      .insert({ ...insertBase })
+      .select("*")
+      .single());
+  }
+
   if (insErr || !round) {
     return NextResponse.json(
       { error: insErr?.message ?? "Could not start round" },
