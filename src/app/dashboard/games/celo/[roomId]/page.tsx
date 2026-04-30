@@ -5033,8 +5033,8 @@ export default function CeloRoomPage() {
                               }}
                             >
                               {joinSubmitting
-                                ? "Posting…"
-                                : `Post Entry — ${entryAmount.toLocaleString()} GPC`}
+                                ? "Joining…"
+                                : `JOIN ROUND — ${entryAmount.toLocaleString()} GPC`}
                             </button>
                           </div>
                         </div>
