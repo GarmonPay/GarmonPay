@@ -7,7 +7,12 @@ import {
 } from "@/lib/celo-player-state";
 import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
-const STARTABLE_ROOM_STATUSES = new Set(["waiting", "active", "entry_phase"]);
+const STARTABLE_ROOM_STATUSES = new Set([
+  "waiting",
+  "active",
+  "entry_phase",
+  "bank_takeover",
+]);
 
 function isMissingSettlementVersionError(err: { message?: string; code?: string } | null): boolean {
   const msg = String(err?.message ?? "").toLowerCase();

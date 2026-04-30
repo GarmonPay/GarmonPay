@@ -141,6 +141,7 @@ export async function POST(request: Request) {
       current_bank_sc: nextBank,
       current_bank_cents: nextBank,
       bank_busted: false,
+      status: "waiting",
       last_activity: new Date().toISOString(),
     })
     .eq("id", roomId)

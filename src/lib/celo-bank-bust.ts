@@ -101,6 +101,14 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
   };
   const previousBankerId = room.banker_id ? String(room.banker_id) : null;
   const maxPlayers = Math.floor(Number(room.max_players) || 10);
+  const oldBankAmount = Math.max(
+    0,
+    Math.floor(
+      Number(
+        (roomRaw as { current_bank_sc?: number | null }).current_bank_sc ?? 0
+      )
+    )
+  );
 
   if (!previousBankerId) {
     await demoteAllBankerRowsToPlayers(admin, roomId, maxPlayers);
@@ -109,6 +117,7 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       .update({
         current_bank_sc: 0,
         current_bank_cents: 0,
+        banker_reserve_sc: 0,
         bank_busted: true,
       })
       .eq("id", roomId);
@@ -120,6 +129,15 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       bankBusted: true,
       winnerUserId: bustWinnerUserId,
       action,
+    });
+    console.log("[C-Lo Bank Takeover]", {
+      roomId,
+      oldBankerId: previousBankerId,
+      newBankerId: null,
+      winningPlayerId: bustWinnerUserId ?? null,
+      oldBankAmount,
+      newBankAmount: 0,
+      roomStatus: "waiting",
     });
     return;
   }
@@ -140,8 +158,9 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
         banker_id: winner,
         current_bank_sc: 0,
         current_bank_cents: 0,
+        banker_reserve_sc: 0,
         bank_busted: true,
-        status: "waiting",
+        status: "bank_takeover",
         last_activity: new Date().toISOString(),
       })
       .eq("id", roomId);
@@ -154,6 +173,15 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       winnerUserId: winner,
       action,
     });
+    console.log("[C-Lo Bank Takeover]", {
+      roomId,
+      oldBankerId: previousBankerId,
+      newBankerId: winner,
+      winningPlayerId: winner,
+      oldBankAmount,
+      newBankAmount: 0,
+      room: { status: "bank_takeover" },
+    });
     return;
   }
 
@@ -165,6 +193,7 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       banker_id: null,
       current_bank_sc: 0,
       current_bank_cents: 0,
+      banker_reserve_sc: 0,
       bank_busted: true,
     })
     .eq("id", roomId);
@@ -177,5 +206,14 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
     bankBusted: true,
     winnerUserId: null,
     action,
+  });
+  console.log("[C-Lo Bank Takeover]", {
+    roomId,
+    oldBankerId: previousBankerId,
+    newBankerId: null,
+    winningPlayerId: null,
+    oldBankAmount,
+    newBankAmount: 0,
+    roomStatus: "waiting",
   });
 }

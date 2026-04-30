@@ -16,6 +16,7 @@ import {
 } from "@/lib/celo-accounting";
 import { nextPlayerRollDeadlineIso } from "@/lib/celo-player-roll-constants";
 import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
+import { nextRoomStatusAfterRoundComplete } from "@/lib/celo-room-status";
 
 const RESULT_DISPLAY_MS = 4000;
 
@@ -174,12 +175,13 @@ export async function finishOrAdvanceAfterPlayerResolvingRoll(
         }
       );
       await delayBeforeRoomReset();
+      const nextStatus = await nextRoomStatusAfterRoundComplete(admin, room.id);
       await admin
         .from("celo_rooms")
         .update({
           total_rounds: (room.total_rounds ?? 0) + 1,
           last_activity: now,
-          status: "waiting",
+          status: nextStatus,
         })
         .eq("id", room.id);
       await resetCeloRoomEntries(admin, room.id);

@@ -145,7 +145,7 @@ async function runAbandonmentCleanup(request: Request) {
     .select(
       "id, banker_id, status, last_activity, abandonment_fee_charged, abandoned_at"
     )
-    .in("status", ["waiting", "active", "rolling", "entry_phase"])
+    .in("status", ["waiting", "active", "rolling", "entry_phase", "bank_takeover"])
     .lt("last_activity", cutoff)
     .or("abandonment_fee_charged.is.null,abandonment_fee_charged.eq.false")
     .is("paused_at", null);
@@ -277,7 +277,7 @@ async function runAbandonmentCleanup(request: Request) {
         last_activity: now,
       })
       .eq("id", roomId)
-      .in("status", ["waiting", "active", "rolling", "entry_phase"]);
+      .in("status", ["waiting", "active", "rolling", "entry_phase", "bank_takeover"]);
 
     if (upErr) {
       console.error("[C-Lo abandonment] room update failed", {

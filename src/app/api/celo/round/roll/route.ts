@@ -25,6 +25,7 @@ import {
   resolvePlayerRollTimeout,
 } from "@/lib/celo-player-timeout";
 import { normalizeCeloUserId } from "@/lib/celo-player-state";
+import { nextRoomStatusAfterRoundComplete } from "@/lib/celo-room-status";
 
 const ROLL_ANIMATION_MS = 1500;
 /** Pause after terminal round writes so clients can display final dice/outcome before reset. */
@@ -605,6 +606,7 @@ async function handleBankerRoll(
     );
     const newBank = await celoAdjustRoomBank(admin, room.id, bankerWins);
     await delayBeforeRoomReset();
+    const roomStatusAfterIw = await nextRoomStatusAfterRoundComplete(admin, room.id);
     await admin
       .from("celo_rooms")
       .update({
@@ -612,7 +614,7 @@ async function handleBankerRoll(
         banker_celo_at: roll.isCelo ? now : room.banker_celo_at,
         total_rounds: (room.total_rounds ?? 0) + 1,
         last_activity: now,
-        status: "waiting",
+        status: roomStatusAfterIw,
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
@@ -790,13 +792,14 @@ async function handleBankerRoll(
     );
 
     await delayBeforeRoomReset();
+    const roomStatusAfterLoss = await nextRoomStatusAfterRoundComplete(admin, room.id);
     await admin
       .from("celo_rooms")
       .update({
         last_round_was_celo: false,
         total_rounds: (room.total_rounds ?? 0) + 1,
         last_activity: now,
-        status: "waiting",
+        status: roomStatusAfterLoss,
       })
       .eq("id", room.id);
     await resetRoomEntries(admin, room.id);
@@ -1049,12 +1052,13 @@ async function handlePlayerRoll(
 
       if (finalizedPush) {
         await delayBeforeRoomReset();
+        const roomStatusAfterPush = await nextRoomStatusAfterRoundComplete(admin, room.id);
         await admin
           .from("celo_rooms")
           .update({
             total_rounds: (room.total_rounds ?? 0) + 1,
             last_activity: now,
-            status: "waiting",
+            status: roomStatusAfterPush,
           })
           .eq("id", room.id);
         await resetRoomEntries(admin, room.id);

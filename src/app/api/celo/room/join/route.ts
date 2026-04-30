@@ -51,8 +51,9 @@ export async function POST(request: Request) {
   if (CLOSED.has(String(room.status))) {
     return NextResponse.json({ error: "Room is closed" }, { status: 400 });
   }
+  const rs = String(room.status);
   const allowSeat =
-    String(room.status) === "waiting" || String(room.status) === "entry_phase";
+    rs === "waiting" || rs === "entry_phase" || rs === "bank_takeover";
   if (!allowSeat) {
     return NextResponse.json(
       { error: "This room is not accepting new seats right now" },

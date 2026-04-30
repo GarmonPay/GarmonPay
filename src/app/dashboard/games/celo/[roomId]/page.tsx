@@ -677,6 +677,11 @@ export default function CeloRoomPage() {
   const rollFetchAbortRef = useRef<AbortController | null>(null);
   const diceRef = useRef<number[] | null>(null);
   const feltTiedToRoundIdRef = useRef<string | null>(null);
+  /** Last roll response takeover lineage for debug logs (server sends ids on bank stop). */
+  const lastBankTakeoverMetaRef = useRef<{
+    oldBankerId: string | null;
+    newBankerId: string | null;
+  } | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
   /** Roll API: 30s product clock + bank animation / network slack. */
   const ROLL_HARD_TIMEOUT_MS = CELO_PLAYER_ROLL_TIMEOUT_MS + 25_000;
@@ -1834,6 +1839,15 @@ export default function CeloRoomPage() {
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
+  /** Full bank won / bust: successor banker assigned, bank at 0 — not generic “waiting”. */
+  const isBankTakeoverUi =
+    !!room &&
+    !inProgress &&
+    (roomStatusLc === "bank_takeover" ||
+      (room.bank_busted === true &&
+        bankVal(room) <= 0 &&
+        room.banker_id != null &&
+        String(room.banker_id).trim() !== ""));
   const roomPausedBlocking = isRoomPauseBlockingActions(room);
   const roomPauseActive = isRoomPauseActive(room);
   const hasActiveRound = !!(
@@ -1846,7 +1860,7 @@ export default function CeloRoomPage() {
     room &&
       isCurrentBanker &&
       Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
-      room.bank_busted === true &&
+      (room.bank_busted === true || roomStatusLc === "bank_takeover") &&
       roomStatusLc !== "cancelled" &&
       roomStatusLc !== "closed"
   );
@@ -1878,6 +1892,20 @@ export default function CeloRoomPage() {
       pauseVoteCount,
     });
   }, [me, room?.banker_id, isCurrentBanker, pauseRequested, pauseVoteCount]);
+
+  useEffect(() => {
+    if (!room || !isBankTakeoverUi) return;
+    const meta = lastBankTakeoverMetaRef.current;
+    console.log("[C-Lo Bank Takeover]", {
+      roomId: room.id,
+      oldBankerId: meta?.oldBankerId ?? null,
+      newBankerId: room.banker_id,
+      winningPlayerId: room.banker_id,
+      oldBankAmount: null,
+      newBankAmount: bankVal(room),
+      roomStatus: room.status,
+    });
+  }, [room?.id, room?.banker_id, room?.status, isBankTakeoverUi]);
 
   useEffect(() => {
     // If banker ownership moves away from this user, immediately clear setup interaction state.
@@ -2396,6 +2424,11 @@ export default function CeloRoomPage() {
     [players]
   );
 
+  const takeoverBankerDisplayName = useMemo(() => {
+    if (!room?.banker_id) return "the new banker";
+    return celoBannerSeatLabel(players, room.banker_id);
+  }, [players, room?.banker_id]);
+
   const myEntryScRaw = Math.max(
     Math.floor(Number(myRow?.stake_amount_sc ?? 0)),
     Math.floor(Number(myRow?.entry_sc ?? 0))
@@ -2405,6 +2438,9 @@ export default function CeloRoomPage() {
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
+    if (isBankTakeoverUi) {
+      return "";
+    }
     if (needsBankSetup) {
       return "You stopped the bank. Set your rules and fund the bank to continue.";
     }
@@ -2420,6 +2456,7 @@ export default function CeloRoomPage() {
       return "Waiting for new banker";
     }
     if (
+      !isBankTakeoverUi &&
       room.bank_busted !== true &&
       room.banker_id != null &&
       bankVal(room) <= 0 &&
@@ -2593,6 +2630,7 @@ export default function CeloRoomPage() {
     roomPausedBlocking;
   const canOfferBankerPause =
     isCurrentBanker &&
+    roomStatusLc !== "bank_takeover" &&
     ["waiting", "active"].includes(roomStatusLc) &&
     !hasActiveRound &&
     !roomInLiveRound &&
@@ -2602,6 +2640,7 @@ export default function CeloRoomPage() {
   const canOfferPlayerPauseVote =
     !isCurrentBanker &&
     isPlayer &&
+    roomStatusLc !== "bank_takeover" &&
     ["waiting", "active", "entry_phase"].includes(roomStatusLc) &&
     !hasActiveRound &&
     !roomInLiveRound &&
@@ -2614,6 +2653,7 @@ export default function CeloRoomPage() {
     !needsBankSetup &&
     !hasActiveRound &&
     !roomInLiveRound &&
+    roomPhase !== "bank_takeover" &&
     ["waiting", "active", "entry_phase"].includes(roomPhase) &&
     bankVal(room) > 0 &&
     room.bank_busted !== true &&
@@ -2659,10 +2699,16 @@ export default function CeloRoomPage() {
     if (roomPhase === "rolling" && !round) {
       return "SYNCING ROUND…";
     }
+    if (isBankTakeoverUi) {
+      return isCurrentBanker
+        ? "YOU ARE THE BANKER — FUND THE TABLE"
+        : "BANK TAKEN OVER — WAITING FOR NEW BANKER";
+    }
     if (
       roomPhase === "waiting" ||
       roomPhase === "entry_phase" ||
-      roomPhase === "active"
+      roomPhase === "active" ||
+      roomPhase === "bank_takeover"
     ) {
       if (isBanker) {
         return stakedPlayerCount > 0
@@ -3644,6 +3690,20 @@ export default function CeloRoomPage() {
       );
       lastRealtimeUpdateRef.current = Date.now();
       await fetchAll();
+      if (rj.bankStopped === true) {
+        lastBankTakeoverMetaRef.current = {
+          oldBankerId:
+            rj.oldBankerId != null && String(rj.oldBankerId).trim() !== ""
+              ? String(rj.oldBankerId)
+              : null,
+          newBankerId:
+            rj.newBankerId != null && String(rj.newBankerId).trim() !== ""
+              ? String(rj.newBankerId)
+              : null,
+        };
+        await new Promise((r) => setTimeout(r, 250));
+        await fetchAll();
+      }
       if (rj.bankStopped === true && rj.newBankerId) {
         const nid = String(rj.newBankerId);
         const oid =
@@ -4427,9 +4487,24 @@ export default function CeloRoomPage() {
                 </div>
               </div>
 
-              <p className="relative z-10 mx-auto mb-3 max-w-md text-center text-xs leading-relaxed text-zinc-300/95 md:mb-4 md:text-sm">
-                {tableStatusText}
-              </p>
+              {isBankTakeoverUi ? (
+                <div className="relative z-10 mx-auto mb-3 max-w-md text-center md:mb-4">
+                  <p
+                    className={`text-base font-bold uppercase tracking-[0.14em] text-amber-200 sm:text-lg ${cinzel.className}`}
+                  >
+                    BANK TAKEN OVER
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-zinc-300/95 md:text-sm">
+                    {isCurrentBanker
+                      ? "You are now the banker. Fund the bank and set room rules below."
+                      : `Waiting for ${takeoverBankerDisplayName} to fund the bank.`}
+                  </p>
+                </div>
+              ) : (
+                <p className="relative z-10 mx-auto mb-3 max-w-md text-center text-xs leading-relaxed text-zinc-300/95 md:mb-4 md:text-sm">
+                  {tableStatusText}
+                </p>
+              )}
 
               {showBankerPointCallout && round && (
                 <div
@@ -4570,15 +4645,19 @@ export default function CeloRoomPage() {
                     {needsBankSetup && room && (
                       <div className="mx-auto w-full max-w-md rounded-xl border border-amber-500/40 bg-amber-950/35 p-3">
                         <p className={`text-sm font-bold text-amber-100 ${cinzel.className}`}>
-                          New Banker Setup
+                          {roomStatusLc === "bank_takeover"
+                            ? "You are now the banker"
+                            : "New Banker Setup"}
                         </p>
                         <p className="mt-1 text-xs text-amber-200/85">
-                          You stopped the bank. Set your rules and fund the bank to continue.
+                          {roomStatusLc === "bank_takeover"
+                            ? "Fund the bank and edit room rules below. Players can join once the table is funded."
+                            : "You stopped the bank. Set your rules and fund the bank to continue."}
                         </p>
                         {newBankerSetupError && (
                           <p className="mt-2 text-xs text-red-300">{newBankerSetupError}</p>
                         )}
-                        <div className="mt-2 space-y-2">
+                        <div id="celo-edit-room-rules" className="mt-2 space-y-2">
                           <label className="block text-left text-xs text-zinc-300">
                             Room name
                             <input
@@ -4632,15 +4711,28 @@ export default function CeloRoomPage() {
                             </select>
                           </label>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleNewBankerSetup()}
-                          disabled={newBankerSetupBusy || roomPausedBlocking}
-                          className="mt-3 w-full min-h-[46px] rounded-xl px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
-                          style={{ background: "linear-gradient(135deg, #F5C842, #B8860B)" }}
-                        >
-                          {newBankerSetupBusy ? "Setting up…" : "Fund Bank & Continue"}
-                        </button>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={() => void handleNewBankerSetup()}
+                            disabled={newBankerSetupBusy || roomPausedBlocking}
+                            className="min-h-[46px] flex-1 rounded-xl px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
+                            style={{ background: "linear-gradient(135deg, #F5C842, #B8860B)" }}
+                          >
+                            {newBankerSetupBusy ? "Setting up…" : "Fund Bank"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              document
+                                .getElementById("celo-edit-room-rules")
+                                ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                            }
+                            className="min-h-[46px] flex-1 rounded-xl border border-amber-400/50 bg-transparent px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-950/40"
+                          >
+                            Edit Room Rules
+                          </button>
+                        </div>
                       </div>
                     )}
                     {canRoll && !bannerOverlayVisible && (
