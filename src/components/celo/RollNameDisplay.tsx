@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 interface Props {
   rollName: string | null;
+  point?: number | null;
   onComplete?: () => void;
 }
 
@@ -79,11 +80,12 @@ function getStyle(rollName: string) {
   };
 }
 
-export default function RollNameDisplay({ rollName, onComplete }: Props) {
+export default function RollNameDisplay({ rollName, point, onComplete }: Props) {
   const [visible, setVisible] = useState(false);
   const [opacity, setOpacity] = useState(0);
-  const [scale, setScale] = useState(0.5);
+  const [scale, setScale] = useState(0.9);
   const [isMobile, setIsMobile] = useState(false);
+  const [showPointLine, setShowPointLine] = useState(false);
 
   useEffect(() => {
     const m = () =>
@@ -103,18 +105,25 @@ export default function RollNameDisplay({ rollName, onComplete }: Props) {
 
     setVisible(true);
     setOpacity(0);
-    setScale(0.5);
+    setScale(0.9);
+    setShowPointLine(false);
 
     const isNoCount = rollName.toLowerCase().includes("no count");
-    const holdMs = isNoCount ? 1000 : 2500;
+    const holdMs = isNoCount ? 1200 : 2600;
+    const showPointTimerMs = 1000;
 
     const raf1 = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setOpacity(1);
-        setScale(1.1);
-        setTimeout(() => setScale(1), 200);
+        setScale(1.05);
+        setTimeout(() => setScale(1), 220);
       });
     });
+    const phaseTimer = setTimeout(() => {
+      if (typeof point === "number" && Number.isFinite(point)) {
+        setShowPointLine(true);
+      }
+    }, showPointTimerMs);
 
     const timer = setTimeout(() => {
       setOpacity(0);
@@ -127,9 +136,10 @@ export default function RollNameDisplay({ rollName, onComplete }: Props) {
 
     return () => {
       cancelAnimationFrame(raf1);
+      clearTimeout(phaseTimer);
       clearTimeout(timer);
     };
-  }, [rollName, onComplete]);
+  }, [rollName, point, onComplete]);
 
   if (!visible || !rollName) return null;
 
@@ -156,29 +166,82 @@ export default function RollNameDisplay({ rollName, onComplete }: Props) {
           zIndex: 20,
           pointerEvents: "none",
           opacity,
-          transition: "opacity 0.3s ease",
+          transition: "opacity 0.35s ease",
         }}
       >
         <div
           style={{
+            position: "absolute",
+            inset: "-10%",
+            background:
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.32) 0%, rgba(0,0,0,0.56) 65%, rgba(0,0,0,0) 100%)",
+            filter: "blur(2px)",
+            opacity: 0.85,
+          }}
+        />
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: isMobile ? 4 : 6,
             fontFamily: "var(--font-cinzel-decorative), 'Cinzel Decorative', ui-serif, serif",
             fontSize: isMobile ? style.mobileSize : style.size,
             fontWeight: 900,
-            color: style.color,
             textAlign: "center",
-            textShadow: style.glow
-              ? `0 0 20px ${style.glow},
-               0 0 40px ${style.glow}80`
-              : "none",
             transform: `scale(${scale})`,
-            transition: "transform 0.2s ease",
+            transition: "transform 0.28s ease",
             animation: style.shake ? "screenShake 0.5s ease-in-out" : "none",
             padding: "0 12px",
             lineHeight: 1.1,
             letterSpacing: "0.02em",
           }}
         >
-          {rollName}
+          <div
+            style={{
+              background: "linear-gradient(180deg, #FFE8A3 0%, #F5C842 52%, #B8860B 100%)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              color: style.color,
+              textShadow: style.glow
+                ? `0 0 14px ${style.glow}AA, 0 0 30px ${style.glow}66`
+                : "0 0 12px rgba(245,200,66,0.4)",
+            }}
+          >
+            {rollName}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif",
+              fontSize: isMobile ? 16 : 19,
+              fontWeight: 700,
+              color: "#F6E7B0",
+              opacity: showPointLine ? 0.96 : 0,
+              transform: showPointLine ? "translateY(0)" : "translateY(6px)",
+              transition: "opacity 0.28s ease, transform 0.28s ease",
+              letterSpacing: "0.06em",
+            }}
+          >
+            {rollName}
+            {typeof point === "number" && Number.isFinite(point) ? ` • POINT ${point}` : ""}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif",
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 500,
+              letterSpacing: "0.03em",
+              color: "#F8EFD0",
+              opacity: showPointLine ? 0.55 : 0,
+              transform: showPointLine ? "translateY(0)" : "translateY(4px)",
+              transition: "opacity 0.28s ease, transform 0.28s ease",
+            }}
+          >
+            Roll higher to win • Match to push • Lower to lose
+          </div>
         </div>
       </div>
     </>

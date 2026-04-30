@@ -44,8 +44,10 @@ import {
 import { CELO_PLAYER_ROLL_TIMEOUT_MS } from "@/lib/celo-player-roll-constants";
 
 const CELO_DEBUG = process.env.NODE_ENV === "development";
-/** Wait after dice are settled before point / roll-name / settlement popups (ms). */
-const CELO_RESULT_REVEAL_DELAY_MS = 3000;
+/** Wait after dice settle before roll-name reveal (ms). */
+const CELO_ROLL_RESULT_REVEAL_DELAY_MS = 500;
+/** Wait before settlement card reveal (ms). */
+const CELO_SETTLEMENT_REVEAL_DELAY_MS = 3000;
 /*
 ALL ROOM STATE UPDATES MUST GO THROUGH applyCeloStateUpdate()
 NO EXCEPTIONS (realtime, fetch, join, roll)
@@ -551,6 +553,7 @@ export default function CeloRoomPage() {
   const [round, setRound] = useState<Round | null>(null);
   const [myBalance, setMyBalance] = useState(0);
   const [rollName, setRollName] = useState<string | null>(null);
+  const [rollPoint, setRollPoint] = useState<number | null>(null);
   const [dice, setDice] = useState<number[] | null>(null);
   const [rolling, setRolling] = useState(false);
   const [rollingAction, setRollingAction] = useState(false);
@@ -733,12 +736,12 @@ export default function CeloRoomPage() {
           resultId,
           settlementId: log?.settlementId ?? null,
           diceSettled: !!diceTrip,
-          delayMs: CELO_RESULT_REVEAL_DELAY_MS,
+          delayMs: CELO_ROLL_RESULT_REVEAL_DELAY_MS,
           shownRollResults: Array.from(shownRollResultIdsRef.current),
           shownSettlements: Array.from(shownSettlementResultIdsRef.current),
         });
         callback();
-      }, CELO_RESULT_REVEAL_DELAY_MS);
+      }, CELO_ROLL_RESULT_REVEAL_DELAY_MS);
     },
     [roomId]
   );
@@ -771,13 +774,13 @@ export default function CeloRoomPage() {
           resultId: null,
           settlementId,
           diceSettled: !!diceTrip,
-          delayMs: CELO_RESULT_REVEAL_DELAY_MS,
+          delayMs: CELO_SETTLEMENT_REVEAL_DELAY_MS,
           shownRollResults: Array.from(shownRollResultIdsRef.current),
           shownSettlements: Array.from(shownSettlementResultIdsRef.current),
         });
         shownSettlementResultIdsRef.current.add(settlementId);
         onShow();
-      }, CELO_RESULT_REVEAL_DELAY_MS);
+      }, CELO_SETTLEMENT_REVEAL_DELAY_MS);
     },
     [roomId]
   );
@@ -1649,7 +1652,15 @@ export default function CeloRoomPage() {
                 const rid = roundRef.current?.id;
                 if (rid) {
                   const resultId = `${rid}:player:${uid}:${t[0]}-${t[1]}-${t[2]}`;
-                  scheduleRollResultReveal(resultId, () => setRollName(rName));
+                  const pointRaw = (n as { point?: unknown }).point;
+                  const rollPt =
+                    typeof pointRaw === "number" && Number.isFinite(pointRaw)
+                      ? pointRaw
+                      : null;
+                  scheduleRollResultReveal(resultId, () => {
+                    setRollPoint(rollPt);
+                    setRollName(rName);
+                  });
                 }
               }
             }
@@ -1830,6 +1841,13 @@ export default function CeloRoomPage() {
   );
 
   useEffect(() => {
+    // If banker ownership moves away from this user, immediately clear setup interaction state.
+    if (needsBankSetup) return;
+    if (newBankerSetupBusy) setNewBankerSetupBusy(false);
+    if (newBankerSetupError) setNewBankerSetupError(null);
+  }, [needsBankSetup, newBankerSetupBusy, newBankerSetupError]);
+
+  useEffect(() => {
     if (!room?.paused_at) return;
     const id = window.setInterval(() => setPauseTick((x) => x + 1), 1000);
     return () => window.clearInterval(id);
@@ -1959,7 +1977,14 @@ export default function CeloRoomPage() {
     const name = String(r.banker_dice_name ?? "").trim();
     if (!trip || !name) return;
     const resultId = `${r.id}:banker:${trip[0]}-${trip[1]}-${trip[2]}`;
-    scheduleRollResultReveal(resultId, () => setRollName(name));
+    const bankerPoint =
+      typeof r.banker_point === "number" && Number.isFinite(r.banker_point)
+        ? r.banker_point
+        : null;
+    scheduleRollResultReveal(resultId, () => {
+      setRollPoint(bankerPoint);
+      setRollName(name);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- round snapshot fields listed
   }, [
     round?.id,
@@ -2719,6 +2744,7 @@ export default function CeloRoomPage() {
     setResultBannerData(null);
     setResultBannerModel(null);
     setRollName(null);
+    setRollPoint(null);
     if (rollResultRevealTimerRef.current) {
       clearTimeout(rollResultRevealTimerRef.current);
       rollResultRevealTimerRef.current = null;
@@ -2740,6 +2766,7 @@ export default function CeloRoomPage() {
     setResultBannerData(null);
     setResultBannerModel(null);
     setRollName(null);
+    setRollPoint(null);
     setDice(null);
     setMessages([]);
     setCurrentPlayerResolvedRoll(false);
@@ -3321,6 +3348,7 @@ export default function CeloRoomPage() {
       setRollingAction(true);
       setRolling(true);
       setRollName(null);
+      setRollPoint(null);
       setRollFetchInfo({ url: rollUrl, status: "pending", body: "", error: "" });
       const [fetchRes] = await Promise.all([
         fetchCeloApi(supabase, rollUrl, {
@@ -3419,6 +3447,7 @@ export default function CeloRoomPage() {
         feltTiedToRoundIdRef.current = round.id;
         const rn = String(rj.rollName ?? "No Count");
         setRollName(null);
+        setRollPoint(null);
         setNoCountReveal({ dice: trip, rollName: rn });
         setRolling(false);
         setRollingAction(false);
@@ -3457,6 +3486,7 @@ export default function CeloRoomPage() {
           setNoCountReveal(null);
           setDice(null);
           setRollName(null);
+          setRollPoint(null);
           void fetchAll();
         }, 1500);
         return;
@@ -3477,7 +3507,15 @@ export default function CeloRoomPage() {
           const resultId = isBanker
             ? `${round.id}:banker:${tripletRaw[0]}-${tripletRaw[1]}-${tripletRaw[2]}`
             : `${round.id}:player:${uid || "unknown"}:${tripletRaw[0]}-${tripletRaw[1]}-${tripletRaw[2]}`;
-          scheduleRollResultReveal(resultId, () => setRollName(name));
+          const pointRaw = (rj as { point?: unknown }).point;
+          const maybePoint =
+            typeof pointRaw === "number" && Number.isFinite(pointRaw)
+              ? pointRaw
+              : null;
+          scheduleRollResultReveal(resultId, () => {
+            setRollPoint(maybePoint);
+            setRollName(name);
+          });
         }
       }
       setRollError(null);
@@ -4309,36 +4347,19 @@ export default function CeloRoomPage() {
 
               {showBankerPointCallout && round && (
                 <div
-                  className="relative z-10 mb-4 w-full max-w-lg rounded-xl border border-amber-500/45 bg-gradient-to-b from-amber-950/55 to-[#0f0a1c] px-4 py-3.5 text-center shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] sm:px-5 sm:py-4"
+                  className="relative z-10 mb-4 w-full max-w-lg rounded-xl border border-amber-500/35 bg-gradient-to-b from-amber-950/45 to-[#0f0a1c] px-4 py-3 text-center shadow-[0_8px_28px_rgba(0,0,0,0.45)] sm:px-5 sm:py-3.5"
                   role="status"
                   aria-live="polite"
                 >
                   <p
-                    className={`text-base font-bold leading-snug text-amber-50 sm:text-lg ${cinzel.className}`}
+                    className={`text-base font-bold leading-snug text-amber-100 sm:text-lg ${cinzel.className}`}
                   >
-                    {String(round.banker_dice_name ?? "").trim()
-                      ? `Banker rolled ${String(round.banker_dice_name).trim()}`
-                      : "Banker set a point"}
+                    {typeof round.banker_point === "number" && Number.isFinite(round.banker_point)
+                      ? `POINT ${round.banker_point} SET`
+                      : "Point set"}
                   </p>
-                  <p
-                    className="mt-1.5 font-mono text-lg font-bold tracking-tight text-white sm:text-xl"
-                    style={{ fontFamily: "ui-monospace, 'Courier New', monospace" }}
-                  >
-                    Point:{" "}
-                    {typeof round.banker_point === "number" &&
-                    Number.isFinite(round.banker_point)
-                      ? round.banker_point
-                      : "—"}
-                  </p>
-                  <p className="mt-2.5 text-xs leading-relaxed text-amber-100/90 sm:text-sm">
-                    Roll higher than the banker&apos;s point to win, lower to lose, or match
-                    to push.
-                  </p>
-                  <p className="mt-3 text-[11px] leading-relaxed text-amber-200/75 sm:text-xs">
-                    When it is your seat to roll, you have {CELO_PLAYER_ROLL_TIMEOUT_MS / 1000}{" "}
-                    seconds. If the timer expires, you forfeit your stake to the banker; the
-                    platform fee applies on that banker win (same as a normal loss), then play
-                    moves to the next seat or the round ends.
+                  <p className="mt-1.5 text-xs leading-relaxed text-amber-100/70 sm:text-sm">
+                    Roll higher to win • Match to push • Lower to lose
                   </p>
                 </div>
               )}
@@ -4417,7 +4438,11 @@ export default function CeloRoomPage() {
                   </div>
                   <RollNameDisplay
                     rollName={noCountReveal ? null : rollName}
-                    onComplete={() => setRollName(null)}
+                    point={noCountReveal ? null : rollPoint}
+                    onComplete={() => {
+                      setRollName(null);
+                      setRollPoint(null);
+                    }}
                   />
                   {noCountReveal ? (
                     <div className="mt-3 flex flex-col items-center gap-1 px-2">
