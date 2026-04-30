@@ -22,7 +22,7 @@ import {
   isRoomPauseActive,
   isRoomPauseBlockingActions,
 } from "@/lib/celo-pause";
-import DiceFace, { type DiceType, type TumbleVariant } from "@/components/celo/DiceFace";
+import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
 import {
