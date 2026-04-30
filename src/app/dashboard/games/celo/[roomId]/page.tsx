@@ -2493,7 +2493,7 @@ export default function CeloRoomPage() {
       return "";
     }
     if (needsBankSetup) {
-      return "You stopped the bank. Set your rules and fund the bank to continue.";
+      return "Bank stopped — fund the bank and set rules to continue.";
     }
     if (
       !isCurrentBanker &&
@@ -2501,7 +2501,7 @@ export default function CeloRoomPage() {
       Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
       roomStatusLc === "waiting"
     ) {
-      return "Bank was stopped. Waiting for the new banker to fund the bank.";
+      return "Bank stopped — waiting for new banker to fund.";
     }
     if (room.bank_busted === true && (room.banker_id == null || room.banker_id === "")) {
       return "Waiting for new banker";
@@ -2513,7 +2513,7 @@ export default function CeloRoomPage() {
       bankVal(room) <= 0 &&
       !inProgress
     ) {
-      return "Syncing table bank…";
+      return "Syncing bank…";
     }
     if (roomStatusLc === "rolling" && !round) {
       return "Syncing round…";
@@ -2528,11 +2528,11 @@ export default function CeloRoomPage() {
     }
     if (roomStatusLc === "entry_phase" && isBanker) {
       return stakedPlayerCount < 1
-        ? "Waiting for players to post entries…"
-        : "When ready, start the round to open the felt.";
+        ? "Waiting for player entries…"
+        : "Start the round when ready.";
     }
     if (roomStatusLc === "waiting" && isBanker && seatedPlayerCount < 1) {
-      return "No players seated yet. Players can post entries when seated.";
+      return "No players seated yet.";
     }
     if (
       (roomStatusLc === "entry_phase" || roomStatusLc === "active") &&
@@ -2540,10 +2540,10 @@ export default function CeloRoomPage() {
       isPlayer &&
       myEntrySc === 0
     ) {
-      return "Post your entry to join this round’s pot.";
+      return "Post entry to join the pot.";
     }
     if (roomStatusLc === "entry_phase" && !isBanker && isPlayer && myEntrySc > 0) {
-      return "Entry posted. Waiting for the banker to start the round…";
+      return "Entry in — waiting for banker to start.";
     }
     if (
       (roomStatusLc === "waiting" || roomStatusLc === "active") &&
@@ -2551,12 +2551,12 @@ export default function CeloRoomPage() {
       isPlayer &&
       myEntrySc > 0
     ) {
-      return "Entry posted. Waiting for the banker to start the round…";
+      return "Entry in — waiting for banker to start.";
     }
     if (roomStatusLc === "waiting" && !isBanker) {
-      return "Waiting for the banker to start the round…";
+      return "Waiting for banker to start…";
     }
-    if (isBanker) return "Start the round when at least one player has posted an entry.";
+    if (isBanker) return "Start round once a player has entered.";
     return "Waiting for banker";
   })();
 
@@ -4242,10 +4242,9 @@ export default function CeloRoomPage() {
     stopBankModalEligible;
 
   const feltW = "min(100%, 28rem)";
-  const feltH = "min(100%, max(13.5rem, 75vw))";
 
   const gamePanelClass =
-    "relative flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col self-center overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-b from-[#0f0a1c] via-[#0a0514] to-[#040208] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.12),0_4px_40px_rgba(120,50,200,0.12),0_24px_80px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5 md:p-6 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:opacity-40 before:shadow-[inset_0_0_60px_rgba(245,200,66,0.06),inset_0_-40px_80px_rgba(0,0,0,0.45)]";
+    "relative flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col self-center overflow-x-hidden max-md:overflow-y-visible md:overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-b from-[#0f0a1c] via-[#0a0514] to-[#040208] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.12),0_4px_40px_rgba(120,50,200,0.12),0_24px_80px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5 md:p-6 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:opacity-40 before:shadow-[inset_0_0_60px_rgba(245,200,66,0.06),inset_0_-40px_80px_rgba(0,0,0,0.45)]";
   const rightRailClass =
     "hidden min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden md:flex md:max-w-[20rem] md:shrink-0 md:self-stretch lg:max-w-[22rem]";
 
@@ -4497,11 +4496,11 @@ export default function CeloRoomPage() {
         )}
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-3 px-4 pb-3 md:gap-5 md:px-6 md:pb-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-3 px-4 pb-3 max-md:pb-14 md:gap-5 md:px-6 md:pb-6">
         <div
           className="grid min-h-0 w-full min-w-0 flex-1 grid-cols-1 place-items-stretch content-stretch gap-4 sm:gap-5 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:items-start md:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-6"
         >
-          <main className="relative z-0 order-1 flex min-w-0 flex-col md:order-none">
+          <main className="relative z-0 order-1 flex min-h-0 min-w-0 flex-col md:order-none">
             <div className={gamePanelClass}>
               <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-1 sm:px-2">
               <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-stretch border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
@@ -4559,7 +4558,7 @@ export default function CeloRoomPage() {
                   </p>
                 </div>
               ) : (
-                <p className="relative z-10 mx-auto mb-3 max-w-md text-center text-xs leading-relaxed text-zinc-300/95 md:mb-4 md:text-sm">
+                <p className="relative z-10 mx-auto mb-2 max-w-md px-1 text-center text-balance text-xs leading-snug text-zinc-300/95 md:mb-4 md:text-sm md:leading-relaxed">
                   {tableStatusText}
                 </p>
               )}
@@ -4593,10 +4592,9 @@ export default function CeloRoomPage() {
                   aria-hidden
                 />
                 <div
-                  className="relative w-full max-w-[280px] min-h-[9rem] md:max-w-[480px] md:min-h-[12rem]"
+                  className="relative w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh)))] md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
                   style={{
                     width: feltW,
-                    height: feltH,
                     borderRadius: "50%",
                     background:
                       "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
@@ -4705,14 +4703,9 @@ export default function CeloRoomPage() {
                 )}
               </div>
 
-              <div className="mt-auto w-full max-w-3xl border-t border-white/5 pt-4">
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                  <div className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-amber-400/10 bg-black/25 px-3 py-2 sm:max-w-[7.5rem] sm:flex-col sm:items-start sm:py-3">
-                    <span className="font-mono text-[9px] uppercase text-zinc-500">Your balance</span>
-                    <span className="font-mono text-sm font-bold text-amber-200">{myBalance.toLocaleString()} GPC</span>
-                    <span className="hidden text-[9px] text-zinc-500 sm:inline">{gpcToUsdDisplay(myBalance)}</span>
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-2">
+              <div className="mt-auto w-full max-w-3xl border-t border-white/5 pt-3 md:pt-4">
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 sm:flex-row sm:items-start sm:justify-end sm:gap-4">
+                  <div className="min-w-0 w-full flex-1 space-y-1.5 md:space-y-2">
                     {needsBankSetup && room && (
                       <div className="mx-auto w-full max-w-md rounded-xl border border-amber-500/40 bg-amber-950/35 p-3">
                         <p className={`text-sm font-bold text-amber-100 ${cinzel.className}`}>
@@ -4880,9 +4873,8 @@ export default function CeloRoomPage() {
                       isPlayer &&
                       myEntrySc > 0 &&
                       postEntryUiRoomOk && (
-                        <p className="text-center text-sm text-amber-200/90">
-                          Your entry: {myEntrySc.toLocaleString()} GPC posted. Waiting for the banker
-                          to start the round…
+                        <p className="mx-auto max-w-md text-center text-balance text-xs leading-snug text-amber-200/90 sm:text-sm">
+                          {myEntrySc.toLocaleString()} GPC posted — waiting for banker to start.
                         </p>
                       )}
                     {room &&
@@ -4918,18 +4910,17 @@ export default function CeloRoomPage() {
                       myEntrySc === 0 &&
                       !isSpec &&
                       postEntryUiRoomOk && (
-                        <div className="mx-auto flex w-full max-w-md flex-col gap-1.5 md:gap-2">
+                        <div className="mx-auto flex w-full max-w-md flex-col gap-1 md:gap-2">
                           {joinHint && (
                             <p className="text-center text-xs leading-snug text-amber-200/80 md:text-sm">
                               {joinHint}
                             </p>
                           )}
-                          <div className="rounded-xl border border-amber-400/20 bg-black/40 p-2.5 md:border-0 md:bg-transparent md:p-0">
-                            <p className="text-center text-xs leading-snug text-amber-200/90 md:mb-1 md:text-sm">
-                              Min {minE.toLocaleString()} GPC · Max {maxStakeSc.toLocaleString()}{" "}
-                              GPC (bank)
+                          <div className="rounded-xl border border-amber-400/20 bg-black/40 p-2 md:border-0 md:bg-transparent md:p-0">
+                            <p className="text-center text-[11px] leading-snug text-amber-200/90 md:mb-1 md:text-sm">
+                              Min {minE.toLocaleString()} · Max {maxStakeSc.toLocaleString()} GPC
                             </p>
-                            <div className="mt-2 grid grid-cols-3 gap-1.5 md:hidden">
+                            <div className="mt-1.5 grid grid-cols-2 gap-1 md:hidden">
                               <button
                                 type="button"
                                 data-selected={entryAmount === celoMobileQuick1}
@@ -4937,7 +4928,7 @@ export default function CeloRoomPage() {
                                   setJoinHint(null);
                                   setEntryAmount(celoMobileQuick1);
                                 }}
-                                className={`h-10 rounded-xl border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
+                                className={`h-9 rounded-lg border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
                               >
                                 {celoMobileQuick1.toLocaleString()}
                               </button>
@@ -4949,7 +4940,7 @@ export default function CeloRoomPage() {
                                   setEntryAmount(celoMobileQuick2Ui);
                                 }}
                                 disabled={celoMobileQuick2Ui === celoMobileQuick1}
-                                className={`h-10 rounded-xl border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 disabled:pointer-events-none disabled:opacity-35 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
+                                className={`h-9 rounded-lg border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 disabled:pointer-events-none disabled:opacity-35 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
                               >
                                 {celoMobileQuick2Ui.toLocaleString()}
                               </button>
@@ -4961,7 +4952,7 @@ export default function CeloRoomPage() {
                                   setEntryAmount(Math.min(maxStakeSc, Math.max(minE, myBalance)));
                                 }}
                                 disabled={maxStakeSc <= 0}
-                                className={`h-10 rounded-xl border border-amber-500/60 px-1 text-[10px] font-semibold leading-tight text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 sm:text-xs ${cinzel.className}`}
+                                className={`col-span-2 h-9 rounded-lg border border-amber-500/60 px-2 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 ${cinzel.className}`}
                               >
                                 Cover bank
                               </button>
@@ -4994,8 +4985,8 @@ export default function CeloRoomPage() {
                                 Cover bank
                               </button>
                             </div>
-                            <label className="mx-auto mt-2 flex w-full max-w-xs flex-col gap-0.5 text-left md:max-w-none md:gap-1">
-                              <span className="text-xs text-zinc-400">Bet amount (GPC)</span>
+                            <label className="mx-auto mt-1.5 flex w-full max-w-xs flex-col gap-0.5 text-left md:mt-2 md:max-w-none md:gap-1">
+                              <span className="text-[11px] text-zinc-400 md:text-xs">Bet (GPC)</span>
                               <input
                                 type="number"
                                 inputMode="numeric"
@@ -5016,7 +5007,7 @@ export default function CeloRoomPage() {
                                     clamp(whole, minE, maxStakeSc > 0 ? maxStakeSc : minE)
                                   );
                                 }}
-                                className="h-10 rounded-xl border border-[#f5c842]/35 bg-black/40 px-3 text-center text-sm tabular-nums text-[#f5c842] outline-none focus:ring-2 focus:ring-[#f5c842]/40 md:min-h-[44px] md:text-left"
+                                className="h-9 rounded-lg border border-[#f5c842]/35 bg-black/40 px-3 text-center text-sm tabular-nums text-[#f5c842] outline-none focus:ring-2 focus:ring-[#f5c842]/40 md:h-auto md:min-h-[44px] md:rounded-xl md:text-left"
                               />
                             </label>
                             <button
@@ -5027,7 +5018,7 @@ export default function CeloRoomPage() {
                               onClick={() => {
                                 void handlePostEntry();
                               }}
-                              className={`mt-2 w-full rounded-xl font-bold text-zinc-950 touch-manipulation h-11 text-sm md:min-h-[48px] ${cinzel.className}`}
+                              className={`mt-1.5 w-full rounded-lg font-bold text-zinc-950 touch-manipulation h-10 text-sm md:mt-2 md:h-auto md:min-h-[48px] md:rounded-xl ${cinzel.className}`}
                               style={{
                                 background: "linear-gradient(135deg, #F5C842, #B8860B)",
                                 opacity: joinSubmitting || !canPostEntry ? 0.45 : 1,
@@ -5078,45 +5069,53 @@ export default function CeloRoomPage() {
           </aside>
         </div>
       </div>
-      <div className="mx-auto mt-5 w-full max-w-[1500px] px-4 pb-2 md:mt-0 md:hidden md:px-6">
+      {/* Mobile chat: fixed above bottom nav so it does not reflow/push the game panel */}
       <div
-        className="grid h-11 w-full min-w-0 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs"
+        className="pointer-events-none fixed inset-x-0 z-[101] md:hidden"
         style={{
-          background: "rgba(5,1,15,0.9)",
-          gridTemplateColumns: "1fr",
+          bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))",
         }}
       >
-        <button
-          type="button"
-          onClick={() => setPanelOpen((o) => !o)}
-          className="min-h-touch font-mono"
-          style={{
-            borderBottom: panelOpen ? "2px solid #F5C842" : "2px solid transparent",
-            color: panelOpen ? "#F5C842" : "#6B7280",
-          }}
-        >
-          💬 Table chat
-        </button>
-      </div>
-      <div
-        className="shrink-0 overflow-hidden rounded-b-xl border border-t-0 border-amber-400/10 transition-[height] duration-200 ease-out md:hidden"
-        style={{
-          background: "rgba(8,5,15,0.98)",
-          height: panelOpen ? "min(44vh, 320px)" : 0,
-        }}
-      >
-        <CeloRoomChatPanel
-          className="h-full min-h-0"
-          minHeightStyle={{ minHeight: "min(42vh, 300px)" }}
-          messages={messages}
-          value={chat}
-          onChange={setChat}
-          onSend={() => void sendRoomChat()}
-          selfProfile={myProfile}
-          selfUserId={me}
-          canSend={!!(supabase && me && room && chat.trim().length > 0)}
-        />
-      </div>
+        <div className="pointer-events-auto mx-auto w-full max-w-[1500px] px-4">
+          <div
+            className="grid h-11 w-full min-w-0 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs shadow-[0_-4px_24px_rgba(0,0,0,0.35)]"
+            style={{
+              background: "rgba(5,1,15,0.96)",
+              gridTemplateColumns: "1fr",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setPanelOpen((o) => !o)}
+              className="min-h-touch font-mono"
+              style={{
+                borderBottom: panelOpen ? "2px solid #F5C842" : "2px solid transparent",
+                color: panelOpen ? "#F5C842" : "#6B7280",
+              }}
+            >
+              💬 Table chat
+            </button>
+          </div>
+          <div
+            className="overflow-hidden rounded-b-xl border border-t-0 border-amber-400/10 transition-[height] duration-200 ease-out"
+            style={{
+              background: "rgba(8,5,15,0.98)",
+              height: panelOpen ? "min(36vh, 260px)" : 0,
+            }}
+          >
+            <CeloRoomChatPanel
+              className="h-full min-h-0"
+              minHeightStyle={{ minHeight: "min(34vh, 240px)" }}
+              messages={messages}
+              value={chat}
+              onChange={setChat}
+              onSend={() => void sendRoomChat()}
+              selfProfile={myProfile}
+              selfUserId={me}
+              canSend={!!(supabase && me && room && chat.trim().length > 0)}
+            />
+          </div>
+        </div>
       </div>
       {bankStopBannerText != null && (
         <div
