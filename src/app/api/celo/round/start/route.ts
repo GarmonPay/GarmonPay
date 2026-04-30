@@ -6,6 +6,7 @@ import {
   normalizeCeloUserId,
 } from "@/lib/celo-player-state";
 import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
+import { generateCeloIdlePreviewDiceTriplet } from "@/lib/celo-idle-preview-server";
 
 const STARTABLE_ROOM_STATUSES = new Set([
   "waiting",
@@ -149,6 +150,7 @@ export async function POST(request: Request) {
     .select("id", { count: "exact", head: true })
     .eq("room_id", roomId);
   const roundNumber = (prev ?? 0) + 1;
+  const idlePreviewDice = generateCeloIdlePreviewDiceTriplet();
   let round: Record<string, unknown> | null = null;
   let insErr: { message?: string; code?: string } | null = null;
   ({ data: round, error: insErr } = await adminClient
@@ -163,6 +165,7 @@ export async function POST(request: Request) {
       platform_fee_sc: 0,
       bank_covered: false,
       bank_at_round_start_sc: curBank,
+      idle_preview_dice: idlePreviewDice,
     })
     .select("*")
     .single());
@@ -178,6 +181,7 @@ export async function POST(request: Request) {
         platform_fee_sc: 0,
         bank_covered: false,
         bank_at_round_start_sc: curBank,
+        idle_preview_dice: idlePreviewDice,
       })
       .select("*")
       .single());

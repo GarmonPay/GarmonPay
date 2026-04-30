@@ -135,6 +135,7 @@ export type CeloServerVisibleDice = {
   source:
     | "none"
     | "banker_in_flight"
+    | "banker_idle_preview"
     | "banker_round"
     | "banker_point_phase"
     | "player_anim_banker_bg"
@@ -183,6 +184,17 @@ export function getVisibleDiceFromServer(
         rollId: null,
         rollerUserId: null,
         source: "banker_round",
+      };
+    }
+    const idlePreview = realDiceTripletFromUnknown(
+      (round as { idle_preview_dice?: unknown }).idle_preview_dice
+    );
+    if (idlePreview) {
+      return {
+        triplet: idlePreview,
+        rollId: null,
+        rollerUserId: null,
+        source: "banker_idle_preview",
       };
     }
     return none();
@@ -309,8 +321,8 @@ export function computeCeloVisualDiceMode(input: {
     if (input.roundHasBankerTriplet || input.feltTripletPresent) {
       return "banker_settled";
     }
-    // No banker dice yet (e.g. immediately after Start Round) — keep tumble UX.
-    return "banker_tumble";
+    // Legacy rows without idle_preview_dice: static empty felt, not infinite tumble.
+    return "idle";
   }
   if (s === "player_rolling") {
     // Player has a final roll committed → show their settled dice

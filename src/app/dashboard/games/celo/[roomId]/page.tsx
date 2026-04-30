@@ -98,6 +98,8 @@ type Round = {
   push?: boolean;
   /** Set when the banker has rolled; source of truth for their dice in this round. */
   banker_dice?: unknown;
+  /** Shared static triplet (1–6) until the banker commits `banker_dice`; server-generated at round insert. */
+  idle_preview_dice?: unknown;
   banker_dice_name?: string | null;
   banker_dice_result?: string | null;
   banker_roll_in_flight?: boolean | null;
@@ -1641,9 +1643,13 @@ export default function CeloRoomPage() {
                   );
                 }
               } else if (n.banker_dice == null) {
-                const k = lastRealTripletRef.current;
-                if (k) setDice([k[0], k[1], k[2]]);
-                else setDice(null);
+                if (realDiceTripletFromUnknown(n.idle_preview_dice)) {
+                  setDice(null);
+                } else {
+                  const k = lastRealTripletRef.current;
+                  if (k) setDice([k[0], k[1], k[2]]);
+                  else setDice(null);
+                }
               }
               if (
                 n.banker_dice != null &&

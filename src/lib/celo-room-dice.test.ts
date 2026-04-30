@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeCeloVisualDiceMode,
   getVisibleDiceFromServer,
   shouldClobberFeltTripletOnFetch,
 } from "./celo-room-dice";
@@ -102,6 +103,36 @@ describe("getVisibleDiceFromServer", () => {
     expect(v.source).toBe("banker_round");
   });
 
+  it("banker rolling, no real dice yet → idle_preview_dice for all viewers", () => {
+    const v = getVisibleDiceFromServer(
+      {
+        status: "banker_rolling",
+        banker_roll_in_flight: false,
+        banker_dice: null,
+        idle_preview_dice: [3, 1, 6],
+      },
+      [],
+      { rollerUserId: null }
+    );
+    expect(v.triplet).toEqual([3, 1, 6]);
+    expect(v.source).toBe("banker_idle_preview");
+  });
+
+  it("banker_dice wins over idle_preview when both present", () => {
+    const v = getVisibleDiceFromServer(
+      {
+        status: "banker_rolling",
+        banker_roll_in_flight: false,
+        banker_dice: [2, 2, 2],
+        idle_preview_dice: [3, 1, 6],
+      },
+      [],
+      { rollerUserId: null }
+    );
+    expect(v.triplet).toEqual([2, 2, 2]);
+    expect(v.source).toBe("banker_round");
+  });
+
   it("player roll_processing → banker triplet for observers", () => {
     const v = getVisibleDiceFromServer(
       {
@@ -162,5 +193,53 @@ describe("getVisibleDiceFromServer", () => {
     );
     expect(v.triplet).toEqual([4, 4, 2]);
     expect(v.source).toBe("completed_player");
+  });
+});
+
+describe("computeCeloVisualDiceMode", () => {
+  const base = {
+    inProgress: true,
+    roundStatus: "banker_rolling",
+    roundHasBankerTriplet: false,
+    currentPlayerHasFinalRoll: false,
+    rollingAction: false,
+    localRolling: false,
+    serverBankerInFlight: false,
+    serverPlayerInFlight: false,
+  };
+
+  it("banker_rolling with felt triplet (e.g. idle preview) → settled, not tumble", () => {
+    expect(
+      computeCeloVisualDiceMode({
+        ...base,
+        feltTripletPresent: true,
+      })
+    ).toBe("banker_settled");
+  });
+
+  it("banker_rolling only tumbles when roll in flight or local rolling", () => {
+    expect(
+      computeCeloVisualDiceMode({
+        ...base,
+        feltTripletPresent: false,
+        serverBankerInFlight: true,
+      })
+    ).toBe("banker_tumble");
+    expect(
+      computeCeloVisualDiceMode({
+        ...base,
+        feltTripletPresent: false,
+        rollingAction: true,
+      })
+    ).toBe("banker_tumble");
+  });
+
+  it("banker_rolling no dice and no felt → idle (no infinite tumble)", () => {
+    expect(
+      computeCeloVisualDiceMode({
+        ...base,
+        feltTripletPresent: false,
+      })
+    ).toBe("idle");
   });
 });
