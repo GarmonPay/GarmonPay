@@ -53,6 +53,11 @@ const STYLES: Record<
     glow: "#EF4444",
     shake: true,
   },
+  "ACE-DEUCE": {
+    color: "#EF4444",
+    size: 64,
+    mobileSize: 42,
+  },
   DICK: {
     color: "#EF4444",
     size: 64,
@@ -70,6 +75,7 @@ const STYLES: Record<
   GIRL: { color: "#EC4899", size: 60, mobileSize: 40 },
   HOE: { color: "#EC4899", size: 60, mobileSize: 40 },
   SHORTLY: { color: "#A855F7", size: 60, mobileSize: 40 },
+  SHORTY: { color: "#A855F7", size: 60, mobileSize: 40 },
   JIT: { color: "#A855F7", size: 60, mobileSize: 40 },
 };
 

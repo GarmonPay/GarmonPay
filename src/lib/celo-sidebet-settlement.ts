@@ -69,7 +69,8 @@ export function resolveSideBetCreatorWins(args: {
       return (
         name.includes("SHIT") ||
         name.includes("DICK") ||
-        name.includes("DICE")
+        name.includes("DICE") ||
+        name.includes("ACE-DEUCE-TREY")
       );
     }
     case "trips": {

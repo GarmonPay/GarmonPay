@@ -67,11 +67,11 @@ export function evaluateRoll(
     });
   }
 
-  // 2) 1-2-3 any order — DICK (auto loss)
+  // 2) 1-2-3 sorted — Ace–Deuce–Trey (auto loss)
   if (a === 1 && b === 2 && c === 3) {
     return logResult({
       dice,
-      rollName: "DICK • AUTOMATIC LOSS",
+      rollName: "ACE-DEUCE-TREY • AUTOMATIC LOSS",
       result: "instant_loss",
       point: null,
       isCelo: false,
@@ -91,7 +91,7 @@ export function evaluateRoll(
     });
   }
 
-  // 4) Pair + singleton: singleton 1 — DICE / automatic loss (e.g. 6,6,1)
+  // 4) Pair + singleton
   let singleton: number | null = null;
   if (a === b) {
     singleton = c;
@@ -102,24 +102,43 @@ export function evaluateRoll(
   }
 
   if (singleton !== null) {
+    if (singleton === 6) {
+      return logResult({
+        dice,
+        rollName: "HAND CRACK • AUTOMATIC WIN",
+        result: "instant_win",
+        point: null,
+        isCelo: false,
+        isTrips: false,
+      });
+    }
     if (singleton === 1) {
       return logResult({
         dice,
-        rollName: "DICE • AUTOMATIC LOSS",
+        rollName: "DICK • AUTOMATIC LOSS",
         result: "instant_loss",
         point: null,
         isCelo: false,
         isTrips: false,
       });
     }
-    return logResult({
-      dice,
-      rollName: `POINT ${singleton}`,
-      result: "point",
-      point: singleton,
-      isCelo: false,
-      isTrips: false,
-    });
+    const pointRoll: Record<number, string> = {
+      2: "SHORTY • POINT 2",
+      3: "GIRL • POINT 3",
+      4: "ZOE • POINT 4",
+      5: "POUND • POINT 5",
+    };
+    const label = pointRoll[singleton];
+    if (label) {
+      return logResult({
+        dice,
+        rollName: label,
+        result: "point",
+        point: singleton,
+        isCelo: false,
+        isTrips: false,
+      });
+    }
   }
 
   return logResult({
