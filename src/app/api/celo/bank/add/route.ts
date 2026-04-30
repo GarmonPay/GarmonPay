@@ -6,8 +6,8 @@ import { validateEntry } from "@/lib/celo-engine";
 import { isRoomPauseBlockingActions } from "@/lib/celo-pause";
 
 /**
- * Banker adds GPC from personal balance to the table bank (between rounds).
- * Rejected when bank is busted (no valid banker chain) or server rules disallow.
+ * Banker adds GPC from personal balance to the table bank.
+ * Current banker may fund even when bank is busted/zero after takeover setup.
  */
 export async function POST(request: Request) {
   const clients = await getCeloApiClients();
@@ -65,25 +65,6 @@ export async function POST(request: Request) {
 
   const action = "bank_add_attempt";
 
-  if (room.bank_busted === true) {
-    console.log("[C-Lo banker bank rule]", {
-      roomId,
-      bankerId: room.banker_id,
-      userId,
-      currentBankSc: room.current_bank_sc,
-      bankBusted: true,
-      winnerUserId: null,
-      action,
-    });
-    return NextResponse.json(
-      {
-        error:
-          "Bank is busted. Banker must change before more GPC can be added.",
-      },
-      { status: 400 }
-    );
-  }
-
   if (
     !room.banker_id ||
     normalizeCeloUserId(room.banker_id) !== normalizeCeloUserId(userId)
@@ -95,12 +76,23 @@ export async function POST(request: Request) {
   }
 
   const rs = String(room.status ?? "").toLowerCase();
-  if (rs !== "waiting") {
+  if (rs === "cancelled" || rs === "completed") {
     return NextResponse.json(
       {
-        error:
-          "You can only add to the bank between rounds (room must be waiting).",
+        error: "Room is closed and cannot be funded.",
       },
+      { status: 400 }
+    );
+  }
+  const { data: activeRound } = await admin
+    .from("celo_rounds")
+    .select("id")
+    .eq("room_id", roomId)
+    .in("status", ["banker_rolling", "player_rolling", "betting"])
+    .limit(1);
+  if (activeRound && activeRound.length > 0) {
+    return NextResponse.json(
+      { error: "Cannot fund while a round is in progress." },
       { status: 400 }
     );
   }
@@ -116,6 +108,12 @@ export async function POST(request: Request) {
     500,
     Math.floor(Number(room.minimum_entry_sc ?? room.min_bet_cents ?? 500))
   );
+  if (amountSc < minE) {
+    return NextResponse.json(
+      { error: `amount_sc must be at least minimum entry (${minE})` },
+      { status: 400 }
+    );
+  }
   const v = validateEntry(amountSc, minE);
   if (!v.valid) {
     return NextResponse.json({ error: v.error }, { status: 400 });

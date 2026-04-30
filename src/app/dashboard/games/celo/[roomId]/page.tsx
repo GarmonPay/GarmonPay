@@ -639,6 +639,12 @@ export default function CeloRoomPage() {
   const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
   const [lowerBankError, setLowerBankError] = useState<string | null>(null);
   const [bankerAcceptError, setBankerAcceptError] = useState<string | null>(null);
+  const [newBankerSetupBusy, setNewBankerSetupBusy] = useState(false);
+  const [newBankerSetupError, setNewBankerSetupError] = useState<string | null>(null);
+  const [newBankerSetupName, setNewBankerSetupName] = useState("");
+  const [newBankerSetupMinEntry, setNewBankerSetupMinEntry] = useState(500);
+  const [newBankerSetupFunding, setNewBankerSetupFunding] = useState(500);
+  const [newBankerSetupMaxPlayers, setNewBankerSetupMaxPlayers] = useState(10);
   const [lastFetchInfo, setLastFetchInfo] = useState<{
     url: string;
     status: string;
@@ -1766,6 +1772,10 @@ export default function CeloRoomPage() {
     me != null &&
     room?.banker_id != null &&
     normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id);
+  const isCurrentBanker =
+    me != null &&
+    room?.banker_id != null &&
+    normalizeCeloUserId(me) === normalizeCeloUserId(room.banker_id);
   const isPlayer = myRoleLc === "player";
   const isSpec = myRoleLc === "spectator";
   const minE = room ? minVal(room) : 1000;
@@ -1783,6 +1793,18 @@ export default function CeloRoomPage() {
     });
   }, [room]);
 
+  useEffect(() => {
+    if (!room || !isCurrentBanker) return;
+    const min = Math.max(500, minVal(room));
+    const maxPlayers = [2, 4, 6, 10].includes(Number(room.max_players))
+      ? Number(room.max_players)
+      : 10;
+    setNewBankerSetupName(String(room.name ?? ""));
+    setNewBankerSetupMinEntry(min);
+    setNewBankerSetupFunding(min);
+    setNewBankerSetupMaxPlayers(maxPlayers);
+  }, [room?.id, room?.name, room?.minimum_entry_sc, room?.max_players, isCurrentBanker]);
+
   const prize = round?.prize_pool_sc ?? 0;
   const inProgress = !!(
     round &&
@@ -1791,6 +1813,12 @@ export default function CeloRoomPage() {
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
   const roomPausedBlocking = isRoomPauseBlockingActions(room);
   const roomPauseActive = isRoomPauseActive(room);
+  const needsBankSetup = Boolean(
+    room &&
+      isCurrentBanker &&
+      Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
+      (room.bank_busted === true || roomStatusLc === "waiting")
+  );
 
   useEffect(() => {
     if (!room?.paused_at) return;
@@ -2314,6 +2342,17 @@ export default function CeloRoomPage() {
   const tableStatusText = (() => {
     if (!uiReady) return "Loading table…";
     if (!room) return roomFetchError ? "Could not load room" : "Loading…";
+    if (needsBankSetup) {
+      return "You stopped the bank. Set your rules and fund the bank to continue.";
+    }
+    if (
+      !isCurrentBanker &&
+      room.bank_busted === true &&
+      Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
+      roomStatusLc === "waiting"
+    ) {
+      return "New banker is setting up the bank.";
+    }
     if (room.bank_busted === true && (room.banker_id == null || room.banker_id === "")) {
       return "Waiting for new banker";
     }
@@ -2506,6 +2545,7 @@ export default function CeloRoomPage() {
   const showStartRoundPanel =
     !!room &&
     isBanker &&
+    !needsBankSetup &&
     !hasActiveRound &&
     !roomInLiveRound &&
     ["waiting", "active", "entry_phase"].includes(roomPhase) &&
@@ -2897,6 +2937,72 @@ export default function CeloRoomPage() {
       ),
     });
   }, [isBanker, isPlayer, isSpec, myEntrySc, room, inProgress]);
+
+  async function handleNewBankerSetup() {
+    if (!room || !supabase || !needsBankSetup || newBankerSetupBusy) return;
+    setNewBankerSetupError(null);
+    const minEntry = Math.max(500, Math.floor(Number(newBankerSetupMinEntry)));
+    const funding = Math.max(0, Math.floor(Number(newBankerSetupFunding)));
+    const maxPlayers = [2, 4, 6, 10].includes(Number(newBankerSetupMaxPlayers))
+      ? Number(newBankerSetupMaxPlayers)
+      : 10;
+    if (!newBankerSetupName.trim()) {
+      setNewBankerSetupError("Room name is required.");
+      return;
+    }
+    if (minEntry <= 0) {
+      setNewBankerSetupError("Minimum entry must be greater than 0.");
+      return;
+    }
+    if (funding < minEntry) {
+      setNewBankerSetupError("Funding must be at least the minimum entry.");
+      return;
+    }
+    if (funding > myBalance) {
+      setNewBankerSetupError("Insufficient balance for setup funding.");
+      return;
+    }
+    setNewBankerSetupBusy(true);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/new-banker-setup", {
+        method: "POST",
+        body: JSON.stringify({
+          room_id: room.id,
+          name: newBankerSetupName.trim(),
+          minimum_entry_sc: minEntry,
+          funding_amount_sc: funding,
+          max_players: maxPlayers,
+        }),
+      });
+      const txt = await res.text();
+      let j: { error?: string; room?: Record<string, unknown> } = {};
+      try {
+        j = txt ? (JSON.parse(txt) as typeof j) : {};
+      } catch {
+        setNewBankerSetupError("Invalid response from setup API.");
+        return;
+      }
+      if (!res.ok) {
+        if (res.status === 401) {
+          alertCeloUnauthorized();
+          return;
+        }
+        setNewBankerSetupError(j.error ?? "Could not finish banker setup.");
+        return;
+      }
+      if (j.room) {
+        bumpOptimisticAsRealtime();
+        commitCeloAggregateMerge(
+          { room: j.room, updated_at: new Date().toISOString() },
+          "join"
+        );
+      }
+      setNewBankerSetupError(null);
+      await fetchAll();
+    } finally {
+      setNewBankerSetupBusy(false);
+    }
+  }
 
   async function handleStart() {
     if (!room || !canStartRound) return;
@@ -4150,6 +4256,7 @@ export default function CeloRoomPage() {
                     room?.last_round_was_celo &&
                     bankVal(room) > 0 &&
                     room.bank_busted !== true &&
+                    !needsBankSetup &&
                     !roomPausedBlocking && (
                     <button
                       type="button"
@@ -4319,6 +4426,82 @@ export default function CeloRoomPage() {
                     <span className="hidden text-[9px] text-zinc-500 sm:inline">{gpcToUsdDisplay(myBalance)}</span>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
+                    {needsBankSetup && room && (
+                      <div className="mx-auto w-full max-w-md rounded-xl border border-amber-500/40 bg-amber-950/35 p-3">
+                        <p className={`text-sm font-bold text-amber-100 ${cinzel.className}`}>
+                          New Banker Setup
+                        </p>
+                        <p className="mt-1 text-xs text-amber-200/85">
+                          You stopped the bank. Set your rules and fund the bank to continue.
+                        </p>
+                        {newBankerSetupError && (
+                          <p className="mt-2 text-xs text-red-300">{newBankerSetupError}</p>
+                        )}
+                        <div className="mt-2 space-y-2">
+                          <label className="block text-left text-xs text-zinc-300">
+                            Room name
+                            <input
+                              type="text"
+                              value={newBankerSetupName}
+                              onChange={(e) => setNewBankerSetupName(e.target.value)}
+                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                              maxLength={40}
+                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block text-left text-xs text-zinc-300">
+                              Minimum entry (GPC)
+                              <input
+                                type="number"
+                                min={500}
+                                step={1}
+                                value={newBankerSetupMinEntry}
+                                onChange={(e) =>
+                                  setNewBankerSetupMinEntry(Math.max(500, Math.floor(Number(e.target.value) || 0)))
+                                }
+                                className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                              />
+                            </label>
+                            <label className="block text-left text-xs text-zinc-300">
+                              Fund bank (GPC)
+                              <input
+                                type="number"
+                                min={newBankerSetupMinEntry}
+                                step={1}
+                                value={newBankerSetupFunding}
+                                onChange={(e) =>
+                                  setNewBankerSetupFunding(Math.max(0, Math.floor(Number(e.target.value) || 0)))
+                                }
+                                className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                              />
+                            </label>
+                          </div>
+                          <label className="block text-left text-xs text-zinc-300">
+                            Max players
+                            <select
+                              value={newBankerSetupMaxPlayers}
+                              onChange={(e) => setNewBankerSetupMaxPlayers(Number(e.target.value))}
+                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                            >
+                              {[2, 4, 6, 10].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleNewBankerSetup()}
+                          disabled={newBankerSetupBusy || roomPausedBlocking}
+                          className="mt-3 w-full min-h-[46px] rounded-xl px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
+                          style={{ background: "linear-gradient(135deg, #F5C842, #B8860B)" }}
+                        >
+                          {newBankerSetupBusy ? "Setting up…" : "Fund Bank & Continue"}
+                        </button>
+                      </div>
+                    )}
                     {canRoll && !bannerOverlayVisible && (
                       <div className="mx-auto w-full max-w-md">
                         {rollError && (

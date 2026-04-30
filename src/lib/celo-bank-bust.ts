@@ -114,7 +114,9 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
         banker_id: winner,
         current_bank_sc: 0,
         current_bank_cents: 0,
-        bank_busted: false,
+        bank_busted: true,
+        status: "waiting",
+        last_activity: new Date().toISOString(),
       })
       .eq("id", roomId);
     console.log("[C-Lo banker bank rule]", {
@@ -122,7 +124,7 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       bankerId: winner,
       userId: previousBankerId,
       currentBankSc: 0,
-      bankBusted: false,
+      bankBusted: true,
       winnerUserId: winner,
       action,
     });
