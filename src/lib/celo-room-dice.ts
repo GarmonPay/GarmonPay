@@ -127,6 +127,141 @@ export function resolveCeloFeltDice(
   return realDiceTripletFromUnknown(roundBankerDice);
 }
 
+/** Metadata for `[C-Lo Dice Sync]` and felt rendering (all values from DB / API). */
+export type CeloServerVisibleDice = {
+  triplet: [number, number, number] | null;
+  rollId: string | null;
+  rollerUserId: string | null;
+  source:
+    | "none"
+    | "banker_in_flight"
+    | "banker_round"
+    | "banker_point_phase"
+    | "player_anim_banker_bg"
+    | "player_roll"
+    | "completed_player"
+    | "completed_banker_only"
+    | "betting_banker";
+};
+
+/**
+ * Single source of truth for which three dice every client should show from server state.
+ * `rolls` should be newest-first (e.g. `order("created_at", { ascending: false })`).
+ * Local optimistic dice from a just-finished POST should override via `dice` state in the UI layer.
+ */
+export function getVisibleDiceFromServer(
+  round: Record<string, unknown> | null | undefined,
+  rollsNewestFirst: Record<string, unknown>[],
+  ctx: { rollerUserId: string | null }
+): CeloServerVisibleDice {
+  const none = (): CeloServerVisibleDice => ({
+    triplet: null,
+    rollId: null,
+    rollerUserId: null,
+    source: "none",
+  });
+  if (!round) return none();
+
+  const status = String(round.status ?? "").toLowerCase();
+  const bankerDice = realDiceTripletFromUnknown(round.banker_dice);
+  const bankerInFlight = round.banker_roll_in_flight === true;
+  const rollProcessing = round.roll_processing === true;
+  const roller = ctx.rollerUserId?.trim() ? String(ctx.rollerUserId) : null;
+
+  if (status === "banker_rolling") {
+    if (bankerInFlight) {
+      return {
+        triplet: null,
+        rollId: null,
+        rollerUserId: null,
+        source: "banker_in_flight",
+      };
+    }
+    if (bankerDice) {
+      return {
+        triplet: bankerDice,
+        rollId: null,
+        rollerUserId: null,
+        source: "banker_round",
+      };
+    }
+    return none();
+  }
+
+  if (status === "player_rolling") {
+    if (rollProcessing && bankerDice) {
+      return {
+        triplet: bankerDice,
+        rollId: null,
+        rollerUserId: roller,
+        source: "player_anim_banker_bg",
+      };
+    }
+    if (roller) {
+      for (const r of rollsNewestFirst) {
+        if (String(r.user_id ?? "") !== roller) continue;
+        const t = extractDiceFromRoll(r);
+        if (t && isRealDiceValues(t)) {
+          return {
+            triplet: t,
+            rollId: r.id != null ? String(r.id) : null,
+            rollerUserId: roller,
+            source: "player_roll",
+          };
+        }
+      }
+    }
+    if (bankerDice) {
+      return {
+        triplet: bankerDice,
+        rollId: null,
+        rollerUserId: roller,
+        source: "banker_point_phase",
+      };
+    }
+    return none();
+  }
+
+  if (status === "betting") {
+    if (bankerDice) {
+      return {
+        triplet: bankerDice,
+        rollId: null,
+        rollerUserId: null,
+        source: "betting_banker",
+      };
+    }
+    return none();
+  }
+
+  if (status === "completed") {
+    for (const r of rollsNewestFirst) {
+      const o = String(r.outcome ?? "").toLowerCase();
+      if (o !== "win" && o !== "loss" && o !== "push") continue;
+      const t = extractDiceFromRoll(r);
+      if (t && isRealDiceValues(t)) {
+        return {
+          triplet: t,
+          rollId: r.id != null ? String(r.id) : null,
+          rollerUserId: r.user_id != null ? String(r.user_id) : null,
+          source: "completed_player",
+        };
+      }
+    }
+    if (bankerDice) {
+      return {
+        triplet: bankerDice,
+        rollId: null,
+        rollerUserId: null,
+        source: "completed_banker_only",
+      };
+    }
+    return none();
+  }
+
+  return none();
+}
+
 /** Explicit mode for felt UX / dev logs (single source of truth for animation). */
 export type CeloVisualDiceMode =
   | "idle"
