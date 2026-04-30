@@ -42,8 +42,6 @@ function netMinorFromCoinFlipApi(
   return -Math.abs(bet || Math.floor(fallbackBet));
 }
 
-type Tab = "house" | "player";
-
 type OpenGame = {
   id: string;
   createdAt: string;
@@ -76,10 +74,9 @@ export function CoinFlipPanel() {
   const { sweepsCoins, formatGPC, refresh, applyServerGpayBalance } = useCoins();
   const [token, setToken] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [tab, setTab] = useState<Tab>("house");
+  const [tab, setTab] = useState<"player">("player");
 
   const [bet, setBet] = useState(100);
-  const [sideHouse, setSideHouse] = useState<"heads" | "tails">("heads");
   const [sideCreate, setSideCreate] = useState<"heads" | "tails">("heads");
 
   const [busy, setBusy] = useState(false);
@@ -190,7 +187,7 @@ export function CoinFlipPanel() {
           result: resultFace,
           youWon: p?.youWon ?? false,
           netMinor: typeof p?.netMinor === "number" ? p.netMinor : 0,
-          mode: p?.mode ?? "vs_house",
+          mode: p?.mode ?? "vs_player",
         });
         pendingRef.current = null;
         setBusy(false);
@@ -206,80 +203,6 @@ export function CoinFlipPanel() {
   const betValid = Number.isFinite(bet) && betAmountMinor >= MIN_BET;
   const flipDisabled = busy || isFlipping || !betValid || !canAfford;
   const joinDisabled = busy || isFlipping;
-
-  async function handleVsHouse() {
-    if (!token || busy || isFlipping || !betValid || !canAfford) return;
-    setError(null);
-    setLastResult(null);
-    setWon(null);
-    balanceAfterFlipRef.current = null;
-    setTargetFace(null);
-    setIsFlipping(true);
-    setFlipGeneration((g) => g + 1);
-    setBusy(true);
-    try {
-      const balanceBefore = sweepsCoins;
-      const d = await Promise.all([
-        (async () => {
-          const r = await fetch(`${API}/create`, {
-            method: "POST",
-            credentials: "include",
-            headers: authHeaders(),
-            body: JSON.stringify({ betAmountMinor: betAmountMinor, side: sideHouse, mode: "vs_house" }),
-          });
-          const j = (await r.json().catch(() => ({}))) as {
-            message?: string;
-            result?: string;
-            youWon?: boolean;
-            netMinor?: number;
-            new_balance?: number;
-            gpayCoins?: number;
-            betAmountMinor?: number;
-            payoutWinnerMinor?: number;
-            amount_lost?: number;
-            amount_won?: number;
-          };
-          if (!r.ok) {
-            throw new Error(typeof j.message === "string" ? j.message : "Flip failed");
-          }
-          return j;
-        })(),
-        new Promise<void>((resolve) => setTimeout(resolve, FLIP_ANIM_MS)),
-      ]).then(([data]) => data);
-
-      const authoritative =
-        typeof d.gpayCoins === "number"
-          ? d.gpayCoins
-          : typeof d.new_balance === "number"
-            ? d.new_balance
-            : null;
-      if (authoritative != null && Number.isFinite(authoritative)) {
-        balanceAfterFlipRef.current = { gpayCoins: Math.max(0, Math.floor(authoritative)) };
-      }
-
-      const netMinor = netMinorFromCoinFlipApi(d, betAmountMinor);
-      console.info("[coin-flip client] vs_house settled", {
-        youWon: d.youWon,
-        netMinor,
-        serverGpayCoins: authoritative,
-        balanceBefore,
-      });
-
-      const res: "heads" | "tails" = d.result === "tails" ? "tails" : "heads";
-      pendingRef.current = {
-        youWon: !!d.youWon,
-        netMinor,
-        mode: "vs_house",
-      };
-      setTargetFace(res);
-    } catch (e) {
-      balanceAfterFlipRef.current = null;
-      setError(e instanceof Error ? e.message : "Flip failed");
-      setIsFlipping(false);
-      setTargetFace(null);
-      setBusy(false);
-    }
-  }
 
   async function handleCreatePlayer() {
     if (!token) return;
@@ -416,7 +339,7 @@ export function CoinFlipPanel() {
           Coin Flip
         </h1>
         <p className="text-sm text-white/70 mt-1">
-          GPay Coins (GPC) — 10% house edge on the doubled pot. Minimum bet {MIN_BET} GPC.
+          GPay Coins (GPC) — PvP only. Winner takes pot minus platform fee. Minimum bet {MIN_BET} GPC.
         </p>
         <p className="text-sm mt-2 font-medium" style={{ color: GOLD }}>
           Balance: {formatGPC(sweepsCoins)}
@@ -457,86 +380,9 @@ export function CoinFlipPanel() {
         </div>
       )}
 
-      <div className="flex rounded-xl border border-white/10 bg-black/20 p-1 max-w-md">
-        <button
-          type="button"
-          onClick={() => setTab("house")}
-          className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
-            tab === "house" ? "bg-fintech-accent text-white" : "text-white/60 hover:text-white"
-          }`}
-        >
-          VS House
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("player")}
-          className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
-            tab === "player" ? "bg-fintech-accent text-white" : "text-white/60 hover:text-white"
-          }`}
-        >
-          VS Player
-        </button>
+      <div className="rounded-xl border border-[#f5c842]/20 bg-[#f5c842]/5 px-4 py-2 text-sm text-[#f5c842]">
+        Coin Flip is player-vs-player only.
       </div>
-
-      {tab === "house" && (
-        <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-white">Play vs House</h2>
-          <div>
-            <span className="text-xs text-white/50 uppercase tracking-wider">Bet (GPC)</span>
-            <input
-              type="number"
-              min={MIN_BET}
-              step={1}
-              value={bet}
-              onChange={(e) => setBet(Number(e.target.value))}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white"
-            />
-            <div className="flex flex-wrap gap-2 mt-3">
-              {BET_PRESETS.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => setBet(q)}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold border transition-colors ${
-                    bet === q
-                      ? "border-[#f5c842] text-[#f5c842] bg-[#f5c842]/10"
-                      : "border-white/10 text-white/70 hover:border-white/20"
-                  }`}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-white/50 mb-2">Your side</p>
-            <div className="flex gap-2">
-              {(["heads", "tails"] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSideHouse(s)}
-                  className={`flex-1 rounded-xl py-3 font-semibold capitalize border ${
-                    sideHouse === s
-                      ? "border-[#f5c842] bg-[#f5c842]/15 text-[#f5c842]"
-                      : "border-white/10 text-white/60 hover:border-white/20"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={flipDisabled}
-            onClick={handleVsHouse}
-            className="w-full rounded-xl bg-fintech-accent py-3.5 font-semibold text-white hover:opacity-95 disabled:opacity-40"
-          >
-            {busy || isFlipping ? "Flipping…" : "Flip"}
-          </button>
-        </section>
-      )}
 
       {tab === "player" && (
         <div className="space-y-6">
@@ -656,7 +502,7 @@ export function CoinFlipPanel() {
                     <td className="py-2 pr-3 whitespace-nowrap text-white/90">
                       {h.createdAt ? new Date(h.createdAt).toLocaleString() : "—"}
                     </td>
-                    <td className="py-2 pr-3">{h.mode === "vs_house" ? "House" : "Player"}</td>
+                    <td className="py-2 pr-3">{h.mode === "vs_player" ? "Player" : "Legacy"}</td>
                     <td className="py-2 pr-3">{formatGPC(h.betAmountMinor)}</td>
                     <td className="py-2 pr-3">{h.result ?? "—"}</td>
                     <td
