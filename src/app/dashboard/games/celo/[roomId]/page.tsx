@@ -1808,6 +1808,43 @@ export default function CeloRoomPage() {
   const isSpec = myRoleLc === "spectator";
   const minE = room ? minVal(room) : 1000;
   const maxStakeSc = room ? bankVal(room) : 0;
+
+  const celoEntryPresetAmounts = useMemo(() => {
+    if (!room || maxStakeSc <= 0) return [];
+    return Array.from(
+      new Set(
+        [
+          minE,
+          minE * 2,
+          minE * 5,
+          Math.min(maxStakeSc, 2500),
+          maxStakeSc,
+        ].filter((x) => x >= minE && x <= maxStakeSc && x > 0)
+      )
+    ).sort((a, b) => a - b);
+  }, [room, minE, maxStakeSc]);
+
+  const celoMobileQuick1 = useMemo(() => {
+    if (minE <= 1000 && maxStakeSc >= 1000) return 1000;
+    return celoEntryPresetAmounts[0] ?? minE;
+  }, [minE, maxStakeSc, celoEntryPresetAmounts]);
+
+  const celoMobileQuick2 = useMemo(() => {
+    if (minE <= 2000 && maxStakeSc >= 2000 && 2000 !== celoMobileQuick1) return 2000;
+    const alt = celoEntryPresetAmounts.find((x) => x !== celoMobileQuick1);
+    if (alt != null) return alt;
+    return maxStakeSc > celoMobileQuick1
+      ? maxStakeSc
+      : Math.min(celoMobileQuick1 * 2, maxStakeSc);
+  }, [celoEntryPresetAmounts, celoMobileQuick1, maxStakeSc, minE]);
+
+  /** Second quick-bet column when it would duplicate the first (mobile 3-col row). */
+  const celoMobileQuick2Ui = useMemo(() => {
+    if (celoMobileQuick2 !== celoMobileQuick1) return celoMobileQuick2;
+    const alt = celoEntryPresetAmounts.find((x) => x !== celoMobileQuick1);
+    return alt ?? maxStakeSc;
+  }, [celoEntryPresetAmounts, celoMobileQuick1, celoMobileQuick2, maxStakeSc]);
+
   useEffect(() => {
     if (!room) return;
     const m = minVal(room);
@@ -4525,7 +4562,7 @@ export default function CeloRoomPage() {
                 </div>
               )}
 
-              <div className="relative z-10 flex flex-1 flex-col items-center justify-center py-1 md:min-h-[12rem] md:py-4">
+              <div className="relative z-10 flex flex-col items-center justify-center py-1 md:flex-1 md:min-h-[12rem] md:py-4">
                 <div
                   className="pointer-events-none absolute -inset-6 -z-10 opacity-90 md:-inset-8"
                   style={{
@@ -4535,11 +4572,10 @@ export default function CeloRoomPage() {
                   aria-hidden
                 />
                 <div
-                  className="relative w-full max-w-[280px] md:max-w-[480px]"
+                  className="relative w-full max-w-[280px] min-h-[9rem] md:max-w-[480px] md:min-h-[12rem]"
                   style={{
                     width: feltW,
                     height: feltH,
-                    minHeight: "12rem",
                     borderRadius: "50%",
                     background:
                       "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
@@ -4635,7 +4671,7 @@ export default function CeloRoomPage() {
               </div>
 
               <div className="mt-auto w-full max-w-3xl border-t border-white/5 pt-4">
-                <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4">
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <div className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-amber-400/10 bg-black/25 px-3 py-2 sm:max-w-[7.5rem] sm:flex-col sm:items-start sm:py-3">
                     <span className="font-mono text-[9px] uppercase text-zinc-500">Your balance</span>
                     <span className="font-mono text-sm font-bold text-amber-200">{myBalance.toLocaleString()} GPC</span>
@@ -4847,28 +4883,56 @@ export default function CeloRoomPage() {
                       myEntrySc === 0 &&
                       !isSpec &&
                       postEntryUiRoomOk && (
-                        <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+                        <div className="mx-auto flex w-full max-w-md flex-col gap-1.5 md:gap-2">
                           {joinHint && (
-                            <p className="text-center text-xs leading-snug text-amber-200/80">{joinHint}</p>
+                            <p className="text-center text-xs leading-snug text-amber-200/80 md:text-sm">
+                              {joinHint}
+                            </p>
                           )}
-                          <p className="text-center text-xs text-amber-200/80">
-                            Min {minE.toLocaleString()} GPC. You can bet up to the bank amount (
-                            {maxStakeSc.toLocaleString()} GPC max).
-                          </p>
-                          <div className="flex flex-wrap justify-center gap-1.5">
-                            {Array.from(
-                              new Set(
-                                [
-                                  minE,
-                                  minE * 2,
-                                  minE * 5,
-                                  Math.min(maxStakeSc, 2500),
-                                  maxStakeSc,
-                                ].filter((x) => x >= minE && x <= maxStakeSc && x > 0)
-                              )
-                            )
-                              .sort((a, b) => a - b)
-                              .map((amt) => (
+                          <div className="rounded-xl border border-amber-400/20 bg-black/40 p-2.5 md:border-0 md:bg-transparent md:p-0">
+                            <p className="text-center text-xs leading-snug text-amber-200/90 md:mb-1 md:text-sm">
+                              Min {minE.toLocaleString()} GPC · Max {maxStakeSc.toLocaleString()}{" "}
+                              GPC (bank)
+                            </p>
+                            <div className="mt-2 grid grid-cols-3 gap-1.5 md:hidden">
+                              <button
+                                type="button"
+                                data-selected={entryAmount === celoMobileQuick1}
+                                onClick={() => {
+                                  setJoinHint(null);
+                                  setEntryAmount(celoMobileQuick1);
+                                }}
+                                className={`h-10 rounded-xl border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
+                              >
+                                {celoMobileQuick1.toLocaleString()}
+                              </button>
+                              <button
+                                type="button"
+                                data-selected={entryAmount === celoMobileQuick2Ui}
+                                onClick={() => {
+                                  setJoinHint(null);
+                                  setEntryAmount(celoMobileQuick2Ui);
+                                }}
+                                disabled={celoMobileQuick2Ui === celoMobileQuick1}
+                                className={`h-10 rounded-xl border border-[#f5c842]/40 px-1 text-xs font-semibold text-[#f5c842] transition hover:bg-[#f5c842]/10 disabled:pointer-events-none disabled:opacity-35 data-[selected=true]:bg-[#f5c842] data-[selected=true]:text-black ${cinzel.className}`}
+                              >
+                                {celoMobileQuick2Ui.toLocaleString()}
+                              </button>
+                              <button
+                                type="button"
+                                data-selected={entryAmount === maxStakeSc && maxStakeSc > 0}
+                                onClick={() => {
+                                  setJoinHint(null);
+                                  setEntryAmount(Math.min(maxStakeSc, Math.max(minE, myBalance)));
+                                }}
+                                disabled={maxStakeSc <= 0}
+                                className={`h-10 rounded-xl border border-amber-500/60 px-1 text-[10px] font-semibold leading-tight text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 sm:text-xs ${cinzel.className}`}
+                              >
+                                Cover bank
+                              </button>
+                            </div>
+                            <div className="mt-2 hidden flex-wrap justify-center gap-1.5 md:flex">
+                              {celoEntryPresetAmounts.map((amt) => (
                                 <button
                                   key={amt}
                                   type="button"
@@ -4882,73 +4946,72 @@ export default function CeloRoomPage() {
                                   {amt.toLocaleString()}
                                 </button>
                               ))}
+                              <button
+                                type="button"
+                                data-selected={entryAmount === maxStakeSc && maxStakeSc > 0}
+                                onClick={() => {
+                                  setJoinHint(null);
+                                  setEntryAmount(Math.min(maxStakeSc, Math.max(minE, myBalance)));
+                                }}
+                                disabled={maxStakeSc <= 0}
+                                className={`min-h-[44px] rounded-xl border border-amber-500/60 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 ${cinzel.className}`}
+                              >
+                                Cover bank
+                              </button>
+                            </div>
+                            <label className="mx-auto mt-2 flex w-full max-w-xs flex-col gap-0.5 text-left md:max-w-none md:gap-1">
+                              <span className="text-xs text-zinc-400">Bet amount (GPC)</span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={minE}
+                                max={maxStakeSc > 0 ? maxStakeSc : minE}
+                                step={1}
+                                value={entryAmount}
+                                onChange={(ev) => {
+                                  const raw = ev.target.value;
+                                  if (raw === "") {
+                                    setEntryAmount(minE);
+                                    return;
+                                  }
+                                  const v = Number(raw);
+                                  if (!Number.isFinite(v)) return;
+                                  const whole = Math.floor(v);
+                                  setEntryAmount(
+                                    clamp(whole, minE, maxStakeSc > 0 ? maxStakeSc : minE)
+                                  );
+                                }}
+                                className="h-10 rounded-xl border border-[#f5c842]/35 bg-black/40 px-3 text-center text-sm tabular-nums text-[#f5c842] outline-none focus:ring-2 focus:ring-[#f5c842]/40 md:min-h-[44px] md:text-left"
+                              />
+                            </label>
                             <button
                               type="button"
-                              data-selected={entryAmount === maxStakeSc && maxStakeSc > 0}
+                              disabled={joinSubmitting}
+                              aria-disabled={joinSubmitting || !canPostEntry}
+                              aria-busy={joinSubmitting}
                               onClick={() => {
-                                setJoinHint(null);
-                                setEntryAmount(Math.min(maxStakeSc, Math.max(minE, myBalance)));
+                                void handlePostEntry();
                               }}
-                              disabled={maxStakeSc <= 0}
-                              className={`min-h-[44px] rounded-xl border border-amber-500/60 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40 ${cinzel.className}`}
+                              className={`mt-2 w-full rounded-xl font-bold text-zinc-950 touch-manipulation h-11 text-sm md:min-h-[48px] ${cinzel.className}`}
+                              style={{
+                                background: "linear-gradient(135deg, #F5C842, #B8860B)",
+                                opacity: joinSubmitting || !canPostEntry ? 0.45 : 1,
+                                cursor:
+                                  joinSubmitting || !canPostEntry ? "not-allowed" : "pointer",
+                              }}
                             >
-                              Cover bank
+                              {joinSubmitting
+                                ? "Posting…"
+                                : `Post Entry — ${entryAmount.toLocaleString()} GPC`}
                             </button>
                           </div>
-                          <label className="mx-auto flex w-full max-w-xs flex-col gap-1 text-left">
-                            <span className="text-xs text-zinc-400">
-                              Bet amount (GPC)
-                            </span>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min={minE}
-                              max={maxStakeSc > 0 ? maxStakeSc : minE}
-                              step={1}
-                              value={entryAmount}
-                              onChange={(ev) => {
-                                const raw = ev.target.value;
-                                if (raw === "") {
-                                  setEntryAmount(minE);
-                                  return;
-                                }
-                                const v = Number(raw);
-                                if (!Number.isFinite(v)) return;
-                                const whole = Math.floor(v);
-                                setEntryAmount(
-                                  clamp(whole, minE, maxStakeSc > 0 ? maxStakeSc : minE)
-                                );
-                              }}
-                              className="min-h-[44px] rounded-xl border border-[#f5c842]/35 bg-black/40 px-3 text-[#f5c842] outline-none focus:ring-2 focus:ring-[#f5c842]/40"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            disabled={joinSubmitting}
-                            aria-disabled={joinSubmitting || !canPostEntry}
-                            aria-busy={joinSubmitting}
-                            onClick={() => {
-                              void handlePostEntry();
-                            }}
-                            className="w-full min-h-[48px] rounded-xl font-bold text-zinc-950 touch-manipulation"
-                            style={{
-                              background: "linear-gradient(135deg, #F5C842, #B8860B)",
-                              opacity: joinSubmitting || !canPostEntry ? 0.45 : 1,
-                              cursor:
-                                joinSubmitting || !canPostEntry ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {joinSubmitting
-                              ? "Posting…"
-                              : `Post entry — ${entryAmount} GPC`}
-                          </button>
                         </div>
                       )}
                     {isSpec && (
                       <p className="text-center text-sm text-zinc-400/95">You’re spectating this table.</p>
                     )}
                   </div>
-                  <div className="flex justify-center sm:flex-col sm:items-center sm:justify-start">
+                  <div className="flex shrink-0 justify-center self-start sm:flex-col sm:items-center sm:justify-start">
                     <button
                       type="button"
                       onClick={() => setDiceModal(true)}
