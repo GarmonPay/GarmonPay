@@ -20,38 +20,71 @@ export function rollThreeDice(): [DiceValue, DiceValue, DiceValue] {
   ];
 }
 
+function clampDie(n: number): DiceValue {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v) || v < 1) return 1;
+  if (v > 6) return 6;
+  return v as DiceValue;
+}
+
 export function evaluateRoll(
   dice: [DiceValue, DiceValue, DiceValue]
 ): EvaluatedRoll {
-  const sorted = [...dice].sort((a, b) => a - b) as [
+  const normalized = [
+    clampDie(dice[0]),
+    clampDie(dice[1]),
+    clampDie(dice[2]),
+  ] as [DiceValue, DiceValue, DiceValue];
+  const sorted = [...normalized].sort((a, b) => a - b) as [
     DiceValue,
     DiceValue,
     DiceValue,
   ];
   const [a, b, c] = sorted;
 
-  // C-Lo 4-5-6
+  const logResult = (out: EvaluatedRoll): EvaluatedRoll => {
+    console.log("[C-Lo Roll Classification]", {
+      dice: [dice[0], dice[1], dice[2]],
+      sorted: [a, b, c],
+      result: { rollName: out.rollName, result: out.result },
+    });
+    return out;
+  };
+
+  // Any order 1-2-3 → automatic loss (must run before pair/trips logic)
+  if (a === 1 && b === 2 && c === 3) {
+    return logResult({
+      dice,
+      rollName: "DICK • AUTOMATIC LOSS",
+      result: "instant_loss",
+      point: null,
+      isCelo: false,
+      isTrips: false,
+    });
+  }
+
+  // Any order 4-5-6 → C-Lo (automatic win)
   if (a === 4 && b === 5 && c === 6) {
-    return {
+    return logResult({
       dice,
       rollName: "C-Lo",
       result: "instant_win",
       point: null,
       isCelo: true,
       isTrips: false,
-    };
+    });
   }
 
   // Trips
   if (a === b && b === c) {
-    return {
+    return logResult({
       dice,
       rollName: "Trips",
       result: "instant_win",
       point: null,
       isCelo: false,
       isTrips: true,
-    };
+    });
   }
 
   // Pair + odd
@@ -70,24 +103,24 @@ export function evaluateRoll(
 
   if (pair !== null && odd !== null) {
     if (odd === 6) {
-      return {
+      return logResult({
         dice,
         rollName: "Head Crack",
         result: "instant_win",
         point: null,
         isCelo: false,
         isTrips: false,
-      };
+      });
     }
     if (odd === 1) {
-      return {
+      return logResult({
         dice,
         rollName: "Dick",
         result: "instant_loss",
         point: null,
         isCelo: false,
         isTrips: false,
-      };
+      });
     }
     const pointNameByOdd: Record<number, string> = {
       2: "Shorty",
@@ -96,38 +129,26 @@ export function evaluateRoll(
       5: "Pound",
     };
     if (pointNameByOdd[odd]) {
-      return {
+      return logResult({
         dice,
         rollName: pointNameByOdd[odd]!,
         result: "point",
         point: odd,
         isCelo: false,
         isTrips: false,
-      };
+      });
     }
   }
 
-  // 1-2-3
-  if (a === 1 && b === 2 && c === 3) {
-    return {
-      dice,
-      rollName: "Trey",
-      result: "instant_loss",
-      point: null,
-      isCelo: false,
-      isTrips: false,
-    };
-  }
-
   // No count
-  return {
+  return logResult({
     dice,
     rollName: "No Count",
     result: "no_count",
     point: null,
     isCelo: false,
     isTrips: false,
-  };
+  });
 }
 
 export function calculatePayout(entrySC: number, feePct = 10) {

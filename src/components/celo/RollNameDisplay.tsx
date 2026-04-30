@@ -71,7 +71,16 @@ const STYLES: Record<
 function getStyle(rollName: string) {
   const upper = rollName.toUpperCase();
   for (const [key, val] of Object.entries(STYLES)) {
-    if (upper.includes(key)) return val;
+    if (upper.includes(key)) {
+      if (upper.includes("AUTOMATIC LOSS") || upper.includes("AUTOMATIC WIN")) {
+        return {
+          ...val,
+          size: Math.min(val.size, 52),
+          mobileSize: Math.min(val.mobileSize, 34),
+        };
+      }
+      return val;
+    }
   }
   return {
     color: "#9CA3AF",

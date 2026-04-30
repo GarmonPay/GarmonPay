@@ -23,10 +23,37 @@ describe("evaluateRoll (authentic C-Lo rules)", () => {
     expect(r.rollName).toBe("C-Lo");
   });
 
-  it("1-2-3 is Trey (instant loss)", () => {
-    const r = d3(1, 2, 3);
-    expect(r.result).toBe("instant_loss");
-    expect(r.rollName).toBe("Trey");
+  it("4-5-6 is C-Lo in any order", () => {
+    const permutations: [number, number, number][] = [
+      [4, 5, 6],
+      [4, 6, 5],
+      [5, 4, 6],
+      [5, 6, 4],
+      [6, 4, 5],
+      [6, 5, 4],
+    ];
+    for (const [x, y, z] of permutations) {
+      const r = d3(x, y, z);
+      expect(r.result).toBe("instant_win");
+      expect(r.rollName).toBe("C-Lo");
+      expect(r.isCelo).toBe(true);
+    }
+  });
+
+  it("1-2-3 is DICK automatic loss in any order", () => {
+    const permutations: [number, number, number][] = [
+      [1, 2, 3],
+      [1, 3, 2],
+      [2, 1, 3],
+      [2, 3, 1],
+      [3, 1, 2],
+      [3, 2, 1],
+    ];
+    for (const [x, y, z] of permutations) {
+      const r = d3(x, y, z);
+      expect(r.result).toBe("instant_loss");
+      expect(r.rollName).toBe("DICK • AUTOMATIC LOSS");
+    }
   });
 
   it("1-1-5 is point 5 (Pound)", () => {
@@ -80,7 +107,7 @@ describe("evaluateRoll (authentic C-Lo rules)", () => {
     const samples: [number, number, number, string][] = [
       [3, 3, 3, "Trips"],
       [4, 5, 6, "C-Lo"],
-      [1, 2, 3, "Trey"],
+      [1, 2, 3, "DICK • AUTOMATIC LOSS"],
       [6, 6, 5, "Pound"],
       [4, 4, 6, "Head Crack"],
       [6, 6, 2, "Shorty"],
