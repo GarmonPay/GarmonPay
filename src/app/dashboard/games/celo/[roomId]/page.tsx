@@ -561,6 +561,8 @@ export default function CeloRoomPage() {
   const [pauseTick, setPauseTick] = useState(0);
   const [pauseUiBusy, setPauseUiBusy] = useState(false);
   const [pauseVoteBusy, setPauseVoteBusy] = useState(false);
+  const [pauseRequested, setPauseRequested] = useState(false);
+  const [pauseVoteCount, setPauseVoteCount] = useState(0);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
   const [diceModal, setDiceModal] = useState(false);
@@ -917,6 +919,8 @@ export default function CeloRoomPage() {
       );
       const ar = (roundsRes.data as Round[] | null) ?? [];
       activeRound = ar[0] ?? null;
+      setPauseRequested(false);
+      setPauseVoteCount(0);
       const rs = String((incomingRoom as { status?: string })?.status ?? "");
       if (
         !activeRound &&
@@ -940,6 +944,11 @@ export default function CeloRoomPage() {
         room?: Record<string, unknown>;
         players?: unknown[];
         activeRound?: Record<string, unknown> | null;
+        pauseVotes?: {
+          requestCount?: number;
+          approveCount?: number;
+          requested?: boolean;
+        };
       };
       if (body.room) {
         incomingRoom = body.room;
@@ -952,6 +961,12 @@ export default function CeloRoomPage() {
         body.activeRound == null
           ? null
           : (body.activeRound as unknown as Round);
+      const requestVotes = Math.max(0, Math.floor(Number(body.pauseVotes?.requestCount ?? 0)));
+      const approveVotes = Math.max(0, Math.floor(Number(body.pauseVotes?.approveCount ?? 0)));
+      setPauseRequested(
+        body.pauseVotes?.requested === true || requestVotes > 0 || approveVotes > 0
+      );
+      setPauseVoteCount(approveVotes);
     }
 
     if (isStaleFetch()) {
@@ -1855,6 +1870,16 @@ export default function CeloRoomPage() {
   }, [roomId, room, me, players]);
 
   useEffect(() => {
+    console.log("[C-Lo pause controls]", {
+      userId: me,
+      bankerId: room?.banker_id,
+      isCurrentBanker,
+      pauseRequested,
+      pauseVoteCount,
+    });
+  }, [me, room?.banker_id, isCurrentBanker, pauseRequested, pauseVoteCount]);
+
+  useEffect(() => {
     // If banker ownership moves away from this user, immediately clear setup interaction state.
     if (needsBankSetup) return;
     if (newBankerSetupBusy) setNewBankerSetupBusy(false);
@@ -2558,22 +2583,31 @@ export default function CeloRoomPage() {
   const roomInLiveRound = roomStatusLc === "rolling";
   const rollSideQuiet =
     round?.roll_processing !== true && round?.banker_roll_in_flight !== true;
+  const roundSettling = round?.roll_processing === true;
+  const pauseControlsHidden =
+    roomStatusLc === "rolling" ||
+    roomStatusLc === "cancelled" ||
+    roomStatusLc === "closed" ||
+    roundSettling ||
+    roomPauseActive ||
+    roomPausedBlocking;
   const canOfferBankerPause =
-    isBanker &&
+    isCurrentBanker &&
     ["waiting", "active"].includes(roomStatusLc) &&
     !hasActiveRound &&
     !roomInLiveRound &&
     rollSideQuiet &&
     !bannerOverlayVisible &&
-    !roomPausedBlocking;
+    !pauseControlsHidden;
   const canOfferPlayerPauseVote =
+    !isCurrentBanker &&
     isPlayer &&
     ["waiting", "active", "entry_phase"].includes(roomStatusLc) &&
     !hasActiveRound &&
     !roomInLiveRound &&
     rollSideQuiet &&
     !bannerOverlayVisible &&
-    !roomPausedBlocking;
+    !pauseControlsHidden;
   const showStartRoundPanel =
     !!room &&
     isBanker &&
@@ -3170,7 +3204,7 @@ export default function CeloRoomPage() {
   }
 
   async function handleResumeRoom() {
-    if (!room || !supabase || !isBanker || !room.paused_at) return;
+    if (!room || !supabase || !isCurrentBanker || !room.paused_at) return;
     setPauseUiBusy(true);
     setRollError(null);
     try {
@@ -3200,6 +3234,35 @@ export default function CeloRoomPage() {
           "join"
         );
       }
+      await fetchAll();
+    } finally {
+      setPauseUiBusy(false);
+    }
+  }
+
+  async function handleRejectPauseRequest() {
+    if (!room || !supabase || !isCurrentBanker || !pauseRequested) return;
+    setPauseUiBusy(true);
+    setRollError(null);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/pause-vote/reset", {
+        method: "POST",
+        body: JSON.stringify({ room_id: room.id }),
+      });
+      const text = await res.text();
+      let j: { error?: string } = {};
+      try {
+        j = text ? (JSON.parse(text) as typeof j) : {};
+      } catch {
+        setRollError("Invalid pause reject response");
+        return;
+      }
+      if (!res.ok) {
+        setRollError(j.error ?? "Could not reject pause request");
+        return;
+      }
+      setPauseRequested(false);
+      setPauseVoteCount(0);
       await fetchAll();
     } finally {
       setPauseUiBusy(false);
@@ -4120,17 +4183,34 @@ export default function CeloRoomPage() {
                 Delete Room
               </button>
             )}
-            {isBanker && room && canOfferBankerPause && (
-              <button
-                type="button"
-                disabled={pauseUiBusy}
-                onClick={() => void handlePauseRoom()}
-                className="shrink-0 min-h-touch rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/50 sm:text-sm disabled:opacity-50"
-              >
-                Pause
-              </button>
+            {!pauseControlsHidden && room && (
+              <span className="shrink-0 rounded-md border border-zinc-700/60 bg-zinc-900/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                Pause controls
+              </span>
             )}
-            {isBanker && room && Boolean(room.paused_at) && (
+            {isCurrentBanker && room && canOfferBankerPause && (
+              <>
+                <button
+                  type="button"
+                  disabled={pauseUiBusy}
+                  onClick={() => void handlePauseRoom()}
+                  className="shrink-0 min-h-touch rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/50 sm:text-sm disabled:opacity-50"
+                >
+                  {pauseRequested ? "Approve Pause" : "Pause"}
+                </button>
+                {pauseRequested && (
+                  <button
+                    type="button"
+                    disabled={pauseUiBusy}
+                    onClick={() => void handleRejectPauseRequest()}
+                    className="shrink-0 min-h-touch rounded-lg border border-rose-500/50 bg-rose-950/30 px-2.5 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-900/40 sm:text-sm disabled:opacity-50"
+                  >
+                    Reject Pause
+                  </button>
+                )}
+              </>
+            )}
+            {isCurrentBanker && room && Boolean(room.paused_at) && (
               <button
                 type="button"
                 disabled={pauseUiBusy}
@@ -4140,7 +4220,7 @@ export default function CeloRoomPage() {
                 Resume
               </button>
             )}
-            {isPlayer && room && canOfferPlayerPauseVote && (
+            {!isCurrentBanker && room && canOfferPlayerPauseVote && (
               <>
                 <button
                   type="button"
@@ -4148,16 +4228,18 @@ export default function CeloRoomPage() {
                   onClick={() => void handlePauseVote("request")}
                   className="shrink-0 min-h-touch rounded-lg border border-zinc-600 px-2 py-1.5 text-[10px] font-semibold text-zinc-200 sm:text-xs disabled:opacity-50"
                 >
-                  Request pause
+                  Request Pause
                 </button>
-                <button
-                  type="button"
-                  disabled={pauseVoteBusy}
-                  onClick={() => void handlePauseVote("approve")}
-                  className="shrink-0 min-h-touch rounded-lg border border-amber-600/60 px-2 py-1.5 text-[10px] font-semibold text-amber-100 sm:text-xs disabled:opacity-50"
-                >
-                  Vote pause
-                </button>
+                {pauseRequested && (
+                  <button
+                    type="button"
+                    disabled={pauseVoteBusy}
+                    onClick={() => void handlePauseVote("approve")}
+                    className="shrink-0 min-h-touch rounded-lg border border-amber-600/60 px-2 py-1.5 text-[10px] font-semibold text-amber-100 sm:text-xs disabled:opacity-50"
+                  >
+                    Vote Pause
+                  </button>
+                )}
               </>
             )}
             <span

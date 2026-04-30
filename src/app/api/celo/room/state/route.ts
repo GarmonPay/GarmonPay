@@ -130,6 +130,19 @@ export async function GET(request: Request) {
     playerRolls = rolls ?? [];
   }
 
+  const [{ count: requestCount }, { count: approveCount }] = await Promise.all([
+    adminClient
+      .from("celo_pause_votes")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .eq("vote", "request"),
+    adminClient
+      .from("celo_pause_votes")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .eq("vote", "approve"),
+  ]);
+
   const bankerIdForShape = String(
     (roomRaw as { banker_id?: string | null }).banker_id ?? ""
   );
@@ -156,5 +169,10 @@ export async function GET(request: Request) {
     players: playersShaped,
     activeRound: activeRound ?? null,
     playerRolls,
+    pauseVotes: {
+      requestCount: requestCount ?? 0,
+      approveCount: approveCount ?? 0,
+      requested: (requestCount ?? 0) > 0,
+    },
   });
 }
