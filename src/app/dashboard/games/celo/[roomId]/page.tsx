@@ -1771,13 +1771,10 @@ export default function CeloRoomPage() {
   const myRow = players.find(
     (p) => me != null && normalizeCeloUserId(p.user_id) === normalizeCeloUserId(me)
   );
-  /**
-   * Prefer `room.banker_id` (server); fallback only when realtime omits it briefly.
-   */
-  const bankerUserIdResolved =
-    room?.banker_id ??
-    players.find((p) => String(p.role ?? "").toLowerCase() === "banker")?.user_id ??
-    null;
+  /** Sole banker source for UI: `celo_rooms.banker_id` only (never player.role / seat). */
+  const roomBankerIdForUi = room?.banker_id?.trim()
+    ? String(room.banker_id)
+    : null;
   const myRoleLc = String(myRow?.role ?? "").toLowerCase();
   const isBanker =
     me != null &&
@@ -1835,10 +1832,27 @@ export default function CeloRoomPage() {
       isCurrentBanker &&
       Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
       room.bank_busted === true &&
-      !hasActiveRound &&
       roomStatusLc !== "cancelled" &&
       roomStatusLc !== "closed"
   );
+
+  useEffect(() => {
+    if (!room) return;
+    console.log("[C-Lo banker source of truth]", {
+      roomId,
+      roomBankerId: room?.banker_id,
+      currentUserId: me,
+      players: players.map((p) => ({
+        user_id: p.user_id,
+        seat: p.seat_number,
+        oldRole: p.role,
+        isBadgeBanker:
+          room.banker_id != null &&
+          normalizeCeloUserId(p.user_id) ===
+            normalizeCeloUserId(room.banker_id),
+      })),
+    });
+  }, [roomId, room, me, players]);
 
   useEffect(() => {
     // If banker ownership moves away from this user, immediately clear setup interaction state.
@@ -2302,20 +2316,10 @@ export default function CeloRoomPage() {
       mode: visualDiceMode,
     });
   }, [rolling, dice, round?.banker_dice, round?.id, visualDiceMode]);
-  const stakedPlayerCount = useMemo(() => {
-    const n = players.filter((p) => {
-      const bankerRow =
-        p.is_banker === true ||
-        (bankerUserIdResolved != null &&
-          normalizeCeloUserId(p.user_id) ===
-            normalizeCeloUserId(bankerUserIdResolved));
-      if (bankerRow) return false;
-      return (
-        p.entry_posted === true && Number(p.stake_amount_sc || 0) > 0
-      );
-    }).length;
-    return n;
-  }, [players, bankerUserIdResolved]);
+  const stakedPlayerCount = useMemo(
+    () => countStakedEntryPlayers(players, roomBankerIdForUi),
+    [players, roomBankerIdForUi]
+  );
 
   useEffect(() => {
     console.log(
@@ -2396,7 +2400,7 @@ export default function CeloRoomPage() {
       bankVal(room) <= 0 &&
       !inProgress
     ) {
-      return "Bank busted — banker changed";
+      return "Syncing table bank…";
     }
     if (roomStatusLc === "rolling" && !round) {
       return "Syncing round…";
@@ -2518,7 +2522,7 @@ export default function CeloRoomPage() {
       isBanker,
       roomStatus: room?.status,
       roomStatusLc,
-      bankerUserIdResolved,
+      roomBankerIdForUi,
       myRoleLc,
       selectedEntryAmount: entryAmount,
       entryAmountFinite: Number.isFinite(entryAmount),
@@ -2536,7 +2540,7 @@ export default function CeloRoomPage() {
     isBanker,
     room?.status,
     roomStatusLc,
-    bankerUserIdResolved,
+    roomBankerIdForUi,
     myRoleLc,
     entryAmount,
     myRow?.entry_posted,
@@ -3821,7 +3825,7 @@ export default function CeloRoomPage() {
       myEntrySc,
       myRoleLc,
       roomStatusLc,
-      bankerUserIdResolved,
+      roomBankerIdForUi,
       joinSubmitting,
     });
     console.log("[C-Lo UI] POST ENTRY BUTTON CLICKED");
@@ -4231,9 +4235,9 @@ export default function CeloRoomPage() {
               <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-300 sm:text-[11px]">
                 {playersAtTable.map((p) => {
                   const isRoomBanker =
-                    (room.banker_id != null &&
-                      String(room.banker_id) === p.user_id) ||
-                    p.role === "banker";
+                    room.banker_id != null &&
+                    normalizeCeloUserId(p.user_id) ===
+                      normalizeCeloUserId(room.banker_id);
                   return (
                     <li key={p.id} className="flex min-w-0 max-w-full items-baseline gap-1">
                       <span className="shrink-0 text-zinc-500">

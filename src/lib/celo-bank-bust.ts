@@ -22,24 +22,54 @@ async function nextAvailablePlayerSeat(
   return 1;
 }
 
-async function swapBankerSeatRoles(
+/** Demote every `role = banker` row except `exceptUserId` (if any) to player with a free seat. */
+async function demoteBankerRowsExcept(
   admin: SupabaseClient,
   roomId: string,
-  oldBankerId: string,
-  newBankerId: string,
+  exceptUserId: string | null,
   maxPlayers: number
 ): Promise<void> {
-  const nextSeat = await nextAvailablePlayerSeat(admin, roomId, maxPlayers);
-  await admin
+  const { data: bankerRows } = await admin
     .from("celo_room_players")
-    .update({ role: "player", seat_number: nextSeat })
+    .select("user_id")
     .eq("room_id", roomId)
-    .eq("user_id", oldBankerId);
+    .eq("role", "banker");
+  for (const row of bankerRows ?? []) {
+    const uid = String(row.user_id);
+    if (
+      exceptUserId &&
+      normalizeCeloUserId(uid) === normalizeCeloUserId(exceptUserId)
+    ) {
+      continue;
+    }
+    const nextSeat = await nextAvailablePlayerSeat(admin, roomId, maxPlayers);
+    await admin
+      .from("celo_room_players")
+      .update({ role: "player", seat_number: nextSeat })
+      .eq("room_id", roomId)
+      .eq("user_id", uid);
+  }
+}
+
+/** Demote all banker rows to player (used when room has no successor banker). */
+async function demoteAllBankerRowsToPlayers(
+  admin: SupabaseClient,
+  roomId: string,
+  maxPlayers: number
+): Promise<void> {
+  await demoteBankerRowsExcept(admin, roomId, null, maxPlayers);
+}
+
+async function ensurePlayerRowIsBanker(
+  admin: SupabaseClient,
+  roomId: string,
+  bankerUserId: string
+): Promise<void> {
   await admin
     .from("celo_room_players")
     .update({ role: "banker", seat_number: 0 })
     .eq("room_id", roomId)
-    .eq("user_id", newBankerId);
+    .eq("user_id", bankerUserId);
 }
 
 /**
@@ -73,6 +103,7 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
   const maxPlayers = Math.floor(Number(room.max_players) || 10);
 
   if (!previousBankerId) {
+    await demoteAllBankerRowsToPlayers(admin, roomId, maxPlayers);
     await admin
       .from("celo_rooms")
       .update({
@@ -101,13 +132,8 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
       : null;
 
   if (winner) {
-    await swapBankerSeatRoles(
-      admin,
-      roomId,
-      previousBankerId,
-      winner,
-      maxPlayers
-    );
+    await demoteBankerRowsExcept(admin, roomId, winner, maxPlayers);
+    await ensurePlayerRowIsBanker(admin, roomId, winner);
     await admin
       .from("celo_rooms")
       .update({
@@ -131,11 +157,7 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
     return;
   }
 
-  await admin
-    .from("celo_room_players")
-    .update({ role: "player", seat_number: await nextAvailablePlayerSeat(admin, roomId, maxPlayers) })
-    .eq("room_id", roomId)
-    .eq("user_id", previousBankerId);
+  await demoteAllBankerRowsToPlayers(admin, roomId, maxPlayers);
 
   await admin
     .from("celo_rooms")

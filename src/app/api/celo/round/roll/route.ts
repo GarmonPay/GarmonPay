@@ -24,6 +24,7 @@ import {
   resetCeloRoomEntries as resetRoomEntries,
   resolvePlayerRollTimeout,
 } from "@/lib/celo-player-timeout";
+import { normalizeCeloUserId } from "@/lib/celo-player-state";
 
 const ROLL_ANIMATION_MS = 1500;
 /** Pause after terminal round writes so clients can display final dice/outcome before reset. */
@@ -243,7 +244,11 @@ export async function POST(request: Request) {
   if (String(body.action ?? "") === "timeout_forfeit") {
     return handlePlayerRollTimeout(adminClient, { room, round, feePct });
   }
-  if (player.role === "banker" || userId === room.banker_id) {
+  const roomBankerId = room.banker_id ? String(room.banker_id) : "";
+  const isRoomBanker =
+    roomBankerId.length > 0 &&
+    normalizeCeloUserId(userId) === normalizeCeloUserId(roomBankerId);
+  if (isRoomBanker) {
     if (round.status !== "banker_rolling") {
       return NextResponse.json({ error: "Not your turn" }, { status: 400 });
     }
@@ -257,6 +262,15 @@ export async function POST(request: Request) {
   const dice = rollThreeDice();
   const roll = evaluateRoll(dice);
   if (player.role === "player") {
+    if (
+      roomBankerId.length > 0 &&
+      normalizeCeloUserId(userId) === normalizeCeloUserId(roomBankerId)
+    ) {
+      return NextResponse.json(
+        { error: "Room banker cannot roll as a seated player on this table." },
+        { status: 403 }
+      );
+    }
     if (round.status !== "player_rolling") {
       return NextResponse.json({ error: "Not your turn" }, { status: 400 });
     }
