@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { isAdmin } from "@/lib/admin-auth";
-import { totalWageredMinor } from "@/lib/coin-flip";
+import { coinFlipPvpTotalWageredMinor } from "@/lib/coin-flip";
 
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
@@ -43,8 +43,7 @@ export async function GET(request: Request) {
     totalFlipsToday += 1;
     totalHouseCutTodayMinor += Math.trunc(Number(r.house_cut_minor ?? 0));
     const bet = Math.trunc(Number(r.bet_amount_minor ?? 0));
-    const mode = r.mode === "vs_player" ? "vs_player" : "vs_house";
-    totalWageredTodayMinor += totalWageredMinor(mode, bet);
+    totalWageredTodayMinor += coinFlipPvpTotalWageredMinor(bet);
   }
 
   return NextResponse.json({

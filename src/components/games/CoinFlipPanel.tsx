@@ -56,6 +56,9 @@ type HistoryRow = {
   mode: string;
   status: string;
   betAmountMinor: number;
+  totalPotMinor?: number;
+  platformFeeMinor?: number;
+  winnerPayoutMinor?: number;
   result: string | null;
   won: boolean | null;
   netMinor: number;
@@ -491,7 +494,7 @@ export function CoinFlipPanel() {
                 <tr className="text-white/50 border-b border-white/10">
                   <th className="pb-2 pr-3">Date</th>
                   <th className="pb-2 pr-3">Mode</th>
-                  <th className="pb-2 pr-3">Bet</th>
+                  <th className="pb-2 pr-3 min-w-[11rem]">Pot &amp; fees</th>
                   <th className="pb-2 pr-3">Result</th>
                   <th className="pb-2">Net</th>
                 </tr>
@@ -499,14 +502,28 @@ export function CoinFlipPanel() {
               <tbody>
                 {history.map((h) => (
                   <tr key={h.id} className="border-b border-white/5 text-white/60">
-                    <td className="py-2 pr-3 whitespace-nowrap text-white/90">
+                    <td className="py-2 pr-3 whitespace-nowrap text-white/90 align-top">
                       {h.createdAt ? new Date(h.createdAt).toLocaleString() : "—"}
                     </td>
-                    <td className="py-2 pr-3">{h.mode === "vs_player" ? "Player" : "Legacy"}</td>
-                    <td className="py-2 pr-3">{formatGPC(h.betAmountMinor)}</td>
-                    <td className="py-2 pr-3">{h.result ?? "—"}</td>
+                    <td className="py-2 pr-3 align-top">{h.mode === "vs_player" ? "PvP" : "—"}</td>
+                    <td className="py-2 pr-3 align-top text-[11px] leading-snug">
+                      {h.status === "completed" &&
+                      h.totalPotMinor != null &&
+                      h.platformFeeMinor != null &&
+                      h.winnerPayoutMinor != null ? (
+                        <div className="space-y-0.5 text-white/75">
+                          <div>Bet: {formatGPC(h.betAmountMinor)}</div>
+                          <div>Pot: {formatGPC(h.totalPotMinor)}</div>
+                          <div>Fee (10%): {formatGPC(h.platformFeeMinor)}</div>
+                          <div>Paid: {formatGPC(h.winnerPayoutMinor)}</div>
+                        </div>
+                      ) : (
+                        <span>Bet: {formatGPC(h.betAmountMinor)}</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 align-top">{h.result ?? "—"}</td>
                     <td
-                      className={`py-2 tabular-nums ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-400" : ""}`}
+                      className={`py-2 tabular-nums align-top ${h.netMinor > 0 ? "text-emerald-400" : h.netMinor < 0 ? "text-red-400" : ""}`}
                     >
                       {h.status === "completed" ? (
                         <>

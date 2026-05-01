@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { computePayoutAndHouseCut, flipCoin } from "@/lib/coin-flip";
+import { computePvpCoinFlipSettlement, flipCoin } from "@/lib/coin-flip";
 import { COIN_FLIP_MIN_BET_SC } from "@/lib/coin-flip";
-import { insertCoinFlipPlatformFee } from "@/lib/coin-flip-ledger";
-import { creditCoins, debitGpayCoins, getUserCoins } from "@/lib/coins";
+import { recordCoinFlipPvpPlatformFee } from "@/lib/coin-flip-ledger";
+import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
 export async function POST(request: Request) {
   const userId = await getAuthUserIdBearerOrCookie(request);
@@ -94,7 +94,10 @@ export async function POST(request: Request) {
   const result = flipCoin();
   const creatorWins = result === g.creator_side;
   const winnerId = creatorWins ? g.creator_id : userId;
-  const { payoutWinnerMinor, houseCutMinor } = computePayoutAndHouseCut(betAmountSc);
+  const loserId = creatorWins ? userId : g.creator_id;
+
+  const { totalPotGpc, platformFeeGpc, winnerPayoutGpc } = computePvpCoinFlipSettlement(betAmountSc);
+
   const resolvedAt = new Date().toISOString();
 
   const { data: updated, error: updErr } = await supabase
@@ -104,8 +107,12 @@ export async function POST(request: Request) {
       status: "completed",
       result,
       winner_id: winnerId,
-      house_cut_minor: houseCutMinor,
+      loser_user_id: loserId,
+      house_cut_minor: platformFeeGpc,
+      total_pot_minor: totalPotGpc,
+      winner_payout_minor: winnerPayoutGpc,
       resolved_at: resolvedAt,
+      settled_at: resolvedAt,
     })
     .eq("id", gameId)
     .eq("status", "waiting")
@@ -114,31 +121,49 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (updErr || !updated) {
-    const refund = await creditCoins(
+    const refund = await creditGpayIdempotent(
       userId,
-      0,
       betAmountSc,
       `Coin flip join refund (race) ${gameId}`,
       `coin_flip_join_refund_${gameId}`,
       "coin_flip_refund"
     );
-    if (!refund.success && !/duplicate/i.test(refund.message ?? "")) {
+    if (!refund.success) {
       console.error("[coin-flip/join] refund failed", refund.message);
     }
     return NextResponse.json({ message: "Game was already taken or cancelled" }, { status: 409 });
   }
 
-  const winRef = `coin_flip_win_${gameId}`;
-  const win = await creditCoins(winnerId, 0, payoutWinnerMinor, `Coin flip win ${gameId}`, winRef, "coin_flip_win");
+  console.log("[CoinFlip:Settle]", {
+    flipId: gameId,
+    winnerId,
+    totalPotGpc,
+    platformFeeGpc,
+    winnerPayoutGpc,
+  });
+
+  const winRef = `coinflip_win_${gameId}`;
+  const win = await creditGpayIdempotent(
+    winnerId,
+    winnerPayoutGpc,
+    `Coin flip win ${gameId}`,
+    winRef,
+    "coinflip_win"
+  );
 
   if (!win.success) {
     return NextResponse.json({ message: win.message ?? "Payout failed" }, { status: 500 });
   }
 
-  await insertCoinFlipPlatformFee(supabase, gameId, houseCutMinor, { userId: winnerId });
+  const feeKey = `coinflip_fee_${gameId}`;
+  const feeRes = await recordCoinFlipPvpPlatformFee(supabase, gameId, platformFeeGpc, winnerId, feeKey);
+  if (!feeRes.ok) {
+    console.error("[coin-flip/join] platform fee record failed", feeRes.message);
+    return NextResponse.json({ message: feeRes.message ?? "Fee ledger failed" }, { status: 500 });
+  }
 
   const youWon = winnerId === userId;
-  const netMinor = youWon ? payoutWinnerMinor - betAmountSc : -betAmountSc;
+  const netMinor = youWon ? winnerPayoutGpc - betAmountSc : -betAmountSc;
   const netMinorInt = Math.trunc(netMinor);
   const after = await getUserCoins(userId);
   const afterInt = Math.max(0, Math.trunc(after.gpayCoins));
@@ -160,10 +185,13 @@ export async function POST(request: Request) {
     winnerId,
     youWon,
     betAmountMinor: betAmountSc,
-    payoutWinnerMinor,
-    houseCutMinor,
+    totalPotGpc,
+    platformFeeGpc,
+    winnerPayoutGpc,
+    payoutWinnerMinor: winnerPayoutGpc,
+    houseCutMinor: platformFeeGpc,
     netMinor: netMinorInt,
-    amount_won: youWon ? Math.trunc(payoutWinnerMinor) : 0,
+    amount_won: youWon ? Math.trunc(winnerPayoutGpc) : 0,
     amount_lost: youWon ? 0 : Math.trunc(betAmountSc),
     new_balance: afterInt,
     gpayCoins: afterInt,

@@ -5,14 +5,23 @@ export type CoinSide = "heads" | "tails";
 /** Coin flip stakes use GPay Coins; minimum bet (GPC). */
 export const COIN_FLIP_MIN_BET_SC = 100;
 
-/** Total pot is 2× bet; platform fee is 10% of gross; winner receives gross − fee. */
+/** PvP only: total pot = both stakes; fee = 10% of pot taken from pot; winner gets remainder. */
+export function computePvpCoinFlipSettlement(betPerPlayerGpc: number): {
+  totalPotGpc: number;
+  platformFeeGpc: number;
+  winnerPayoutGpc: number;
+} {
+  const bet = Math.floor(Number(betPerPlayerGpc));
+  const totalPotGpc = bet * 2;
+  const platformFeeGpc = Math.floor(totalPotGpc * 0.1);
+  const winnerPayoutGpc = totalPotGpc - platformFeeGpc;
+  return { totalPotGpc, platformFeeGpc, winnerPayoutGpc };
+}
+
+/** @deprecated use computePvpCoinFlipSettlement; kept for call sites that expect { payoutWinnerMinor, houseCutMinor }. */
 export function computePayoutAndHouseCut(betMinor: number): { payoutWinnerMinor: number; houseCutMinor: number } {
-  const bet = Math.floor(Number(betMinor));
-  const gross = bet * 2;
-  const platformFee = Math.floor(gross * 0.1);
-  const payoutWinnerMinor = gross - platformFee;
-  const houseCutMinor = platformFee;
-  return { payoutWinnerMinor, houseCutMinor };
+  const s = computePvpCoinFlipSettlement(betMinor);
+  return { payoutWinnerMinor: s.winnerPayoutGpc, houseCutMinor: s.platformFeeGpc };
 }
 
 export function flipCoin(): CoinSide {
@@ -28,8 +37,7 @@ export function maskCreatorEmail(email: string | null | undefined): string {
   return `${local[0]}•••@${domain}`;
 }
 
-/** GPay wagered into the game (creator + opponent stakes where applicable). */
-export function totalWageredMinor(mode: "vs_house" | "vs_player", betMinor: number): number {
-  const b = Math.floor(betMinor);
-  return mode === "vs_house" ? b : b * 2;
+/** GPay wagered into a completed PvP flip (both players staked the same per-player bet). */
+export function coinFlipPvpTotalWageredMinor(betPerPlayerMinor: number): number {
+  return Math.floor(Number(betPerPlayerMinor)) * 2;
 }

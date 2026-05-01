@@ -1,25 +1,35 @@
 /**
- * Coin Flip: record house edge in platform_earnings (reporting; user balances use gpay_ledger / users.gpay_coins).
+ * Coin Flip PvP: idempotent platform fee via coin_flip_record_platform_fee RPC
+ * (platform_earnings + platform_balance).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function insertCoinFlipPlatformFee(
+export async function recordCoinFlipPvpPlatformFee(
   supabase: SupabaseClient,
   gameId: string,
-  houseCutMinor: number,
-  opts?: { userId?: string | null }
-): Promise<void> {
-  if (!Number.isFinite(houseCutMinor) || houseCutMinor <= 0) return;
-  const row: Record<string, unknown> = {
-    source: "coin_flip_game",
-    source_id: gameId,
-    amount_cents: Math.round(houseCutMinor),
-    description: `Coin Flip house edge (10%) — game ${gameId}`,
-  };
-  if (opts?.userId) row.user_id = opts.userId;
-  const { error } = await supabase.from("platform_earnings").insert(row);
+  platformFeeGpc: number,
+  winnerUserId: string,
+  idempotencyKey: string
+): Promise<{ ok: boolean; message?: string }> {
+  const fee = Math.floor(platformFeeGpc);
+  if (!Number.isFinite(fee) || fee <= 0) return { ok: true };
+
+  const { data, error } = await supabase.rpc("coin_flip_record_platform_fee", {
+    p_game_id: gameId,
+    p_amount_gpc: fee,
+    p_winner_user_id: winnerUserId,
+    p_idempotency_key: idempotencyKey,
+  });
+
   if (error) {
-    console.error("[coin-flip] platform_earnings insert failed:", error.message);
+    console.error("[coin-flip] coin_flip_record_platform_fee RPC failed:", error.message);
+    return { ok: false, message: error.message };
   }
+
+  const row = data as { inserted?: boolean; reason?: string } | null;
+  if (row && row.inserted === false && row.reason === "duplicate_or_conflict") {
+    return { ok: true };
+  }
+  return { ok: true };
 }
