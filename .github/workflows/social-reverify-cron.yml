@@ -1,0 +1,33 @@
+# POST /api/cron/social-reverify every 15 minutes.
+# Required GitHub repository secrets:
+#   CRON_TARGET_URL — full URL, e.g. https://your-domain.com/api/cron/social-reverify
+#   CRON_SECRET — same value as CRON_SECRET on Vercel (x-cron-secret header)
+
+name: Social task proof reverify
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  reverify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger social-reverify
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_TARGET_URL:-}" ]; then
+            echo "Missing secret CRON_TARGET_URL (full URL to /api/cron/social-reverify)" >&2
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing secret CRON_SECRET" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$CRON_TARGET_URL" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Content-Type: application/json"

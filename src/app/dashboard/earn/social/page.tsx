@@ -58,6 +58,29 @@ function startOfTodayUtc(): number {
   return d.getTime();
 }
 
+/** Lightweight device signal for fraud velocity (no external libs). */
+function buildSubmissionFingerprint(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const parts = [
+      navigator.userAgent,
+      navigator.language,
+      String(screen?.width ?? 0),
+      String(screen?.height ?? 0),
+      String(screen?.colorDepth ?? 0),
+      String(new Date().getTimezoneOffset()),
+    ].join("|");
+    let h = 2166136261;
+    for (let i = 0; i < parts.length; i++) {
+      h ^= parts.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return `fp_${(h >>> 0).toString(16)}`;
+  } catch {
+    return "";
+  }
+}
+
 async function authFetchSocial(url: string, body: Record<string, unknown>) {
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Not configured");
@@ -178,10 +201,12 @@ export default function SocialTasksEarnPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const fp = buildSubmissionFingerprint();
       const res = await authFetchSocial("/api/social/submit", {
         task_id: modalTask.id,
         proof_url: proofUrl,
         ...(claimStartedAt ? { claimed_at: claimStartedAt } : {}),
+        ...(fp ? { fingerprint: fp } : {}),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!res.ok) {

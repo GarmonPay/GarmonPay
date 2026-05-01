@@ -42,6 +42,8 @@ export async function runFraudChecks(params: {
   claimedAt: string | null;
   platform: string;
   taskType: string;
+  /** Same IP as stored on this completion row (for velocity across accounts). */
+  submissionIp?: string | null;
 }): Promise<FraudCheckResult> {
   const supabase = createAdminClient();
   if (!supabase) {
@@ -202,6 +204,22 @@ export async function runFraudChecks(params: {
     flags.push("bot_like_pattern");
   }
 
+  // ── CHECK 8: IP VELOCITY (same IP, any user, rolling 1h) ──
+  const submissionIp = params.submissionIp?.trim();
+  if (submissionIp && submissionIp !== "unknown") {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: ipCompletionCount } = await supabase
+      .from("social_task_completions")
+      .select("*", { count: "exact", head: true })
+      .eq("submission_ip", submissionIp)
+      .gte("completed_at", oneHourAgo);
+
+    if ((ipCompletionCount ?? 0) > 5) {
+      trustScore -= 20;
+      flags.push("ip_velocity_high");
+    }
+  }
+
   // ── DETERMINE ACTION ──
   let action: FraudCheckResult["action"];
   if (trustScore >= 85) {
@@ -277,14 +295,47 @@ export async function reverifyCompletion(params: {
     });
 
     if (response.status === 404) {
+      const { data: completionRow } = await supabase
+        .from("social_task_completions")
+        .select("reward_gpc, status")
+        .eq("id", params.completionId)
+        .maybeSingle();
+
+      const reward = Number((completionRow as { reward_gpc?: number } | null)?.reward_gpc ?? 0);
+      const priorStatus = String((completionRow as { status?: string } | null)?.status ?? "");
+
+      if (reward > 0) {
+        const claw = await debitGpayCoins(
+          params.userId,
+          reward,
+          "Social task reward clawback",
+          `claw_back_${params.completionId}`
+        );
+        if (!claw.success) console.error("[social-fraud] clawback:", claw.message);
+      }
+
       await supabase
         .from("social_task_completions")
         .update({
           verification_status: "clawed_back",
+          status: "clawed_back",
           flagged: true,
           flag_reason: "proof_deleted_possible_unfollow",
         })
         .eq("id", params.completionId);
+
+      if (priorStatus === "approved") {
+        const { data: taskRow } = await supabase
+          .from("social_tasks")
+          .select("completions")
+          .eq("id", params.taskId)
+          .maybeSingle();
+        const cur = Math.max(0, Math.floor(Number((taskRow as { completions?: number } | null)?.completions ?? 0)));
+        await supabase
+          .from("social_tasks")
+          .update({ completions: Math.max(0, cur - 1) })
+          .eq("id", params.taskId);
+      }
 
       await supabase.from("social_fraud_flags").insert({
         user_id: params.userId,
@@ -300,23 +351,6 @@ export async function reverifyCompletion(params: {
         p_user_id: params.userId,
       });
       if (rpcErr) console.error("[social-fraud] increment_social_strikes:", rpcErr.message);
-
-      const { data: completion } = await supabase
-        .from("social_task_completions")
-        .select("reward_gpc")
-        .eq("id", params.completionId)
-        .maybeSingle();
-
-      const reward = Number((completion as { reward_gpc?: number } | null)?.reward_gpc ?? 0);
-      if (reward > 0) {
-        const claw = await debitGpayCoins(
-          params.userId,
-          reward,
-          "Social task reward clawback",
-          `claw_back_${params.completionId}`
-        );
-        if (!claw.success) console.error("[social-fraud] clawback:", claw.message);
-      }
     }
   } catch {
     // Transient network / TLS — do not penalize

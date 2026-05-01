@@ -4,6 +4,10 @@ import { createAdminClient } from "@/lib/supabase";
 import { userMeetsMinTier } from "@/lib/social-tier";
 import { runFraudChecks } from "@/lib/social-fraud-detection";
 import { creditGpayIdempotent } from "@/lib/coins";
+import { getClientIp } from "@/lib/rate-limit";
+
+const MAX_UA_LEN = 512;
+const MAX_FP_LEN = 256;
 
 const GENERIC_OK = {
   success: true,
@@ -22,7 +26,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { task_id?: string; proof_url?: string; claimed_at?: string };
+  let body: { task_id?: string; proof_url?: string; claimed_at?: string; fingerprint?: string };
   try {
     body = await req.json();
   } catch {
@@ -32,6 +36,11 @@ export async function POST(req: Request) {
   const task_id = body.task_id?.trim();
   const proof_url = typeof body.proof_url === "string" ? body.proof_url.trim() : "";
   const claimed_at = typeof body.claimed_at === "string" ? body.claimed_at.trim() : undefined;
+  const submissionIp = getClientIp(req);
+  const submissionUaRaw = req.headers.get("user-agent") ?? "";
+  const submissionUa = submissionUaRaw.slice(0, MAX_UA_LEN);
+  const fpRaw = typeof body.fingerprint === "string" ? body.fingerprint.trim() : "";
+  const submissionFingerprint = fpRaw.slice(0, MAX_FP_LEN) || null;
 
   if (!task_id) {
     return NextResponse.json({ error: "task_id required" }, { status: 400 });
@@ -110,6 +119,9 @@ export async function POST(req: Request) {
       status: "pending",
       reward_gpc: t.reward_gpc,
       claimed_at: claimed_at ?? null,
+      submission_ip: submissionIp || null,
+      submission_ua: submissionUa || null,
+      submission_fingerprint: submissionFingerprint,
     })
     .select("id")
     .single();
@@ -134,6 +146,7 @@ export async function POST(req: Request) {
       claimedAt: claimed_at ?? null,
       platform: t.platform,
       taskType: t.task_type,
+      submissionIp,
     });
   } catch (e) {
     console.error("[social/submit] fraud checks:", e);
