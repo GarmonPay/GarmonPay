@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -28,19 +29,14 @@ const DEFAULT_CONFIG: Config = {
   created_at: null,
 };
 
-export default function GamificationPage() {
+function GamificationPageInner() {
+  const session = useAdminSession();
   const [config, setConfig] = useState<Config | null | undefined>(undefined);
-  const [session, setSession] = useState<AdminSession | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   const load = useCallback(async () => {
-    if (!session) return;
     setLoadError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/gamification-config`, {
@@ -61,12 +57,12 @@ export default function GamificationPage() {
   }, [session]);
 
   useEffect(() => {
-    if (session) load();
-  }, [session, load]);
+    load();
+  }, [load]);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!session || !config) return;
+    if (!config) return;
     const form = e.currentTarget;
     const spin_cost = Number((form.elements.namedItem("spin_cost") as HTMLInputElement)?.value);
     const scratch_cost = Number((form.elements.namedItem("scratch_cost") as HTMLInputElement)?.value);
@@ -119,14 +115,6 @@ export default function GamificationPage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  if (!session) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[200px] text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
   }
 
   if (config === undefined) {
@@ -242,5 +230,13 @@ export default function GamificationPage() {
         {JSON.stringify(c, null, 2)}
       </pre>
     </div>
+  );
+}
+
+export default function GamificationPage() {
+  return (
+    <AdminPageGate>
+      <GamificationPageInner />
+    </AdminPageGate>
   );
 }

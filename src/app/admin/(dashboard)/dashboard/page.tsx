@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 import { localeInt } from "@/lib/format-number";
 
@@ -92,8 +93,8 @@ type CoinFlipAdminStats = {
   totalWageredTodayMinor: number;
 };
 
-export default function Dashboard() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function DashboardInner() {
+  const session = useAdminSession();
   const [stats, setStats] = useState(defaultStats);
   const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null);
   const [coinFlipStats, setCoinFlipStats] = useState<CoinFlipAdminStats | null>(null);
@@ -103,11 +104,6 @@ export default function Dashboard() {
   const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     setStatsError(null);
     fetch("/api/admin/stats", { credentials: "include" })
       .then((res) => {
@@ -131,7 +127,6 @@ export default function Dashboard() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
     fetch("/api/admin/stripe-payments", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : { payments: [] }))
       .then((data) => setStats((prev) => ({ ...prev, recentPayments: data.payments ?? [] })))
@@ -139,7 +134,6 @@ export default function Dashboard() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
     fetch("/api/admin/platform-metrics", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: PlatformMetrics | null) => {
@@ -149,7 +143,6 @@ export default function Dashboard() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
     fetch("/api/admin/coin-flip/stats", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: CoinFlipAdminStats | null) => {
@@ -160,7 +153,6 @@ export default function Dashboard() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
     setGameRevenueError(null);
     fetch(`${API_BASE}/admin/revenue`, {
       credentials: "include",
@@ -192,7 +184,6 @@ export default function Dashboard() {
   }, [session]);
 
   function load() {
-    if (!session) return;
     setLoading(true);
     setStatsError(null);
     fetch("/api/admin/stats", { credentials: "include" })
@@ -214,14 +205,6 @@ export default function Dashboard() {
       })
       .catch((err) => setStatsError(err instanceof Error ? err.message : "Failed to load stats"))
       .finally(() => setLoading(false));
-  }
-
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh] text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
   }
 
   if (loading) {
@@ -602,5 +585,13 @@ export default function Dashboard() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <AdminPageGate>
+      <DashboardInner />
+    </AdminPageGate>
   );
 }

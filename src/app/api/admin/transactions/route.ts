@@ -14,8 +14,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rows = await listAllTransactions();
-    return NextResponse.json({ transactions: rows });
+    const { searchParams } = new URL(request.url);
+    const limit = Number(searchParams.get("limit") ?? "100");
+    const offset = Number(searchParams.get("offset") ?? "0");
+    const rows = await listAllTransactions({
+      limit: Number.isFinite(limit) ? limit : 100,
+      offset: Number.isFinite(offset) ? offset : 0,
+    });
+    return NextResponse.json({
+      transactions: rows,
+      limit: Number.isFinite(limit) ? limit : 100,
+      offset: Number.isFinite(offset) ? offset : 0,
+    });
   } catch (e) {
     console.error("[admin transactions]", e);
     return NextResponse.json(

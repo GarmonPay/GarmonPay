@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { getApiRoot } from "@/lib/api";
 import { localeInt } from "@/lib/format-number";
 
@@ -17,8 +18,8 @@ type Row = {
   user_id: string;
 };
 
-export default function AdminMembershipBonusesPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminMembershipBonusesPageInner() {
+  const session = useAdminSession();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
@@ -27,13 +28,13 @@ export default function AdminMembershipBonusesPage() {
     recent: Row[];
   } | null>(null);
 
-  const load = useCallback(async (s: AdminSession) => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/membership-bonuses`, {
         credentials: "include",
-        headers: adminApiHeaders(s),
+        headers: adminApiHeaders(session),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -48,23 +49,11 @@ export default function AdminMembershipBonusesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    getAdminSessionAsync().then((s) => {
-      setSession(s);
-      if (s) void load(s);
-      else setLoading(false);
-    });
+    void load();
   }, [load]);
-
-  if (!session) {
-    return (
-      <div className="p-8 text-white">
-        <p>Admin sign-in required.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-5xl mx-auto p-6 text-white space-y-8">
@@ -125,5 +114,13 @@ export default function AdminMembershipBonusesPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function AdminMembershipBonusesPage() {
+  return (
+    <AdminPageGate>
+      <AdminMembershipBonusesPageInner />
+    </AdminPageGate>
   );
 }

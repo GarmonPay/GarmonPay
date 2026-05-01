@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -30,20 +31,15 @@ function ctr(impressions: number, clicks: number): string {
   return ((clicks / impressions) * 100).toFixed(2) + "%";
 }
 
-export default function AdminBannersPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminBannersPageInner() {
+  const session = useAdminSession();
   const [banners, setBanners] = useState<BannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   function load() {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/banners`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -65,7 +61,6 @@ export default function AdminBannersPage() {
   }, [session?.adminId]);
 
   async function updateStatus(id: string, status: string) {
-    if (!session) return;
     setActionError(null);
     setUpdatingId(id);
     try {
@@ -89,7 +84,6 @@ export default function AdminBannersPage() {
   }
 
   async function deleteBanner(id: string) {
-    if (!session) return;
     if (!confirm("Delete this banner?")) return;
     setActionError(null);
     setUpdatingId(id);
@@ -111,14 +105,6 @@ export default function AdminBannersPage() {
     } finally {
       setUpdatingId(null);
     }
-  }
-
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-fintech-muted">Redirecting to admin login…</p>
-      </div>
-    );
   }
 
   return (
@@ -231,5 +217,13 @@ export default function AdminBannersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminBannersPage() {
+  return (
+    <AdminPageGate>
+      <AdminBannersPageInner />
+    </AdminPageGate>
   );
 }

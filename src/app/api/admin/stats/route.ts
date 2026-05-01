@@ -11,6 +11,23 @@ export type RecentUserDepositRow = {
   user_email?: string;
 };
 
+/** Approved/paid payout rows on `withdrawals` (cents in `amount`). Used for net profit vs platform_earnings. */
+async function sumWithdrawalsApprovedOrPaidCents(supabase: SupabaseClient): Promise<number> {
+  const { data, error } = await supabase
+    .from("withdrawals")
+    .select("amount")
+    .in("status", ["approved", "paid"]);
+  if (error) {
+    console.error("Admin stats sum withdrawals (approved/paid):", error);
+    return 0;
+  }
+  let total = 0;
+  for (const r of data ?? []) {
+    total += Number((r as { amount?: number }).amount ?? 0);
+  }
+  return total;
+}
+
 async function sumPlatformEarningsAllTime(supabase: SupabaseClient): Promise<number> {
   let total = 0;
   let from = 0;
@@ -36,7 +53,8 @@ async function sumPlatformEarningsAllTime(supabase: SupabaseClient): Promise<num
 
 /**
  * GET /api/admin/stats
- * Balances and deposits from wallet tables; platform revenue from platform_earnings; profit = earnings − paid withdrawals.
+ * Net profit (reported): Σ platform_earnings.amount_cents − Σ withdrawals.amount where status ∈ (approved, paid).
+ * Ledger totals from getWalletTotals() are informational (user liability vs ledger).
  */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
@@ -55,6 +73,7 @@ export async function GET(request: Request) {
         totalBalance: 0,
         totalProfit: 0,
         platformRevenueAllTimeCents: 0,
+        approvedWithdrawalsFromRequestsCents: 0,
         recentUserDeposits: [] as RecentUserDepositRow[],
       },
       { status: 503 }
@@ -87,7 +106,14 @@ export async function GET(request: Request) {
     console.error("Admin stats platform_earnings sum:", e);
   }
 
-  const totalProfitCents = platformRevenueAllTimeCents - totalWithdrawalsCents;
+  let approvedWithdrawalsFromRequestsCents = 0;
+  try {
+    approvedWithdrawalsFromRequestsCents = await sumWithdrawalsApprovedOrPaidCents(supabase);
+  } catch (e) {
+    console.error("Admin stats withdrawals table sum:", e);
+  }
+
+  const totalProfitCents = platformRevenueAllTimeCents - approvedWithdrawalsFromRequestsCents;
 
   let recentUserDeposits: RecentUserDepositRow[] = [];
   try {
@@ -132,10 +158,13 @@ export async function GET(request: Request) {
   return NextResponse.json({
     totalUsers,
     totalDeposits: totalDepositsCents,
+    /** Ledger withdrawal volume (wallet_ledger type withdrawal); not the same as approved payout rows. */
     totalWithdrawals: totalWithdrawalsCents,
     totalBalance: totalBalanceCents,
+    /** Σ platform_earnings − Σ withdrawals.amount (approved/paid). */
     totalProfit: totalProfitCents,
     platformRevenueAllTimeCents,
+    approvedWithdrawalsFromRequestsCents,
     recentUserDeposits,
   });
 }

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -14,18 +15,13 @@ type EventRow = {
   created_at: string;
 };
 
-export default function AdminAnalyticsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminAnalyticsPageInner() {
+  const session = useAdminSession();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/analytics?limit=200`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -78,5 +74,13 @@ export default function AdminAnalyticsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminAnalyticsPage() {
+  return (
+    <AdminPageGate>
+      <AdminAnalyticsPageInner />
+    </AdminPageGate>
   );
 }

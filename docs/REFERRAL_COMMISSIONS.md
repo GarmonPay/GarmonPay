@@ -33,7 +33,7 @@ Schedule this endpoint monthly (e.g. Vercel Cron, cron job).
 ## Admin
 
 - **Referrals** page: total recurring commissions paid, active referral subscriptions count, form to set commission % per tier.
-- **Create subscription** (testing): `POST /api/admin/subscriptions` with `userId`, `membershipTier`, `monthlyPriceCents`, optional `nextBillingDate`.
+- **Test subscriptions**: create or update rows directly in Supabase (`subscriptions` / related tables) or use existing billing flows. The legacy `POST /api/admin/subscriptions` admin route was removed; do not rely on it in docs or scripts.
 
 ## User Dashboard
 

@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
-
-const ACTION_BTN =
-  "inline-flex items-center justify-center min-h-[36px] min-w-[60px] px-3 py-1.5 rounded-lg text-sm font-medium transition max-[480px]:w-full max-[480px]:min-w-0";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
+import { ActionButton } from "@/components/admin/ActionButton";
 
 const API_BASE = getApiRoot();
 
@@ -32,20 +31,15 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString();
 }
 
-export default function AdminWithdrawalsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminWithdrawalsInner() {
+  const session = useAdminSession();
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   function load() {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/withdrawals`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -64,7 +58,6 @@ export default function AdminWithdrawalsPage() {
   }, [session?.adminId]);
 
   async function updateStatus(id: string, status: string) {
-    if (!session) return;
     setActionError(null);
     setUpdatingId(id);
     try {
@@ -92,51 +85,54 @@ export default function AdminWithdrawalsPage() {
 
   return (
     <div className="py-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white mb-2">Withdrawals</h1>
-          <p className="text-fintech-muted">
-            Review and approve, reject, or mark as paid. Rejecting refunds the user&apos;s balance.
+          <h1 className="font-[family-name:var(--font-admin-display)] text-xl font-bold text-white mb-2">
+            Withdrawals
+          </h1>
+          <p className="text-white/60">
+            Approve, reject, or mark paid via PATCH /api/admin/withdrawals (RPC). Rejecting refunds balance.
           </p>
         </div>
       </div>
       {actionError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{actionError}</div>
+        <div className="mb-4 rounded-lg bg-red-500/20 p-3 text-sm text-red-400">{actionError}</div>
       )}
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
-      )}
+      {error && <div className="mb-4 rounded-lg bg-red-500/20 p-3 text-sm text-red-400">{error}</div>}
       {loading ? (
-        <div className="text-fintech-muted">Loading…</div>
+        <div className="text-white/60">Loading…</div>
       ) : error ? null : withdrawals.length === 0 ? (
-        <div className="text-fintech-muted">No withdrawal requests.</div>
+        <div className="text-white/60">No withdrawal requests.</div>
       ) : (
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0e0118]/80">
           <AdminScrollHint />
           <AdminTableWrap>
-            <table className="w-full text-left min-w-[720px]">
+            <table className="w-full min-w-[720px] text-left">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="p-3 text-sm font-medium text-fintech-muted">User</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted">Amount</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Fee</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Net</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted hidden sm:table-cell">Method</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted hidden lg:table-cell">Wallet / details</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted">Status</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted">Date</th>
-                  <th className="p-3 text-sm font-medium text-fintech-muted">Actions</th>
+                  <th className="p-3 text-sm font-medium text-white/50">User</th>
+                  <th className="p-3 text-sm font-medium text-white/50">Amount</th>
+                  <th className="hidden p-3 text-sm font-medium text-white/50 sm:table-cell">Fee</th>
+                  <th className="hidden p-3 text-sm font-medium text-white/50 sm:table-cell">Net</th>
+                  <th className="hidden p-3 text-sm font-medium text-white/50 sm:table-cell">Method</th>
+                  <th className="hidden p-3 text-sm font-medium text-white/50 lg:table-cell">Wallet / details</th>
+                  <th className="p-3 text-sm font-medium text-white/50">Status</th>
+                  <th className="p-3 text-sm font-medium text-white/50">Date</th>
+                  <th className="p-3 text-sm font-medium text-white/50">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {withdrawals.map((w) => (
                   <tr key={w.id} className="border-b border-white/5">
                     <td className="p-3 text-white">{w.user_email ?? w.user_id}</td>
-                    <td className="p-3 text-white font-medium">{formatCents(w.amount)}</td>
-                    <td className="p-3 text-fintech-muted hidden sm:table-cell">{formatCents(w.platform_fee ?? 0)}</td>
-                    <td className="p-3 text-white hidden sm:table-cell">{formatCents(w.net_amount ?? w.amount)}</td>
-                    <td className="p-3 text-fintech-muted capitalize hidden sm:table-cell">{w.method}</td>
-                    <td className="p-3 text-fintech-muted font-mono text-sm max-w-xs truncate hidden lg:table-cell" title={w.wallet_address}>
+                    <td className="p-3 font-medium text-white">{formatCents(w.amount)}</td>
+                    <td className="hidden p-3 text-white/55 sm:table-cell">{formatCents(w.platform_fee ?? 0)}</td>
+                    <td className="hidden p-3 text-white sm:table-cell">{formatCents(w.net_amount ?? w.amount)}</td>
+                    <td className="hidden p-3 capitalize text-white/55 sm:table-cell">{w.method}</td>
+                    <td
+                      className="hidden max-w-xs truncate p-3 font-mono text-sm text-white/55 lg:table-cell"
+                      title={w.wallet_address}
+                    >
                       {w.wallet_address}
                     </td>
                     <td className="p-3">
@@ -152,45 +148,30 @@ export default function AdminWithdrawalsPage() {
                         {w.status}
                       </span>
                     </td>
-                    <td className="p-3 text-fintech-muted text-sm">{formatDate(w.created_at)}</td>
+                    <td className="p-3 text-sm text-white/55">{formatDate(w.created_at)}</td>
                     <td className="p-3">
                       {w.status === "pending" && (
                         <div className="flex flex-wrap gap-2 max-[480px]:flex-col">
-                          <button
-                            type="button"
+                          <ActionButton
+                            variant="primary"
+                            className="!bg-emerald-600 hover:!bg-emerald-500"
                             onClick={() => updateStatus(w.id, "approved")}
                             disabled={updatingId === w.id}
-                            className={`${ACTION_BTN} bg-green-600 text-white hover:bg-green-500 disabled:opacity-50`}
                           >
                             Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStatus(w.id, "rejected")}
-                            disabled={updatingId === w.id}
-                            className={`${ACTION_BTN} bg-red-600 text-white hover:bg-red-500 disabled:opacity-50`}
-                          >
+                          </ActionButton>
+                          <ActionButton variant="danger" onClick={() => updateStatus(w.id, "rejected")} disabled={updatingId === w.id}>
                             Reject
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStatus(w.id, "paid")}
-                            disabled={updatingId === w.id}
-                            className={`${ACTION_BTN} bg-fintech-accent text-white hover:bg-fintech-accent/90 disabled:opacity-50`}
-                          >
+                          </ActionButton>
+                          <ActionButton variant="gold" onClick={() => updateStatus(w.id, "paid")} disabled={updatingId === w.id}>
                             Mark paid
-                          </button>
+                          </ActionButton>
                         </div>
                       )}
                       {w.status === "approved" && (
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(w.id, "paid")}
-                          disabled={updatingId === w.id}
-                          className={`${ACTION_BTN} bg-fintech-accent text-white hover:bg-fintech-accent/90 disabled:opacity-50`}
-                        >
+                        <ActionButton variant="gold" onClick={() => updateStatus(w.id, "paid")} disabled={updatingId === w.id}>
                           Mark paid
-                        </button>
+                        </ActionButton>
                       )}
                     </td>
                   </tr>
@@ -201,5 +182,13 @@ export default function AdminWithdrawalsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminWithdrawalsPage() {
+  return (
+    <AdminPageGate>
+      <AdminWithdrawalsInner />
+    </AdminPageGate>
   );
 }

@@ -4,7 +4,8 @@ import type { ComponentType, SVGProps } from "react";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 import {
   IconCreditCard,
@@ -68,8 +69,8 @@ type FraudFlag = { id: string; user_id: string; ad_id: string | null; reason: st
 type BlockedIp = { id: string; ip_prefix: string; reason: string | null; created_at: string };
 type BannedUser = { user_id: string; reason: string | null; created_at: string };
 
-export default function AdminGarmonAdsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminGarmonAdsPageInner() {
+  const session = useAdminSession();
   const [pending, setPending] = useState<GarmonAd[]>([]);
   const [allAds, setAllAds] = useState<GarmonAd[]>([]);
   const [advertisers, setAdvertisers] = useState<AdvertiserRow[]>([]);
@@ -88,7 +89,6 @@ export default function AdminGarmonAdsPage() {
   const [packageNamesById, setPackageNamesById] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
-    if (!session) return;
     setLoading(true);
     Promise.all([
       fetch(`${API_BASE}/admin/garmon-ads?status=pending`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) => r.json()),
@@ -121,15 +121,10 @@ export default function AdminGarmonAdsPage() {
   }, [session]);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (session) load();
-  }, [session, load]);
+    load();
+  }, [load]);
 
   async function approve(adId: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads`, {
@@ -147,7 +142,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function reject(adId: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads`, {
@@ -166,7 +160,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function removeFraudFlag(flagId: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags`, {
@@ -184,7 +177,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function banUser(userId: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/fraud-flags/ban`, {
@@ -203,7 +195,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function viewEngagements(userId: string) {
-    if (!session) return;
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/user-engagements?userId=${encodeURIComponent(userId)}`, { credentials: "include", headers: adminApiHeaders(session) });
       const data = await res.json().catch(() => ({}));
@@ -214,7 +205,7 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function addBlockedIp() {
-    if (!session || !blockedIpInput.trim()) return;
+    if (!blockedIpInput.trim()) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips`, {
@@ -233,7 +224,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function removeBlockedIp(id: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/blocked-ips?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include", headers: adminApiHeaders(session) });
@@ -246,7 +236,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function unbanUser(userId: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/banned-users?userId=${encodeURIComponent(userId)}`, { method: "DELETE", credentials: "include", headers: adminApiHeaders(session) });
@@ -259,7 +248,6 @@ export default function AdminGarmonAdsPage() {
   }
 
   async function advertiserAction(advertiserId: string, action: string) {
-    if (!session) return;
     setActionError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/garmon-ads/advertisers`, {
@@ -889,5 +877,13 @@ export default function AdminGarmonAdsPage() {
         </div>
       </nav>
     </div>
+  );
+}
+
+export default function AdminGarmonAdsPage() {
+  return (
+    <AdminPageGate>
+      <AdminGarmonAdsPageInner />
+    </AdminPageGate>
   );
 }

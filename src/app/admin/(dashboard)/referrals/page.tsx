@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { localeInt } from "@/lib/format-number";
 
 const API_BASE = getApiRoot();
@@ -17,8 +18,8 @@ function tierLabel(t: string) {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-export default function AdminReferralsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminReferralsPageInner() {
+  const session = useAdminSession();
   const [config, setConfig] = useState<Array<{ tier: string; percentage: number }>>([]);
   const [totalRecurringPaidGpc, setTotalRecurringPaidGpc] = useState(0);
   const [activeReferralSubs, setActiveReferralSubs] = useState(0);
@@ -32,12 +33,7 @@ export default function AdminReferralsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [editPct, setEditPct] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   function load() {
-    if (!session) return;
     setLoading(true);
     setError(null);
     Promise.all([
@@ -68,7 +64,6 @@ export default function AdminReferralsPage() {
   }, [session?.adminId]);
 
   async function saveTier(tier: Tier, percentage: number) {
-    if (!session) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -94,13 +89,6 @@ export default function AdminReferralsPage() {
     }
   }
 
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-fintech-muted">Redirecting to admin login…</p>
-      </div>
-    );
-  }
   if (loading && config.length === 0) {
     return (
       <div className="p-6">
@@ -232,5 +220,13 @@ export default function AdminReferralsPage() {
         Run the monthly process via <code className="bg-white/10 px-1 rounded">POST /api/cron/process-referral-commissions</code> with header <code className="bg-white/10 px-1 rounded">X-Cron-Secret</code> or <code className="bg-white/10 px-1 rounded">Authorization: Bearer &lt;CRON_SECRET&gt;</code>. Set <code className="bg-white/10 px-1 rounded">CRON_SECRET</code> in env.
       </p>
     </div>
+  );
+}
+
+export default function AdminReferralsPage() {
+  return (
+    <AdminPageGate>
+      <AdminReferralsPageInner />
+    </AdminPageGate>
   );
 }

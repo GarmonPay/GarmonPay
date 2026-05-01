@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
-export default function AdminArenaSecurityPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminArenaSecurityPageInner() {
+  const session = useAdminSession();
   const [data, setData] = useState<{
     velocity?: Array<{ userId: string; count: number; lastAt: string; ipCount: number }>;
     sameIpAccounts?: Array<{ ip: string; userCount: number; userIds: string[] }>;
@@ -17,25 +18,12 @@ export default function AdminArenaSecurityPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     fetch(`${API_BASE}/admin/arena/security`, { headers: adminApiHeaders(session), credentials: "include" })
       .then((r) => (r.ok ? r.json() : {}))
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [session]);
-
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 max-w-6xl">
@@ -78,5 +66,13 @@ export default function AdminArenaSecurityPage() {
       )}
       <p className="mt-6 text-fintech-muted text-sm">Activity log: arena_activity_log. Server resolves all tap actions; no client-side outcome trust.</p>
     </div>
+  );
+}
+
+export default function AdminArenaSecurityPage() {
+  return (
+    <AdminPageGate>
+      <AdminArenaSecurityPageInner />
+    </AdminPageGate>
   );
 }

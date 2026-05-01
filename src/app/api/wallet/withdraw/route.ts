@@ -15,7 +15,11 @@ const MIN_BY_PLAN_CENTS: Record<string, number> = {
 
 /**
  * POST /api/wallet/withdraw
- * Debit wallet via ledger (atomic), then create withdrawal request (pending).
+ *
+ * Canonical withdrawal rows live in `public.withdrawals` (RPC + admin PATCH flow). The optional insert into
+ * `withdrawal_requests` is auxiliary / legacy compatibility only — **admin lists and approves using `withdrawals`**.
+ *
+ * Debit wallet via ledger (atomic), then insert into `withdrawals` (pending).
  * Fraud: strict auth, negative balance prevented in RPC, duplicate reference per request.
  */
 export async function POST(req: Request) {

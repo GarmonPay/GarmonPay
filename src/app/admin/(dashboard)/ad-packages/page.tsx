@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import {
   memberPayoutCeilingUsd,
   advertiserBurnCeilingUsd,
@@ -29,8 +30,8 @@ function toInt(v: number | string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export default function AdminAdPackagesPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminAdPackagesPageInner() {
+  const session = useAdminSession();
   const [packages, setPackages] = useState<AdminPkg[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +45,7 @@ export default function AdminAdPackagesPage() {
   const [newSort, setNewSort] = useState("100");
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   const load = useCallback(() => {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/ad-packages`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -67,7 +63,6 @@ export default function AdminAdPackagesPage() {
   }, [session, load]);
 
   async function saveRow(pkg: AdminPkg, draft: Record<string, string>) {
-    if (!session) return;
     setError(null);
     setSuccess(null);
     const res = await fetch(`${API_BASE}/admin/ad-packages`, {
@@ -95,7 +90,6 @@ export default function AdminAdPackagesPage() {
 
   async function createPackage(e: React.FormEvent) {
     e.preventDefault();
-    if (!session) return;
     setCreating(true);
     setError(null);
     setSuccess(null);
@@ -239,6 +233,14 @@ export default function AdminAdPackagesPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function AdminAdPackagesPage() {
+  return (
+    <AdminPageGate>
+      <AdminAdPackagesPageInner />
+    </AdminPageGate>
   );
 }
 

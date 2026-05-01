@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
 const ACTION_BTN =
@@ -30,8 +31,8 @@ type LockedUser = {
   locked_until: string | null;
 };
 
-export default function AdminSecurityPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminSecurityPageInner() {
+  const session = useAdminSession();
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [multiIp, setMultiIp] = useState<MultiIpAccount[]>([]);
   const [failedLogins, setFailedLogins] = useState<SecurityEvent[]>([]);
@@ -41,12 +42,7 @@ export default function AdminSecurityPage() {
   const [banSubmitting, setBanSubmitting] = useState<string | null>(null);
   const [unlockSubmitting, setUnlockSubmitting] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   const load = useCallback(async () => {
-    if (!session) return;
     setLoading(true);
     setError("");
     try {
@@ -68,12 +64,10 @@ export default function AdminSecurityPage() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
     load();
-  }, [session, load]);
+  }, [load]);
 
   async function banUser(userId: string, banned: boolean) {
-    if (!session) return;
     setBanSubmitting(userId);
     try {
       const res = await fetch("/api/admin/ban", {
@@ -94,7 +88,6 @@ export default function AdminSecurityPage() {
   }
 
   async function unlockUser(userId: string) {
-    if (!session) return;
     setUnlockSubmitting(userId);
     try {
       const res = await fetch("/api/admin/unlock", {
@@ -112,14 +105,6 @@ export default function AdminSecurityPage() {
     } finally {
       setUnlockSubmitting(null);
     }
-  }
-
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
   }
 
   return (
@@ -272,5 +257,13 @@ export default function AdminSecurityPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function AdminSecurityPage() {
+  return (
+    <AdminPageGate>
+      <AdminSecurityPageInner />
+    </AdminPageGate>
   );
 }

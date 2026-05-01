@@ -18,7 +18,9 @@ export async function GET(req: Request) {
 
   const { data: rows, error } = await supabase
     .from("social_task_completions")
-    .select("id, task_id, user_id, proof_url, status, reward_gpc, completed_at")
+    .select(
+      "id, task_id, user_id, proof_url, status, reward_gpc, completed_at, trust_score, flagged, flag_reason, verification_status"
+    )
     .eq("status", status)
     .order("completed_at", { ascending: false })
     .limit(200);

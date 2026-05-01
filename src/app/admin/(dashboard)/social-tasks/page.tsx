@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
 import { localeInt } from "@/lib/format-number";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
+import { ActionButton } from "@/components/admin/ActionButton";
 
 const API_BASE = getApiRoot();
 
@@ -18,6 +20,10 @@ type Row = {
   status: string;
   reward_gpc: number;
   completed_at: string;
+  trust_score?: number | null;
+  flagged?: boolean;
+  flag_reason?: string | null;
+  verification_status?: string | null;
   task: {
     title?: string;
     platform?: string;
@@ -26,8 +32,8 @@ type Row = {
   } | null;
 };
 
-export default function AdminSocialTasksPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminSocialTasksInner() {
+  const session = useAdminSession();
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,12 +54,7 @@ export default function AdminSocialTasksPage() {
     status: "active" as "active" | "paused",
   });
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   const load = useCallback(async () => {
-    if (!session) return;
     setLoadError(null);
     setLoading(true);
     try {
@@ -79,7 +80,6 @@ export default function AdminSocialTasksPage() {
   }, [session?.adminId]);
 
   async function act(id: string, action: "approve" | "reject") {
-    if (!session) return;
     setBusy(id);
     setLoadError(null);
     try {
@@ -105,7 +105,6 @@ export default function AdminSocialTasksPage() {
 
   async function createTask(e: React.FormEvent) {
     e.preventDefault();
-    if (!session) return;
     setCreateBusy(true);
     setCreateError(null);
     setCreateSuccess(null);
@@ -321,6 +320,25 @@ export default function AdminSocialTasksPage() {
                   {row.task?.platform} · {row.task?.task_type} · {localeInt(row.reward_gpc)} GPC
                 </p>
                 <p className="text-xs text-slate-500 font-mono">User: {row.user_id}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {row.flagged === true && (
+                    <span className="rounded bg-red-600/90 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                      Flagged
+                    </span>
+                  )}
+                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">
+                    trust {row.trust_score != null ? row.trust_score : "—"}
+                  </span>
+                  <span className="rounded bg-[#7c3aed]/30 px-2 py-0.5 text-[10px] text-violet-100">
+                    {row.verification_status ?? "pending_review"}
+                  </span>
+                  {row.flag_reason && (
+                    <span className="text-[10px] text-red-300/95" title={row.flag_reason}>
+                      {row.flag_reason.slice(0, 80)}
+                      {row.flag_reason.length > 80 ? "…" : ""}
+                    </span>
+                  )}
+                </div>
                 {row.proof_url && (
                   <a
                     href={row.proof_url}
@@ -332,28 +350,26 @@ export default function AdminSocialTasksPage() {
                   </a>
                 )}
               </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  disabled={busy === row.id}
-                  onClick={() => void act(row.id, "reject")}
-                  className="rounded-lg border border-white/15 px-4 py-2 text-sm text-slate-300 hover:bg-white/5"
-                >
+              <div className="flex shrink-0 gap-2">
+                <ActionButton variant="primary" className="!bg-transparent !text-slate-300 border border-white/20" disabled={busy === row.id} onClick={() => void act(row.id, "reject")}>
                   Reject
-                </button>
-                <button
-                  type="button"
-                  disabled={busy === row.id}
-                  onClick={() => void act(row.id, "approve")}
-                  className="rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:bg-fintech-accent/90 disabled:opacity-50"
-                >
+                </ActionButton>
+                <ActionButton variant="primary" disabled={busy === row.id} onClick={() => void act(row.id, "approve")}>
                   {busy === row.id ? "…" : "Approve"}
-                </button>
+                </ActionButton>
               </div>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+export default function AdminSocialTasksPage() {
+  return (
+    <AdminPageGate>
+      <AdminSocialTasksInner />
+    </AdminPageGate>
   );
 }

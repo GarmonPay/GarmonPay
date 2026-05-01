@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -11,8 +12,8 @@ function fmt(num: number) {
   return `$${Number(num).toFixed(2)}`;
 }
 
-export default function AdminArenaPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminArenaPageInner() {
+  const session = useAdminSession();
   const [data, setData] = useState<{
     earnings?: Record<string, number>;
     stats?: { fightCount: number; spectatorBetCount: number; activeSeasonPassCount: number };
@@ -25,25 +26,12 @@ export default function AdminArenaPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     fetch(`${API_BASE}/admin/arena/overview`, { headers: adminApiHeaders(session), credentials: "include" })
       .then((r) => (r.ok ? r.json() : {}))
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [session]);
-
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px] text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
-  }
 
   const e = data?.earnings ?? {};
   const stats = data?.stats ?? { fightCount: 0, spectatorBetCount: 0, activeSeasonPassCount: 0 };
@@ -163,5 +151,13 @@ export default function AdminArenaPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function AdminArenaPage() {
+  return (
+    <AdminPageGate>
+      <AdminArenaPageInner />
+    </AdminPageGate>
   );
 }

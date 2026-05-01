@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -20,8 +21,8 @@ function gameLabel(name: string) {
 
 type GameName = "spin_wheel" | "scratch_card" | "pinball" | "mystery_box";
 
-export default function AdminPlatformPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminPlatformPageInner() {
+  const session = useAdminSession();
   const [balance, setBalance] = useState<{
     balance_cents: number;
     total_revenue_cents: number;
@@ -36,12 +37,7 @@ export default function AdminPlatformPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   function load() {
-    if (!session) return;
     setLoading(true);
     setError(null);
     Promise.all([
@@ -84,7 +80,6 @@ export default function AdminPlatformPage() {
   }, [session?.adminId]);
 
   async function saveAdReward() {
-    if (!session) return;
     const num = parseFloat(adRewardInput);
     if (!Number.isFinite(num) || num < 0 || num > 100) {
       setError("Enter a number between 0 and 100");
@@ -116,7 +111,6 @@ export default function AdminPlatformPage() {
   }
 
   async function saveGameEdge(gameName: GameName) {
-    if (!session) return;
     const value = gameInputs[gameName] ?? "10";
     const num = parseFloat(value);
     if (!Number.isFinite(num) || num < 0 || num > 100) {
@@ -149,13 +143,6 @@ export default function AdminPlatformPage() {
     }
   }
 
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[200px]">
-        <p className="text-fintech-muted">Redirecting to admin login…</p>
-      </div>
-    );
-  }
   if (loading && !balance) {
     return (
       <div className="p-6">
@@ -287,5 +274,13 @@ export default function AdminPlatformPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function AdminPlatformPage() {
+  return (
+    <AdminPageGate>
+      <AdminPlatformPageInner />
+    </AdminPageGate>
   );
 }

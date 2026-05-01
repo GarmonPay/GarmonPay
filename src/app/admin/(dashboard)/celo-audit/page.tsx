@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -13,8 +14,8 @@ type AuditPayload = {
   room_bank: unknown;
 };
 
-export default function AdminCeloAuditPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminCeloAuditPageInner() {
+  const session = useAdminSession();
   const [roomId, setRoomId] = useState("");
   const [roundId, setRoundId] = useState("");
   const [limit, setLimit] = useState("8");
@@ -22,12 +23,7 @@ export default function AdminCeloAuditPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   const run = useCallback(async () => {
-    if (!session) return;
     const rid = roomId.trim();
     if (!rid) {
       setError("Enter a room UUID");
@@ -94,7 +90,7 @@ export default function AdminCeloAuditPage() {
         </label>
         <button
           type="button"
-          disabled={!session || loading}
+          disabled={loading}
           onClick={() => void run()}
           className="rounded-lg bg-amber-500/90 text-black font-semibold px-4 py-2 text-sm disabled:opacity-40"
         >
@@ -102,7 +98,6 @@ export default function AdminCeloAuditPage() {
         </button>
       </div>
 
-      {!session && <p className="text-fintech-muted text-sm">Loading admin session…</p>}
       {error && (
         <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200 mb-4">
           {error}
@@ -115,5 +110,13 @@ export default function AdminCeloAuditPage() {
         </pre>
       )}
     </div>
+  );
+}
+
+export default function AdminCeloAuditPage() {
+  return (
+    <AdminPageGate>
+      <AdminCeloAuditPageInner />
+    </AdminPageGate>
   );
 }

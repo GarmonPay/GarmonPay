@@ -43,6 +43,8 @@ export interface AdminRevenueResponse {
     description: string | null;
     created_at: string;
   }>;
+  /** Daily `platform_earnings` (all sources), last 30 days — for admin chart. */
+  platformEarningsChartData: RevenueChartPoint[];
   message?: string;
 }
 
@@ -67,6 +69,26 @@ function buildEmptyChartData(now: Date): RevenueChartPoint[] {
     chartData.push({ date: d.toISOString().slice(0, 10), amountCents: 0 });
   }
   return chartData;
+}
+
+function buildPlatformEarningsChartFromRows(peRows: PeRow[], now: Date): RevenueChartPoint[] {
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const peByDay: Record<string, number> = {};
+  for (const r of peRows) {
+    const createdAt = new Date(r.created_at);
+    if (createdAt < thirtyDaysAgo) continue;
+    const dayKey = createdAt.toISOString().slice(0, 10);
+    peByDay[dayKey] = (peByDay[dayKey] ?? 0) + (Number(r.amount_cents) || 0);
+  }
+  const out: RevenueChartPoint[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toISOString().slice(0, 10);
+    out.push({ date: dateKey, amountCents: peByDay[dateKey] ?? 0 });
+  }
+  return out;
 }
 
 function bucketPlatformSource(source: string): "coinflip" | "ads" | "memberships" | "other" {
@@ -132,6 +154,7 @@ export async function GET(request: Request) {
       thisMonth: { total: 0, breakdown: {} },
       allTime: { total: 0, breakdown: {} },
       recentTransactions: [],
+      platformEarningsChartData: buildEmptyChartData(now),
       message: "Set SUPABASE_SERVICE_ROLE_KEY for revenue data.",
     });
   }
@@ -209,6 +232,9 @@ export async function GET(request: Request) {
               created_at: r.created_at,
             }))
           : [],
+        platformEarningsChartData: !peError
+          ? buildPlatformEarningsChartFromRows(peRows, now)
+          : buildEmptyChartData(now),
       });
     }
 
@@ -273,6 +299,7 @@ export async function GET(request: Request) {
             created_at: r.created_at,
           }))
         : [],
+      platformEarningsChartData: buildPlatformEarningsChartFromRows(peRows, now),
     };
 
     if (peError) {

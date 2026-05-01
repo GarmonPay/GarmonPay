@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -19,8 +20,8 @@ type Tournament = {
   created_at?: string;
 };
 
-export default function AdminTournamentsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminTournamentsPageInner() {
+  const session = useAdminSession();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +36,7 @@ export default function AdminTournamentsPage() {
     end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
   });
 
-  useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
   function loadTournaments() {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/tournaments`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -62,7 +58,6 @@ export default function AdminTournamentsPage() {
     e.preventDefault();
     setSubmitError(null);
     setSuccess(null);
-    if (!session) return;
     const payload = {
       name: form.name.trim(),
       entry_fee: Number(form.entry_fee) || 0,
@@ -101,7 +96,7 @@ export default function AdminTournamentsPage() {
   }
 
   async function handleEnd(tournamentId: string) {
-    if (!session || endingId) return;
+    if (endingId) return;
     setSubmitError(null);
     setSuccess(null);
     setEndingId(tournamentId);
@@ -294,5 +289,13 @@ export default function AdminTournamentsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AdminTournamentsPage() {
+  return (
+    <AdminPageGate>
+      <AdminTournamentsPageInner />
+    </AdminPageGate>
   );
 }

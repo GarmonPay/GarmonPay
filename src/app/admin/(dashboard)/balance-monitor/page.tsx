@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -27,21 +28,21 @@ type MonitorPayload = {
   checkedAt: string;
 };
 
-export default function AdminBalanceMonitorPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminBalanceMonitorPageInner() {
+  const session = useAdminSession();
   const [data, setData] = useState<MonitorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingEmail, setSyncingEmail] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  const load = useCallback(async (s: AdminSession) => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/balance-monitor`, {
         credentials: "include",
-        headers: adminApiHeaders(s),
+        headers: adminApiHeaders(session),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -55,27 +56,20 @@ export default function AdminBalanceMonitorPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
-    if (!session) return;
-    void load(session);
-  }, [session, load]);
-
-  useEffect(() => {
-    if (!session) return;
     const t = setInterval(() => {
-      void load(session);
+      void load();
     }, 60_000);
     return () => clearInterval(t);
-  }, [session, load]);
+  }, [load]);
 
   async function syncLedger(email: string) {
-    if (!session) return;
     setSyncingEmail(email);
     setSyncMessage(null);
     try {
@@ -91,20 +85,12 @@ export default function AdminBalanceMonitorPage() {
       }
       const cents = (j as { correctedCents?: number }).correctedCents ?? 0;
       setSyncMessage(`Synced ${email}: corrected ${formatCents(cents)}`);
-      await load(session);
+      await load();
     } catch (e) {
       setSyncMessage(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setSyncingEmail(null);
     }
-  }
-
-  if (!session) {
-    return (
-      <div className="flex min-h-[200px] items-center justify-center p-6 text-fintech-muted">
-        Redirecting to admin login…
-      </div>
-    );
   }
 
   if (loading && !data) {
@@ -210,5 +196,13 @@ export default function AdminBalanceMonitorPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminBalanceMonitorPage() {
+  return (
+    <AdminPageGate>
+      <AdminBalanceMonitorPageInner />
+    </AdminPageGate>
   );
 }

@@ -96,19 +96,31 @@ export async function markWithdrawalTransactionCompleted(withdrawalId: string): 
     .eq("type", "withdrawal");
 }
 
-/** Admin: list all transactions (with optional user filter). */
-export async function listAllTransactions(): Promise<(TransactionRow & { user_email?: string })[]> {
+/** Admin: list transactions (paginated). Default limit 100, max 500. */
+export async function listAllTransactions(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<(TransactionRow & { user_email?: string })[]> {
+  const limit = Math.min(Math.max(Number(opts?.limit) || 100, 1), 500);
+  const offset = Math.max(Number(opts?.offset) || 0, 0);
   const { data, error } = await supabase()
     .from("transactions")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   const rows = (data ?? []) as TransactionRow[];
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
   const emails = new Map<string, string>();
-  for (const uid of userIds) {
-    const { data: u } = await supabase().from("users").select("email").eq("id", uid).single();
-    if (u?.email) emails.set(uid, u.email as string);
+  if (userIds.length > 0) {
+    const { data: userRows } = await supabase()
+      .from("users")
+      .select("id, email")
+      .in("id", userIds);
+    for (const u of userRows ?? []) {
+      const row = u as { id: string; email?: string | null };
+      if (row.email) emails.set(row.id, String(row.email));
+    }
   }
   return rows.map((r) => ({ ...r, user_email: emails.get(r.user_id) }));
 }

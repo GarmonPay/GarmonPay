@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -17,6 +18,8 @@ interface AdminRevenueData {
   monthlyRevenueCents: number;
   fightCount: number;
   chartData: RevenueChartPoint[];
+  platformEarningsChartData: RevenueChartPoint[];
+  allTime: { total: number; breakdown: Record<string, number> };
 }
 
 function formatCents(cents: number) {
@@ -28,17 +31,12 @@ function formatShortDate(dateStr: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default function AdminRevenuePage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminRevenueInner() {
+  const session = useAdminSession();
   const [data, setData] = useState<AdminRevenueData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     setError(null);
     fetch(`${API_BASE}/admin/revenue`, {
       credentials: "include",
@@ -46,7 +44,9 @@ export default function AdminRevenuePage() {
     })
       .then((res) => {
         if (res.status === 403) {
-          throw new Error("Access denied. Ensure your user has role = 'admin' or is_super_admin = true in public.users.");
+          throw new Error(
+            "Access denied. Ensure your user has role = 'admin' or is_super_admin = true in public.users."
+          );
         }
         if (!res.ok) {
           return res.json().then((b: { message?: string }) => {
@@ -55,13 +55,17 @@ export default function AdminRevenuePage() {
         }
         return res.json();
       })
-      .then((body: AdminRevenueData) => {
+      .then((body: AdminRevenueData & { message?: string }) => {
         setData({
           totalFightRevenueCents: body.totalFightRevenueCents ?? 0,
           dailyRevenueCents: body.dailyRevenueCents ?? 0,
           monthlyRevenueCents: body.monthlyRevenueCents ?? 0,
           fightCount: body.fightCount ?? 0,
           chartData: Array.isArray(body.chartData) ? body.chartData : [],
+          platformEarningsChartData: Array.isArray(body.platformEarningsChartData)
+            ? body.platformEarningsChartData
+            : [],
+          allTime: body.allTime ?? { total: 0, breakdown: {} },
         });
         setError(null);
       })
@@ -74,79 +78,95 @@ export default function AdminRevenuePage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4 text-red-400">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[40vh] text-fintech-muted">
-        Redirecting to admin login…
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">{error}</div>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[40vh] text-fintech-muted">
-        Loading…
+      <div className="flex min-h-[40vh] items-center justify-center p-6 text-white/60">
+        Loading fight & platform revenue…
       </div>
     );
   }
 
-  const maxChartCents = Math.max(1, ...data.chartData.map((p) => p.amountCents));
+  const maxFightChart = Math.max(1, ...data.chartData.map((p) => p.amountCents));
+  const maxPeChart = Math.max(1, ...data.platformEarningsChartData.map((p) => p.amountCents));
 
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold text-white mb-2">Fight Revenue</h1>
-      <p className="text-fintech-muted mb-6">
-        Platform revenue from fight arena fees (10% of each completed fight pot).
+      <h1 className="font-[family-name:var(--font-admin-display)] text-xl font-bold text-white mb-2">
+        Fight Revenue
+      </h1>
+      <p className="text-white/60 mb-6">
+        Arena fees from <code className="text-[#f5c842]/90">platform_revenue</code> (fight source only). This is not total
+        platform earnings.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
-          <p className="text-sm text-fintech-muted mb-1">Total Fight Revenue</p>
-          <p className="text-2xl font-bold text-emerald-400">
-            {formatCents(data.totalFightRevenueCents)}
-          </p>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
+          <p className="mb-1 text-sm text-white/55">Total Fight Revenue</p>
+          <p className="text-2xl font-bold text-emerald-400">{formatCents(data.totalFightRevenueCents)}</p>
         </div>
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
-          <p className="text-sm text-fintech-muted mb-1">Daily Revenue</p>
-          <p className="text-2xl font-bold text-white">
-            {formatCents(data.dailyRevenueCents)}
-          </p>
+        <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
+          <p className="mb-1 text-sm text-white/55">Daily (fight)</p>
+          <p className="text-2xl font-bold text-white">{formatCents(data.dailyRevenueCents)}</p>
         </div>
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
-          <p className="text-sm text-fintech-muted mb-1">Monthly Revenue</p>
-          <p className="text-2xl font-bold text-white">
-            {formatCents(data.monthlyRevenueCents)}
-          </p>
+        <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
+          <p className="mb-1 text-sm text-white/55">Monthly (fight)</p>
+          <p className="text-2xl font-bold text-white">{formatCents(data.monthlyRevenueCents)}</p>
         </div>
-        <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5">
-          <p className="text-sm text-fintech-muted mb-1">Fight Count</p>
+        <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
+          <p className="mb-1 text-sm text-white/55">Fight Count</p>
           <p className="text-2xl font-bold text-white">{data.fightCount}</p>
         </div>
       </div>
 
-      <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Profit Chart (last 30 days)</h2>
-        <div className="flex items-end gap-1 h-48">
+      <div className="mb-8 rounded-xl border border-white/10 bg-[#0e0118]/90 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-white">Fight Fees Chart (last 30 days)</h2>
+        <div className="flex h-48 items-end gap-1">
           {data.chartData.map((point, i) => (
             <div
               key={point.date}
-              className="flex-1 flex flex-col items-center gap-1 min-w-0"
+              className="flex min-w-0 flex-1 flex-col items-center gap-1"
               title={`${formatShortDate(point.date)}: ${formatCents(point.amountCents)}`}
             >
               <div
-                className="w-full rounded-t bg-fintech-accent min-h-[4px] transition-all"
+                className="min-h-[4px] w-full rounded-t bg-[#f5c842] transition-all"
                 style={{
-                  height: `${(point.amountCents / maxChartCents) * 100}%`,
+                  height: `${(point.amountCents / maxFightChart) * 100}%`,
                 }}
               />
-              <span className="text-[10px] text-fintech-muted truncate w-full text-center">
+              <span className="w-full truncate text-center text-[10px] text-white/45">
+                {i % 5 === 0 ? formatShortDate(point.date) : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[#7c3aed]/30 bg-[#0e0118]/90 p-6">
+        <h2 className="mb-2 text-lg font-semibold text-white">Platform Earnings (All Sources)</h2>
+        <p className="mb-4 text-sm text-white/55">
+          Sum of <code className="text-[#f5c842]/90">platform_earnings.amount_cents</code> (all products). All-time total:{" "}
+          <strong className="text-emerald-400">{formatCents(data.allTime.total)}</strong>
+        </p>
+        <h3 className="mb-3 text-sm font-medium text-white/80">Platform Earnings Chart (last 30 days)</h3>
+        <div className="flex h-48 items-end gap-1">
+          {data.platformEarningsChartData.map((point, i) => (
+            <div
+              key={`pe-${point.date}-${i}`}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1"
+              title={`${formatShortDate(point.date)}: ${formatCents(point.amountCents)}`}
+            >
+              <div
+                className="min-h-[4px] w-full rounded-t bg-[#7c3aed] transition-all"
+                style={{
+                  height: `${(point.amountCents / maxPeChart) * 100}%`,
+                }}
+              />
+              <span className="w-full truncate text-center text-[10px] text-white/45">
                 {i % 5 === 0 ? formatShortDate(point.date) : ""}
               </span>
             </div>
@@ -154,5 +174,13 @@ export default function AdminRevenuePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminRevenuePage() {
+  return (
+    <AdminPageGate>
+      <AdminRevenueInner />
+    </AdminPageGate>
   );
 }

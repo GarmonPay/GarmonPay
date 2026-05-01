@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase";
 
 /**
  * GET /api/admin/wallet-stats
- * Returns wallet ledger totals: total deposits, withdrawals, platform profit (deposits - withdrawals - balance?), user balances.
+ * Ledger totals + accounting surplus (deposits − withdrawals − balances). Not platform_earnings-based profit.
  */
 export async function GET(request: Request) {
   if (!(await isAdmin(request))) {
@@ -38,12 +38,15 @@ export async function GET(request: Request) {
       updated_at: r.updated_at,
     }));
 
-    const platformProfitCents = totals.totalDepositsCents - totals.totalWithdrawalsCents - totals.totalBalanceCents;
+    const ledgerSurplusCents = Math.max(
+      0,
+      totals.totalDepositsCents - totals.totalWithdrawalsCents - totals.totalBalanceCents
+    );
     return NextResponse.json({
       totalDepositsCents: totals.totalDepositsCents,
       totalWithdrawalsCents: totals.totalWithdrawalsCents,
       totalBalanceCents: totals.totalBalanceCents,
-      platformProfitCents: Math.max(0, platformProfitCents),
+      ledgerSurplusCents,
       userCount: totals.userCount,
       userBalances,
     });

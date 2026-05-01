@@ -21,6 +21,7 @@ const links = [
   { href: "/admin/gamification", label: "Gamification" },
   { href: "/admin/tournaments", label: "Tournaments" },
   { href: "/admin/referrals", label: "Referrals" },
+  { href: "/admin/membership-bonuses", label: "Membership bonuses" },
   { href: "/admin/platform", label: "Platform" },
   { href: "/admin/wallet-monitor", label: "Wallet" },
   { href: "/admin/balance-monitor", label: "Balance Monitor" },
@@ -47,14 +48,14 @@ export function AdminSidebar() {
       </div>
       <nav className="flex-1 flex flex-row md:flex-col gap-0.5 overflow-x-auto md:overflow-visible scrollbar-thin pb-2 md:pb-0 -mx-1 px-1 md:mx-0 md:px-0">
         {links.map(({ href, label }) => {
-          const active = pathname === href;
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}
               href={href}
               className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? "text-white bg-white/5"
+                  ? "text-white bg-[#7c3aed]/25 border border-[#7c3aed]/35"
                   : "text-fintech-muted hover:text-white hover:bg-white/5"
               }`}
             >

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 
 const API_BASE = getApiRoot();
 
@@ -16,18 +17,13 @@ type TxRow = {
   created_at: string;
 };
 
-export default function AdminRewardsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminRewardsPageInner() {
+  const session = useAdminSession();
   const [transactions, setTransactions] = useState<TxRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/admin/transactions`, { credentials: "include", headers: adminApiHeaders(session) })
@@ -51,10 +47,6 @@ export default function AdminRewardsPage() {
       <p className="text-fintech-muted mb-6">
         Earning-type transactions (earning, referral, referral_commission). Amounts are USD cents.
       </p>
-      {!session ? (
-        <div className="text-fintech-muted">Redirecting to admin login…</div>
-      ) : (
-        <>
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}
@@ -90,8 +82,14 @@ export default function AdminRewardsPage() {
           </div>
         </div>
       )}
-        </>
-      )}
     </div>
+  );
+}
+
+export default function AdminRewardsPage() {
+  return (
+    <AdminPageGate>
+      <AdminRewardsPageInner />
+    </AdminPageGate>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getApiRoot } from "@/lib/api";
-import { getAdminSessionAsync, adminApiHeaders, type AdminSession } from "@/lib/admin-supabase";
+import { adminApiHeaders } from "@/lib/admin-supabase";
+import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 
 const ACTION_BTN =
@@ -38,8 +39,8 @@ const AD_TYPES: { value: AdType; label: string }[] = [
   { value: "video", label: "Video" },
 ];
 
-export default function AdminAdsPage() {
-  const [session, setSession] = useState<AdminSession | null>(null);
+function AdminAdsPageInner() {
+  const session = useAdminSession();
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +58,6 @@ export default function AdminAdsPage() {
   });
 
   const loadAds = useCallback(() => {
-    if (!session) return;
     setLoading(true);
     fetch(`${API_BASE}/admin/advertisements`, { credentials: "include", headers: adminApiHeaders(session) })
       .then((res) => {
@@ -70,15 +70,10 @@ export default function AdminAdsPage() {
   }, [session]);
 
   useEffect(() => {
-    getAdminSessionAsync().then(setSession);
-  }, []);
-
-  useEffect(() => {
     if (session) loadAds();
   }, [session, loadAds]);
 
   async function handleUpload() {
-    if (!session) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/jpeg,image/png,video/mp4,.jpg,.jpeg,.png,.mp4";
@@ -112,7 +107,6 @@ export default function AdminAdsPage() {
     e.preventDefault();
     setSubmitError(null);
     setSuccess(null);
-    if (!session) return;
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
@@ -151,7 +145,6 @@ export default function AdminAdsPage() {
   }
 
   async function toggleActive(ad: Advertisement) {
-    if (!session) return;
     try {
       const res = await fetch(`${API_BASE}/admin/advertisements`, {
         method: "PATCH",
@@ -171,7 +164,7 @@ export default function AdminAdsPage() {
   }
 
   async function handleDelete(ad: Advertisement) {
-    if (!session || !confirm(`Delete "${ad.title}"?`)) return;
+    if (!confirm(`Delete "${ad.title}"?`)) return;
     try {
       const res = await fetch(`${API_BASE}/admin/advertisements?id=${encodeURIComponent(ad.id)}`, {
         method: "DELETE",
@@ -371,5 +364,13 @@ export default function AdminAdsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AdminAdsPage() {
+  return (
+    <AdminPageGate>
+      <AdminAdsPageInner />
+    </AdminPageGate>
   );
 }
