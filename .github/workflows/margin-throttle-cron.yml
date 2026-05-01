@@ -1,0 +1,33 @@
+# POST /api/cron/margin-throttle every 15 minutes.
+# Required GitHub repository secrets:
+#   CRON_TARGET_URL_MARGIN — full URL, e.g. https://your-domain.com/api/cron/margin-throttle
+#   CRON_SECRET — same value as CRON_SECRET on Vercel (x-cron-secret header)
+
+name: Margin throttle
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  throttle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger margin-throttle
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL_MARGIN: ${{ secrets.CRON_TARGET_URL_MARGIN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_TARGET_URL_MARGIN:-}" ]; then
+            echo "Missing secret CRON_TARGET_URL_MARGIN (full URL to /api/cron/margin-throttle)" >&2
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing secret CRON_SECRET" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$CRON_TARGET_URL_MARGIN" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Content-Type: application/json"

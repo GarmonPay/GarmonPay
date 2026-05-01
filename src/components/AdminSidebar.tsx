@@ -23,6 +23,7 @@ const links = [
   { href: "/admin/referrals", label: "Referrals" },
   { href: "/admin/membership-bonuses", label: "Membership bonuses" },
   { href: "/admin/platform", label: "Platform" },
+  { href: "/admin/throttle-log", label: "Throttle log" },
   { href: "/admin/wallet-monitor", label: "Wallet" },
   { href: "/admin/balance-monitor", label: "Balance Monitor" },
   { href: "/admin/celo-audit", label: "C-Lo audit" },
