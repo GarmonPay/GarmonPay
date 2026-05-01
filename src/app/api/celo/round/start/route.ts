@@ -231,5 +231,9 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-  return NextResponse.json({ round, room: roomAfter });
+  return NextResponse.json({
+    ok: true,
+    round,
+    room: roomAfter,
+  });
 }

@@ -683,6 +683,8 @@ export default function CeloRoomPage() {
   const lastRealtimeUpdateRef = useRef(0);
   /** Start time of the in-flight fetchAll (for stale guards across awaits). */
   const fetchStartedAtRef = useRef(0);
+  /** Local API mutation time; fetch started before this must not clobber round/room from merge. */
+  const lastLocalMutationRef = useRef(0);
   const roomRef = useRef<Room | null>(null);
   const playersRef = useRef<Player[]>([]);
   const roundRef = useRef<Round | null>(null);
@@ -882,6 +884,9 @@ export default function CeloRoomPage() {
       if (fetchStartedAt < lastRealtimeUpdateRef.current) return true;
       return false;
     };
+
+    const skipMergeDueToLocalMutation =
+      fetchStartedAt < lastLocalMutationRef.current;
 
     const [stateRes, chatRes] = await Promise.all([
       fetchCeloApi(
@@ -1140,27 +1145,32 @@ export default function CeloRoomPage() {
       }
       playerRollsSnapshot = (prData ?? []) as Record<string, unknown>[];
     }
-    setRoundPlayerRolls(playerRollsSnapshot);
 
-    commitCeloAggregateMerge(
-      {
-        room: incomingRoom !== undefined ? incomingRoom : undefined,
-        players: playerRows,
-        currentRound:
-          activeRound === null
-            ? null
-            : (activeRound as unknown as Record<string, unknown>),
-      },
-      "fetch",
-      { playersSnapshot: true }
-    );
+    if (skipMergeDueToLocalMutation) {
+      console.log("[C-Lo] skipping fetch merge (fetch older than local mutation)");
+    } else {
+      setRoundPlayerRolls(playerRollsSnapshot);
 
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
+      commitCeloAggregateMerge(
+        {
+          room: incomingRoom !== undefined ? incomingRoom : undefined,
+          players: playerRows,
+          currentRound:
+            activeRound === null
+              ? null
+              : (activeRound as unknown as Record<string, unknown>),
+        },
+        "fetch",
+        { playersSnapshot: true }
+      );
+
+      if (isStaleFetch()) {
+        console.log("[C-Lo] skipping stale fetch");
+        return;
+      }
+
+      setCurrentPlayerResolvedRoll(hasCurrentPlayerFinal);
     }
-
-    setCurrentPlayerResolvedRoll(hasCurrentPlayerFinal);
 
     setMessages(
       ((chatRes.data as unknown[]) ?? []).map((row) => normalizeChatRow(row))
@@ -1172,7 +1182,7 @@ export default function CeloRoomPage() {
       return;
     }
 
-    if (activeRound?.id && !rollingRef.current) {
+    if (!skipMergeDueToLocalMutation && activeRound?.id && !rollingRef.current) {
       if (isStaleFetch()) {
         console.log("[C-Lo] skipping stale fetch");
         return;
@@ -1231,6 +1241,7 @@ export default function CeloRoomPage() {
         }
       }
     } else if (
+      !skipMergeDueToLocalMutation &&
       !activeRound &&
       !rollingActionRef.current &&
       !resultBannerDataRef.current
@@ -2652,14 +2663,41 @@ export default function CeloRoomPage() {
       me != null &&
       normalizeCeloUserId(String(round.roller_user_id)) === normalizeCeloUserId(me));
   const canRollPlayer = !!(
-    room &&
-    round &&
-    inProgress &&
-    round.status === "player_rolling" &&
     isPlayer &&
+    round?.status === "player_rolling" &&
     isMyTurn &&
-    myRow?.entry_posted === true
+    myRow?.entry_posted === true &&
+    !rollingAction
   );
+
+  useEffect(() => {
+    console.log("[C-Lo canRollBanker]", {
+      isBanker,
+      roundStatus: round?.status,
+      rollingAction,
+      canRollBanker,
+    });
+  }, [isBanker, round?.status, rollingAction, canRollBanker]);
+
+  useEffect(() => {
+    console.log("[C-Lo canRollPlayer]", {
+      mySeatNum,
+      currentPlayerSeat: round?.current_player_seat,
+      rollerUserId: round?.roller_user_id,
+      entryPosted: myRow?.entry_posted,
+      roundStatus: round?.status,
+      rollingAction,
+      canRollPlayer,
+    });
+  }, [
+    mySeatNum,
+    round?.current_player_seat,
+    round?.roller_user_id,
+    round?.status,
+    myRow?.entry_posted,
+    rollingAction,
+    canRollPlayer,
+  ]);
 
   const postEntryRoomOk = ["waiting", "active", "entry_phase"].includes(roomStatusLc);
   const entryStakeInt = Math.floor(Number(entryAmount));
@@ -3088,10 +3126,8 @@ export default function CeloRoomPage() {
   const rollDiceDisabled =
     roomPausedBlocking ||
     bannerOverlayVisible ||
-    noCountReveal != null ||
-    (round?.status === "banker_rolling" && isBanker
-      ? !canRollBanker && !CELO_DEBUG
-      : rollingAction);
+    (isBanker && round?.status === "banker_rolling" && !canRollBanker) ||
+    (isPlayer && round?.status === "player_rolling" && !canRollPlayer);
 
   useEffect(() => {
     if (!bannerOverlayVisible) {
@@ -3286,17 +3322,27 @@ export default function CeloRoomPage() {
         body: JSON.stringify({ room_id: room.id }),
       });
       const text = await res.text();
-      let j: { error?: string; room?: unknown; round?: unknown } = {};
+      let j: {
+        ok?: boolean;
+        error?: string;
+        room?: unknown;
+        round?: unknown;
+      } = {};
       try {
         j = text
-          ? (JSON.parse(text) as { error?: string; room?: unknown; round?: unknown })
+          ? (JSON.parse(text) as {
+              ok?: boolean;
+              error?: string;
+              room?: unknown;
+              round?: unknown;
+            })
           : {};
       } catch {
         setStartRoundError("Invalid response from server");
         if (CELO_DEBUG) console.error("[C-Lo room] Start round bad JSON", text);
         return;
       }
-      console.log("[C-Lo] start round response", { status: res.status, body: j });
+      console.log("[C-Lo startRound response]", j);
       if (!res.ok) {
         if (res.status === 401) {
           setStartRoundError("Session expired. Please log in again.");
@@ -3305,20 +3351,30 @@ export default function CeloRoomPage() {
         setStartRoundError(j.error ?? "Could not start round");
         return;
       }
+      if (j.ok === false) {
+        setStartRoundError(j.error ?? "Could not start round");
+        return;
+      }
       const rid = String((j.room as { id?: string } | undefined)?.id ?? "");
-      if (rid === room.id) {
+      if (rid === room.id && j.round != null) {
+        fetchTokenRef.current += 1;
+        lastLocalMutationRef.current = Date.now();
         bumpOptimisticAsRealtime();
+        setDice(null);
+        setRollName(null);
+        setRollPoint(null);
+        setNoCountReveal(null);
+        setRolling(false);
+        setRollingAction(false);
         commitCeloAggregateMerge(
           {
             room: j.room as Record<string, unknown>,
-            currentRound:
-              j.round != null
-                ? (j.round as Record<string, unknown>)
-                : undefined,
+            currentRound: j.round as Record<string, unknown>,
             updated_at: new Date().toISOString(),
           },
           "join"
         );
+        console.log("[C-Lo currentRound set local]", j.round);
       }
       await fetchAll();
     } catch (e) {
@@ -3477,14 +3533,11 @@ export default function CeloRoomPage() {
   async function handleRoll() {
     const rollRoomStatus = room?.status ?? null;
     const rollRoundStatus = round?.status ?? null;
-    const bankerRollBypass =
-      CELO_DEBUG && isBanker && round?.status === "banker_rolling";
     console.warn("[C-Lo UI] roll handler (predicates)", {
       hasRoom: !!room,
       hasRound: !!round,
       hasSupabase: !!supabase,
       rollingAction,
-      bankerRollBypass,
       isBanker,
       isPlayer,
       roomStatus: rollRoomStatus,
@@ -3501,7 +3554,7 @@ export default function CeloRoomPage() {
       setRollFetchInfo({ url: "(blocked)", status: !room ? "missing_room" : "missing_round", body: "", error: "" });
       return;
     }
-    if (rollingAction && !bankerRollBypass) {
+    if (rollingAction) {
       setRollFetchInfo({ url: "(blocked)", status: "rolling_action_in_progress", body: "", error: "" });
       return;
     }
@@ -3509,15 +3562,6 @@ export default function CeloRoomPage() {
       console.error("[C-Lo] roll: blocked — no supabase client");
       setRollError("Please log in to roll.");
       setRollFetchInfo({ url: "(blocked)", status: "missing_supabase", body: "", error: "Please log in to roll." });
-      return;
-    }
-    if (noCountReveal) {
-      setRollFetchInfo({
-        url: "(blocked)",
-        status: "no_count_reveal",
-        body: "",
-        error: "",
-      });
       return;
     }
     setRollError(null);
@@ -3709,6 +3753,7 @@ export default function CeloRoomPage() {
           "roll"
         );
         lastRealtimeUpdateRef.current = Date.now();
+        lastLocalMutationRef.current = Date.now();
         if (noCountRevealTimeoutRef.current) {
           clearTimeout(noCountRevealTimeoutRef.current);
         }
@@ -3807,6 +3852,7 @@ export default function CeloRoomPage() {
         "roll"
       );
       lastRealtimeUpdateRef.current = Date.now();
+      lastLocalMutationRef.current = Date.now();
       await fetchAll();
       if (rj.bankStopped === true) {
         lastBankTakeoverMetaRef.current = {
