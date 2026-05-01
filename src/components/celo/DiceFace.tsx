@@ -148,7 +148,7 @@ const FACE_PIP: Record<FaceId, 1 | 2 | 3 | 4 | 5 | 6> = {
   bottom: 4,
 };
 
-function PipsOnFace({
+export function PipsOnFace({
   v,
   st,
   pipSize,
@@ -356,6 +356,63 @@ function isValidDie(v: unknown): v is 1 | 2 | 3 | 4 | 5 | 6 {
   );
 }
 
+/**
+ * Flat 2D die with high-contrast pips — safe fallback if 3D CSS has GPU issues (e.g. some mobile WebKit).
+ */
+export function SimpleDiceFace({
+  value,
+  diceType = "gold",
+  size = 64,
+}: {
+  value: 1 | 2 | 3 | 4 | 5 | 6;
+  diceType?: DiceType;
+  size?: number;
+}) {
+  const st = STYLES[diceType];
+  const r = Math.round(size * 0.12);
+  const pipSize = Math.max(5, Math.round(size * 0.18));
+  const pad = Math.round(size * 0.11);
+  const hiContrast = {
+    ...st,
+    dot: "#0f172a",
+    dotGlow: "rgba(15,23,42,0.25)",
+    pipShadow: "0 2px 4px rgba(0,0,0,0.55)",
+  };
+  return (
+    <div
+      className="relative flex flex-shrink-0 items-center justify-center"
+      style={{
+        width: size * 1.1,
+        height: size * 1.1,
+        margin: "0 2px",
+      }}
+      aria-hidden
+    >
+      <div
+        className="relative overflow-hidden"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: r,
+          border: "2px solid rgba(15,15,25,0.9)",
+          boxShadow:
+            "inset 0 2px 0 rgba(255,255,255,0.55), 0 6px 18px rgba(0,0,0,0.45)",
+          background: "linear-gradient(165deg, #fefefe 0%, #e8e8f0 48%, #d8d8e4 100%)",
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: st.face,
+            opacity: 0.18,
+          }}
+        />
+        <PipsOnFace v={value} st={hiContrast} pipSize={pipSize} pad={pad} />
+      </div>
+    </div>
+  );
+}
+
 export default function DiceFace({
   value,
   diceType = "standard",
@@ -366,8 +423,10 @@ export default function DiceFace({
   variant = "a",
   durationSec = 1.8,
 }: Props) {
-  const dieOk = blank || isValidDie(value);
-  const resolvedPip: 1 | 2 | 3 | 4 | 5 | 6 = blank
+  /** During tumble, always draw pips (parent supplies preview or cycling values). */
+  const effectiveBlank = blank && !rolling;
+  const dieOk = effectiveBlank || isValidDie(value);
+  const resolvedPip: 1 | 2 | 3 | 4 | 5 | 6 = effectiveBlank
     ? 1
     : isValidDie(value)
       ? value
@@ -375,7 +434,7 @@ export default function DiceFace({
 
   const id = useId().replace(/:/g, "");
   const slug = `d3d-${id}`;
-  const s = blank
+  const s = effectiveBlank
     ? {
         face: BLANK_FACE,
         rim: BLANK_RIM,
@@ -405,7 +464,7 @@ export default function DiceFace({
     wasRolling.current = rolling;
   }, [rolling]);
 
-  if (!blank && !dieOk) {
+  if (!effectiveBlank && !dieOk) {
     return (
       <>
         <style>{`${SHIMMER_STYLE}`}</style>
@@ -512,8 +571,8 @@ export default function DiceFace({
                     rolling || (!rolling && settleId > 0)
                       ? undefined
                       : settledT,
-                  WebkitBackfaceVisibility: "hidden",
-                  backfaceVisibility: "hidden",
+                  WebkitBackfaceVisibility: "visible",
+                  backfaceVisibility: "visible",
                   willChange: rolling || (!rolling && settleId > 0) ? "transform" : undefined,
                   animation: rolling
                     ? `${slug}-tumble ${durationSec}s ${TUMBLE_EASING} infinite`
@@ -552,14 +611,14 @@ export default function DiceFace({
                         transform: t,
                         WebkitTransform: t,
                         transformStyle: "preserve-3d",
-                        WebkitBackfaceVisibility: "hidden",
-                        backfaceVisibility: "hidden",
+                        WebkitBackfaceVisibility: "visible",
+                        backfaceVisibility: "visible",
                         background: s.rim,
-                        border: blank
+                        border: effectiveBlank
                           ? "1px solid rgba(253,224,71,0.32)"
                           : "1px solid rgba(0,0,0,0.38)",
                         borderRadius: r,
-                        boxShadow: blank
+                        boxShadow: effectiveBlank
                           ? "0 0 10px rgba(167,139,250,0.35), 0 0 0 0.5px rgba(245,200,66,0.12)"
                           : "0 0 0 0.5px rgba(0,0,0,0.2)",
                       } as React.CSSProperties
@@ -573,17 +632,17 @@ export default function DiceFace({
                         background: s.face,
                       }}
                     />
-                    {!blank && (
+                    {!effectiveBlank && (
                       <PipsOnFace v={pval} st={s} pipSize={pipSize} pad={pad} />
                     )}
                     <div
                       className="pointer-events-none absolute rounded-[inherit]"
                       style={{
                         inset: 0,
-                        background: blank
+                        background: effectiveBlank
                           ? "linear-gradient(125deg, rgba(255,255,255,0.22) 0%, transparent 38%, rgba(245,200,66,0.12) 55%, rgba(76,29,149,0.2) 100%)"
                           : "linear-gradient(125deg, rgba(255,255,255,0.18) 0%, transparent 40%, rgba(0,0,0,0.1) 100%)",
-                        boxShadow: blank
+                        boxShadow: effectiveBlank
                           ? "inset 0 0 12px rgba(167,139,250,0.25)"
                           : undefined,
                       }}

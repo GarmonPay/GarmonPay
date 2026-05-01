@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -2372,6 +2372,41 @@ export default function CeloRoomPage() {
     return null;
   })();
 
+  /** Static felt preview from round row — visible during banker tumble before banker_dice commits. */
+  const idlePreviewTriplet = useMemo((): [number, number, number] | null => {
+    const t = realDiceTripletFromUnknown(displayRound?.idle_preview_dice);
+    if (!t || !isRealDiceValues(t)) return null;
+    return [clampDie(t[0]), clampDie(t[1]), clampDie(t[2])];
+  }, [displayRound?.idle_preview_dice]);
+
+  /** Fast random faces while tumbling if server has not published pips yet (never blank purple cubes). */
+  const [spinTriplet, setSpinTriplet] = useState<[number, number, number] | null>(null);
+
+  useLayoutEffect(() => {
+    const needSpin =
+      isRollingFaces && facePips == null && idlePreviewTriplet == null;
+    if (!needSpin) {
+      setSpinTriplet(null);
+      return;
+    }
+    const tick = () =>
+      setSpinTriplet([
+        clampDie(Math.floor(Math.random() * 6) + 1),
+        clampDie(Math.floor(Math.random() * 6) + 1),
+        clampDie(Math.floor(Math.random() * 6) + 1),
+      ]);
+    tick();
+    const id = window.setInterval(tick, 110);
+    return () => window.clearInterval(id);
+  }, [isRollingFaces, facePips, idlePreviewTriplet]);
+
+  const tumbleFaceTriplet: [number, number, number] | null = isRollingFaces
+    ? (facePips ??
+      idlePreviewTriplet ??
+      spinTriplet ??
+      ([3, 4, 5] as [number, number, number]))
+    : null;
+
   const displayDice = authoritativeTriplet ?? facePips;
 
   useEffect(() => {
@@ -4660,15 +4695,14 @@ export default function CeloRoomPage() {
                         : "0 10px 24px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {isRollingFaces && !facePips
+                    {isRollingFaces && tumbleFaceTriplet
                       ? [0, 1, 2].map((i) => (
                           <DiceFace
-                            key={`${round?.id ?? "r"}-${visualDiceMode}-blank-${i}`}
-                            value={1}
+                            key={`${round?.id ?? "r"}-${visualDiceMode}-tumble-${i}-${tumbleFaceTriplet[i]}-${round?.status ?? ""}`}
+                            value={tumbleFaceTriplet[i] as 1 | 2 | 3 | 4 | 5 | 6}
                             diceType={myDiceType}
                             size={diceSize}
                             rolling
-                            blank
                             delay={[0, 80, 160][i]}
                             variant={CELO_TUMBLE[i]!.variant}
                             durationSec={CELO_TUMBLE[i]!.durationSec}
@@ -4688,8 +4722,8 @@ export default function CeloRoomPage() {
                             />
                           ))
                         : (
-                            <CeloDiceEmptyState diceSize={diceSize} />
-                          )}
+                              <CeloDiceEmptyState diceSize={diceSize} />
+                            )}
                   </div>
                   <RollNameDisplay
                     rollName={noCountReveal ? null : rollName}
