@@ -1,6 +1,8 @@
 /**
  * GarmonPay ad earnings rates. Advertisers charged 2x user earnings; GarmonPay keeps 50%.
  * All amounts in dollars (convert to cents for wallet).
+ *
+ * Server-side member payout helpers (async, DB-backed): {@link ./garmon-member-payout}.
  */
 
 export type GarmonEngagementType =
@@ -72,34 +74,3 @@ export const VIDEO_MIN_SECONDS = { view_15: 15, view_30: 30, view_60: 60 };
 
 /** Banner view duration seconds. */
 export const BANNER_VIEW_SECONDS = 30;
-
-/** Base member payout ($) before level/streak multipliers — video tiers scale off 30s = half of advertiser view cost. */
-export function baseUserEarnForVideoTier(
-  tier: "view_15" | "view_30" | "view_60",
-  adCostPerView: number
-): number {
-  const adv = Number(adCostPerView);
-  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_VIEW_MAX) {
-    return GARMON_AD_RATES[tier].userEarns;
-  }
-  const u30 = adv / 2;
-  if (tier === "view_15") return u30 * 0.5;
-  if (tier === "view_30") return u30;
-  return u30 * 1.5;
-}
-
-export function baseUserEarnForBannerView(adCostPerView: number): number {
-  const adv = Number(adCostPerView);
-  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_VIEW_MAX) {
-    return GARMON_AD_RATES.banner_view.userEarns;
-  }
-  return adv / 2;
-}
-
-export function baseUserEarnForClick(adCostPerClick: number): number {
-  const adv = Number(adCostPerClick);
-  if (!Number.isFinite(adv) || adv <= GARMON_LEGACY_COST_PER_CLICK_MAX) {
-    return GARMON_AD_RATES.click.userEarns;
-  }
-  return adv / 2;
-}

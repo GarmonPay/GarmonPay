@@ -1,4 +1,5 @@
 /** Member-facing caps used for package economics (must stay ≤ price). */
+// TODO: Optionally sync marketing copy with platform_settings click_payout_cents / view_payout_cents (admin /admin/platform).
 export const AD_PACKAGE_MEMBER_EARN_PER_VIEW = 0.01;
 export const AD_PACKAGE_MEMBER_EARN_PER_CLICK = 0.05;
 

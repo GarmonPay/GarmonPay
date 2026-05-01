@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getApiRoot } from "@/lib/api";
 import { adminApiHeaders } from "@/lib/admin-supabase";
 import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
+import { ActionButton } from "@/components/admin/ActionButton";
 
 const API_BASE = getApiRoot();
 
@@ -28,6 +29,13 @@ function AdminPlatformPageInner() {
     total_revenue_cents: number;
     total_rewards_paid_cents: number;
   } | null>(null);
+  const [rateClickInput, setRateClickInput] = useState("5");
+  const [rateViewInput, setRateViewInput] = useState("1");
+  const [savedClickCents, setSavedClickCents] = useState(5);
+  const [savedViewCents, setSavedViewCents] = useState(1);
+  const [ratesSuccess, setRatesSuccess] = useState<string | null>(null);
+  const [ratesSaving, setRatesSaving] = useState(false);
+
   const [adRewardPct, setAdRewardPct] = useState<number>(40);
   const [adRewardInput, setAdRewardInput] = useState("40");
   const [gameConfig, setGameConfig] = useState<Record<string, number>>({});
@@ -47,11 +55,14 @@ function AdminPlatformPageInner() {
       fetch(`${API_BASE}/admin/platform-settings`, { credentials: "include", headers: adminApiHeaders(session) }).then(
         (r) => r.json()
       ),
+      fetch(`${API_BASE}/admin/rates`, { credentials: "include", headers: adminApiHeaders(session) }).then((r) =>
+        r.json()
+      ),
       fetch(`${API_BASE}/admin/game-config`, { credentials: "include", headers: adminApiHeaders(session) }).then(
         (r) => r.json()
       ),
     ])
-      .then(([balanceRes, settingsRes, gameRes]) => {
+      .then(([balanceRes, settingsRes, ratesRes, gameRes]) => {
         if (balanceRes.balance_cents !== undefined) {
           setBalance({
             balance_cents: balanceRes.balance_cents ?? 0,
@@ -62,6 +73,12 @@ function AdminPlatformPageInner() {
         const pct = Number(settingsRes.ad_reward_percent ?? 40);
         setAdRewardPct(pct);
         setAdRewardInput(String(pct));
+        const ck = Math.floor(Number(ratesRes.click_payout_cents ?? 5));
+        const vw = Math.floor(Number(ratesRes.view_payout_cents ?? 1));
+        setSavedClickCents(ck);
+        setSavedViewCents(vw);
+        setRateClickInput(String(ck));
+        setRateViewInput(String(vw));
         const config = gameRes.config ?? {};
         setGameConfig(config);
         const inputs: Record<string, string> = {};
@@ -78,6 +95,40 @@ function AdminPlatformPageInner() {
     if (session) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.adminId]);
+
+  async function saveRates() {
+    const click = parseInt(rateClickInput, 10);
+    const view = parseInt(rateViewInput, 10);
+    if (!Number.isInteger(click) || click < 0 || click > 100 || !Number.isInteger(view) || view < 0 || view > 100) {
+      setError("Click and view payouts must be integers from 0 to 100 (cents)");
+      return;
+    }
+    setRatesSaving(true);
+    setError(null);
+    setRatesSuccess(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/rates`, {
+        method: "POST",
+        credentials: "include",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ click_payout_cents: click, view_payout_cents: view }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data.message as string) || "Update failed");
+        return;
+      }
+      setSavedClickCents(data.click_payout_cents ?? click);
+      setSavedViewCents(data.view_payout_cents ?? view);
+      setRatesSuccess("Rates updated. New rate applies on next click/view.");
+      setTimeout(() => setRatesSuccess(null), 5000);
+    } catch {
+      setError("Request failed");
+    } finally {
+      setRatesSaving(false);
+    }
+  }
 
   async function saveAdReward() {
     const num = parseFloat(adRewardInput);
@@ -168,6 +219,11 @@ function AdminPlatformPageInner() {
       {success && (
         <div className="mb-4 p-3 rounded-lg bg-green-500/20 text-green-400 text-sm">{success}</div>
       )}
+      {ratesSuccess && (
+        <div className="mb-4 p-3 rounded-lg border border-[#7c3aed]/35 bg-[#7c3aed]/15 text-sm text-white">
+          {ratesSuccess}
+        </div>
+      )}
 
       {/* Platform balance (read-only) */}
       <section className="mb-8">
@@ -188,6 +244,47 @@ function AdminPlatformPageInner() {
             <p className="text-fintech-muted text-sm">Total rewards paid</p>
             <p className="text-2xl font-bold text-white">{balance ? formatCents(balance.total_rewards_paid_cents) : "—"}</p>
           </div>
+        </div>
+      </section>
+
+      {/* Garmon member payout rates (cents) */}
+      <section className="mb-8 rounded-xl border border-[#7c3aed]/25 bg-[#0e0118] p-5">
+        <h2 className="font-[family-name:var(--font-admin-display)] text-lg font-bold text-white mb-2">
+          User Payout Rates
+        </h2>
+        <p className="text-sm text-white/60 mb-4">
+          How much each user earns when they click or view a Garmon ad.
+        </p>
+        <div className="flex flex-col gap-4 max-w-md">
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1">Pay user per click (cents)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={rateClickInput}
+              onChange={(e) => setRateClickInput(e.target.value)}
+              className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-white text-sm"
+            />
+            <p className="mt-1 text-xs text-[#f5c842]/90">Current rate: {savedClickCents}¢</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1">Pay user per view (cents)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={rateViewInput}
+              onChange={(e) => setRateViewInput(e.target.value)}
+              className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-white text-sm"
+            />
+            <p className="mt-1 text-xs text-[#f5c842]/90">Current rate: {savedViewCents}¢</p>
+          </div>
+          <ActionButton type="button" variant="gold" disabled={ratesSaving} onClick={() => void saveRates()}>
+            {ratesSaving ? "Saving…" : "Save Rates"}
+          </ActionButton>
         </div>
       </section>
 

@@ -15,8 +15,6 @@ import { checkIpReputation } from "@/lib/ip-reputation";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 import {
   GARMON_AD_RATES,
-  baseUserEarnForBannerView,
-  baseUserEarnForClick,
   capAdEarnMultiplier,
   GARMON_AD_EARN_MULT_CAP,
   MAX_USER_EARNINGS_PER_DAY,
@@ -25,19 +23,15 @@ import {
   VIDEO_MIN_SECONDS,
   BANNER_VIEW_SECONDS,
 } from "@/lib/garmon-ad-rates";
+import {
+  baseUserEarnForBannerView,
+  baseUserEarnForClick,
+  baseUserEarnForVideoTier,
+} from "@/lib/garmon-member-payout";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { normalizeUserMembershipTier } from "@/lib/garmon-plan-config";
-import type { MarketingPlanId } from "@/lib/garmon-plan-config";
 
 const RATE_LIMIT_PER_HOUR = 30;
 const WINDOW_MS = 60 * 60 * 1000;
-const PLAN_VIEW_PAYOUT_DOLLARS = {
-  free: 0.01,
-  starter: 0.03,
-  growth: 0.05,
-  pro: 0.08,
-  elite: 0.15,
-} as const;
 
 type EngageBody = {
   adId: string;
@@ -146,13 +140,6 @@ export async function POST(request: Request) {
     }
 
     let userEarns: number;
-    let memberTier: MarketingPlanId = "free";
-    const { data: memberRow } = await supabase
-      .from("users")
-      .select("membership")
-      .eq("id", userId)
-      .maybeSingle();
-    memberTier = normalizeUserMembershipTier((memberRow as { membership?: string } | null)?.membership);
 
     let serverDuration = Math.round(durationSeconds ?? 0);
     if (sessionId) {
@@ -171,16 +158,20 @@ export async function POST(request: Request) {
 
     if (engagementType === "view") {
       const dur = serverDuration;
+      let tier: "view_15" | "view_30" | "view_60";
       if (dur >= VIDEO_MIN_SECONDS.view_60) {
+        tier = "view_60";
       } else if (dur >= VIDEO_MIN_SECONDS.view_30) {
+        tier = "view_30";
       } else if (dur >= VIDEO_MIN_SECONDS.view_15) {
+        tier = "view_15";
       } else {
         return NextResponse.json(
           { message: "Watch at least 15 seconds for video credit" },
           { status: 400 }
         );
       }
-      userEarns = PLAN_VIEW_PAYOUT_DOLLARS[memberTier];
+      userEarns = await baseUserEarnForVideoTier(tier, ad.cost_per_view);
     } else if (engagementType === "banner_view") {
       if (serverDuration < BANNER_VIEW_SECONDS) {
         return NextResponse.json(
@@ -188,9 +179,9 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      userEarns = baseUserEarnForBannerView(ad.cost_per_view);
+      userEarns = await baseUserEarnForBannerView(ad.cost_per_view);
     } else if (engagementType === "click") {
-      userEarns = baseUserEarnForClick(ad.cost_per_click);
+      userEarns = await baseUserEarnForClick(ad.cost_per_click);
     } else if (engagementType === "follow") {
       userEarns = GARMON_AD_RATES.follow.userEarns;
     } else {

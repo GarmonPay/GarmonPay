@@ -4,12 +4,12 @@ import {
   getActiveGarmonAds,
   getEngagedAdIdsToday,
 } from "@/lib/garmon-ads-db";
+import { GARMON_AD_RATES } from "@/lib/garmon-ad-rates";
 import {
-  GARMON_AD_RATES,
   baseUserEarnForVideoTier,
   baseUserEarnForBannerView,
   baseUserEarnForClick,
-} from "@/lib/garmon-ad-rates";
+} from "@/lib/garmon-member-payout";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const FEED_LIMIT = 10;
@@ -32,16 +32,21 @@ export async function GET(request: Request) {
       getEngagedAdIdsToday(userId),
     ]);
     const filtered = ads.filter((a) => !engagedIds.has(a.id)).slice(0, FEED_LIMIT);
-    return NextResponse.json({
-      ads: filtered.map((ad) => {
+    const enriched = await Promise.all(
+      filtered.map(async (ad) => {
         const adType = ad.ad_type;
         const userEarnsView =
           adType === "banner"
-            ? baseUserEarnForBannerView(ad.cost_per_view)
-            : baseUserEarnForVideoTier("view_30", ad.cost_per_view);
-        const userEarnsClick = baseUserEarnForClick(ad.cost_per_click);
+            ? await baseUserEarnForBannerView(ad.cost_per_view)
+            : await baseUserEarnForVideoTier("view_30", ad.cost_per_view);
+        const userEarnsClick = await baseUserEarnForClick(ad.cost_per_click);
         const userEarnsFollow = GARMON_AD_RATES.follow.userEarns;
         const userEarnsShare = GARMON_AD_RATES.share.userEarns;
+        const [userEarnsView15, userEarnsView30, userEarnsView60] = await Promise.all([
+          baseUserEarnForVideoTier("view_15", ad.cost_per_view),
+          baseUserEarnForVideoTier("view_30", ad.cost_per_view),
+          baseUserEarnForVideoTier("view_60", ad.cost_per_view),
+        ]);
         return {
           id: ad.id,
           advertiserId: ad.advertiser_id,
@@ -67,12 +72,13 @@ export async function GET(request: Request) {
           userEarnsClick,
           userEarnsFollow,
           userEarnsShare,
-          userEarnsView15: baseUserEarnForVideoTier("view_15", ad.cost_per_view),
-          userEarnsView30: baseUserEarnForVideoTier("view_30", ad.cost_per_view),
-          userEarnsView60: baseUserEarnForVideoTier("view_60", ad.cost_per_view),
+          userEarnsView15,
+          userEarnsView30,
+          userEarnsView60,
         };
-      }),
-    });
+      })
+    );
+    return NextResponse.json({ ads: enriched });
   } catch (e) {
     console.error("Ads feed error:", e);
     return NextResponse.json({ message: "Failed to load feed", ads: [] }, { status: 500 });
