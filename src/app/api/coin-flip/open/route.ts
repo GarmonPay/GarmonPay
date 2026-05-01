@@ -36,13 +36,37 @@ export async function GET(request: Request) {
   }>;
 
   const creatorIds = Array.from(new Set(list.map((r) => r.creator_id)));
-  const emailMap = new Map<string, string | null>();
+  const profileMap = new Map<
+    string,
+    { email: string | null; username: string | null; full_name: string | null }
+  >();
   if (creatorIds.length) {
-    const { data: users } = await supabase.from("users").select("id, email").in("id", creatorIds);
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, email, username, full_name")
+      .in("id", creatorIds);
     for (const u of users ?? []) {
-      const row = u as { id: string; email: string | null };
-      emailMap.set(row.id, row.email);
+      const row = u as {
+        id: string;
+        email: string | null;
+        username: string | null;
+        full_name: string | null;
+      };
+      profileMap.set(row.id, {
+        email: row.email,
+        username: row.username,
+        full_name: row.full_name,
+      });
     }
+  }
+
+  function creatorLabelFor(userId: string): string {
+    const p = profileMap.get(userId);
+    const un = String(p?.username ?? "").trim();
+    if (un) return un;
+    const fn = String(p?.full_name ?? "").trim();
+    if (fn) return fn;
+    return maskCreatorEmail(p?.email ?? undefined);
   }
 
   const games = list.map((r) => ({
@@ -50,7 +74,7 @@ export async function GET(request: Request) {
     createdAt: r.created_at,
     betAmountMinor: Math.trunc(r.bet_amount_minor),
     creatorSide: r.creator_side,
-    creatorLabel: maskCreatorEmail(emailMap.get(r.creator_id) ?? undefined),
+    creatorLabel: creatorLabelFor(r.creator_id),
   }));
 
   return NextResponse.json({ games });

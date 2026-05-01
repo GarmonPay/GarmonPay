@@ -629,7 +629,7 @@ export default function CeloRoomPage() {
   resultBannerDataRef.current = resultBannerData;
   const [lowerAmt, setLowerAmt] = useState(0);
   const [entryAmount, setEntryAmount] = useState(1000);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [chat, setChat] = useState("");
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
@@ -4309,7 +4309,7 @@ export default function CeloRoomPage() {
       )}
       <div className="mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-1 pt-2 sm:pt-3 md:px-6 md:pt-4">
         <header className="rounded-2xl border border-amber-400/10 bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-4">
-          <div className="flex min-h-10 min-w-0 items-center gap-2">
+          <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-2">
             <Link
               href="/dashboard/games/celo"
               className="shrink-0 min-h-touch rounded-lg px-2 text-sm text-amber-300/90 transition hover:text-amber-200 sm:text-base"
