@@ -192,22 +192,12 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 20,
+          zIndex: 25,
           pointerEvents: "none",
           opacity,
           transition: "opacity 0.35s ease",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: "-10%",
-            background:
-              "radial-gradient(ellipse at center, rgba(0,0,0,0.32) 0%, rgba(0,0,0,0.56) 65%, rgba(0,0,0,0) 100%)",
-            filter: "blur(2px)",
-            opacity: 0.85,
-          }}
-        />
         <div
           style={{
             position: "relative",

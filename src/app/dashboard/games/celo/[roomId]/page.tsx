@@ -4652,27 +4652,34 @@ export default function CeloRoomPage() {
                   aria-hidden
                 />
                 <div
-                  className="relative w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh)))] md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
+                  className="relative isolate z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
                   style={{
                     width: feltW,
                     borderRadius: "50%",
-                    background:
-                      "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
                     border: "10px solid #7a4a28",
                     boxShadow: `
                     0 0 0 1px #c9a061,
                     0 0 0 3px #4a2d1a,
                     0 0 48px rgba(255, 230, 160, 0.2),
-                    0 24px 64px rgba(0,0,0,0.72),
-                    inset 0 8px 42px rgba(220, 245, 180, 0.16),
-                    inset 0 -32px 52px rgba(0,0,0,0.58)`,
+                    0 24px 64px rgba(0,0,0,0.72)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
                   <div
-                    className="pointer-events-none absolute left-1/2 top-[38%] z-0 w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
+                      boxShadow: `
+                    inset 0 8px 42px rgba(220, 245, 180, 0.16),
+                    inset 0 -32px 52px rgba(0,0,0,0.58)`,
+                    }}
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-[38%] z-[1] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{
                       height: "48%",
                       background:
@@ -4681,13 +4688,13 @@ export default function CeloRoomPage() {
                     aria-hidden
                   />
                   <span
-                    className={`absolute z-[1] ${cinzel.className} pointer-events-none select-none`}
+                    className={`pointer-events-none absolute z-[2] ${cinzel.className} select-none`}
                     style={{ fontSize: "clamp(2.5rem,8vw,3.5rem)", color: "#F5C842", opacity: 0.055 }}
                   >
                     GP
                   </span>
                   <div
-                    className="relative z-[5] flex items-center justify-center gap-2 md:gap-3"
+                    className="relative z-10 flex items-center justify-center gap-2 md:gap-3"
                     style={{
                       opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
                       boxShadow: isRollingFaces
@@ -4734,7 +4741,7 @@ export default function CeloRoomPage() {
                     }}
                   />
                   {noCountReveal ? (
-                    <div className="mt-3 flex flex-col items-center gap-1 px-2">
+                    <div className="relative z-[22] mt-3 flex flex-col items-center gap-1 px-2">
                       <p
                         className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
                       >
