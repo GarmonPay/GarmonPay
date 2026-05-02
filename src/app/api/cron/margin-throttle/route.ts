@@ -8,14 +8,11 @@ import { invalidateRateCache } from "@/lib/rates";
  * Auth: x-cron-secret or Authorization: Bearer (same as social-reverify).
  */
 
-function cronAuthorized(request: Request): boolean {
+function extractCronSecret(request: Request): string {
   const authHeader = request.headers.get("authorization");
-  const secret = (
+  return (
     request.headers.get("x-cron-secret") ?? (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "")
   ).trim();
-  const expected = process.env.CRON_SECRET?.trim();
-  if (expected && secret !== expected) return false;
-  return true;
 }
 
 function clampEffective(target: number, multiplier: number): number {
@@ -26,7 +23,15 @@ function clampEffective(target: number, multiplier: number): number {
 type MarginRow = { revenue_cents: number | string | null; payout_cents: number | string | null };
 
 export async function POST(request: Request) {
-  if (!cronAuthorized(request)) {
+  const expected = process.env.CRON_SECRET?.trim();
+  if (!expected) {
+    return NextResponse.json(
+      { message: "Cron misconfigured: CRON_SECRET is not set" },
+      { status: 500 }
+    );
+  }
+  const secret = extractCronSecret(request);
+  if (secret !== expected) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
     }).eq("id", rowId);
 
     await supabase.from("throttle_log").insert({
-      ran_at: runAt,
+      created_at: runAt,
       observed_margin_pct: null,
       action_taken: "skip_insufficient_data",
       prev_click_effective: prevClick,
@@ -159,7 +164,7 @@ export async function POST(request: Request) {
   }
 
   const { error: logErr } = await supabase.from("throttle_log").insert({
-    ran_at: runAt,
+    created_at: runAt,
     observed_margin_pct: marginRounded,
     action_taken: action,
     prev_click_effective: prevClick,

@@ -43,7 +43,7 @@ COMMENT ON COLUMN public.platform_settings.view_payout_effective_cents IS 'Actua
 
 CREATE TABLE IF NOT EXISTS public.throttle_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  ran_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
   observed_margin_pct numeric(8, 4),
   action_taken text NOT NULL,
   prev_click_effective integer,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.throttle_log (
   notes text
 );
 
-CREATE INDEX IF NOT EXISTS throttle_log_ran_at_desc ON public.throttle_log (ran_at DESC);
+CREATE INDEX IF NOT EXISTS throttle_log_created_at_desc ON public.throttle_log (created_at DESC);
 
 COMMENT ON TABLE public.throttle_log IS 'Margin throttle cron and manual override audit log.';
 

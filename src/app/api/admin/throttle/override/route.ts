@@ -106,7 +106,7 @@ export async function POST(request: Request) {
   }
 
   await supabase.from("throttle_log").insert({
-    ran_at: runAt,
+    created_at: runAt,
     observed_margin_pct: null,
     action_taken: "manual_admin_override",
     prev_click_effective: prevClick,

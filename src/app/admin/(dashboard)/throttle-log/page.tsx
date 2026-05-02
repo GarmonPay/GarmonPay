@@ -10,7 +10,7 @@ const API_BASE = getApiRoot();
 
 type Row = {
   id: string;
-  ran_at: string;
+  created_at: string;
   observed_margin_pct: number | null;
   action_taken: string;
   prev_click_effective: number | null;
@@ -74,7 +74,9 @@ function AdminThrottleLogInner() {
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-white/5 text-white">
                   <td className="p-3 whitespace-nowrap text-white/90">
-                    {r.ran_at ? new Date(r.ran_at).toISOString().replace("T", " ").slice(0, 19) : "—"}
+                    {r.created_at
+                      ? new Date(r.created_at).toISOString().replace("T", " ").slice(0, 19)
+                      : "—"}
                   </td>
                   <td className="p-3">
                     {r.observed_margin_pct === null || r.observed_margin_pct === undefined

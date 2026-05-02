@@ -15,9 +15,9 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("throttle_log")
     .select(
-      "id, ran_at, observed_margin_pct, action_taken, prev_click_effective, new_click_effective, prev_view_effective, new_view_effective, notes"
+      "id, created_at, observed_margin_pct, action_taken, prev_click_effective, new_click_effective, prev_view_effective, new_view_effective, notes"
     )
-    .order("ran_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) {
