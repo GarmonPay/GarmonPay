@@ -1,7 +1,9 @@
 -- Margin auto-throttle: target vs effective payout cents + audit log.
 -- Renames legacy columns from ec053fe; adds effective rates and throttle metadata.
+-- Dollar-quote tags ($rename$, $func$) avoid Supabase SQL editor mangling bare $$ blocks.
+-- platform_settings is treated as single-row; backfill does not filter by id.
 
-DO $$
+DO $rename$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -15,7 +17,7 @@ BEGIN
   ) THEN
     ALTER TABLE public.platform_settings RENAME COLUMN view_payout_cents TO view_payout_target_cents;
   END IF;
-END $$;
+END $rename$;
 
 ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS click_payout_target_cents integer NOT NULL DEFAULT 5;
 ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS view_payout_target_cents integer NOT NULL DEFAULT 1;
@@ -26,11 +28,13 @@ ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS throttle_active bo
 ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS throttle_last_run_at timestamptz;
 ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS throttle_last_margin_pct numeric(5, 2);
 
+-- Align effective to target where still unset (nullable legacy path); safe no-op when both NOT NULL from ADD COLUMN defaults.
 UPDATE public.platform_settings
 SET
   click_payout_effective_cents = click_payout_target_cents,
   view_payout_effective_cents = view_payout_target_cents
-WHERE id = 'default';
+WHERE click_payout_effective_cents IS NULL
+   OR view_payout_effective_cents IS NULL;
 
 COMMENT ON COLUMN public.platform_settings.click_payout_target_cents IS 'Admin target: max member payout per click (cents) in legacy range.';
 COMMENT ON COLUMN public.platform_settings.view_payout_target_cents IS 'Admin target: max member payout per view (cents) in legacy range.';
@@ -58,20 +62,33 @@ DROP POLICY IF EXISTS "Service role full throttle_log" ON public.throttle_log;
 CREATE POLICY "Service role full throttle_log"
   ON public.throttle_log FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Aggregates Garmon engagements for rolling 24h margin (main formula).
+-- Rolling 24h margin inputs: platform revenue (USD cents) vs GPay ledger positive available deltas (minor units).
 CREATE OR REPLACE FUNCTION public.garmon_margin_last_24h()
 RETURNS TABLE (revenue_cents bigint, payout_cents bigint)
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SET search_path = public
-AS $$
-  SELECT
-    round(coalesce(sum(advertiser_charged), 0)::numeric * 100)::bigint AS revenue_cents,
-    round(coalesce(sum(user_earned), 0)::numeric * 100)::bigint AS payout_cents
-  FROM public.garmon_ad_engagements
-  WHERE created_at >= now() - interval '24 hours';
-$$;
+AS $func$
+DECLARE
+  r bigint;
+  p bigint;
+BEGIN
+  SELECT coalesce(sum(pe.amount_cents), 0)::bigint
+  INTO r
+  FROM public.platform_earnings pe
+  WHERE pe.created_at >= now() - interval '24 hours';
 
-COMMENT ON FUNCTION public.garmon_margin_last_24h() IS 'Rolling 24h sum(advertiser_charged) and sum(user_earned) as integer cents for margin throttle.';
+  SELECT coalesce(sum(gl.delta_available_minor), 0)::bigint
+  INTO p
+  FROM public.gpay_ledger gl
+  WHERE gl.created_at >= now() - interval '24 hours'
+    AND gl.delta_available_minor > 0;
+
+  RETURN QUERY SELECT r, p;
+END;
+$func$;
+
+COMMENT ON FUNCTION public.garmon_margin_last_24h() IS
+  'Rolling 24h: sum(platform_earnings.amount_cents) as revenue_cents; sum(gpay_ledger.delta_available_minor) where delta > 0 as payout_cents (GPay minor).';
 
 GRANT EXECUTE ON FUNCTION public.garmon_margin_last_24h() TO service_role;

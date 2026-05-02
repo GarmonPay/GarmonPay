@@ -41,7 +41,7 @@ async function loadRatesFromDb(): Promise<PlatformPayoutRatesRow> {
     .select(
       "click_payout_effective_cents, view_payout_effective_cents, click_payout_target_cents, view_payout_target_cents, throttle_active, throttle_last_run_at, throttle_last_margin_pct"
     )
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
 
   if (error || !data) {

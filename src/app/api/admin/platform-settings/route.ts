@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { platformSettingsRowId } from "@/lib/platform-settings-db";
 import { createAdminClient } from "@/lib/supabase";
 
 /** GET /api/admin/platform-settings — return platform_settings (ad_reward_percent). */
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("platform_settings")
     .select("id, ad_reward_percent, updated_at")
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
@@ -50,10 +51,14 @@ export async function PATCH(request: Request) {
   if (typeof pct !== "number" || pct < 0 || pct > 100) {
     return NextResponse.json({ message: "ad_reward_percent must be 0–100" }, { status: 400 });
   }
+  const rowId = await platformSettingsRowId(supabase);
+  if (rowId === null) {
+    return NextResponse.json({ message: "platform_settings row not found" }, { status: 500 });
+  }
   const { error } = await supabase
     .from("platform_settings")
     .update({ ad_reward_percent: pct, updated_at: new Date().toISOString() })
-    .eq("id", "default");
+    .eq("id", rowId);
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }

@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     .select(
       "click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active, throttle_last_run_at, throttle_last_margin_pct"
     )
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
@@ -128,18 +128,24 @@ export async function POST(request: Request) {
   const { data: existing } = await supabase
     .from("platform_settings")
     .select(
-      "click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active"
+      "id, click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active"
     )
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
 
   const cur = existing as {
+    id?: string | number;
     click_payout_target_cents?: number;
     view_payout_target_cents?: number;
     click_payout_effective_cents?: number;
     view_payout_effective_cents?: number;
     throttle_active?: boolean;
   } | null;
+
+  const rowId = cur?.id;
+  if (rowId === undefined || rowId === null) {
+    return NextResponse.json({ message: "platform_settings row missing id" }, { status: 500 });
+  }
 
   const throttleActive = !!cur?.throttle_active;
 
@@ -164,7 +170,7 @@ export async function POST(request: Request) {
   const { data: updatedRow, error } = await supabase
     .from("platform_settings")
     .update(update)
-    .eq("id", "default")
+    .eq("id", rowId)
     .select(
       "click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active, throttle_last_run_at, throttle_last_margin_pct"
     )

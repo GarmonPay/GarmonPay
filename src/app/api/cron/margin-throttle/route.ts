@@ -40,14 +40,19 @@ export async function POST(request: Request) {
   const { data: settings, error: settingsErr } = await supabase
     .from("platform_settings")
     .select(
-      "click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active"
+      "id, click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents, throttle_active"
     )
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
 
   if (settingsErr || !settings) {
     console.error("[cron/margin-throttle] settings", settingsErr);
     return NextResponse.json({ message: settingsErr?.message ?? "platform_settings missing" }, { status: 500 });
+  }
+
+  const rowId = (settings as { id?: string | number }).id;
+  if (rowId === undefined || rowId === null) {
+    return NextResponse.json({ message: "platform_settings row missing id" }, { status: 500 });
   }
 
   const s = settings as {
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
       throttle_last_run_at: runAt,
       throttle_last_margin_pct: null,
       updated_at: runAt,
-    }).eq("id", "default");
+    }).eq("id", rowId);
 
     await supabase.from("throttle_log").insert({
       ran_at: runAt,
@@ -146,7 +151,7 @@ export async function POST(request: Request) {
       throttle_last_margin_pct: marginRounded,
       updated_at: runAt,
     })
-    .eq("id", "default");
+    .eq("id", rowId);
 
   if (upErr) {
     console.error("[cron/margin-throttle] update", upErr);

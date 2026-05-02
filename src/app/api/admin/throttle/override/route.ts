@@ -35,13 +35,18 @@ export async function POST(request: Request) {
   const { data: settings, error: readErr } = await supabase
     .from("platform_settings")
     .select(
-      "click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents"
+      "id, click_payout_target_cents, view_payout_target_cents, click_payout_effective_cents, view_payout_effective_cents"
     )
-    .eq("id", "default")
+    .limit(1)
     .maybeSingle();
 
   if (readErr || !settings) {
     return NextResponse.json({ message: readErr?.message ?? "platform_settings missing" }, { status: 500 });
+  }
+
+  const rowId = (settings as { id?: string | number }).id;
+  if (rowId === undefined || rowId === null) {
+    return NextResponse.json({ message: "platform_settings row missing id" }, { status: 500 });
   }
 
   const cur = settings as {
@@ -94,7 +99,7 @@ export async function POST(request: Request) {
       throttle_active: false,
       updated_at: runAt,
     })
-    .eq("id", "default");
+    .eq("id", rowId);
 
   if (upErr) {
     return NextResponse.json({ message: upErr.message }, { status: 500 });
