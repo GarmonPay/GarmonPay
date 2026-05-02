@@ -4690,18 +4690,57 @@ export default function CeloRoomPage() {
 
               <div className="relative z-10 flex flex-col items-center justify-center py-1 md:flex-1 md:min-h-[12rem] md:py-4">
                 <div
-                  className="relative isolate z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] items-center justify-center overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
-                  style={{ width: feltW }}
+                  className="pointer-events-none absolute left-1/2 top-[42%] -z-10 h-[min(38vh,20rem)] w-[min(94vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[36px] blur-[44px] opacity-[0.38] md:top-[45%] md:w-[min(30rem,92vw)]"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse at 50% 42%, rgba(245,200,66,0.2) 0%, rgba(180,120,40,0.08) 38%, transparent 72%)",
+                  }}
+                  aria-hidden
+                />
+                <div
+                  className="relative z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] flex-col items-stretch justify-center overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
+                  style={{
+                    width: feltW,
+                    borderRadius: 28,
+                    padding: 7,
+                    background:
+                      "linear-gradient(155deg, #e4c06a 0%, #c9a061 26%, #9a6636 68%, #7a4a28 100%)",
+                    boxShadow:
+                      "0 18px 52px rgba(0,0,0,0.58), 0 0 72px rgba(245,200,66,0.12), inset 0 1px 0 rgba(255,248,220,0.35)",
+                  }}
                 >
                   <div
-                    className="relative z-10 flex items-center justify-center gap-2 md:gap-3"
+                    className="relative isolate flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden rounded-[22px] px-4 py-5 md:rounded-[24px] md:px-6 md:py-7"
                     style={{
-                      opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
-                      boxShadow: isRollingFaces
-                        ? "0 8px 28px rgba(124,58,237,0.28), 0 4px 18px rgba(245,200,66,0.14)"
-                        : "0 10px 24px rgba(0,0,0,0.5)",
+                      boxShadow: "inset 0 8px 32px rgba(0,0,0,0.4), inset 0 -4px 18px rgba(0,0,0,0.28)",
+                      background:
+                        "radial-gradient(ellipse 92% 78% at 50% 40%, #2d7a3e 0%, #267035 22%, #1a5c2e 48%, #0f4a24 72%, #0a3d1a 92%, #082a14 100%)",
                     }}
                   >
+                    <div
+                      className="pointer-events-none absolute inset-0 z-[1] opacity-[0.12]"
+                      style={{
+                        mixBlendMode: "overlay",
+                        backgroundImage:
+                          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+                        backgroundSize: "180px 180px",
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="pointer-events-none absolute inset-0 z-[1]"
+                      style={{
+                        background:
+                          "radial-gradient(ellipse 72% 58% at 50% 36%, rgba(255,255,255,0.07) 0%, transparent 58%)",
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="relative z-10 flex items-center justify-center gap-2 md:gap-3"
+                      style={{
+                        opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
+                      }}
+                    >
                     {isRollingFaces && tumbleFaceTriplet
                       ? [0, 1, 2].map((i) => (
                           <DiceFace
@@ -4731,29 +4770,30 @@ export default function CeloRoomPage() {
                         : (
                               <CeloDiceEmptyState diceSize={diceSize} />
                             )}
-                  </div>
-                  <RollNameDisplay
-                    rollName={noCountReveal ? null : rollName}
-                    point={noCountReveal ? null : rollPoint}
-                    onComplete={() => {
-                      setRollName(null);
-                      setRollPoint(null);
-                    }}
-                  />
-                  {noCountReveal ? (
-                    <div className="relative z-[22] mt-3 flex flex-col items-center gap-1 px-2">
-                      <p
-                        className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
-                      >
-                        NO POINT — Roll Again
-                      </p>
-                      {noCountReveal.rollName ? (
-                        <p className="text-center font-mono text-xs text-amber-100/75">
-                          {noCountReveal.rollName}
-                        </p>
-                      ) : null}
                     </div>
-                  ) : null}
+                    <RollNameDisplay
+                      rollName={noCountReveal ? null : rollName}
+                      point={noCountReveal ? null : rollPoint}
+                      onComplete={() => {
+                        setRollName(null);
+                        setRollPoint(null);
+                      }}
+                    />
+                    {noCountReveal ? (
+                      <div className="relative z-[22] mt-3 flex flex-col items-center gap-1 px-2">
+                        <p
+                          className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
+                        >
+                          NO POINT — Roll Again
+                        </p>
+                        {noCountReveal.rollName ? (
+                          <p className="text-center font-mono text-xs text-amber-100/75">
+                            {noCountReveal.rollName}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 {showIdleDice && !isRollingFaces && (
                   <p
