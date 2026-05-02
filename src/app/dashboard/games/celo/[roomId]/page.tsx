@@ -4690,55 +4690,9 @@ export default function CeloRoomPage() {
 
               <div className="relative z-10 flex flex-col items-center justify-center py-1 md:flex-1 md:min-h-[12rem] md:py-4">
                 <div
-                  className="pointer-events-none absolute -inset-6 -z-10 opacity-90 md:-inset-8"
-                  style={{
-                    background:
-                      "radial-gradient(52% 48% at 50% 40%, rgba(255,235,180,0.22) 0%, rgba(245,200,66,0.12) 28%, rgba(80,30,120,0.08) 45%, transparent 72%)",
-                  }}
-                  aria-hidden
-                />
-                <div
-                  className="relative isolate z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
-                  style={{
-                    width: feltW,
-                    borderRadius: "50%",
-                    border: "10px solid #7a4a28",
-                    boxShadow: `
-                    0 0 0 1px #c9a061,
-                    0 0 0 3px #4a2d1a,
-                    0 0 48px rgba(255, 230, 160, 0.2),
-                    0 24px 64px rgba(0,0,0,0.72)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  className="relative isolate z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] items-center justify-center overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
+                  style={{ width: feltW }}
                 >
-                  <div
-                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
-                    style={{
-                      background:
-                        "radial-gradient(ellipse 100% 75% at 50% 38%, #1a5c2e 0%, #0d3d1a 32%, #082510 55%, #041a0d 78%, #021208 100%)",
-                      boxShadow: `
-                    inset 0 8px 42px rgba(220, 245, 180, 0.16),
-                    inset 0 -32px 52px rgba(0,0,0,0.58)`,
-                    }}
-                    aria-hidden
-                  />
-                  <div
-                    className="pointer-events-none absolute left-1/2 top-[38%] z-[1] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-                    style={{
-                      height: "48%",
-                      background:
-                        "radial-gradient(ellipse at 50% 45%, rgba(255, 255, 220, 0.28) 0%, rgba(255,240,200,0.1) 42%, transparent 74%)",
-                    }}
-                    aria-hidden
-                  />
-                  <span
-                    className={`pointer-events-none absolute z-[2] ${cinzel.className} select-none`}
-                    style={{ fontSize: "clamp(2.5rem,8vw,3.5rem)", color: "#F5C842", opacity: 0.055 }}
-                  >
-                    GP
-                  </span>
                   <div
                     className="relative z-10 flex items-center justify-center gap-2 md:gap-3"
                     style={{
