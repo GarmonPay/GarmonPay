@@ -76,8 +76,86 @@ export async function celoAdjustRoomBank(
     Math.floor(Number((row as { current_bank_sc?: number })?.current_bank_sc ?? 0))
   );
   const next = Math.max(0, cur + deltaNetSc);
-  await admin.from("celo_rooms").update({ current_bank_sc: next }).eq("id", roomId);
-  return next;
+  const { data: updated, error } = await admin
+    .from("celo_rooms")
+    .update({ current_bank_sc: next, current_bank_cents: next })
+    .eq("id", roomId)
+    .select("current_bank_sc")
+    .single();
+  if (error) {
+    throw new Error(error.message);
+  }
+  const persisted = Math.max(
+    0,
+    Math.floor(Number((updated as { current_bank_sc?: number })?.current_bank_sc ?? next))
+  );
+  return persisted;
+}
+
+export type CeloFinalizeBankerTerminalResult = {
+  finalized: boolean;
+  newBankSc: number;
+  reason?: string;
+};
+
+/** Atomically finalize banker instant_win / instant_loss and move room bank (Postgres RPC). */
+export async function celoFinalizeBankerTerminalRound(
+  admin: SupabaseClient,
+  args: {
+    roundId: string;
+    roomId: string;
+    bankerDice: number[];
+    bankerDiceName: string;
+    bankerDiceResult: string;
+    bankerWinningsSc: number;
+    platformFeeSc: number;
+    bankDeltaSc: number;
+  }
+): Promise<CeloFinalizeBankerTerminalResult> {
+  const { data, error } = await admin.rpc("celo_finalize_banker_terminal_round", {
+    p_round_id: args.roundId,
+    p_room_id: args.roomId,
+    p_banker_dice: args.bankerDice,
+    p_banker_dice_name: args.bankerDiceName,
+    p_banker_dice_result: args.bankerDiceResult,
+    p_banker_winnings_sc: args.bankerWinningsSc,
+    p_platform_fee_sc: args.platformFeeSc,
+    p_bank_delta_sc: args.bankDeltaSc,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  const row = data as { finalized?: boolean; new_bank_sc?: number; reason?: string } | null;
+  return {
+    finalized: row?.finalized === true,
+    newBankSc: Math.max(0, Math.floor(Number(row?.new_bank_sc ?? 0))),
+    reason: typeof row?.reason === "string" ? row.reason : undefined,
+  };
+}
+
+export type CeloReconcileTerminalBankResult = {
+  reconciled: boolean;
+  newBankSc: number;
+  reason?: string;
+};
+
+/** Apply stored terminal bank delta if round completed without a prior room bank update (retry / legacy). */
+export async function celoReconcileTerminalRoomBank(
+  admin: SupabaseClient,
+  roundId: string
+): Promise<CeloReconcileTerminalBankResult> {
+  const { data, error } = await admin.rpc("celo_reconcile_terminal_room_bank", {
+    p_round_id: roundId,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  const row = data as { reconciled?: boolean; new_bank_sc?: number; reason?: string } | null;
+  return {
+    reconciled: row?.reconciled === true,
+    newBankSc: Math.max(0, Math.floor(Number(row?.new_bank_sc ?? 0))),
+    reason: typeof row?.reason === "string" ? row.reason : undefined,
+  };
 }
 
 /** Player phase: cumulative banker P&L and platform fees as each staked roll settles. */

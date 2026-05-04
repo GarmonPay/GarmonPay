@@ -9,6 +9,8 @@ import {
   celoAccountingLog,
   celoApplyRoundBankerAccountingDelta,
   celoAdjustRoomBank,
+  celoFinalizeBankerTerminalRound,
+  celoReconcileTerminalRoomBank,
   celoStakeNetAndPlatformFee,
   celoUpdateRoundIfStatus,
 } from "@/lib/celo-accounting";
@@ -499,36 +501,37 @@ async function handleBankerRoll(
       );
     }
 
-    const { data: finalized, error: finErr } = await admin
-      .from("celo_rounds")
-      .update({
-        banker_dice: diceArr,
-        banker_dice_name: roll.rollName,
-        banker_dice_result: roll.result,
-        banker_roll_in_flight: false,
-        status: "completed",
-        platform_fee_sc: totalPlatformFee,
-        banker_winnings_sc: bankerWins,
-        completed_at: now,
-      })
-      .eq("id", round.id)
-      .eq("status", "banker_rolling")
-      .select("id")
-      .maybeSingle();
-
-    if (finErr) {
-      celoAccountingLog("banker_instant_win_finalize_err", {
+    let finIw;
+    try {
+      finIw = await celoFinalizeBankerTerminalRound(admin, {
         roundId: round.id,
-        message: finErr.message,
+        roomId: room.id,
+        bankerDice: [...diceArr],
+        bankerDiceName: roll.rollName,
+        bankerDiceResult: roll.result,
+        bankerWinningsSc: bankerWins,
+        platformFeeSc: totalPlatformFee,
+        bankDeltaSc: bankerWins,
       });
-      await clearBankerRollInFlight(admin, round.id, "instant_win_finalize_err");
-      return NextResponse.json(
-        { error: finErr.message ?? "Finalize failed" },
-        { status: 500 }
-      );
+    } catch (rpcErr) {
+      const msg = rpcErr instanceof Error ? rpcErr.message : String(rpcErr);
+      celoAccountingLog("banker_instant_win_finalize_rpc_err", {
+        roundId: round.id,
+        message: msg,
+      });
+      await clearBankerRollInFlight(admin, round.id, "instant_win_finalize_rpc_err");
+      return NextResponse.json({ error: msg || "Finalize failed" }, { status: 500 });
     }
 
-    if (!finalized) {
+    if (!finIw.finalized) {
+      try {
+        await celoReconcileTerminalRoomBank(admin, round.id);
+      } catch (recErr) {
+        celoAccountingLog("banker_instant_win_reconcile_err", {
+          roundId: round.id,
+          message: recErr instanceof Error ? recErr.message : String(recErr),
+        });
+      }
       const { data: cur } = await admin
         .from("celo_rounds")
         .select(
@@ -604,7 +607,7 @@ async function handleBankerRoll(
         idempotencyKey: `celo_fee_round_${round.id}_banker_instant_win`,
       }
     );
-    const newBank = await celoAdjustRoomBank(admin, room.id, bankerWins);
+    const newBank = finIw.newBankSc;
     await delayBeforeRoomReset();
     const roomStatusAfterIw = await nextRoomStatusAfterRoundComplete(admin, room.id);
     await admin
@@ -705,24 +708,43 @@ async function handleBankerRoll(
       }
     }
 
-    const { data: finalized } = await admin
-      .from("celo_rounds")
-      .update({
-        banker_dice: diceArr,
-        banker_dice_name: roll.rollName,
-        banker_dice_result: roll.result,
-        banker_roll_in_flight: false,
-        status: "completed",
-        completed_at: now,
-        banker_winnings_sc: -totalNetFromBank,
-        platform_fee_sc: totalPlatformFee,
-      })
-      .eq("id", round.id)
-      .eq("status", "banker_rolling")
-      .select("id")
-      .maybeSingle();
+    const settlementV2Il = Number(round.settlement_version ?? 1) >= 2;
+    /** v2: deduct sum(stake) from table bank; banker_winnings_sc stays -sum(net). Credits are stake+net per player — intentional asymmetry for launch economics. */
+    const bankDeltaInstantLoss = settlementV2Il
+      ? -totalStakeFromBank
+      : -totalNetFromBank;
 
-    if (!finalized) {
+    let finIl;
+    try {
+      finIl = await celoFinalizeBankerTerminalRound(admin, {
+        roundId: round.id,
+        roomId: room.id,
+        bankerDice: [...diceArr],
+        bankerDiceName: roll.rollName,
+        bankerDiceResult: roll.result,
+        bankerWinningsSc: -totalNetFromBank,
+        platformFeeSc: totalPlatformFee,
+        bankDeltaSc: bankDeltaInstantLoss,
+      });
+    } catch (rpcErr) {
+      const msg = rpcErr instanceof Error ? rpcErr.message : String(rpcErr);
+      celoAccountingLog("instant_loss_finalize_rpc_err", {
+        roundId: round.id,
+        message: msg,
+      });
+      await clearBankerRollInFlight(admin, round.id, "instant_loss_finalize_rpc_err");
+      return NextResponse.json({ error: msg || "Finalize failed" }, { status: 500 });
+    }
+
+    if (!finIl.finalized) {
+      try {
+        await celoReconcileTerminalRoomBank(admin, round.id);
+      } catch (recErr) {
+        celoAccountingLog("instant_loss_reconcile_err", {
+          roundId: round.id,
+          message: recErr instanceof Error ? recErr.message : String(recErr),
+        });
+      }
       const { data: cur } = await admin
         .from("celo_rounds")
         .select("status, banker_dice, banker_dice_name, banker_dice_result")
@@ -741,6 +763,18 @@ async function handleBankerRoll(
         cur?.status === "completed" &&
         cur.banker_dice_result === "instant_loss"
       ) {
+        const { data: roomFreshIl } = await admin
+          .from("celo_rooms")
+          .select("current_bank_sc")
+          .eq("id", room.id)
+          .maybeSingle();
+        const nbIl = Math.max(
+          0,
+          Math.floor(
+            Number((roomFreshIl as { current_bank_sc?: number })?.current_bank_sc) ||
+              room.current_bank_sc
+          )
+        );
         return NextResponse.json({
           idempotent: true,
           dice: Array.isArray(cur.banker_dice)
@@ -749,6 +783,7 @@ async function handleBankerRoll(
           rollName: cur.banker_dice_name ?? roll.rollName,
           result: cur.banker_dice_result,
           outcome: "players_win",
+          newBank: nbIl,
         });
       }
       await clearBankerRollInFlight(admin, round.id, "instant_loss_finalize_failed");
@@ -767,13 +802,7 @@ async function handleBankerRoll(
       reason: "instant_loss",
     });
 
-    const newBankAfterLoss = await celoAdjustRoomBank(
-      admin,
-      room.id,
-      Number(round.settlement_version ?? 1) >= 2
-        ? -totalStakeFromBank
-        : -totalNetFromBank
-    );
+    const newBankAfterLoss = finIl.newBankSc;
     await handleCeloBankBustAndBankerTransfer({
       admin,
       roomId: room.id,
