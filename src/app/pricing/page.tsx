@@ -18,6 +18,7 @@ import {
 import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
 import { getMonthlyGpcBonusForPlan, getFirstMonthTotalGpcForPlan } from "@/lib/membership-monthly-gpc-bonus";
 import { localeInt } from "@/lib/format-number";
+import { GC_TO_GPC_RATE_DISPLAY } from "@/lib/gc-gpc-convert";
 
 const cinzel = Cinzel_Decorative({
   subsets: ["latin"],
@@ -69,15 +70,12 @@ function cardChrome(id: string): {
   }
 }
 
-const TIER_EXTRA: Record<
-  string,
-  { convertPct: number; tasks: string }
-> = {
-  free: { convertPct: 80, tasks: "3 tasks per day" },
-  starter: { convertPct: 85, tasks: "10 tasks per day" },
-  growth: { convertPct: 90, tasks: "25 tasks per day" },
-  pro: { convertPct: 95, tasks: "50 tasks per day" },
-  elite: { convertPct: 100, tasks: "Unlimited tasks per day" },
+const TIER_EXTRA: Record<string, { tasks: string }> = {
+  free: { tasks: "3 tasks per day" },
+  starter: { tasks: "10 tasks per day" },
+  growth: { tasks: "25 tasks per day" },
+  pro: { tasks: "50 tasks per day" },
+  elite: { tasks: "Unlimited tasks per day" },
 };
 
 const ROI = [
@@ -478,7 +476,7 @@ export default function PricingPage() {
                         )}
                         {extra && (
                           <p className="mt-2 text-[10px] leading-snug text-violet-300/80">
-                            Convert GC at {extra.convertPct}% rate · {extra.tasks}
+                            {GC_TO_GPC_RATE_DISPLAY} · {extra.tasks}
                           </p>
                         )}
                       </div>

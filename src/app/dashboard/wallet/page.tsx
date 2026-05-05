@@ -11,6 +11,14 @@ import { GOLD_COIN_PACKAGES, type GoldCoinPackageId } from "@/lib/gold-coin-pack
 import { createBrowserClient } from "@/lib/supabase";
 import { localeInt } from "@/lib/format-number";
 import { MONTHLY_BONUSES, normalizeMembershipTierKey } from "@/lib/membership-bonus";
+import {
+  GC_TO_GPC_RATE,
+  GC_TO_GPC_NOMINAL,
+  GC_TO_GPC_RATE_DISPLAY,
+  PLATFORM_FEE_PCT,
+  gpcPlatformFeeFromGc,
+  gpcReceivedFromGc,
+} from "@/lib/gc-gpc-convert";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
@@ -22,15 +30,6 @@ type CoinEntry = {
   description: string | null;
   created_at: string;
 };
-
-function tierToRateLabel(tierRaw: string): { rate: number; label: string } {
-  const t = tierRaw.toLowerCase();
-  if (t.includes("elite") || t.includes("vip")) return { rate: 1.0, label: "Elite" };
-  if (t.includes("pro")) return { rate: 0.95, label: "Pro" };
-  if (t.includes("growth")) return { rate: 0.9, label: "Growth" };
-  if (t.includes("starter")) return { rate: 0.85, label: "Starter" };
-  return { rate: 0.8, label: "Free" };
-}
 
 function WalletDashboardContent() {
   const searchParams = useSearchParams();
@@ -65,8 +64,8 @@ function WalletDashboardContent() {
   const [redeeming, setRedeeming] = useState(false);
   const [redeemOk, setRedeemOk] = useState<string | null>(null);
 
-  const { rate: tierRate, label: tierLabel } = tierToRateLabel(tierRaw);
-  const previewGpc = Math.floor(convertGc * tierRate);
+  const previewGpc = gpcReceivedFromGc(convertGc);
+  const previewFeeGpc = gpcPlatformFeeFromGc(convertGc);
 
   const tierKey = normalizeMembershipTierKey(tierRaw);
   const monthlyBonusAmount =
@@ -179,7 +178,9 @@ function WalletDashboardContent() {
         return;
       }
       await refresh();
-      setConvertOk(`You received ${data.gpay_coins_received ?? previewGpc} GPC.`);
+      setConvertOk(
+        `You received ${localeInt(Number(data.gpay_coins_received ?? previewGpc))} GPC (fee ${localeInt(gpcPlatformFeeFromGc(gc))} GPC).`
+      );
       const histHeaders: Record<string, string> = {};
       if (session.accessToken) histHeaders.Authorization = `Bearer ${session.accessToken}`;
       const h = await fetch("/api/coins/history?limit=25", {
@@ -284,9 +285,7 @@ function WalletDashboardContent() {
           {coinsLoading ? "…" : localeInt(goldCoins)} GC
         </p>
         <p className="text-sm text-violet-200/80">Convert to GPay Coins to play prize games</p>
-        <p className="text-xs text-fintech-muted">
-          Your rate: 100 GC → {Math.floor(100 * tierRate)} GPC ({tierLabel})
-        </p>
+        <p className="text-xs text-fintech-muted">{GC_TO_GPC_RATE_DISPLAY} — e.g. 100 GC → 9,700 GPC.</p>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
@@ -525,21 +524,24 @@ function WalletDashboardContent() {
               onChange={(e) => setConvertGc(Math.max(100, Math.floor(Number(e.target.value) / 100) * 100 || 100))}
               className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white mb-3"
             />
-            <p className="text-sm text-violet-200">
-              {convertGc} GC → {previewGpc} GPC
-            </p>
-            <p className="text-xs text-fintech-muted mb-2">
-              (Your {tierLabel} rate: {(tierRate * 100).toFixed(0)}%)
+            <p className="text-sm font-medium text-violet-100">{GC_TO_GPC_RATE_DISPLAY}</p>
+            <p className="text-xs text-fintech-muted mt-1 mb-2">
+              Preview: {localeInt(convertGc)} GC × {GC_TO_GPC_NOMINAL} GPC nominal ={" "}
+              {localeInt(convertGc * GC_TO_GPC_NOMINAL)} GPC; {(PLATFORM_FEE_PCT * 100).toFixed(0)}% fee (
+              {localeInt(previewFeeGpc)} GPC) → <span className="text-violet-200/95">{localeInt(previewGpc)}</span>{" "}
+              GPC to you ({GC_TO_GPC_RATE} per 1 GC).
             </p>
             <p className="text-sm text-white/90 mb-1">
               Gold Coins: {localeInt(goldCoins)} GC
             </p>
-            <p className="text-sm text-emerald-300/90 mb-3">You will receive: {previewGpc} GPC</p>
-            {tierRate < 1 && (
-              <p className="text-xs text-amber-200/90 mb-3">
-                Upgrade to Elite for 100% rate and get {(100 - Math.floor(100 * tierRate))} more GPC per 100 GC.
-              </p>
-            )}
+            <p className="text-sm text-emerald-300/90 mb-1">
+              You&apos;ll receive:{" "}
+              <span className="font-semibold tabular-nums">{localeInt(previewGpc)} GPC</span> (
+              <span className="tabular-nums">{localeInt(previewFeeGpc)} GPC</span> fee)
+            </p>
+            <p className="text-xs text-violet-300/80 mb-3">
+              Matches server: {GC_TO_GPC_RATE} GPC per 1 GC.
+            </p>
             {convertErr && <p className="text-red-400 text-sm mb-2">{convertErr}</p>}
             {convertOk && <p className="text-emerald-400 text-sm mb-2">{convertOk}</p>}
             <button

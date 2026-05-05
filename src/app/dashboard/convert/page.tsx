@@ -14,7 +14,8 @@ export default function DashboardConvertPage() {
     <div className={`mx-auto max-w-lg space-y-6 px-4 py-8 ${dmSans.className}`}>
       <h1 className="text-2xl font-bold text-[#F5C842]">Convert GC → $GPAY</h1>
       <p className="leading-relaxed text-violet-200/85">
-        Purchase Gold Coin packages (many include bonus $GPAY), or open your wallet for balance tools.
+        Purchase Gold Coin packages (many include bonus $GPAY), or open your wallet for balance tools. In the
+        wallet, Gold Coins convert to GPay Coins at 1 GC = 97 GPC (3% platform fee).
       </p>
       <Link
         href="/dashboard/buy-coins"
