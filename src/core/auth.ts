@@ -122,8 +122,10 @@ export async function register(options: RegisterOptions): Promise<RegisterResult
       id: data.user.id,
       email: data.user.email ?? "",
       role: "member",
-      balance: 0,
-      ad_credit_balance: 0,
+      // Canonical signup bonus: 50 GPC ($0.50 equivalent at 100 GPC = $1).
+      gpay_coins: 50,
+      gold_coins: 0,
+      gpay_tokens: 0,
       created_at: new Date().toISOString(),
     }]);
   } catch {

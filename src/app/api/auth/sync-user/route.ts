@@ -6,23 +6,10 @@ import { isStateExcludedFromParticipation, isValidUsStateCode } from "@/lib/us-s
 import { sendWelcomeEmail } from "@/lib/send-email";
 import { creditCoins } from "@/lib/coins";
 import { referralCodeFromUserId } from "@/lib/referral-code";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Referrer bonus when someone signs up with their code (GPC; 100 GPC = $1). */
 const REFERRAL_SIGNUP_BONUS_GPC = 50;
 
-async function ensureWalletBalanceRow(supabase: SupabaseClient, userId: string): Promise<void> {
-  const { error: wbErr } = await supabase.from("wallet_balances").insert({
-    user_id: userId,
-    balance: 0,
-    updated_at: new Date().toISOString(),
-  });
-  if (wbErr && wbErr.code !== "23505") {
-    console.warn("sync-user wallet_balances insert:", wbErr.message);
-  }
-}
-
-const ALLOWED_ADMIN_EMAIL = "admin123@garmonpay.com";
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
 
 /** Sync auth user into public.users. Requires either Bearer token (sub === id) or id must be a recently created auth user. */
@@ -133,7 +120,6 @@ export async function POST(req: Request) {
         console.error("Sync-user update error:", updateError);
         return NextResponse.json({ success: false, message: updateError.message }, { status: 500 });
       }
-      await ensureWalletBalanceRow(supabase, id);
     } else {
       const registrationIp = getClientIp(req);
       const { error: insertError } = await supabase.from("users").insert({
@@ -142,8 +128,11 @@ export async function POST(req: Request) {
         full_name: fullName || null,
         ...complianceFields,
         role: "user",
-        balance: 0,
-        balance_cents: 0,
+        // Canonical signup bonus: 50 GPC. We avoid fractional GC because GC is whole-unit in this schema.
+        // 50 GPC corresponds to $0.50 at the platform's 100 GPC = $1 display convention.
+        gpay_coins: 50,
+        gold_coins: 0,
+        gpay_tokens: 0,
         membership: "free",
         referral_code: referralCodeFromUserId(id),
         created_at: new Date().toISOString(),
@@ -162,24 +151,6 @@ export async function POST(req: Request) {
         });
       } catch {
         // best-effort
-      }
-      try {
-        const { error: walletErr } = await supabase.from("wallets").insert({
-          user_id: id,
-          balance: 0,
-        });
-        if (walletErr) {
-          console.warn("Sync-user wallets insert (optional):", walletErr.message);
-        }
-      } catch {
-        // ignore
-      }
-      await ensureWalletBalanceRow(supabase, id);
-      try {
-        const { grantSignupBonusGpc } = await import("@/lib/gpay-bonus-credits");
-        await grantSignupBonusGpc(id);
-      } catch (e) {
-        console.warn("sync-user signup GPC bonus:", e);
       }
     }
 

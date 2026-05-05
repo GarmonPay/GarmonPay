@@ -10,8 +10,9 @@ export interface User {
   email: string;
   membershipTier: MembershipTier;
   earningsCents: number;
-  balanceCents: number;
-  withdrawableCents: number;
+  gpayCoins: number;
+  goldCoins: number;
+  gpayTokens: number;
   referralCode: string;
   createdAt: string;
 }

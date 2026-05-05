@@ -7,7 +7,7 @@ export type MembershipTier = "starter" | "pro" | "elite" | "vip";
 
 export type UserRole = "member" | "admin";
 
-/** Users table: role, membership_tier, earnings_cents, balance_cents. Ready for Supabase. */
+/** Users table: canonical currencies live on users.gpay_coins/gold_coins/gpay_tokens. */
 export interface UserRow {
   id: string;
   email: string;
@@ -15,8 +15,9 @@ export interface UserRow {
   role: UserRole;
   membership_tier: MembershipTier;
   earnings_cents: number;
-  balance_cents: number;
-  withdrawable_cents: number;
+  gpay_coins: number;
+  gold_coins: number;
+  gpay_tokens: number;
   referral_code: string;
   referred_by_code: string | null;
   created_at: Date;

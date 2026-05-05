@@ -15,8 +15,9 @@ export interface UserProfile {
   email: string;
   role: string;
   membership: string;
-  balance: number;
-  ad_credit_balance: number;
+  gpay_coins: number;
+  gold_coins: number;
+  gpay_tokens: number;
   referral_code: string | null;
   referred_by_code: string | null;
 }
@@ -27,7 +28,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, role, membership, balance, ad_credit_balance, referral_code, referred_by_code")
+    .select("id, email, role, membership, gpay_coins, gold_coins, gpay_tokens, referral_code, referred_by_code")
     .eq("id", userId)
     .maybeSingle();
   if (error || !data) return null;
@@ -37,8 +38,9 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     email: String(r.email ?? ""),
     role: String(r.role ?? "member"),
     membership: String(r.membership ?? "starter"),
-    balance: Number(r.balance ?? 0),
-    ad_credit_balance: Number((r as { ad_credit_balance?: number }).ad_credit_balance ?? 0),
+    gpay_coins: Number((r as { gpay_coins?: number }).gpay_coins ?? 0),
+    gold_coins: Number((r as { gold_coins?: number }).gold_coins ?? 0),
+    gpay_tokens: Number((r as { gpay_tokens?: number }).gpay_tokens ?? 0),
     referral_code: r.referral_code != null ? String(r.referral_code) : null,
     referred_by_code: r.referred_by_code != null ? String(r.referred_by_code) : null,
   };
@@ -48,8 +50,9 @@ export interface CreateUserProfileInput {
   id: string;
   email: string;
   role?: string;
-  balance?: number;
-  ad_credit_balance?: number;
+  gpay_coins?: number;
+  gold_coins?: number;
+  gpay_tokens?: number;
 }
 
 /** Create user profile row (e.g. after signup). Client: RLS allows insert with auth.uid() = id. */
@@ -60,8 +63,10 @@ export async function createUserProfile(input: CreateUserProfileInput): Promise<
     id: input.id,
     email: input.email,
     role: input.role ?? "member",
-    balance: input.balance ?? 0,
-    ad_credit_balance: input.ad_credit_balance ?? 0,
+    // Canonical signup bonus: 50 GPC ($0.50 equivalent at 100 GPC = $1).
+    gpay_coins: input.gpay_coins ?? 50,
+    gold_coins: input.gold_coins ?? 0,
+    gpay_tokens: input.gpay_tokens ?? 0,
     created_at: new Date().toISOString(),
   }]);
   if (error) return { ok: false, message: error.message };
@@ -83,18 +88,21 @@ export async function updateUserProfile(userId: string, updates: UpdateUserProfi
   return { ok: true };
 }
 
-/** Get user balance and ad credit balance (client: use current user id). */
-export async function getUserBalance(userId: string): Promise<{ balance: number; ad_credit_balance: number } | null> {
+/** Get canonical user currency balances (client: use current user id). */
+export async function getUserBalance(
+  userId: string
+): Promise<{ gpay_coins: number; gold_coins: number; gpay_tokens: number } | null> {
   const supabase = createBrowserClient();
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("users")
-    .select("balance, ad_credit_balance")
+    .select("gpay_coins, gold_coins, gpay_tokens")
     .eq("id", userId)
     .maybeSingle();
   if (error || !data) return null;
   return {
-    balance: Number((data as { balance?: number }).balance ?? 0),
-    ad_credit_balance: Number((data as { ad_credit_balance?: number }).ad_credit_balance ?? 0),
+    gpay_coins: Number((data as { gpay_coins?: number }).gpay_coins ?? 0),
+    gold_coins: Number((data as { gold_coins?: number }).gold_coins ?? 0),
+    gpay_tokens: Number((data as { gpay_tokens?: number }).gpay_tokens ?? 0),
   };
 }
