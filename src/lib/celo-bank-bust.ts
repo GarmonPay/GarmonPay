@@ -1,80 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizeCeloUserId } from "@/lib/celo-player-state";
-
-async function nextAvailablePlayerSeat(
-  admin: SupabaseClient,
-  roomId: string,
-  maxPlayers: number
-): Promise<number> {
-  const { data: seats } = await admin
-    .from("celo_room_players")
-    .select("seat_number")
-    .eq("room_id", roomId);
-  const used = new Set(
-    (seats ?? [])
-      .map((s) => s.seat_number as number | null)
-      .filter((n) => n != null)
-  );
-  const cap = Math.max(2, Math.min(99, maxPlayers || 10));
-  for (let s = 1; s < cap; s += 1) {
-    if (!used.has(s)) return s;
-  }
-  return 1;
-}
-
-/** Demote every `role = banker` row except `exceptUserId` (if any) to player with a free seat. */
-async function demoteBankerRowsExcept(
-  admin: SupabaseClient,
-  roomId: string,
-  exceptUserId: string | null,
-  maxPlayers: number
-): Promise<void> {
-  const { data: bankerRows } = await admin
-    .from("celo_room_players")
-    .select("user_id")
-    .eq("room_id", roomId)
-    .eq("role", "banker");
-  for (const row of bankerRows ?? []) {
-    const uid = String(row.user_id);
-    if (
-      exceptUserId &&
-      normalizeCeloUserId(uid) === normalizeCeloUserId(exceptUserId)
-    ) {
-      continue;
-    }
-    const nextSeat = await nextAvailablePlayerSeat(admin, roomId, maxPlayers);
-    await admin
-      .from("celo_room_players")
-      .update({ role: "player", seat_number: nextSeat })
-      .eq("room_id", roomId)
-      .eq("user_id", uid);
-  }
-}
-
-/** Demote all banker rows to player (used when room has no successor banker). */
-async function demoteAllBankerRowsToPlayers(
-  admin: SupabaseClient,
-  roomId: string,
-  maxPlayers: number
-): Promise<void> {
-  await demoteBankerRowsExcept(admin, roomId, null, maxPlayers);
-}
-
-async function ensurePlayerRowIsBanker(
-  admin: SupabaseClient,
-  roomId: string,
-  bankerUserId: string
-): Promise<void> {
-  await admin
-    .from("celo_room_players")
-    .update({ role: "banker", seat_number: 0 })
-    .eq("room_id", roomId)
-    .eq("user_id", bankerUserId);
-}
 
 /**
  * When the room bank hits zero: remove the old banker from the seat (or assign a bust winner).
  * Server-authoritative — call immediately after `adjustRoomBank` returns `<= 0`.
+ *
+ * Uses DB RPC `celo_handle_bank_bust_and_transfer` so `celo_room_players` and `celo_rooms` stay in sync.
  */
 export async function handleCeloBankBustAndBankerTransfer(params: {
   admin: SupabaseClient;
@@ -90,37 +20,47 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
 
   const { data: roomRaw } = await admin
     .from("celo_rooms")
-    .select("id, banker_id, max_players, current_bank_sc, status")
+    .select("banker_id, max_players, current_bank_sc")
     .eq("id", roomId)
     .maybeSingle();
   if (!roomRaw) return;
 
-  const room = roomRaw as {
-    banker_id: string | null;
-    max_players?: number;
-  };
-  const previousBankerId = room.banker_id ? String(room.banker_id) : null;
-  const maxPlayers = Math.floor(Number(room.max_players) || 10);
+  const previousBankerId = roomRaw.banker_id ? String(roomRaw.banker_id) : null;
+  const maxPlayers = Math.floor(Number(roomRaw.max_players) || 10);
   const oldBankAmount = Math.max(
     0,
-    Math.floor(
-      Number(
-        (roomRaw as { current_bank_sc?: number | null }).current_bank_sc ?? 0
-      )
-    )
+    Math.floor(Number(roomRaw.current_bank_sc ?? 0))
   );
 
+  const bustParam =
+    bustWinnerUserId && String(bustWinnerUserId).trim() !== ""
+      ? String(bustWinnerUserId).trim()
+      : null;
+
+  const { data: rpcData, error: rpcError } = await admin.rpc(
+    "celo_handle_bank_bust_and_transfer",
+    {
+      p_room_id: roomId,
+      p_winner_user_id: bustParam,
+      p_max_players: maxPlayers,
+      p_action: action,
+    }
+  );
+
+  if (rpcError) throw new Error(rpcError.message);
+
+  const row = rpcData as {
+    success?: boolean;
+    banker_id?: string | null;
+    action?: string;
+  } | null;
+
+  const newBankerId =
+    row?.banker_id != null && String(row.banker_id).trim() !== ""
+      ? String(row.banker_id)
+      : null;
+
   if (!previousBankerId) {
-    await demoteAllBankerRowsToPlayers(admin, roomId, maxPlayers);
-    await admin
-      .from("celo_rooms")
-      .update({
-        current_bank_sc: 0,
-        current_bank_cents: 0,
-        banker_reserve_sc: 0,
-        bank_busted: true,
-      })
-      .eq("id", roomId);
     console.log("[C-Lo banker bank rule]", {
       roomId,
       bankerId: null,
@@ -142,61 +82,27 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
     return;
   }
 
-  const winner =
-    bustWinnerUserId &&
-    normalizeCeloUserId(bustWinnerUserId) !==
-      normalizeCeloUserId(previousBankerId)
-      ? bustWinnerUserId
-      : null;
-
-  if (winner) {
-    await demoteBankerRowsExcept(admin, roomId, winner, maxPlayers);
-    await ensurePlayerRowIsBanker(admin, roomId, winner);
-    await admin
-      .from("celo_rooms")
-      .update({
-        banker_id: winner,
-        current_bank_sc: 0,
-        current_bank_cents: 0,
-        banker_reserve_sc: 0,
-        bank_busted: true,
-        status: "bank_takeover",
-        last_activity: new Date().toISOString(),
-      })
-      .eq("id", roomId);
+  if (newBankerId) {
     console.log("[C-Lo banker bank rule]", {
       roomId,
-      bankerId: winner,
+      bankerId: newBankerId,
       userId: previousBankerId,
       currentBankSc: 0,
       bankBusted: true,
-      winnerUserId: winner,
+      winnerUserId: newBankerId,
       action,
     });
     console.log("[C-Lo Bank Takeover]", {
       roomId,
       oldBankerId: previousBankerId,
-      newBankerId: winner,
-      winningPlayerId: winner,
+      newBankerId,
+      winningPlayerId: newBankerId,
       oldBankAmount,
       newBankAmount: 0,
       room: { status: "bank_takeover" },
     });
     return;
   }
-
-  await demoteAllBankerRowsToPlayers(admin, roomId, maxPlayers);
-
-  await admin
-    .from("celo_rooms")
-    .update({
-      banker_id: null,
-      current_bank_sc: 0,
-      current_bank_cents: 0,
-      banker_reserve_sc: 0,
-      bank_busted: true,
-    })
-    .eq("id", roomId);
 
   console.log("[C-Lo banker bank rule]", {
     roomId,
