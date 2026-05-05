@@ -89,7 +89,7 @@ export function DashboardCoinBalances({
                 Convert
               </Link>
               <Link
-                href="/dashboard/wallet#redeem"
+                href="/dashboard/redeem"
                 className="inline-flex min-h-[32px] items-center justify-center rounded-md border border-emerald-500/40 bg-emerald-950/50 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/55 hover:bg-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/35 tablet:min-h-[36px] tablet:rounded-lg tablet:px-2.5 tablet:py-1.5 tablet:text-[10px]"
               >
                 Redeem
@@ -148,7 +148,7 @@ export function DashboardCoinBalances({
           Convert
         </Link>
         <Link
-          href="/dashboard/wallet#redeem"
+          href="/dashboard/redeem"
           className="inline-flex min-w-[4.5rem] flex-1 justify-center rounded-lg border border-[#10B981]/50 bg-[#10B981]/15 px-2 py-1.5 text-[11px] font-semibold text-emerald-100 hover:bg-[#10B981]/25"
         >
           Redeem

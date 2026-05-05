@@ -27,8 +27,12 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">Withdrawals</h2>
-            <p>Withdrawals may take 1-5 business days.</p>
+            <h2 className="text-xl font-semibold text-white mb-3">Redemption ($GPAY)</h2>
+            <p>GarmonPay does not offer USD bank transfers or Stripe cash withdrawals for prize balances.</p>
+            <p className="mt-2">
+              GPay Coins may be redeemed for the official $GPAY SPL token on Solana when that program is live; timing
+              and fees will be disclosed on the redemption page.
+            </p>
           </section>
 
           <section id="referral-program">

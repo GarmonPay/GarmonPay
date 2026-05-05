@@ -58,23 +58,19 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    title: "Withdrawals",
+    title: "$GPAY redemption",
     items: [
       {
-        q: "How do I withdraw my earnings?",
-        a: "Withdrawals are processed through Stripe. You can request a withdrawal from your dashboard once you reach your plan minimum.",
+        q: "How do I redeem my winnings?",
+        a: "USD bank or Stripe cash-outs are not offered. Winnings stay in-app as Gold Coins / GPay Coins until you redeem GPC for the official $GPAY SPL token on Solana — opening soon.",
       },
       {
-        q: "How long do withdrawals take?",
-        a: "Withdrawals typically process within 1 to 5 business days depending on your bank.",
+        q: "When will $GPAY redemption go live?",
+        a: "The $GPAY token and redemption flow are in development. Use Dashboard → Redeem ($GPAY) for launch updates.",
       },
       {
-        q: "What is the minimum withdrawal?",
-        a: "The minimum withdrawal depends on your membership plan. Free members have a $20 minimum. Starter members $10. Growth members $5. Pro members $2. Elite members $1.",
-      },
-      {
-        q: "Are there withdrawal fees?",
-        a: "GarmonPay does not charge withdrawal fees. Standard Stripe processing fees may apply depending on your region.",
+        q: "Are there redemption fees?",
+        a: "Any chain or platform fees will be communicated at launch. Membership plans may include perks that affect earning rates — not payout rails.",
       },
     ],
   },
@@ -100,7 +96,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "Do I need a paid plan to earn?",
-        a: "No. Free members earn from day one. Paid plans multiply your earning rates and unlock higher referral commissions, faster withdrawals, and exclusive features.",
+        a: "No. Free members earn from day one. Paid plans multiply your earning rates and unlock higher referral commissions and exclusive features.",
       },
       {
         q: "Can I cancel my membership?",
@@ -108,7 +104,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "What happens to my earnings if I cancel?",
-        a: "Your earned balance is yours regardless of your plan status. You can still withdraw your existing balance after cancelling.",
+        a: "Your coins and balances stay linked to your account regardless of plan status. Cash withdrawal is not available; redemption will be via $GPAY when live.",
       },
     ],
   },
@@ -161,7 +157,7 @@ export default function FaqPage() {
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-center text-sm text-violet-200/85">
-          Everything you need to know about earning, withdrawals, and trust on GarmonPay.
+          Everything you need to know about earning, redemption, and trust on GarmonPay.
         </p>
 
         <div className="mt-14 space-y-12">

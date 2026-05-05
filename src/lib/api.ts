@@ -265,28 +265,6 @@ export async function addAdSocialLink(
   });
 }
 
-export async function getWithdrawals(accessTokenOrUserId: string, isToken: boolean) {
-  return api<{
-    withdrawals: Array<{ id: string; amount: number; status: string; method: string; wallet_address: string; created_at: string }>;
-    minWithdrawalCents: number;
-  }>("/withdrawals", { headers: authHeaders(accessTokenOrUserId, isToken) });
-}
-
-export async function submitWithdrawalRequest(
-  accessTokenOrUserId: string,
-  isToken: boolean,
-  data: { amount: number; method: string; wallet_address: string }
-) {
-  return api<{ withdrawal: { id: string; amount: number; status: string; method: string; wallet_address: string; created_at: string }; message: string }>(
-    "/withdrawals",
-    {
-      method: "POST",
-      headers: authHeaders(accessTokenOrUserId, isToken),
-      body: JSON.stringify(data),
-    }
-  );
-}
-
 export async function getDashboard(accessTokenOrUserId: string, isToken = false) {
   return api<{
     earningsTodayCents: number;
@@ -296,7 +274,6 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     balanceCents: number | null;
     balanceError?: string | null;
     adCreditBalanceCents: number;
-    withdrawableCents: number | null;
     totalEarningsCents: number;
     totalWithdrawnCents: number;
     totalDepositsCents?: number;
@@ -314,7 +291,7 @@ export async function getDashboard(accessTokenOrUserId: string, isToken = false)
     lifetimeReferralCommissionGpc?: number;
     announcements: { id: string; title: string; body: string; publishedAt: string }[];
     availableAds: { id: string; title: string; rewardCents: number }[];
-    /** Cumulative paid-out reportable amount (e.g. withdrawals marked paid). */
+    /** Cumulative reportable paid-out amount tracked in profiles. */
     reportableEarningsCents?: number;
     taxInfoSubmittedAt?: string | null;
     /** True when reportable earnings meet IRS-style $600 threshold and tax info not certified. */

@@ -195,21 +195,19 @@ export async function getUserReferralEarningsGpc(userId: string): Promise<number
   return (data ?? []).reduce((sum, r) => sum + Number((r as { amount: number }).amount), 0);
 }
 
-/** Ensure badges are awarded based on current state (first earnings, first withdrawal, top referrer, vip). */
+/** Ensure badges are awarded based on current state (first earnings, top referrer, vip). */
 export async function ensureBadgesAwarded(userId: string): Promise<void> {
   const { data: tx } = await supabase()
     .from("transactions")
     .select("type, status")
     .eq("user_id", userId)
-    .in("type", ["earning", "withdrawal"])
+    .in("type", ["earning"])
     .eq("status", "completed");
   const hasEarning = (tx ?? []).some((t: { type: string }) => t.type === "earning");
-  const hasWithdrawal = (tx ?? []).some((t: { type: string }) => t.type === "withdrawal");
   const rank = await getReferrerRank(userId);
   const { data: u } = await supabase().from("users").select("membership").eq("id", userId).single();
   const isVip = (u as { membership?: string } | null)?.membership === "vip";
   if (hasEarning) await awardBadge(userId, "first_earnings");
-  if (hasWithdrawal) await awardBadge(userId, "first_withdrawal");
   if (rank !== null && rank <= 10) await awardBadge(userId, "top_referrer");
   if (isVip) await awardBadge(userId, "vip_member");
 }

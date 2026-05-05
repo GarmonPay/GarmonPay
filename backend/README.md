@@ -34,7 +34,6 @@ npm run dev
 - `GET /api/user/profile` — current user profile (Bearer token)
 - `GET /api/wallet` — wallet balance
 - `POST /api/rewards/credit` — body: `{ amount, eventType }` (amount in cents)
-- `POST /api/withdrawals/request` — body: `{ amount, paymentMethod, wallet_address }`
 - `GET /api/transactions` — list transactions
 - `POST /api/analytics/event` — body: `{ eventType, payload? }`
 

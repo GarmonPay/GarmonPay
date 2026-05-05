@@ -43,7 +43,6 @@ function WalletDashboardContent() {
   const [user, setUser] = useState<{ id: string; accessToken?: string } | null>(null);
   const [tierRaw, setTierRaw] = useState<string>("free");
   const [coinHistory, setCoinHistory] = useState<CoinEntry[]>([]);
-  const [gpayUsd, setGpayUsd] = useState<number | null>(null);
   const [membershipBonusRows, setMembershipBonusRows] = useState<
     { id: string; bonus_type: string; to_tier: string; gpc_amount: number; credited_at: string }[]
   >([]);
@@ -51,18 +50,10 @@ function WalletDashboardContent() {
 
   const [showBuy, setShowBuy] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
-  const [showRedeem, setShowRedeem] = useState(false);
   const [convertGc, setConvertGc] = useState(100);
   const [convertErr, setConvertErr] = useState<string | null>(null);
   const [convertOk, setConvertOk] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
-  const [redeemGpc, setRedeemGpc] = useState(100);
-  const [redeemStep, setRedeemStep] = useState<1 | 2 | 3>(1);
-  const [walletAddr, setWalletAddr] = useState("");
-  const [redeemCustodial, setRedeemCustodial] = useState(false);
-  const [redeemErr, setRedeemErr] = useState<string | null>(null);
-  const [redeeming, setRedeeming] = useState(false);
-  const [redeemOk, setRedeemOk] = useState<string | null>(null);
 
   const previewGpc = gpcReceivedFromGc(convertGc);
   const previewFeeGpc = gpcPlatformFeeFromGc(convertGc);
@@ -136,13 +127,6 @@ function WalletDashboardContent() {
   }, [user?.accessToken, success, purchased]);
 
   useEffect(() => {
-    fetch("/api/tokens/gpay-price")
-      .then((r) => r.json())
-      .then((d: { usd?: number | null }) => setGpayUsd(typeof d.usd === "number" ? d.usd : null))
-      .catch(() => setGpayUsd(null));
-  }, []);
-
-  useEffect(() => {
     if (user?.accessToken && (success || purchased)) void refresh();
   }, [user?.accessToken, success, purchased, refresh]);
 
@@ -193,41 +177,6 @@ function WalletDashboardContent() {
       }
     } finally {
       setConverting(false);
-    }
-  };
-
-  const runRedeem = async () => {
-    if (redeeming || redeemGpc < 100) return;
-    setRedeemErr(null);
-    setRedeeming(true);
-    try {
-      const session = await getSessionAsync();
-      if (!session?.accessToken) {
-        setRedeemErr("Not signed in.");
-        return;
-      }
-      const res = await fetch("/api/coins/redeem", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify(
-          redeemCustodial
-            ? { amount_gpc: redeemGpc, custodial: true }
-            : { amount_gpc: redeemGpc, wallet_address: walletAddr.trim() }
-        ),
-      });
-      const data = (await res.json().catch(() => ({}))) as { message?: string; ok?: boolean };
-      if (!res.ok) {
-        setRedeemErr(typeof data.message === "string" ? data.message : "Redemption failed");
-        return;
-      }
-      await refresh();
-      setRedeemStep(3);
-      setRedeemOk(`${redeemGpc} $GPAY Tokens redeemed!`);
-    } finally {
-      setRedeeming(false);
     }
   };
 
@@ -323,18 +272,12 @@ function WalletDashboardContent() {
           >
             PLAY GAMES
           </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setShowRedeem(true);
-              setRedeemStep(1);
-              setRedeemErr(null);
-              setRedeemOk(null);
-            }}
+          <Link
+            href="/dashboard/redeem"
             className="rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-200"
           >
-            REDEEM FOR $GPAY
-          </button>
+            $GPAY REDEMPTION
+          </Link>
         </div>
       </section>
 
@@ -398,36 +341,22 @@ function WalletDashboardContent() {
         </div>
       </section>
 
-      {/* SECTION 3 — $GPAY Tokens */}
-      <section id="redeem" className="rounded-xl border border-[#10B981]/45 bg-[#0a1a16]/90 p-6 space-y-3">
-        <h2 className={`${cinzel.className} text-lg text-[#10B981]`}>⬡ $GPAY Tokens</h2>
-        <p className="text-3xl font-bold tabular-nums text-[#10B981]">
-          {coinsLoading ? "…" : localeInt(gpayTokens)} $GPAY
+      {/* SECTION 3 — $GPAY redemption (launch pending) */}
+      <section id="redeem" className="rounded-xl border border-[#7c3aed]/45 bg-[#1a0a2e]/90 p-6 space-y-3">
+        <h2 className={`${cinzel.className} text-lg text-[#f5c842]`}>$GPAY redemption</h2>
+        <p className="text-sm text-violet-100/90">
+          Convert GPC winnings to the official $GPAY Solana token. The SPL is not live yet — use the dedicated page for
+          updates.
         </p>
-        <p className="text-sm text-emerald-200/85">
-          {gpayUsd != null ? `≈ $${gpayUsd.toFixed(4)} USD per token (DexScreener)` : "Live price: configure GPAY_TOKEN_MINT"}
+        <p className="text-xs text-fintech-muted">
+          Custodial balance (when enabled): {coinsLoading ? "…" : localeInt(gpayTokens)} $GPAY
         </p>
-        <p className="text-xs text-fintech-muted">Trade on Raydium (USDC pairs)</p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowRedeem(true);
-              setRedeemStep(1);
-            }}
-            className="rounded-xl border border-[#10B981]/60 px-4 py-2.5 text-sm font-semibold text-emerald-100"
-          >
-            SEND $GPAY TO WALLET
-          </button>
-          <a
-            href="https://raydium.io/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-xl bg-[#10B981] px-4 py-2.5 text-sm font-bold text-black"
-          >
-            TRADE ON RAYDIUM
-          </a>
-        </div>
+        <Link
+          href="/dashboard/redeem"
+          className="inline-flex rounded-xl bg-[#f5c842] px-4 py-2.5 text-sm font-bold text-[#0e0118]"
+        >
+          View redemption status
+        </Link>
       </section>
 
       <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-6">
@@ -559,99 +488,6 @@ function WalletDashboardContent() {
         </div>
       )}
 
-      {/* Redeem modal */}
-      {showRedeem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-w-md w-full rounded-2xl border border-emerald-500/40 bg-[#0e0118] p-6">
-            <h3 className={`${cinzel.className} text-xl text-[#10B981] mb-4`}>Redeem for $GPAY Tokens</h3>
-            {redeemStep === 1 && (
-              <>
-                <label className="block text-sm text-fintech-muted mb-2">How many GPC to redeem? (min 100)</label>
-                <input
-                  type="number"
-                  min={100}
-                  step={1}
-                  value={redeemGpc}
-                  onChange={(e) => setRedeemGpc(Math.max(100, Math.floor(Number(e.target.value))))}
-                  className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white mb-2"
-                />
-                <p className="text-sm text-emerald-200 mb-1">= {redeemGpc} $GPAY Tokens (1 GPC = 1 $GPAY)</p>
-                <p className="text-xs text-fintech-muted mb-4">
-                  {gpayUsd != null ? `≈ $${(redeemGpc * gpayUsd).toFixed(2)} USD at spot` : "Spot estimate unavailable"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setRedeemStep(2)}
-                  className="w-full rounded-xl bg-[#10B981] py-3 font-bold text-black"
-                >
-                  NEXT
-                </button>
-              </>
-            )}
-            {redeemStep === 2 && (
-              <>
-                <p className="text-sm text-white mb-3">Where to send $GPAY Tokens?</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRedeemCustodial(false);
-                  }}
-                  className={`w-full mb-2 rounded-lg border px-3 py-2 text-left ${!redeemCustodial ? "border-[#10B981]" : "border-white/20"}`}
-                >
-                  MY SOLANA WALLET — paste Phantom address
-                </button>
-                {!redeemCustodial && (
-                  <input
-                    type="text"
-                    value={walletAddr}
-                    onChange={(e) => setWalletAddr(e.target.value)}
-                    placeholder="Wallet address"
-                    className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white text-sm mb-3"
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRedeemCustodial(true);
-                    setWalletAddr("");
-                  }}
-                  className={`w-full mb-3 rounded-lg border px-3 py-2 text-left ${redeemCustodial ? "border-[#10B981]" : "border-white/20"}`}
-                >
-                  KEEP IN GARMONPAY — we hold securely; transfer out anytime
-                </button>
-                {redeemErr && <p className="text-red-400 text-sm mb-2">{redeemErr}</p>}
-                <button
-                  type="button"
-                  disabled={redeeming || (!redeemCustodial && !walletAddr.trim())}
-                  onClick={() => void runRedeem()}
-                  className="w-full rounded-xl bg-[#F5C842] py-3 font-bold text-black disabled:opacity-50"
-                >
-                  {redeeming ? "Processing…" : "REDEEM NOW"}
-                </button>
-              </>
-            )}
-            {redeemStep === 3 && redeemOk && (
-              <div className="text-center space-y-2">
-                <div className="text-4xl text-emerald-400">✓</div>
-                <p className="text-emerald-200 font-medium">{redeemOk}</p>
-                <p className="text-sm text-fintech-muted">
-                  {redeemCustodial ? "Held in your account." : "Queued for transfer to your wallet."}
-                </p>
-              </div>
-            )}
-            <button
-              type="button"
-              className="mt-4 w-full text-sm text-violet-300"
-              onClick={() => {
-                setShowRedeem(false);
-                setRedeemStep(1);
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

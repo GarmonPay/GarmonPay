@@ -32,8 +32,8 @@ const TRUST = [
     body: "All transactions are processed through Stripe—the same payment system used by Amazon and Google.",
   },
   {
-    title: "Real withdrawals",
-    body: "Members withdraw real cash directly via Stripe.",
+    title: "$GPAY redemption (coming)",
+    body: "Prize winnings redeem to the official $GPAY Solana token — launch timing announced on the Redeem page.",
   },
   {
     title: "Anti-cheat protection",

@@ -33,9 +33,10 @@ function AdminProfitInner() {
         Platform Profit
       </h1>
       <p className="mb-6 max-w-2xl text-sm text-white/70">
-        Net Profit = Σ platform_earnings − Σ withdrawals (cents), where payout rows use{" "}
-        <code className="text-[#f5c842]/90">withdrawals.amount</code> with status approved or paid. Matches SQL spot-checks
-        against <code className="text-white/80">/api/admin/stats</code>.
+        Net profit matches <code className="text-white/80">/api/admin/stats</code>: all-time{" "}
+        <code className="text-[#f5c842]/90">platform_earnings</code> (USD cash withdrawals and the legacy{" "}
+        <code className="text-[#f5c842]/90">withdrawals</code> payout table have been removed; redemption is $GPAY on
+        Solana).
       </p>
       {message && (
         <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">

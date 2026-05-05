@@ -37,7 +37,7 @@ function AdminAnalyticsPageInner() {
   return (
     <div className="p-6">
       <h1 className="text-xl font-bold text-white mb-2">Analytics</h1>
-      <p className="text-fintech-muted mb-6">Tracked events: login, ad_view, reward_earned, withdrawal_requested.</p>
+      <p className="text-fintech-muted mb-6">Tracked events: login, ad_view, reward_earned, and custom event types.</p>
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">{error}</div>
       )}

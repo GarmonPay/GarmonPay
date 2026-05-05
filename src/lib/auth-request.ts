@@ -74,7 +74,7 @@ export async function getAuthUserId(request: Request): Promise<string | null> {
 
 /**
  * Get authenticated user id from request using ONLY Bearer token (no x-user-id).
- * Use for sensitive operations (payments, withdrawals) to prevent header spoofing.
+ * Use for sensitive operations (payments, balance changes) to prevent header spoofing.
  * Returns null if user is banned.
  */
 export async function getAuthUserIdStrict(request: Request): Promise<string | null> {

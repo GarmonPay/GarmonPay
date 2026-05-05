@@ -87,15 +87,6 @@ export async function getTotalsForUser(userId: string): Promise<{
   };
 }
 
-/** Mark withdrawal transaction as completed (when admin marks paid). */
-export async function markWithdrawalTransactionCompleted(withdrawalId: string): Promise<void> {
-  await supabase()
-    .from("transactions")
-    .update({ status: "completed", description: "Withdrawal paid" })
-    .eq("reference_id", withdrawalId)
-    .eq("type", "withdrawal");
-}
-
 /** Admin: list transactions (paginated). Default limit 100, max 500. */
 export async function listAllTransactions(opts?: {
   limit?: number;

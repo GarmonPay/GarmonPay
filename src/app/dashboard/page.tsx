@@ -280,7 +280,7 @@ export default function DashboardPage() {
           </p>
           <p className="mt-2 text-xs text-emerald-200/75">Redeem GPC — trade on Raydium for USDC</p>
           <Link
-            href="/dashboard/wallet#redeem"
+            href="/dashboard/redeem"
             className="mt-3 inline-block text-sm font-medium text-emerald-200/90 underline-offset-2 hover:underline"
           >
             Redeem →
@@ -303,7 +303,7 @@ export default function DashboardPage() {
           Convert
         </Link>
         <Link
-          href="/dashboard/wallet#redeem"
+          href="/dashboard/redeem"
           className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl border border-[#10B981]/60 bg-[#10B981]/20 px-4 py-3 text-center text-sm font-bold text-emerald-100 hover:bg-[#10B981]/30"
         >
           Redeem

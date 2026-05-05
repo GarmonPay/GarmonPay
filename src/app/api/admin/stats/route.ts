@@ -11,23 +11,6 @@ export type RecentUserDepositRow = {
   user_email?: string;
 };
 
-/** Approved/paid payout rows on `withdrawals` (cents in `amount`). Used for net profit vs platform_earnings. */
-async function sumWithdrawalsApprovedOrPaidCents(supabase: SupabaseClient): Promise<number> {
-  const { data, error } = await supabase
-    .from("withdrawals")
-    .select("amount")
-    .in("status", ["approved", "paid"]);
-  if (error) {
-    console.error("Admin stats sum withdrawals (approved/paid):", error);
-    return 0;
-  }
-  let total = 0;
-  for (const r of data ?? []) {
-    total += Number((r as { amount?: number }).amount ?? 0);
-  }
-  return total;
-}
-
 async function sumPlatformEarningsAllTime(supabase: SupabaseClient): Promise<number> {
   let total = 0;
   let from = 0;
@@ -53,7 +36,7 @@ async function sumPlatformEarningsAllTime(supabase: SupabaseClient): Promise<num
 
 /**
  * GET /api/admin/stats
- * Net profit (reported): Σ platform_earnings.amount_cents − Σ withdrawals.amount where status ∈ (approved, paid).
+ * Net profit (reported): Σ platform_earnings.amount_cents (USD cash payouts removed; redemption is token-based).
  * Ledger totals from getWalletTotals() are informational (user liability vs ledger).
  */
 export async function GET(request: Request) {
@@ -106,12 +89,7 @@ export async function GET(request: Request) {
     console.error("Admin stats platform_earnings sum:", e);
   }
 
-  let approvedWithdrawalsFromRequestsCents = 0;
-  try {
-    approvedWithdrawalsFromRequestsCents = await sumWithdrawalsApprovedOrPaidCents(supabase);
-  } catch (e) {
-    console.error("Admin stats withdrawals table sum:", e);
-  }
+  const approvedWithdrawalsFromRequestsCents = 0;
 
   const totalProfitCents = platformRevenueAllTimeCents - approvedWithdrawalsFromRequestsCents;
 
@@ -158,10 +136,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     totalUsers,
     totalDeposits: totalDepositsCents,
-    /** Ledger withdrawal volume (wallet_ledger type withdrawal); not the same as approved payout rows. */
+    /** Ledger volume for entries typed `withdrawal` in wallet_ledger (historical USD debit rows). */
     totalWithdrawals: totalWithdrawalsCents,
     totalBalance: totalBalanceCents,
-    /** Σ platform_earnings − Σ withdrawals.amount (approved/paid). */
+    /** All-time platform earnings (USD payout subtraction removed). */
     totalProfit: totalProfitCents,
     platformRevenueAllTimeCents,
     approvedWithdrawalsFromRequestsCents,

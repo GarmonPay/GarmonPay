@@ -125,8 +125,6 @@ export default function GodModePage() {
                 <Card title="Total platform profit" value={formatCents(stats.totalPlatformProfitCents)} />
                 <Card title="Total user balance" value={formatCents(stats.totalUserBalanceCents)} />
                 <Card title="Total advertiser balance" value={formatCents(stats.totalAdCreditBalanceCents)} />
-                <Card title="Withdrawals pending" value={formatCents(stats.totalWithdrawalsPendingCents)} />
-                <Card title="Withdrawals completed" value={formatCents(stats.totalWithdrawalsCompletedCents)} />
               </div>
             </section>
 
@@ -148,7 +146,6 @@ export default function GodModePage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
                 <ActivityBlock title="Recent registrations" items={stats.recentRegistrations.slice(0, 8).map((r) => ({ id: r.id, text: r.email, sub: formatDate(r.created_at) }))} />
                 <ActivityBlock title="Recent ad earnings" items={stats.recentAdEarnings.slice(0, 8).map((e) => ({ id: e.user_id + e.created_at, text: formatCents(e.amount), sub: formatDate(e.created_at) }))} />
-                <ActivityBlock title="Recent withdrawals" items={stats.recentWithdrawals.slice(0, 8).map((w) => ({ id: w.id, text: `${formatCents(w.amount)} · ${w.status}`, sub: formatDate(w.created_at) }))} />
               </div>
             </section>
 
@@ -162,12 +159,6 @@ export default function GodModePage() {
                   active={!!flags?.pause_ads}
                   onClick={() => toggleFlag("pause_ads")}
                   loading={toggling === "pause_ads"}
-                />
-                <ControlButton
-                  label={flags?.pause_withdrawals ? "Resume Withdrawals" : "Pause Withdrawals"}
-                  active={!!flags?.pause_withdrawals}
-                  onClick={() => toggleFlag("pause_withdrawals")}
-                  loading={toggling === "pause_withdrawals"}
                 />
                 <ControlButton
                   label={flags?.maintenance_mode ? "Disable Maintenance Mode" : "Enable Maintenance Mode"}

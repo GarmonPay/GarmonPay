@@ -18,7 +18,6 @@ function AdminEarningsInner() {
   const [error, setError] = useState<string | null>(null);
   const [totals, setTotals] = useState<{
     platformRevenueAllTimeCents: number;
-    approvedWithdrawalsFromRequestsCents: number;
     totalProfit: number;
   } | null>(null);
 
@@ -33,12 +32,10 @@ function AdminEarningsInner() {
       .then(
         (data: {
           platformRevenueAllTimeCents?: number;
-          approvedWithdrawalsFromRequestsCents?: number;
           totalProfit?: number;
         }) => {
           setTotals({
             platformRevenueAllTimeCents: data.platformRevenueAllTimeCents ?? 0,
-            approvedWithdrawalsFromRequestsCents: data.approvedWithdrawalsFromRequestsCents ?? 0,
             totalProfit: data.totalProfit ?? 0,
           });
         }
@@ -62,14 +59,10 @@ function AdminEarningsInner() {
       ) : error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400">{error}</div>
       ) : totals ? (
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
             <p className="text-xs uppercase tracking-wide text-white/50">Σ platform_earnings</p>
             <p className="mt-1 text-2xl font-bold text-emerald-400">{formatUsd(totals.platformRevenueAllTimeCents)}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-5">
-            <p className="text-xs uppercase tracking-wide text-white/50">Σ withdrawals (approved/paid)</p>
-            <p className="mt-1 text-2xl font-bold text-white">{formatUsd(totals.approvedWithdrawalsFromRequestsCents)}</p>
           </div>
           <div className="rounded-xl border border-[#7c3aed]/30 bg-[#0e0118]/90 p-5">
             <p className="text-xs uppercase tracking-wide text-white/50">Net profit</p>

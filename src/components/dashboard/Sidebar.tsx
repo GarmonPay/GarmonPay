@@ -114,6 +114,13 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
         icon: "⚡",
         isActive: (p) => p.startsWith(L.convert),
       },
+      {
+        href: L.redeemGpay,
+        label: "Redeem $GPAY",
+        icon: "🪙",
+        soon: true,
+        isActive: (p) => p.startsWith(L.redeemGpay),
+      },
     ],
   },
   {

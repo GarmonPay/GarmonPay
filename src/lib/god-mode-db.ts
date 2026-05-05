@@ -5,7 +5,6 @@
 
 import { createAdminClient } from "@/lib/supabase";
 import { getPlatformTotals } from "@/lib/transactions-db";
-import { listAllWithdrawals } from "@/lib/withdrawals-db";
 
 function supabase() {
   const client = createAdminClient();
@@ -41,13 +40,11 @@ export async function getGodModeStats(): Promise<GodModeStats> {
   todayStart.setUTCHours(0, 0, 0, 0);
   const todayIso = todayStart.toISOString();
 
-  const [totals, withdrawals, usersRes, recentUsersRes, recentEarningsRes, recentWithdrawalsRes] = await Promise.all([
+  const [totals, usersRes, recentUsersRes, recentEarningsRes] = await Promise.all([
     getPlatformTotals(),
-    listAllWithdrawals(),
     sb.from("users").select("id, balance, ad_credit_balance, created_at"),
     sb.from("users").select("id, email, created_at").order("created_at", { ascending: false }).limit(15),
     sb.from("earnings").select("user_id, amount, created_at").eq("source", "ad").order("created_at", { ascending: false }).limit(15),
-    sb.from("withdrawals").select("id, user_id, amount, status, created_at").order("created_at", { ascending: false }).limit(15),
   ]);
 
   const users = (usersRes?.data ?? []) as { id: string; balance: number; ad_credit_balance: number; created_at: string }[];
@@ -62,14 +59,6 @@ export async function getGodModeStats(): Promise<GodModeStats> {
     if (u.created_at >= todayIso) newUsersToday += 1;
   }
 
-  let totalWithdrawalsPendingCents = 0;
-  let totalWithdrawalsCompletedCents = 0;
-  for (const w of withdrawals) {
-    const amt = Number(w.amount);
-    if (w.status === "pending") totalWithdrawalsPendingCents += amt;
-    if (w.status === "approved" || w.status === "paid") totalWithdrawalsCompletedCents += amt;
-  }
-
   const recentRegistrations = (recentUsersRes?.data ?? []).map((r: { id: string; email: string; created_at: string }) => ({
     id: r.id,
     email: r.email,
@@ -80,19 +69,11 @@ export async function getGodModeStats(): Promise<GodModeStats> {
     amount: Number(r.amount),
     created_at: r.created_at,
   }));
-  const recentWithdrawalsList = (recentWithdrawalsRes?.data ?? []).map((r: { id: string; user_id: string; amount: number; status: string; created_at: string }) => ({
-    id: r.id,
-    user_id: r.user_id,
-    amount: Number(r.amount),
-    status: r.status,
-    created_at: r.created_at,
-  }));
-
   return {
     totalUserBalanceCents,
     totalAdCreditBalanceCents,
-    totalWithdrawalsPendingCents,
-    totalWithdrawalsCompletedCents,
+    totalWithdrawalsPendingCents: 0,
+    totalWithdrawalsCompletedCents: 0,
     totalPlatformEarningsCents: totals.totalEarningsCents,
     totalPlatformWithdrawalsCents: totals.totalWithdrawalsCents,
     totalUsers: users.length,
@@ -100,7 +81,7 @@ export async function getGodModeStats(): Promise<GodModeStats> {
     newUsersToday,
     recentRegistrations,
     recentAdEarnings,
-    recentWithdrawals: recentWithdrawalsList,
+    recentWithdrawals: [],
   };
 }
 

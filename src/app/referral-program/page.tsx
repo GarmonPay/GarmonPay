@@ -154,8 +154,8 @@ export default function ReferralProgramTermsPage() {
               qualifying event.
             </p>
             <p className="mt-3">
-              Commissions are subject to the same withdrawal terms as other earnings including minimum
-              withdrawal amounts and identity verification requirements.
+              Commissions follow the same in-app balance and compliance rules as other earnings — including reporting
+              and identity verification where required — and redemption is via $GPAY when available (not USD cash-out).
             </p>
             <p className="mt-3">
               GarmonPay reserves the right to hold commissions for up to 30 days for fraud prevention
@@ -278,7 +278,7 @@ export default function ReferralProgramTermsPage() {
             </p>
             <p className="mt-3">
               Any commissions already credited to your account at the time of program termination will be
-              honored subject to standard withdrawal terms.
+              honored subject to the same account balance and redemption policies then in effect.
             </p>
           </section>
 

@@ -16,6 +16,7 @@ export const APP_SHELL_LINKS = {
   referrals: "/dashboard/referrals",
   buyGc: "/dashboard/coins/buy",
   convert: "/dashboard/convert",
+  redeemGpay: "/dashboard/redeem",
   profile: "/dashboard/profile",
   settings: "/dashboard/settings",
 } as const;

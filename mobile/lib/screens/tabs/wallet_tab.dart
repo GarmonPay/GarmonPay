@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
-import 'withdrawal_screen.dart';
 
 class WalletTab extends StatefulWidget {
   const WalletTab({super.key});
@@ -16,14 +15,6 @@ class _WalletTabState extends State<WalletTab> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wallet'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.send),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const WithdrawalScreen()),
-            ),
-          ),
-        ],
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: context.read<ApiClient>().getWallet(context),

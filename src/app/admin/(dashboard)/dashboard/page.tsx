@@ -293,7 +293,7 @@ function DashboardInner() {
                   ${(platformMetrics.platformProfitTodayCents / 100).toFixed(2)}
                 </p>
                 <p className="text-[10px] text-fintech-muted mt-1">
-                  platform revenue today − wallet withdrawals today
+                  platform revenue today − ledger debits typed withdrawal today
                 </p>
               </div>
               <div className="rounded-lg bg-fintech-bg-card border border-violet-500/25 p-4">
@@ -427,8 +427,8 @@ function DashboardInner() {
             </p>
           </div>
           <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
-            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">
-              All-time withdrawals (paid out)
+            <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider leading-snug">
+              All-time ledger debits (type withdrawal)
             </h2>
             <p className="text-2xl font-bold text-amber-400 mt-2">
               ${(stats.totalWithdrawals / 100).toFixed(2)}
@@ -444,7 +444,7 @@ function DashboardInner() {
           </div>
           <div className="rounded-xl bg-fintech-bg-card border border-white/10 p-5 shadow-lg">
             <h2 className="text-xs font-medium text-fintech-muted uppercase tracking-wider">Total platform profit</h2>
-            <p className="text-[10px] text-fintech-muted mt-1">All-time platform_earnings − withdrawals paid</p>
+            <p className="text-[10px] text-fintech-muted mt-1">All-time platform_earnings (no USD payout table)</p>
             <p className="text-2xl font-bold text-emerald-400 mt-2">
               ${(Number(stats.totalProfit) / 100).toFixed(2)}
             </p>

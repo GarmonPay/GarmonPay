@@ -350,9 +350,9 @@ export default function PricingPage() {
       label: "Referral Commission %",
       values: orderedPlans.map((p) => `${num(p.referral_commission_pct).toFixed(0)}%`),
     };
-    const minW = {
-      label: "Withdrawal Minimum",
-      values: orderedPlans.map((p) => `$${num(p.min_withdrawal_usd).toFixed(0)}`),
+    const redeemRow = {
+      label: "$GPAY redemption",
+      values: orderedPlans.map(() => "Coming soon"),
     };
     const tasks = {
       label: "Daily Tasks",
@@ -366,11 +366,7 @@ export default function PricingPage() {
       label: "Advertising Credit",
       values: ["—", "—", "$10/mo", "$25/mo", "$50/mo"],
     };
-    const speed = {
-      label: "Withdrawal Speed",
-      values: ["Standard", "Standard", "Standard", "Priority", "Fastest"],
-    };
-    return { headers, rows: [priceRow, adRow, refRow, minW, tasks, games, credit, speed] };
+    return { headers, rows: [priceRow, adRow, refRow, redeemRow, tasks, games, credit] };
   }, [orderedPlans]);
 
   return (
@@ -391,7 +387,7 @@ export default function PricingPage() {
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base text-violet-200/90 sm:text-lg">
             Upgrade your membership and unlock higher earnings, better referral commissions,
-            and faster payouts.
+            and exclusive perks.
           </p>
           <div className="mx-auto mt-6 max-w-xl rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-3 text-sm text-violet-100/95">
             <span className="font-semibold text-white">Gold Coins &amp; GPay Coins</span> are separate from membership —{" "}
@@ -649,8 +645,8 @@ export default function PricingPage() {
             Why upgrading pays for itself
           </h2>
           <p className="mt-3 text-violet-200/85">
-            Higher commissions and lower withdrawal minimums mean faster cash flow. Here is
-            how the math works when your network stays active.
+            Higher referral commissions and perks can outweigh the subscription cost when your network stays active.
+            Here is how the math works at a glance.
           </p>
           <ul className="mt-8 space-y-4">
             {ROI.map((r) => (

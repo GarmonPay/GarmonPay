@@ -53,7 +53,6 @@ function hasAdminCookie(request: NextRequest): boolean {
 /** Paths and methods that are rate limited (10/min per IP). */
 function isRateLimitedPath(pathname: string, method: string): string | null {
   if (pathname.startsWith("/api/admin")) return "admin";
-  if (pathname === "/api/withdrawals") return "withdraw";
   if (pathname === "/api/wallet/fund" && method === "POST") return "wallet-fund";
   if (pathname === "/api/create-checkout-session" && method === "POST") return "checkout";
   if (pathname === "/api/stripe/add-funds" && method === "POST") return "add-funds";

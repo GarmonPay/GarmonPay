@@ -70,8 +70,6 @@ export async function GET(req: Request) {
     }));
 
     const payoutQueue: { type: string; count?: number }[] = [];
-    const { count: pendingWithdrawals } = await supabase.from("withdrawals").select("id", { count: "exact", head: true }).eq("status", "pending");
-    if (pendingWithdrawals != null) payoutQueue.push({ type: "Withdrawals", count: pendingWithdrawals });
 
     return NextResponse.json({
       aiGenerations,

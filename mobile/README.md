@@ -1,6 +1,6 @@
 # GarmonPay Mobile (Flutter)
 
-iOS and Android app: auth, wallet, earn (rewards/ads), withdrawals.
+iOS and Android app: auth, wallet, earn (rewards/ads).
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ await Supabase.initialize(
 
 - **Home** — balance summary
 - **Earn** — watch ads / earn rewards (demo credit button)
-- **Wallet** — balance, transaction history, withdraw button
+- **Wallet** — balance and transaction history
 - **Profile** — email, balance, logout
 
 ## Build

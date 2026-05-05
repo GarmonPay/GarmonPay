@@ -56,25 +56,6 @@ class ApiClient {
     return res.statusCode == 200;
   }
 
-  Future<Map<String, dynamic>?> requestWithdrawal(
-    BuildContext context, {
-    required int amountCents,
-    required String method,
-    String? walletAddress,
-  }) async {
-    final res = await http.post(
-      Uri.parse('$_base/api/withdrawals'),
-      headers: await _headers(context),
-      body: jsonEncode({
-        'amount': amountCents,
-        'method': method,
-        'wallet_address': walletAddress ?? '',
-      }),
-    );
-    if (res.statusCode != 200) return null;
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
   Future<void> trackEvent(BuildContext context, String eventType, [Map<String, dynamic>? payload]) async {
     await http.post(
       Uri.parse('$_base/api/analytics/event'),

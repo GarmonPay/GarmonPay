@@ -69,8 +69,8 @@ function AdminWalletMonitorInner() {
         Wallet Monitor
       </h1>
       <p className="mb-6 text-white/60">
-        Ledger-based wallet totals. <strong className="text-white/80">Ledger surplus</strong> is deposits − ledger
-        withdrawals − user balances (not Σ platform_earnings).
+        Ledger-based wallet totals. <strong className="text-white/80">Ledger surplus</strong> is deposits − historical
+        withdrawal debits − user balances (not Σ platform_earnings).
       </p>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -79,7 +79,7 @@ function AdminWalletMonitorInner() {
           <p className="text-2xl font-bold text-white">{formatCents(s.totalDepositsCents)}</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-4">
-          <p className="text-sm text-white/50">Total withdrawals</p>
+          <p className="text-sm text-white/50">Ledger debits (type withdrawal)</p>
           <p className="text-2xl font-bold text-white">{formatCents(s.totalWithdrawalsCents)}</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-[#0e0118]/90 p-4">
