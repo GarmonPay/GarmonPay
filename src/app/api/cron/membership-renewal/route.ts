@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
-import {
-  ensureWalletBalancesRow,
-  getCanonicalBalanceCents,
-  walletLedgerEntry,
-} from "@/lib/wallet-ledger";
 import { normalizeUserMembershipTier, membershipTierRank } from "@/lib/garmon-plan-config";
-import { PAID_TIER_PRICES_CENTS, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
+import { PAID_TIER_PRICES_GC, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 
 export const runtime = "nodejs";
 
-const RENEWAL_MS = 30 * 24 * 60 * 60 * 1000;
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
@@ -38,7 +32,7 @@ async function runMembershipRenewal(request: Request) {
 
   const { data: rows, error } = await admin
     .from("users")
-    .select("id, membership, membership_tier, membership_expires_at, membership_payment_source")
+    .select("id, membership, membership_tier, membership_expires_at, membership_payment_source, gold_coins")
     .eq("membership_payment_source", "balance")
     .not("membership_expires_at", "is", null);
 
@@ -58,6 +52,7 @@ async function runMembershipRenewal(request: Request) {
       membership_tier?: string | null;
       membership_expires_at?: string | null;
       membership_payment_source?: string | null;
+      gold_coins?: number | null;
     };
     const uid = row.id;
     const tierNorm = normalizeUserMembershipTier(row.membership ?? row.membership_tier ?? "");
@@ -69,7 +64,7 @@ async function runMembershipRenewal(request: Request) {
     if (!Number.isFinite(expMs)) continue;
 
     const paidTier = tierNorm as PaidMembershipTierId;
-    const price = PAID_TIER_PRICES_CENTS[paidTier];
+    const price = PAID_TIER_PRICES_GC[paidTier];
 
     if (expMs < now) {
       await admin
@@ -94,48 +89,31 @@ async function runMembershipRenewal(request: Request) {
 
     if (expMs > horizonMs) continue;
 
-    const ensured = await ensureWalletBalancesRow(uid);
-    if (!ensured.ok) continue;
-
-    const bal = await getCanonicalBalanceCents(uid);
+    const bal = Math.max(0, Math.floor(Number(row.gold_coins ?? 0)));
     if (bal >= price) {
-      const ref = `membership_renew_${paidTier}_${Date.now()}`;
-      const ledger = await walletLedgerEntry(uid, "subscription_payment", -price, ref);
-      if (!ledger.success) {
+      const { data: rpcData, error: rpcError } = await admin.rpc("purchase_membership_with_balance_v2", {
+        p_user_id: uid,
+        p_tier: paidTier,
+        p_price_gc: price,
+      });
+      const ok = (rpcData as { success?: boolean } | null)?.success === true;
+      if (rpcError || !ok) {
         await createGarmonNotification(
           uid,
           "membership_renew_failed",
           "Could not renew membership",
-          `We could not charge your balance for ${paidTier} renewal: ${ledger.message}. Add funds or update payment before your plan expires.`
+          `We could not charge your Gold Coins for ${paidTier} renewal. Add more GC before your plan expires.`
         ).catch(() => {});
         warned += 1;
         continue;
       }
-      const newExp = new Date(expMs + RENEWAL_MS).toISOString();
-      await admin
-        .from("users")
-        .update({
-          membership_expires_at: newExp,
-          updated_at: nowIso,
-        })
-        .eq("id", uid);
       renewed += 1;
       await createGarmonNotification(
         uid,
         "membership_renewed_balance",
         "Membership renewed",
-        "Your membership renewed using your GarmonPay balance."
+        "Your membership renewed using Gold Coins."
       ).catch(() => {});
-      await admin.from("transactions").insert({
-        user_id: uid,
-        type: "subscription_payment",
-        amount: price,
-        status: "completed",
-        description: `Membership renewal (${paidTier})`,
-        reference_id: ref,
-      }).then(({ error: txErr }) => {
-        if (txErr) console.error("[membership-renewal] tx:", txErr.message);
-      });
       continue;
     }
 
@@ -146,7 +124,7 @@ async function runMembershipRenewal(request: Request) {
       uid,
       "membership_expiring_soon",
       `Your ${paidTier} membership expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
-      `Add ${(short / 100).toFixed(2)} to your balance or update your payment method before expiry.`
+      `Add ${short} GC to renew with balance or update your payment method before expiry.`
     ).catch(() => {});
   }
 

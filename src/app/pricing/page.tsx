@@ -15,7 +15,12 @@ import {
   normalizeUserMembershipTier,
   type MarketingPlanId,
 } from "@/lib/garmon-plan-config";
-import { PAID_TIER_PRICES_CENTS, isPaidTierId, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
+import {
+  PAID_TIER_PRICES_GC,
+  PAID_TIER_PRICES_USD,
+  isPaidTierId,
+  type PaidMembershipTierId,
+} from "@/lib/membership-balance-prices";
 import { getMonthlyGpcBonusForPlan, getFirstMonthTotalGpcForPlan } from "@/lib/membership-monthly-gpc-bonus";
 import { localeInt } from "@/lib/format-number";
 import { GC_TO_GPC_RATE_DISPLAY } from "@/lib/gc-gpc-convert";
@@ -102,25 +107,23 @@ function num(v: number | string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatUsdFromCents(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatGcAsUsd(gc: number) {
+  return `$${gc.toFixed(2)}`;
 }
 
 export default function PricingPage() {
   const [catalog, setCatalog] = useState<MembershipPlanCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<"supabase" | "fallback">("fallback");
-  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [goldCoins, setGoldCoins] = useState<number | null>(null);
   const [balanceInfo, setBalanceInfo] = useState<{
-    totalBalance: number;
-    eligibleBalance: number;
-    heldBalance: number;
-    heldUntil: string | null;
+    eligible: boolean;
+    goldCoins: number;
+    shortfall: number;
   }>({
-    totalBalance: 0,
-    eligibleBalance: 0,
-    heldBalance: 0,
-    heldUntil: null,
+    eligible: false,
+    goldCoins: 0,
+    shortfall: 0,
   });
   const [membershipTierUi, setMembershipTierUi] = useState<MarketingPlanId>("free");
   const [dashLoading, setDashLoading] = useState(true);
@@ -167,13 +170,12 @@ export default function PricingPage() {
     getSessionAsync().then(async (session) => {
       if (!session || cancelled) {
         if (!cancelled) {
-          setBalanceCents(null);
+          setGoldCoins(null);
           setMembershipTierUi("free");
           setBalanceInfo({
-            totalBalance: 0,
-            eligibleBalance: 0,
-            heldBalance: 0,
-            heldUntil: null,
+            eligible: false,
+            goldCoins: 0,
+            shortfall: 0,
           });
           setDashLoading(false);
         }
@@ -187,47 +189,43 @@ export default function PricingPage() {
         const dashRes = await fetch("/api/dashboard", { headers, cache: "no-store" });
         const d = await dashRes.json().catch(() => ({}));
         if (cancelled) return;
-        const bc = d.balanceCents != null ? d.balanceCents : null;
-        setBalanceCents(bc);
+        const gc = d.goldCoins != null ? Number(d.goldCoins) : null;
+        setGoldCoins(gc);
         setMembershipTierUi(normalizeUserMembershipTier(d.membershipTier ?? "free"));
 
         if (session.accessToken) {
-          const eligRes = await fetch("/api/membership/balance-eligibility", {
+          const eligRes = await fetch("/api/membership/balance-eligibility?tier=starter", {
             headers: { Authorization: `Bearer ${session.accessToken}` },
             cache: "no-store",
           });
           const elig = await eligRes.json().catch(() => ({}));
-          if (!cancelled && eligRes.ok && typeof (elig as { eligibleBalance?: number }).eligibleBalance === "number") {
+          if (!cancelled && eligRes.ok && typeof (elig as { goldCoins?: number }).goldCoins === "number") {
             const e = elig as {
-              totalBalance?: number;
-              eligibleBalance?: number;
-              heldBalance?: number;
-              heldUntil?: string | null;
+              eligible?: boolean;
+              goldCoins?: number;
+              shortfall?: number;
             };
             setBalanceInfo({
-              totalBalance: e.totalBalance ?? 0,
-              eligibleBalance: e.eligibleBalance ?? 0,
-              heldBalance: e.heldBalance ?? 0,
-              heldUntil: e.heldUntil ?? null,
+              eligible: e.eligible === true,
+              goldCoins: e.goldCoins ?? 0,
+              shortfall: e.shortfall ?? 0,
             });
           } else if (!cancelled) {
             setBalanceInfo({
-              totalBalance: bc,
-              eligibleBalance: bc,
-              heldBalance: 0,
-              heldUntil: null,
+              eligible: gc != null && gc >= PAID_TIER_PRICES_GC.starter,
+              goldCoins: gc ?? 0,
+              shortfall: Math.max(0, PAID_TIER_PRICES_GC.starter - (gc ?? 0)),
             });
           }
         } else if (!cancelled) {
           setBalanceInfo({
-            totalBalance: bc,
-            eligibleBalance: bc,
-            heldBalance: 0,
-            heldUntil: null,
+            eligible: gc != null && gc >= PAID_TIER_PRICES_GC.starter,
+            goldCoins: gc ?? 0,
+            shortfall: Math.max(0, PAID_TIER_PRICES_GC.starter - (gc ?? 0)),
           });
         }
       } catch {
-        if (!cancelled) setBalanceCents(null);
+        if (!cancelled) setGoldCoins(null);
       } finally {
         if (!cancelled) setDashLoading(false);
       }
@@ -296,27 +294,25 @@ export default function PricingPage() {
           : `You're now a ${label} member! 🎉`
       );
       setConfirmTier(null);
-      setBalanceCents(typeof data.newBalance === "number" ? data.newBalance : null);
+      setGoldCoins(typeof data.newGoldCoins === "number" ? data.newGoldCoins : null);
       setMembershipTierUi(normalizeUserMembershipTier(confirmTier));
       const s2 = await getSessionAsync();
       if (s2?.accessToken) {
-        const er = await fetch("/api/membership/balance-eligibility", {
+        const er = await fetch(`/api/membership/balance-eligibility?tier=${confirmTier}`, {
           headers: { Authorization: `Bearer ${s2.accessToken}` },
           cache: "no-store",
         });
         const elig = await er.json().catch(() => ({}));
-        if (er.ok && typeof (elig as { eligibleBalance?: number }).eligibleBalance === "number") {
+        if (er.ok && typeof (elig as { goldCoins?: number }).goldCoins === "number") {
           const e = elig as {
-            totalBalance?: number;
-            eligibleBalance?: number;
-            heldBalance?: number;
-            heldUntil?: string | null;
+            eligible?: boolean;
+            goldCoins?: number;
+            shortfall?: number;
           };
           setBalanceInfo({
-            totalBalance: e.totalBalance ?? 0,
-            eligibleBalance: e.eligibleBalance ?? 0,
-            heldBalance: e.heldBalance ?? 0,
-            heldUntil: e.heldUntil ?? null,
+            eligible: e.eligible === true,
+            goldCoins: e.goldCoins ?? 0,
+            shortfall: e.shortfall ?? 0,
           });
         }
       }
@@ -505,9 +501,9 @@ export default function PricingPage() {
                         >
                           {stripeBusyId === p.id ? "Redirecting…" : "Subscribe with card"}
                         </button>
-                        {dashLoading && balanceCents == null ? (
+                        {dashLoading && goldCoins == null ? (
                           <p className="text-center text-xs text-violet-500">Loading balance…</p>
-                        ) : balanceCents != null && !dashLoading && isPaidTierId(p.id) ? (
+                        ) : goldCoins != null && !dashLoading && isPaidTierId(p.id) ? (
                           (() => {
                             const rankCurrent = membershipTierRank(membershipTierUi);
                             const rankCard = membershipTierRank(p.id as MarketingPlanId);
@@ -521,10 +517,10 @@ export default function PricingPage() {
                                 <p className="text-center text-xs font-medium text-emerald-400/90">Your current plan</p>
                               );
                             }
-                            const priceC = PAID_TIER_PRICES_CENTS[p.id];
-                            const eligible = balanceInfo.eligibleBalance;
-                            const canAffordWithBalance = eligible >= priceC;
-                            const short = Math.max(0, priceC - eligible);
+                            const priceGc = PAID_TIER_PRICES_GC[p.id];
+                            const priceUsd = PAID_TIER_PRICES_USD[p.id];
+                            const canAffordWithBalance = goldCoins >= priceGc;
+                            const short = Math.max(0, priceGc - goldCoins);
                             return (
                               <div className="flex flex-col gap-1">
                                 {canAffordWithBalance ? (
@@ -536,7 +532,7 @@ export default function PricingPage() {
                                     }}
                                     className="w-full rounded-xl border border-[#eab308]/60 bg-gradient-to-r from-[#a16207] via-[#eab308] to-[#fde047] py-3 text-center text-sm font-semibold text-[#0c0618] shadow-md shadow-[#eab308]/20 transition hover:opacity-95 sm:text-base"
                                   >
-                                    Pay with Balance ({formatUsdFromCents(eligible)} eligible)
+                                    Pay with Balance ({goldCoins} GC / {formatGcAsUsd(goldCoins)})
                                   </button>
                                 ) : (
                                   <>
@@ -545,28 +541,15 @@ export default function PricingPage() {
                                       disabled
                                       className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-[#1a1a1a] py-3 text-center text-sm font-semibold text-violet-500/90 sm:text-base"
                                     >
-                                      Pay with Balance ({formatUsdFromCents(eligible)} eligible)
+                                      Pay with Balance ({goldCoins} GC / {formatGcAsUsd(goldCoins)})
                                     </button>
-                                    {balanceInfo.heldBalance > 0 ? (
-                                      <p className="text-center text-[11px] leading-snug text-violet-400/90">
-                                        {formatUsdFromCents(balanceInfo.heldBalance)} on 7-day security hold from recent
-                                        deposit.
-                                        {balanceInfo.heldUntil ? (
-                                          <>
-                                            {" "}
-                                            Full eligible access from{" "}
-                                            {new Date(balanceInfo.heldUntil).toLocaleDateString()}.
-                                          </>
-                                        ) : null}
-                                      </p>
-                                    ) : (
-                                      <p className="text-center text-xs text-violet-400/90">
-                                        Need {formatUsdFromCents(short)} more eligible balance.{" "}
-                                        <Link href="/wallet" className="text-[#eab308] underline-offset-2 hover:underline">
-                                          Add funds
-                                        </Link>
-                                      </p>
-                                    )}
+                                    <p className="text-center text-xs text-violet-400/90">
+                                      Need {short} GC ({formatGcAsUsd(short)}) more to cover{" "}
+                                      {priceGc} GC ({priceUsd.toFixed(2)} USD tier price rounded up).{" "}
+                                      <Link href="/dashboard/buy-coins" className="text-[#eab308] underline-offset-2 hover:underline">
+                                        Add funds
+                                      </Link>
+                                    </p>
                                   </>
                                 )}
                               </div>
@@ -673,26 +656,19 @@ export default function PricingPage() {
               Upgrade to {MARKETING_PLANS[confirmTier].label}
             </h2>
             {(() => {
-              const priceC = PAID_TIER_PRICES_CENTS[confirmTier];
-              const total =
-                balanceInfo.totalBalance > 0 ? balanceInfo.totalBalance : (balanceCents ?? 0);
-              const after = total - priceC;
+              const priceGc = PAID_TIER_PRICES_GC[confirmTier];
+              const total = goldCoins ?? balanceInfo.goldCoins;
+              const after = total - priceGc;
               return (
                 <div className="mt-4 space-y-2 text-sm text-violet-200/90">
                   <p>
-                    Amount: <span className="text-white">{formatUsdFromCents(priceC)}</span>
+                    Amount: <span className="text-white">{priceGc} GC ({formatGcAsUsd(priceGc)})</span>
                   </p>
                   <p>
-                    Your balance: <span className="text-white">{formatUsdFromCents(total)}</span>
+                    Your balance: <span className="text-white">{total} GC ({formatGcAsUsd(total)})</span>
                   </p>
-                  {balanceInfo.heldBalance > 0 ? (
-                    <p className="text-xs text-violet-400/90">
-                      Eligible for membership: {formatUsdFromCents(balanceInfo.eligibleBalance)} (
-                      {formatUsdFromCents(balanceInfo.heldBalance)} on deposit hold)
-                    </p>
-                  ) : null}
                   <p>
-                    Balance after: <span className="text-[#fde047]">{formatUsdFromCents(Math.max(0, after))}</span>
+                    Balance after: <span className="text-[#fde047]">{Math.max(0, after)} GC ({formatGcAsUsd(Math.max(0, after))})</span>
                   </p>
                   <p className="pt-3 text-violet-300/90">
                     Your membership renews in 30 days. You can cancel anytime.

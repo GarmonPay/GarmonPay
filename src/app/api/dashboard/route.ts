@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     profileBalanceCentsLegacy: null as number | null,
     balanceError: "Unable to load dashboard" as string | null,
     adCreditBalanceCents: 0,
+    goldCoins: 0,
     totalEarningsCents: 0,
     totalWithdrawnCents: 0,
     totalDepositsCents: 0,
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
         const { data: row, error: rowError } = await supabase
           .from("users")
           .select(
-            "id, email, role, membership, membership_expires_at, membership_payment_source, stripe_subscription_id, balance, ad_credit_balance, referral_code"
+            "id, email, role, membership, membership_expires_at, membership_payment_source, stripe_subscription_id, balance, ad_credit_balance, gold_coins, referral_code"
           )
           .eq("id", authUser.id)
           .maybeSingle();
@@ -181,6 +182,7 @@ export async function GET(request: Request) {
       const userRow = row as {
         balance?: number | null;
         ad_credit_balance?: number;
+        gold_coins?: number;
         membership?: string;
         membership_expires_at?: string | null;
         membership_payment_source?: string | null;
@@ -189,6 +191,7 @@ export async function GET(request: Request) {
       } | null;
       const membershipRaw = userRow?.membership ?? "";
       const adCreditBalanceCents = Number(userRow?.ad_credit_balance ?? 0);
+      const goldCoins = Math.max(0, Math.floor(Number(userRow?.gold_coins ?? 0)));
 
         return NextResponse.json({
           earningsTodayCents,
@@ -198,6 +201,7 @@ export async function GET(request: Request) {
           balanceError,
           profileBalanceCentsLegacy,
           adCreditBalanceCents,
+          goldCoins,
           totalEarningsCents,
           totalWithdrawnCents,
           totalDepositsCents,
@@ -264,6 +268,7 @@ export async function GET(request: Request) {
       balanceError,
       profileBalanceCentsLegacy,
       adCreditBalanceCents: 0,
+      goldCoins: 0,
       totalEarningsCents: 0,
       totalWithdrawnCents: 0,
       totalDepositsCents: 0,
