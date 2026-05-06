@@ -115,6 +115,8 @@ export default function GarmonFourRoomPage() {
   const [copyLinkDone, setCopyLinkDone] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** One-shot repair when active game has two players but DB never got current_turn (nobody can move). */
+  const repairStuckTurnRef = useRef(false);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -218,6 +220,30 @@ export default function GarmonFourRoomPage() {
       void supabase.removeChannel(ch);
     };
   }, [userId, roomId, supabase, fetchRoom]);
+
+  useEffect(() => {
+    repairStuckTurnRef.current = false;
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!token || !roomId || !userId || !room) return;
+    if (room.status !== "active" || !room.opponent_id || room.current_turn) return;
+    if (repairStuckTurnRef.current) return;
+    repairStuckTurnRef.current = true;
+    void (async () => {
+      try {
+        const res = await fetch(`${API}/repair-turn`, {
+          method: "POST",
+          credentials: "include",
+          headers: authHeaders(),
+          body: JSON.stringify({ roomId }),
+        });
+        if (res.ok) void fetchRoom();
+      } catch {
+        /* leave repairStuckTurnRef true to avoid request spam; refresh retries */
+      }
+    })();
+  }, [token, roomId, userId, room?.status, room?.opponent_id, room?.current_turn, fetchRoom, authHeaders]);
 
   useEffect(() => {
     opponentWasPresentRef.current = false;
@@ -535,9 +561,11 @@ export default function GarmonFourRoomPage() {
     room.status === "waiting"
       ? "Waiting for opponent"
       : room.status === "active"
-        ? room.current_turn === userId
-          ? "Your turn"
-          : `Waiting for ${room.current_turn === room.creator_id ? creatorName : opponentName}`
+        ? !room.current_turn
+          ? "Starting game…"
+          : room.current_turn === userId
+            ? "Your turn"
+            : `Waiting for ${room.current_turn === room.creator_id ? creatorName : opponentName}`
         : "Game over";
 
   const colFull = (c: number) => board[0][c] !== 0;
