@@ -2,17 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Cinzel_Decorative } from "next/font/google";
 import { logout } from "@/lib/api";
 import { clearSession } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { APP_SHELL_LINKS } from "@/config/app-shell-nav";
-
-const cinzel = Cinzel_Decorative({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
-});
 
 type NavItem = {
   href: string;
@@ -171,15 +164,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
   return (
     <aside className="flex h-full min-h-0 w-[220px] shrink-0 flex-col border-r border-[rgba(124,58,237,0.3)] bg-[#0a0118]">
-      <Link
-        href={L.home}
-        onClick={onNavigate}
-        className={`block border-b border-[rgba(124,58,237,0.3)] px-4 py-5 text-xl font-bold text-[#F5C842] ${cinzel.className}`}
-      >
-        GarmonPay
-      </Link>
-
-      <nav className="flex flex-1 flex-col overflow-y-auto pb-4">
+      <nav className="flex flex-1 flex-col overflow-y-auto pb-4 pt-3">
         {SECTIONS.map((section, sectionIdx) => (
           <div key={section.heading ?? `nav-section-${sectionIdx}`}>
             {section.heading ? (

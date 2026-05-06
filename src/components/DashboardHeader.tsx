@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DashboardCoinBalances } from "@/components/DashboardCoinBalances";
+import { GarmonPayWordmark } from "@/components/GarmonPayWordmark";
+import { APP_SHELL_LINKS } from "@/config/app-shell-nav";
 
 function HeaderNavIcons({ className }: { className?: string }) {
   return (
@@ -35,8 +37,9 @@ export function DashboardHeader() {
       {/* Mobile / small: icons row, then wallet (see DashboardCoinBalances) */}
       <div className="tablet:hidden">
         <div className="mx-auto max-w-7xl px-3 py-1.5">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <GarmonPayWordmark href={APP_SHELL_LINKS.home} />
               <HeaderNavIcons />
             </div>
             <DashboardCoinBalances
@@ -47,14 +50,16 @@ export function DashboardHeader() {
         </div>
       </div>
 
-      {/* Desktop / tablet: wallet pills + actions aligned end (sidebar has brand wordmark) */}
       <div className="hidden tablet:block">
-        <div className="mx-auto flex max-w-7xl min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 px-6 py-3">
-          <DashboardCoinBalances
-            compact
-            hideCompactActionsOnMobile={compactWalletOnGameRoom}
-          />
-          <HeaderNavIcons />
+        <div className="mx-auto flex min-w-0 max-w-7xl items-center justify-between gap-x-4 gap-y-2 px-6 py-3">
+          <GarmonPayWordmark href={APP_SHELL_LINKS.home} />
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
+            <DashboardCoinBalances
+              compact
+              hideCompactActionsOnMobile={compactWalletOnGameRoom}
+            />
+            <HeaderNavIcons />
+          </div>
         </div>
       </div>
     </header>
