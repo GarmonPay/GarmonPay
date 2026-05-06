@@ -18,6 +18,7 @@ import {
   type ConnectFourBoard,
 } from "@/lib/connect-four";
 import { useCoins } from "@/hooks/useCoins";
+import { CoinFlipDiscFace } from "@/components/games/CoinFlip3D";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -494,14 +495,24 @@ export default function GarmonFourRoomPage() {
         </div>
 
         <div className="rounded-2xl border border-[#7c3aed]/35 bg-black/25 p-4">
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/45">Gold</p>
-              <p className="font-semibold text-[#f5c842]">{creatorName}</p>
+          <div className="flex flex-wrap gap-5 text-sm">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
+                <CoinFlipDiscFace face="heads" className="h-full w-full" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-white/45">Heads · Host</p>
+                <p className="font-semibold text-[#f5c842]">{creatorName}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/45">Purple</p>
-              <p className="font-semibold text-[#c4b5fd]">{opponentName}</p>
+            <div className="flex min-w-0 items-start gap-2.5">
+              <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
+                <CoinFlipDiscFace face="tails" className="h-full w-full" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-white/45">Tails · Guest</p>
+                <p className="font-semibold text-[#c4b5fd]">{opponentName}</p>
+              </div>
             </div>
           </div>
           <p className="mt-3 text-sm text-white/70">{turnLabel}</p>
@@ -537,8 +548,7 @@ export default function GarmonFourRoomPage() {
                     const v = board[r][c];
                     const isHi = highlight?.has(`${r},${c}`);
                     const isDrop = dropFlash?.r === r && dropFlash?.c === c;
-                    const gold = v === 1;
-                    const purple = v === 2;
+                    const face = v === 1 ? "heads" : v === 2 ? "tails" : null;
                     return (
                       <div
                         key={`${r}-${c}`}
@@ -548,25 +558,26 @@ export default function GarmonFourRoomPage() {
                           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.45)",
                         }}
                       >
-                        <div
-                          className="h-[78%] w-[78%] rounded-full transition-transform duration-300 ease-out"
-                          style={{
-                            transform: isDrop ? "translateY(0)" : undefined,
-                            animation: isDrop ? "gf-drop 0.45s ease-in" : undefined,
-                            background:
-                              gold
-                                ? "radial-gradient(circle at 30% 30%, #fde68a, #f5c842 45%, #b45309)"
-                                : purple
-                                  ? "radial-gradient(circle at 30% 30%, #ddd6fe, #7c3aed 50%, #4c1d95)"
-                                  : "rgba(255,255,255,0.06)",
-                            border: isHi
-                              ? "3px solid #f5c842"
-                              : gold || purple
-                                ? "1px solid rgba(0,0,0,0.35)"
-                                : "1px solid rgba(255,255,255,0.06)",
-                            boxShadow: isHi ? "0 0 16px rgba(245,200,66,0.7)" : undefined,
-                          }}
-                        />
+                        {face ? (
+                          <div
+                            className={`flex aspect-square h-[76%] w-[76%] max-h-[34px] max-w-[34px] items-center justify-center sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px] ${isDrop ? "[animation:gf-drop_0.45s_ease-in]" : ""}`}
+                          >
+                            <CoinFlipDiscFace
+                              face={face}
+                              highlighted={isHi}
+                              className="h-full w-full"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="h-[76%] w-[76%] max-h-[34px] max-w-[34px] rounded-full sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px]"
+                            style={{
+                              background: "rgba(255,255,255,0.06)",
+                              boxShadow: "inset 0 1px 2px rgba(0,0,0,0.5)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                            }}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -585,7 +596,12 @@ export default function GarmonFourRoomPage() {
 
         {room.status === "active" && (
           <div className="mt-6 space-y-3">
-            <p className="text-center text-xs text-white/50">Tap a column to drop your disc</p>
+            <p className="text-center text-xs text-white/50">
+              Tap a column to drop — you are{" "}
+              <span className="font-semibold text-[#f5c842]">
+                {myPiece === 1 ? "Heads" : "Tails"}
+              </span>
+            </p>
             <div className="flex justify-center gap-1 sm:gap-2">
               {[0, 1, 2, 3, 4, 5, 6].map((c) => {
                 const canClick =

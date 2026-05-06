@@ -2,8 +2,52 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const COIN_HEADS = "/images/coin-heads.png";
-const COIN_TAILS = "/images/coin-tails.png";
+/** Public URLs — same assets as all Coin Flip UI (see `CoinFlipDiscFace`). */
+export const COIN_FLIP_HEADS_IMAGE = "/images/coin-heads.png";
+export const COIN_FLIP_TAILS_IMAGE = "/images/coin-tails.png";
+
+const COIN_HEADS = COIN_FLIP_HEADS_IMAGE;
+const COIN_TAILS = COIN_FLIP_TAILS_IMAGE;
+
+export type CoinFlipDiscFaceProps = {
+  face: "heads" | "tails";
+  /** Fixed pixel size (both sides). Omit and size with `className` (e.g. `h-full w-full`) instead. */
+  sizePx?: number;
+  highlighted?: boolean;
+  className?: string;
+};
+
+/**
+ * Single face of the Coin Flip PNG pair — same multiply + border treatment as `CoinFlip3D`.
+ * Use for compact contexts (e.g. Connect Four cells) without duplicating asset paths or styling.
+ */
+export function CoinFlipDiscFace({
+  face,
+  sizePx,
+  highlighted = false,
+  className = "",
+}: CoinFlipDiscFaceProps) {
+  const src = face === "heads" ? COIN_HEADS : COIN_TAILS;
+  const borderRing =
+    face === "heads" ? "border-[#f5c842]/30" : "border-[#f5c842]/25";
+  return (
+    <div
+      className={`relative overflow-hidden rounded-full border ${borderRing} ${highlighted ? "animate-pulse ring-2 ring-[#f5c842] shadow-[0_0_18px_rgba(245,200,66,0.95)]" : ""} ${className}`}
+      style={sizePx != null ? { width: sizePx, height: sizePx } : undefined}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- same promotional asset as CoinFlip3D */}
+      <img
+        src={src}
+        alt=""
+        width={sizePx ?? undefined}
+        height={sizePx ?? undefined}
+        className="h-full w-full rounded-full object-cover"
+        style={{ mixBlendMode: "multiply" }}
+        draggable={false}
+      />
+    </div>
+  );
+}
 
 const LANDING_MS = 420;
 
