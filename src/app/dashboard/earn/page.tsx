@@ -171,7 +171,7 @@ export default function EarnPage() {
       {/* Header */}
       <div className="animate-slide-up card-lux p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">EARN</h1>
-        <p className="text-fintech-muted text-sm mb-4">Get Seen. Get Known. Get Paid.</p>
+        <p className="text-fintech-muted text-sm mb-4">Get Seen. Get Known. Get Rewarded.</p>
         <button
           type="button"
           onClick={() => router.push("/dashboard/earn/calculator")}

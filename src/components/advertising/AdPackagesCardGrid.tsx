@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { AdPackageRow } from "@/lib/ad-packages";
+import { createBrowserClient } from "@/lib/supabase";
+import { getSessionAsync } from "@/lib/session";
 import {
   parseAdPackageFeatures,
   formatAdViews,
@@ -17,7 +20,7 @@ export type AdPackagesCardGridProps = {
   packages: AdPackageRow[];
   loading: boolean;
   error?: string | null;
-  /** Public marketing: Link CTAs. Dashboard: selectable buttons + same Supabase data. */
+  /** Public marketing: Link CTAs. Dashboard: selectable buttons + same catalog data. */
   variant: "marketing" | "dashboard";
   /** Dashboard: which package is highlighted */
   selectedPackageId?: string | null;
@@ -26,8 +29,10 @@ export type AdPackagesCardGridProps = {
   emptyMessage?: string;
 };
 
+const LOGIN_THEN_ADVERTISE = `/login?next=${encodeURIComponent("/dashboard/advertise")}`;
+
 /**
- * Shared UI for `ad_packages` rows (Supabase: name, price_monthly, ad_views, features JSON).
+ * Shared UI for ad package tiers (name, monthly price, views, features).
  */
 export function AdPackagesCardGrid({
   packages,
@@ -38,6 +43,34 @@ export function AdPackagesCardGrid({
   onSelectPackage,
   emptyMessage = "No ad packages available",
 }: AdPackagesCardGridProps) {
+  const [startCampaignHref, setStartCampaignHref] = useState(LOGIN_THEN_ADVERTISE);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function syncHref() {
+      const s = await getSessionAsync();
+      if (!cancelled) {
+        setStartCampaignHref(s ? "/dashboard/advertise" : LOGIN_THEN_ADVERTISE);
+      }
+    }
+    void syncHref();
+    const sb = createBrowserClient();
+    if (!sb) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange(() => {
+      void syncHref();
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   if (loading) {
     return <p className="text-center text-fintech-muted">Loading packages…</p>;
   }
@@ -128,7 +161,7 @@ export function AdPackagesCardGrid({
             )}
             {variant === "marketing" ? (
               <Link
-                href={`/login?next=${encodeURIComponent("/dashboard/advertise")}`}
+                href={startCampaignHref}
                 className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white hover:opacity-90"
               >
                 Start Campaign

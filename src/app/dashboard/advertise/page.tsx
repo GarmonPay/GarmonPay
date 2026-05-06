@@ -75,7 +75,7 @@ export default function AdvertisePage() {
   const [adPackages, setAdPackages] = useState<AdPackageRow[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [packagesError, setPackagesError] = useState<string | null>(null);
-  /** Same Supabase row as public /advertise — drives budget + step 3 */
+  /** Same catalog as public /advertise — drives budget + step 3 */
   const [selectedPackage, setSelectedPackage] = useState<AdPackageRow | null>(null);
 
   useEffect(() => {
@@ -248,7 +248,7 @@ export default function AdvertisePage() {
     <div className="space-y-6">
       <div className="card-lux p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-1">Advertise</h1>
-        <p className="text-fintech-muted text-sm">Get Seen. Get Known. Get Paid.</p>
+        <p className="text-fintech-muted text-sm">Get Seen. Get Known. Get Rewarded.</p>
       </div>
 
       {error && (
@@ -267,7 +267,7 @@ export default function AdvertisePage() {
         <div className="card-lux p-6">
           <h2 className="text-lg font-semibold text-white mb-1">Choose your plan</h2>
           <p className="text-sm text-fintech-muted mb-6">
-            Packages load from Supabase. Select one to set your campaign budget, then create your profile and start your campaign.
+            Pick a package to set your campaign budget, then create your advertiser profile and launch your campaign.
           </p>
           <AdPackagesCardGrid
             variant="dashboard"

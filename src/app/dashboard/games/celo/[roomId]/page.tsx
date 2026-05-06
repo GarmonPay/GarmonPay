@@ -4483,7 +4483,7 @@ export default function CeloRoomPage() {
                       ? "#F87171"
                       : "#FBBF24",
               }}
-              title="Supabase real-time channel for this table (not a player count)"
+              title="Live connection status for this table (not a player count)"
             >
               {connection === "live"
                 ? "Real-time on"

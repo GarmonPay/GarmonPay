@@ -141,7 +141,7 @@ export function SupabaseEarningsTracker({
           Your GarmonPay Earnings
         </h2>
         <p className="mt-1 text-xs text-fintech-muted">
-          From Supabase transactions (status completed) — updates live when new activity posts.
+          From your completed earnings activity — updates live when new activity is recorded.
         </p>
         {sums ? (
           <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">

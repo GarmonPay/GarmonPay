@@ -340,8 +340,8 @@ export default function CeloLobbyPage() {
             >
               <p className="text-sm text-amber-200/90">⚠️ {err}</p>
               <p className="mt-1 text-xs text-gray-500">
-                If the list is empty, check RLS and that `celo_rooms` has rows, or the browser console
-                for ROOMS.
+                If the list stays empty, try again in a moment or refresh the page. You can also open the
+                browser console for details.
               </p>
               <button
                 type="button"

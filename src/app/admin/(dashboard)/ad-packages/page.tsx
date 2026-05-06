@@ -128,7 +128,7 @@ function AdminAdPackagesPageInner() {
       <div>
         <h1 className="text-xl font-bold text-white mb-2">Ad packages</h1>
         <p className="text-sm text-slate-400 mt-1">
-          Prices and allotments sync to <code className="text-violet-300">public.ad_packages</code>. Each save rebuilds
+          Prices and allotments sync to the live campaign catalog. Each save rebuilds
           marketing copy from economics. Live campaigns bill advertisers{" "}
           <strong className="text-white">2×</strong> member payout per event, so price must cover{" "}
           <strong className="text-white">2×</strong> the member pool (

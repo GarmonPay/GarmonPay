@@ -44,9 +44,7 @@ function AdminRevenueInner() {
     })
       .then((res) => {
         if (res.status === 403) {
-          throw new Error(
-            "Access denied. Ensure your user has role = 'admin' or is_super_admin = true in public.users."
-          );
+          throw new Error("Access denied. Your account needs administrator permissions to view this page.");
         }
         if (!res.ok) {
           return res.json().then((b: { message?: string }) => {

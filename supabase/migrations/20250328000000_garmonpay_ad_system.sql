@@ -1,5 +1,5 @@
 -- GarmonPay Advertising & Revenue System
--- Slogan: Get Seen. Get Known. Get Paid.
+-- Slogan: Get Seen. Get Known. Get Rewarded.
 -- Tables use garmon_ prefix where "ads" would conflict with existing public.ads (legacy reward ads).
 -- All user_id FKs reference public.users(id).
 

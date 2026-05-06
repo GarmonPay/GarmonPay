@@ -12,11 +12,11 @@ type Props = {
 };
 
 /**
- * Public ad packages from Supabase `ad_packages` via GET /api/ad-packages.
+ * Public ad packages from GET /api/ad-packages.
  */
 export function PublicAdPackagesPage({
   heading = "Advertising",
-  subheading = "Get Seen. Get Known. Get Paid.",
+  subheading = "Get Seen. Get Known. Get Rewarded.",
   children,
 }: Props) {
   const [packages, setPackages] = useState<AdPackageRow[]>([]);
@@ -62,8 +62,7 @@ export function PublicAdPackagesPage({
           <h1 className="mt-4 text-4xl font-bold">{heading}</h1>
           <p className="mt-2 text-fintech-muted">{subheading}</p>
           <p className="mt-3 text-xs text-fintech-muted/80">
-            Campaign packages (views + click credits, economics) load from Supabase{" "}
-            <code className="text-violet-300/90">ad_packages</code>. Advertisers:{" "}
+            Campaign packages with views and click credits. Advertisers:{" "}
             <Link href="/dashboard/advertise" className="text-fintech-accent hover:underline">
               dashboard → Advertise
             </Link>

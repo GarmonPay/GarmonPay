@@ -155,13 +155,13 @@ export default function HomePage() {
               className={`${cinzelDecorative.className} mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl lg:text-7xl`}
             >
               <span className="block bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#d97706] bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(234,179,8,0.35)]">
-                Get Seen
+                Get Seen.
               </span>
               <span className="mt-1 block bg-gradient-to-r from-[#fde047] via-[#fbbf24] to-[#ca8a04] bg-clip-text text-transparent">
-                Get Known
+                Get Known.
               </span>
               <span className="mt-1 block bg-gradient-to-r from-[#fef08a] via-[#eab308] to-[#a16207] bg-clip-text text-transparent">
-                Get Rewarded
+                Get Rewarded.
               </span>
             </h1>
             <p className="mx-auto mt-8 max-w-xl text-base text-violet-200/90 sm:text-lg">

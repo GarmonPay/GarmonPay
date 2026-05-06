@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     console.error("Admin users query error:", error);
     const message =
       error.message && error.message.includes("balance")
-        ? "Users query failed — verify public.users columns (balance_cents, referral_code, referred_by) exist in Supabase."
+        ? "Could not load users. Ask your developer to verify the user profile schema matches the latest migrations."
         : error.message;
     return NextResponse.json({ message, users: [] }, { status: 500 });
   }

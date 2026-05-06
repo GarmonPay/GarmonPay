@@ -114,7 +114,7 @@ function formatGcAsUsd(gc: number) {
 export default function PricingPage() {
   const [catalog, setCatalog] = useState<MembershipPlanCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [source, setSource] = useState<"supabase" | "fallback">("fallback");
+  const [planCatalogSource, setPlanCatalogSource] = useState<"live" | "default">("default");
   const [goldCoins, setGoldCoins] = useState<number | null>(null);
   const [balanceInfo, setBalanceInfo] = useState<{
     eligible: boolean;
@@ -145,16 +145,16 @@ export default function PricingPage() {
         if (!cancelled) {
           if (plans.length > 0) {
             setCatalog(plans as MembershipPlanCatalogRow[]);
-            setSource("supabase");
+            setPlanCatalogSource("live");
           } else {
             setCatalog(getEmbeddedMembershipCatalog());
-            setSource("fallback");
+            setPlanCatalogSource("default");
           }
         }
       } catch {
         if (!cancelled) {
           setCatalog(getEmbeddedMembershipCatalog());
-          setSource("fallback");
+          setPlanCatalogSource("default");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -394,10 +394,10 @@ export default function PricingPage() {
           </div>
           <p className="mt-2 text-xs text-violet-400/80">
             {loading
-              ? "Loading plans from Supabase…"
-              : source === "supabase"
-                ? "Plans synced from Supabase `membership_plan_catalog` (Free always first)."
-                : "Showing embedded membership defaults — apply Supabase `membership_plan_catalog` migrations and ensure `/api/membership-plans` is reachable."}
+              ? "Loading plans…"
+              : planCatalogSource === "live"
+                ? "Plans loaded from your live catalog (Free is always listed first)."
+                : "Showing standard plan options. If your custom catalog doesn’t appear, try refreshing or check your connection."}
           </p>
           {successMsg && (
             <p className="mx-auto mt-4 max-w-lg rounded-xl border border-[#eab308]/50 bg-[#eab308]/15 px-4 py-3 text-sm font-medium text-[#fde047]">
