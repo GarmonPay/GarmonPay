@@ -111,6 +111,11 @@ export default function GarmonFourRoomPage() {
     kind: "win" | "loss" | "draw" | "info";
   } | null>(null);
 
+  const [roomUrl, setRoomUrl] = useState("");
+  const [copyLinkDone, setCopyLinkDone] = useState(false);
+  const [canNativeShare, setCanNativeShare] = useState(false);
+  const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const authHeaders = useCallback(
     (json = true) => {
       const h: Record<string, string> = {};
@@ -367,6 +372,50 @@ export default function GarmonFourRoomPage() {
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setRoomUrl(window.location.href);
+    setCanNativeShare(typeof navigator.share === "function");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+    };
+  }, []);
+
+  const handleCopyRoomLink = useCallback(async () => {
+    const url =
+      typeof window !== "undefined" && window.location.href ? window.location.href : roomUrl;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyLinkDone(true);
+      if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+      copyLinkTimerRef.current = setTimeout(() => {
+        setCopyLinkDone(false);
+        copyLinkTimerRef.current = null;
+      }, 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [roomUrl]);
+
+  const handleNativeShareRoom = useCallback(async () => {
+    const url =
+      typeof window !== "undefined" && window.location.href ? window.location.href : roomUrl;
+    if (!url || typeof navigator.share !== "function") return;
+    try {
+      await navigator.share({
+        title: "GarmonFour — join my game",
+        text: "Join my GarmonFour game on GarmonPay",
+        url,
+      });
+    } catch {
+      /* user dismissed or share failed */
+    }
+  }, [roomUrl]);
 
   async function handleMove(col: number) {
     if (!token || !userId || !room || busy) return;
@@ -682,7 +731,46 @@ export default function GarmonFourRoomPage() {
         )}
 
         {room.status === "waiting" && room.creator_id === userId && (
-          <p className="mt-6 text-center text-sm text-white/60">Share this page or wait — an opponent can join from the lobby.</p>
+          <div className="mt-6 space-y-4">
+            <p className="text-center text-sm text-white/60">
+              Share this link or wait — an opponent can join from the lobby.
+            </p>
+            <div
+              className="rounded-xl border border-[#7c3aed] px-3 py-3 sm:px-4"
+              style={{
+                background: "linear-gradient(145deg, rgba(26,10,46,0.95), rgba(14,1,24,0.92))",
+              }}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1 rounded-lg border border-[#7c3aed]/55 bg-black/40 px-3 py-2.5">
+                  <p
+                    className="select-text truncate font-mono text-xs leading-snug text-white/95 sm:text-sm"
+                    title={roomUrl || undefined}
+                  >
+                    {roomUrl || "…"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyRoomLink()}
+                    className="rounded-lg border border-[#f5c842]/55 bg-[#f5c842]/12 px-4 py-2 text-sm font-medium text-[#f5c842] transition hover:bg-[#f5c842]/22"
+                  >
+                    {copyLinkDone ? "Copied!" : "Copy Link"}
+                  </button>
+                  {canNativeShare && (
+                    <button
+                      type="button"
+                      onClick={() => void handleNativeShareRoom()}
+                      className="rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
+                    >
+                      Share
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
