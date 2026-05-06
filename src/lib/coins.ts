@@ -53,7 +53,13 @@ export const USD_TO_SC = USD_TO_GPC;
 export function gpcToUsdDisplay(gpc: number): string {
   const n = Number(gpc);
   if (!Number.isFinite(n)) return "$0.00";
-  return `$${(n * GPC_TO_USD).toFixed(2)}`;
+  const usd = n * GPC_TO_USD;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(usd);
 }
 
 /** @deprecated use gpcToUsdDisplay */

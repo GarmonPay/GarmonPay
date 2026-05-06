@@ -4,6 +4,11 @@ export const GARMONFOUR_MIN_ENTRY_GPC = 100;
 
 export type ConnectFourBoard = number[][];
 
+/** Fallback when DB JSON is briefly invalid — keeps the grid on-screen. */
+export function createEmptyConnectFourBoard(): ConnectFourBoard {
+  return Array.from({ length: 6 }, () => Array.from({ length: 7 }, () => 0));
+}
+
 /** Settlement preview: same 10% of total pot as Coin Flip PvP. */
 export function computeGarmonFourSettlement(entryPerPlayerGpc: number) {
   return computePvpCoinFlipSettlement(entryPerPlayerGpc);

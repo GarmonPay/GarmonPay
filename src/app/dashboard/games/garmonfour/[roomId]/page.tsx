@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
-import { gpcToUsdDisplay } from "@/lib/coins";
 import { CELO_USER_PROFILE_FIELDS } from "@/lib/celo-player-state";
 import { resolveDisplayName } from "@/lib/display-name";
 import {
@@ -13,6 +12,7 @@ import {
   computeGarmonFourSettlement,
   findLastPlacedCell,
   findWinningLine,
+  createEmptyConnectFourBoard,
   GARMONFOUR_MIN_ENTRY_GPC,
   parseConnectFourBoard,
   type ConnectFourBoard,
@@ -73,6 +73,13 @@ function pieceForUser(room: RoomRow, uid: string): 1 | 2 | null {
   return null;
 }
 
+function lowestEmptyRow(b: ConnectFourBoard, col: number): number | null {
+  for (let r = 5; r >= 0; r--) {
+    if (b[r][col] === 0) return r;
+  }
+  return null;
+}
+
 export default function GarmonFourRoomPage() {
   const params = useParams();
   const roomId = typeof params?.roomId === "string" ? params.roomId : "";
@@ -89,6 +96,9 @@ export default function GarmonFourRoomPage() {
   const [apiErr, setApiErr] = useState<string | null>(null);
   const [opponentAway, setOpponentAway] = useState(false);
   const oppAwayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const opponentWasPresentRef = useRef(false);
+  const [hoverCol, setHoverCol] = useState<number | null>(null);
+  const [pulseCol, setPulseCol] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Set<string> | null>(null);
   const [dropFlash, setDropFlash] = useState<{ r: number; c: number } | null>(null);
   const prevBoardRef = useRef<ConnectFourBoard | null>(null);
@@ -205,6 +215,14 @@ export default function GarmonFourRoomPage() {
   }, [userId, roomId, supabase, fetchRoom]);
 
   useEffect(() => {
+    opponentWasPresentRef.current = false;
+  }, [room?.opponent_id]);
+
+  useEffect(() => {
+    setHoverCol(null);
+  }, [room?.move_seq, room?.current_turn]);
+
+  useEffect(() => {
     if (!supabase || !roomId || !userId) return;
     const opponentId =
       room?.creator_id === userId ? room.opponent_id : room?.creator_id === userId ? room.creator_id : null;
@@ -226,16 +244,22 @@ export default function GarmonFourRoomPage() {
       }
     };
 
+    const AWAY_AFTER_MS = 30_000;
+
     ch.on("presence", { event: "sync" }, () => {
       const state = ch.presenceState();
       const keys = Object.keys(state);
       const present = keys.includes(opponentId);
       clearAwayTimer();
       if (present) {
+        opponentWasPresentRef.current = true;
         setOpponentAway(false);
-      } else {
-        oppAwayTimerRef.current = setTimeout(() => setOpponentAway(true), 6000);
+        return;
       }
+      if (!opponentWasPresentRef.current) {
+        return;
+      }
+      oppAwayTimerRef.current = setTimeout(() => setOpponentAway(true), AWAY_AFTER_MS);
     });
 
     ch.subscribe(async (status) => {
@@ -253,8 +277,7 @@ export default function GarmonFourRoomPage() {
 
   useEffect(() => {
     if (!room) return;
-    const board = parseConnectFourBoard(room.board_state);
-    if (!board) return;
+    const board = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
     const prev = prevBoardRef.current;
     if (prev && room.status === "active") {
       const last = findLastPlacedCell(prev, board);
@@ -348,6 +371,10 @@ export default function GarmonFourRoomPage() {
   async function handleMove(col: number) {
     if (!token || !userId || !room || busy) return;
     if (room.status !== "active" || room.current_turn !== userId) return;
+    const b = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
+    if (b[0][col] !== 0) return;
+    setPulseCol(col);
+    window.setTimeout(() => setPulseCol(null), 280);
     setApiErr(null);
     setBusy(true);
     try {
@@ -446,7 +473,7 @@ export default function GarmonFourRoomPage() {
     );
   }
 
-  const board = parseConnectFourBoard(room.board_state);
+  const board = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
   const entry = Math.floor(room.entry_amount_minor);
   const { winnerPayoutGpc, totalPotGpc, platformFeeGpc } = computeGarmonFourSettlement(
     Math.max(GARMONFOUR_MIN_ENTRY_GPC, entry)
@@ -464,10 +491,7 @@ export default function GarmonFourRoomPage() {
           : `Waiting for ${room.current_turn === room.creator_id ? creatorName : opponentName}`
         : "Game over";
 
-  const colFull = (c: number) => {
-    if (!board) return true;
-    return board[0][c] !== 0;
-  };
+  const colFull = (c: number) => board[0][c] !== 0;
 
   const oppDisconnected = room.status === "active" && room.opponent_id && opponentAway;
 
@@ -530,7 +554,7 @@ export default function GarmonFourRoomPage() {
             Entry {entry.toLocaleString()} GPC each · Pot {totalPotGpc.toLocaleString()} GPC · Fee{" "}
             {platformFeeGpc.toLocaleString()} GPC (10%) · Winner takes {winnerPayoutGpc.toLocaleString()} GPC
           </p>
-          <p className="mt-1 text-xs text-white/45">Your balance: {formatGPC(sweepsCoins)} ({gpcToUsdDisplay(sweepsCoins)})</p>
+          <p className="mt-1 text-xs text-white/45">Your balance: {formatGPC(sweepsCoins)}</p>
         </div>
 
         {oppDisconnected && (
@@ -543,26 +567,65 @@ export default function GarmonFourRoomPage() {
           <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{apiErr}</div>
         )}
 
-        <div className="mt-6 flex justify-center">
+        {room.status === "active" && (
+          <p className="mt-6 text-center text-xs text-white/50">
+            Tap a column to drop — you are{" "}
+            <span className="font-semibold text-[#f5c842]">{myPiece === 1 ? "Heads" : "Tails"}</span>
+          </p>
+        )}
+
+        <div className={`${room.status === "active" ? "mt-3" : "mt-6"} flex justify-center`}>
           <div
-            className="inline-grid gap-1 rounded-2xl p-2 sm:p-3"
+            className="inline-flex gap-1 rounded-2xl p-2 sm:gap-1.5 sm:p-3"
             style={{
               background: "linear-gradient(180deg, rgba(124,58,237,0.25), rgba(14,1,24,0.9))",
               border: "1px solid rgba(245,200,66,0.15)",
             }}
           >
-            {board &&
-              [0, 1, 2, 3, 4, 5].map((r) => (
-                <div key={r} className="flex gap-1 sm:gap-1.5">
-                  {[0, 1, 2, 3, 4, 5, 6].map((c) => {
+            {[0, 1, 2, 3, 4, 5, 6].map((c) => {
+              const canClickCol =
+                room.status === "active" && room.current_turn === userId && !busy && !colFull(c);
+              const lr = lowestEmptyRow(board, c);
+              const previewFace = myPiece === 1 ? "heads" : "tails";
+              const columnLit = (canClickCol && hoverCol === c) || pulseCol === c;
+              return (
+                <div
+                  key={c}
+                  role="button"
+                  tabIndex={canClickCol ? 0 : -1}
+                  aria-label={`Column ${c + 1}`}
+                  aria-disabled={!canClickCol}
+                  onClick={() => {
+                    if (canClickCol) void handleMove(c);
+                  }}
+                  onMouseEnter={() => {
+                    if (canClickCol) setHoverCol(c);
+                  }}
+                  onMouseLeave={() => setHoverCol(null)}
+                  onKeyDown={(e) => {
+                    if (!canClickCol) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void handleMove(c);
+                    }
+                  }}
+                  className={`flex flex-col gap-1 rounded-lg p-0.5 outline-none transition ${
+                    canClickCol
+                      ? "cursor-pointer focus-visible:ring-2 focus-visible:ring-[#f5c842]/50"
+                      : "cursor-not-allowed"
+                  } ${columnLit ? "ring-1 ring-[#f5c842]/40 sm:bg-[#f5c842]/8" : ""}`}
+                >
+                  {[0, 1, 2, 3, 4, 5].map((r) => {
                     const v = board[r][c];
                     const isHi = highlight?.has(`${r},${c}`);
                     const isDrop = dropFlash?.r === r && dropFlash?.c === c;
                     const face = v === 1 ? "heads" : v === 2 ? "tails" : null;
+                    const showGhost =
+                      canClickCol && hoverCol === c && lr !== null && lr === r && v === 0;
                     return (
                       <div
                         key={`${r}-${c}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg sm:h-11 sm:w-11"
+                        className="pointer-events-none flex h-9 w-9 items-center justify-center rounded-lg sm:h-11 sm:w-11"
                         style={{
                           background: "rgba(0,0,0,0.35)",
                           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.45)",
@@ -572,11 +635,11 @@ export default function GarmonFourRoomPage() {
                           <div
                             className={`flex aspect-square h-[76%] w-[76%] max-h-[34px] max-w-[34px] items-center justify-center sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px] ${isDrop ? "[animation:gf-drop_0.45s_ease-in]" : ""}`}
                           >
-                            <CoinFlipDiscFace
-                              face={face}
-                              highlighted={isHi}
-                              className="h-full w-full"
-                            />
+                            <CoinFlipDiscFace face={face} highlighted={isHi} className="h-full w-full" />
+                          </div>
+                        ) : showGhost ? (
+                          <div className="flex aspect-square h-[76%] w-[76%] max-h-[34px] max-w-[34px] items-center justify-center opacity-45 sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px]">
+                            <CoinFlipDiscFace face={previewFace} className="h-full w-full" />
                           </div>
                         ) : (
                           <div
@@ -592,7 +655,8 @@ export default function GarmonFourRoomPage() {
                     );
                   })}
                 </div>
-              ))}
+              );
+            })}
           </div>
         </div>
 
@@ -605,45 +669,15 @@ export default function GarmonFourRoomPage() {
         `}</style>
 
         {room.status === "active" && (
-          <div className="mt-6 space-y-3">
-            <p className="text-center text-xs text-white/50">
-              Tap a column to drop — you are{" "}
-              <span className="font-semibold text-[#f5c842]">
-                {myPiece === 1 ? "Heads" : "Tails"}
-              </span>
-            </p>
-            <div className="flex justify-center gap-1 sm:gap-2">
-              {[0, 1, 2, 3, 4, 5, 6].map((c) => {
-                const canClick =
-                  room.current_turn === userId && !busy && !colFull(c) && room.status === "active";
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    disabled={!canClick}
-                    onClick={() => void handleMove(c)}
-                    className="min-h-touch min-w-[2.25rem] rounded-lg border text-xs font-bold transition sm:min-w-[2.75rem]"
-                    style={{
-                      borderColor: canClick ? "rgba(245,200,66,0.5)" : "rgba(255,255,255,0.08)",
-                      color: canClick ? "#f5c842" : "#4b5563",
-                      background: canClick ? "rgba(124,58,237,0.2)" : "transparent",
-                    }}
-                  >
-                    {c + 1}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-center">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleForfeit()}
-                className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-200/90"
-              >
-                Forfeit
-              </button>
-            </div>
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleForfeit()}
+              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-200/90"
+            >
+              Forfeit
+            </button>
           </div>
         )}
 
