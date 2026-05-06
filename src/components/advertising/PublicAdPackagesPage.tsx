@@ -2,8 +2,21 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import type { AdPackageRow } from "@/lib/ad-packages";
 import { AdPackagesCardGrid } from "@/components/advertising/AdPackagesCardGrid";
+
+const cinzel = Cinzel_Decorative({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
 
 type Props = {
   heading?: string;
@@ -53,17 +66,31 @@ export function PublicAdPackagesPage({
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1727] to-[#020617] px-4 py-12 text-white">
+    <main
+      className={`min-h-screen bg-fintech-bg px-4 py-12 text-fintech-text-primary ${dmSans.className}`}
+    >
       <div className="mx-auto max-w-6xl">
         <div className="mb-10 text-center">
-          <Link href="/" className="text-sm text-blue-400 hover:underline">
+          <Link
+            href="/"
+            className="text-sm font-medium text-fintech-highlight underline-offset-2 hover:text-fintech-accent hover:underline"
+          >
             ← Home
           </Link>
-          <h1 className="mt-4 text-4xl font-bold">{heading}</h1>
-          <p className="mt-2 text-fintech-muted">{subheading}</p>
-          <p className="mt-3 text-xs text-fintech-muted/80">
+          <h1
+            className={`${cinzel.className} mt-4 text-3xl font-bold sm:text-4xl md:text-5xl`}
+          >
+            <span className="bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent">
+              {heading}
+            </span>
+          </h1>
+          <p className="mt-2 text-base text-fintech-text-secondary sm:text-lg">{subheading}</p>
+          <p className="mt-3 text-xs text-fintech-muted sm:text-sm">
             Campaign packages with views and click credits. Advertisers:{" "}
-            <Link href="/dashboard/advertise" className="text-fintech-accent hover:underline">
+            <Link
+              href="/dashboard/advertise"
+              className="font-medium text-fintech-highlight underline-offset-2 hover:text-fintech-accent hover:underline"
+            >
               dashboard → Advertise
             </Link>
             .
@@ -79,9 +106,12 @@ export function PublicAdPackagesPage({
 
         {children}
 
-        <p className="mt-10 text-center text-sm text-fintech-muted">
+        <p className="mt-10 text-center text-sm text-fintech-text-secondary">
           Already have an account?{" "}
-          <Link href="/dashboard/advertise" className="text-fintech-accent hover:underline">
+          <Link
+            href="/dashboard/advertise"
+            className="font-medium text-fintech-highlight underline-offset-2 hover:text-fintech-accent hover:underline"
+          >
             Advertiser dashboard
           </Link>
         </p>

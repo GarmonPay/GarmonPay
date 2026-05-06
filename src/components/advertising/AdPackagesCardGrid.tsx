@@ -72,7 +72,7 @@ export function AdPackagesCardGrid({
   }, []);
 
   if (loading) {
-    return <p className="text-center text-fintech-muted">Loading packages…</p>;
+    return <p className="text-center text-fintech-text-secondary">Loading packages…</p>;
   }
   if (error) {
     return (
@@ -82,7 +82,7 @@ export function AdPackagesCardGrid({
     );
   }
   if (packages.length === 0) {
-    return <p className="text-center text-lg text-fintech-muted">{emptyMessage}</p>;
+    return <p className="text-center text-lg text-fintech-text-secondary">{emptyMessage}</p>;
   }
 
   return (
@@ -99,43 +99,43 @@ export function AdPackagesCardGrid({
         return (
           <div
             key={pkg.id}
-            className={`flex flex-col rounded-2xl border p-6 ${
+            className={`flex flex-col p-6 ${
               isSelected
-                ? "border-fintech-accent bg-fintech-accent/10 shadow-lg shadow-fintech-accent/15"
-                : "border-white/10 bg-white/[0.03]"
+                ? "rounded-2xl border border-fintech-accent bg-fintech-accent/10 shadow-lg shadow-fintech-accent/15"
+                : "card-lux"
             }`}
           >
-            <h3 className="text-xl font-bold text-white">{displayAdPackageTitle(pkg, packages)}</h3>
-            <p className="mt-4 text-3xl font-black text-white">
+            <h3 className="text-xl font-bold text-fintech-text-primary">
+              {displayAdPackageTitle(pkg, packages)}
+            </h3>
+            <p className="mt-4 text-3xl font-black text-fintech-text-primary">
               ${monthly}
               <span className="text-base font-normal text-fintech-muted">/campaign</span>
             </p>
-            <p className="mt-2 text-sm text-violet-200/90">
-              <span className="font-semibold text-[#eab308]">{views}</span> views
+            <p className="mt-2 text-sm text-fintech-text-secondary">
+              <span className="font-semibold text-fintech-highlight">{views}</span> views
               <span className="text-fintech-muted"> · </span>
-              <span className="font-semibold text-[#eab308]">{clicks}</span> click credits
+              <span className="font-semibold text-fintech-highlight">{clicks}</span> click credits
             </p>
             <p className="mt-1 text-xs text-fintech-muted">
-              Your cost per view: <span className="text-white/90">{cpv}</span>
+              Your cost per view: <span className="text-fintech-text-primary">{cpv}</span>
             </p>
             {meta.est_reach && (
-              <p className="mt-1 text-xs text-violet-300/90">
-                Est. reach: <span className="text-white/90">{meta.est_reach}</span>
+              <p className="mt-1 text-xs text-fintech-text-secondary">
+                Est. reach: <span className="text-fintech-text-primary">{meta.est_reach}</span>
               </p>
             )}
             {meta.member_payout_usd != null && (
               <p className="mt-2 text-xs text-fintech-muted">
                 Member payout pool (cap):{" "}
-                <span className="text-emerald-400/90">
-                  ${meta.member_payout_usd.toFixed(2)}
-                </span>{" "}
+                <span className="text-fintech-success">${meta.member_payout_usd.toFixed(2)}</span>{" "}
                 (${AD_PACKAGE_MEMBER_EARN_PER_VIEW}/view + ${AD_PACKAGE_MEMBER_EARN_PER_CLICK}/click credit)
               </p>
             )}
             {meta.advertiser_burn_ceiling_usd != null && (
               <p className="text-xs text-fintech-muted">
                 Est. budget use if fully delivered:{" "}
-                <span className="text-sky-300/90">
+                <span className="text-fintech-text-secondary">
                   ${meta.advertiser_burn_ceiling_usd.toFixed(2)}
                 </span>{" "}
                 <span className="opacity-80">(2× member pool)</span>
@@ -144,16 +144,14 @@ export function AdPackagesCardGrid({
             {meta.platform_profit_usd != null && (
               <p className="text-xs text-fintech-muted">
                 Est. platform margin:{" "}
-                <span className="text-amber-300/90">
-                  ${meta.platform_profit_usd.toFixed(2)}
-                </span>
+                <span className="text-fintech-highlight">${meta.platform_profit_usd.toFixed(2)}</span>
               </p>
             )}
             {bullets.length > 0 && (
-              <ul className="mt-4 flex-1 space-y-2 text-sm text-fintech-muted">
+              <ul className="mt-4 flex-1 space-y-2 text-sm text-fintech-text-secondary">
                 {bullets.map((f) => (
                   <li key={f} className="flex gap-2">
-                    <span className="text-fintech-accent">•</span>
+                    <span className="text-fintech-highlight">•</span>
                     <span>{f}</span>
                   </li>
                 ))}
@@ -162,7 +160,7 @@ export function AdPackagesCardGrid({
             {variant === "marketing" ? (
               <Link
                 href={startCampaignHref}
-                className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white hover:opacity-90"
+                className="mt-6 block w-full rounded-xl bg-fintech-accent py-3 text-center text-sm font-semibold text-white shadow-soft transition duration-app hover:opacity-90 hover:shadow-soft-lg"
               >
                 Start Campaign
               </Link>
