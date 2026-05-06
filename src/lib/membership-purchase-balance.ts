@@ -23,6 +23,22 @@ export function isPurchaseMembershipRpcMissingError(err: { message?: string; cod
   return false;
 }
 
+/** RPC applied but DB missing columns (e.g. rewire migration not run on remote). */
+function isPurchaseMembershipRpcSchemaDriftError(err: { message?: string } | null): boolean {
+  if (!err?.message) return false;
+  const m = err.message.toLowerCase();
+  if (!m.includes("does not exist")) return false;
+  return (
+    m.includes("membership_period_end") ||
+    m.includes("membership_started_at") ||
+    m.includes("membership_purchases")
+  );
+}
+
+function shouldUsePurchaseMembershipFallback(err: { message?: string; code?: string } | null): boolean {
+  return isPurchaseMembershipRpcMissingError(err) || isPurchaseMembershipRpcSchemaDriftError(err);
+}
+
 type RpcPurchaseResult =
   | { success: true; period_end: string | null; remaining_gold: number }
   | { success: false; message: string };
@@ -74,7 +90,7 @@ export async function purchaseMembershipWithBalanceFallback(
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: row, error: readErr } = await admin
       .from("users")
-      .select("gold_coins, membership_started_at")
+      .select("gold_coins")
       .eq("id", userId)
       .maybeSingle();
 
@@ -91,9 +107,6 @@ export async function purchaseMembershipWithBalanceFallback(
     }
 
     const remaining = current - priceGc;
-    const startedRaw = (row as { membership_started_at?: string | null }).membership_started_at;
-    const membershipStartedAt =
-      typeof startedRaw === "string" && startedRaw.length > 0 ? startedRaw : new Date().toISOString();
 
     const { data: updated, error: updErr } = await admin
       .from("users")
@@ -101,8 +114,6 @@ export async function purchaseMembershipWithBalanceFallback(
         gold_coins: remaining,
         membership: tier,
         membership_tier: tier,
-        membership_started_at: membershipStartedAt,
-        membership_period_end: periodEndIso,
         membership_expires_at: periodEndIso,
         membership_payment_source: "balance",
         stripe_subscription_id: null,
@@ -111,7 +122,7 @@ export async function purchaseMembershipWithBalanceFallback(
       })
       .eq("id", userId)
       .eq("gold_coins", current)
-      .select("membership_period_end, gold_coins")
+      .select("membership_expires_at, gold_coins")
       .maybeSingle();
 
     if (updErr) {
@@ -134,7 +145,7 @@ export async function purchaseMembershipWithBalanceFallback(
           }
         });
 
-      const pe = (updated as { membership_period_end?: string | null }).membership_period_end;
+      const pe = (updated as { membership_expires_at?: string | null }).membership_expires_at;
       return {
         success: true,
         period_end: typeof pe === "string" ? pe : periodEndIso,
@@ -155,7 +166,7 @@ export async function purchaseMembershipWithBalance(
 ): Promise<RpcPurchaseResult> {
   const rpc = await purchaseMembershipWithBalanceRpc(admin, userId, tier, priceGc, extendFromIso);
   if (rpc.success) return rpc;
-  if (isPurchaseMembershipRpcMissingError({ message: rpc.message })) {
+  if (shouldUsePurchaseMembershipFallback({ message: rpc.message })) {
     return purchaseMembershipWithBalanceFallback(admin, userId, tier, priceGc, extendFromIso);
   }
   return rpc;
