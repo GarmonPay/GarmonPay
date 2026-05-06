@@ -32,17 +32,11 @@ export function DashboardHeader() {
 
   return (
     <header className="w-full shrink-0 border-b shadow-soft glass-bar border-white/[0.06]">
-      {/* Mobile / small: tight rows — title + icons, then wallet (see DashboardCoinBalances) */}
+      {/* Mobile / small: icons row, then wallet (see DashboardCoinBalances) */}
       <div className="tablet:hidden">
         <div className="mx-auto max-w-7xl px-3 py-1.5">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-          <Link
-            href="/dashboard"
-            className="shrink-0 text-base font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90"
-          >
-            GarmonPay
-          </Link>
+            <div className="flex items-center justify-end gap-2">
               <HeaderNavIcons />
             </div>
             <DashboardCoinBalances
@@ -53,27 +47,14 @@ export function DashboardHeader() {
         </div>
       </div>
 
-      {/* Desktop / tablet: original single-row layout */}
+      {/* Desktop / tablet: wallet pills + actions aligned end (sidebar has brand wordmark) */}
       <div className="hidden tablet:block">
-        <div
-          className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-3"
-        >
-          <Link
-            href="/dashboard"
-            className="shrink-0 text-lg font-bold tracking-tight text-[#F5C842] no-underline hover:opacity-90 tablet:text-xl"
-          >
-            GarmonPay
-          </Link>
-
-          <div className="hidden min-w-0 flex-1 tablet:block" aria-hidden />
-
-          <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 sm:gap-3">
-            <DashboardCoinBalances
-              compact
-              hideCompactActionsOnMobile={compactWalletOnGameRoom}
-            />
-            <HeaderNavIcons />
-          </div>
+        <div className="mx-auto flex max-w-7xl min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 px-6 py-3">
+          <DashboardCoinBalances
+            compact
+            hideCompactActionsOnMobile={compactWalletOnGameRoom}
+          />
+          <HeaderNavIcons />
         </div>
       </div>
     </header>
