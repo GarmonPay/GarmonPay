@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier, membershipTierRank } from "@/lib/garmon-plan-config";
 import { PAID_TIER_PRICES_GC, type PaidMembershipTierId } from "@/lib/membership-balance-prices";
+import { purchaseMembershipWithBalance } from "@/lib/membership-purchase-balance";
 import { createGarmonNotification } from "@/lib/garmon-notifications";
 
 export const runtime = "nodejs";
@@ -91,13 +92,8 @@ async function runMembershipRenewal(request: Request) {
 
     const bal = Math.max(0, Math.floor(Number(row.gold_coins ?? 0)));
     if (bal >= price) {
-      const { data: rpcData, error: rpcError } = await admin.rpc("purchase_membership_with_balance_v2", {
-        p_user_id: uid,
-        p_tier: paidTier,
-        p_price_gc: price,
-      });
-      const ok = (rpcData as { success?: boolean } | null)?.success === true;
-      if (rpcError || !ok) {
+      const purchase = await purchaseMembershipWithBalance(admin, uid, paidTier, price, expStr);
+      if (!purchase.success) {
         await createGarmonNotification(
           uid,
           "membership_renew_failed",

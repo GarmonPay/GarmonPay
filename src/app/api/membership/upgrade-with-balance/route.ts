@@ -10,6 +10,7 @@ import {
   type PaidMembershipTierId,
 } from "@/lib/membership-balance-prices";
 import { applyMembershipUpgradeAndFirstMonthly, creditMonthlyBonus } from "@/lib/membership-bonus";
+import { purchaseMembershipWithBalance } from "@/lib/membership-purchase-balance";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const prevExpiresAt =
+    typeof (userRow as { membership_expires_at?: string | null }).membership_expires_at === "string"
+      ? (userRow as { membership_expires_at: string }).membership_expires_at
+      : null;
+
   const rawMembership = (userRow as { membership?: string | null; membership_tier?: string | null }).membership ?? "";
   const currentTier = normalizeUserMembershipTier(rawMembership);
   const paymentSource = (userRow as { membership_payment_source?: string | null }).membership_payment_source ?? null;
@@ -87,23 +93,17 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: rpcData, error: rpcError } = await admin.rpc("purchase_membership_with_balance_v2", {
-    p_user_id: userId,
-    p_tier: tier,
-    p_price_gc: tierPriceGc,
-  });
-  if (rpcError) {
-    return NextResponse.json({ error: rpcError.message ?? "Upgrade failed" }, { status: 400 });
+  const purchase = await purchaseMembershipWithBalance(
+    admin,
+    userId,
+    tier,
+    tierPriceGc,
+    renew ? prevExpiresAt : null
+  );
+  if (!purchase.success) {
+    return NextResponse.json({ error: purchase.message }, { status: 400 });
   }
-  const rpcResult = (rpcData ?? {}) as {
-    success?: boolean;
-    period_end?: string | null;
-    remaining_gold?: number;
-  };
-  if (!rpcResult.success) {
-    return NextResponse.json({ error: "Upgrade failed" }, { status: 400 });
-  }
-  const expiresIso = typeof rpcResult.period_end === "string" ? rpcResult.period_end : null;
+  const expiresIso = purchase.period_end;
 
   const bonusRef = renew
     ? `membership_renew_${tier}_${Date.now()}`
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     gpcBonus = totals.upgradeGpc + totals.monthlyGpc;
   }
 
-  const newGoldCoins = Math.max(0, Number(rpcResult.remaining_gold ?? 0));
+  const newGoldCoins = purchase.remaining_gold;
 
   return NextResponse.json({
     success: true,
