@@ -160,6 +160,19 @@ export default function DashboardGamesPage() {
           <p className="text-sm text-fintech-muted mb-4">Neon pinball and leaderboards — opening soon.</p>
           <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">View →</span>
         </Link>
+
+        <Link href="/dashboard/games/garmonfour" className={`${cardBase} block no-underline text-inherit`}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-3xl" aria-hidden>🔴🟡</span>
+            <h2 className="text-lg font-semibold text-white">GarmonFour</h2>
+          </div>
+          <p className="text-sm text-fintech-muted mb-4">
+            Drop discs and connect four. Beat your opponent and take the pot.
+          </p>
+          <span className="inline-block py-3 px-4 rounded-lg bg-[#7c3aed]/15 text-[#c4b5fd] font-medium border border-[#7c3aed]/35">
+            Play live →
+          </span>
+        </Link>
       </div>
 
       <div className="rounded-xl bg-black/20 border border-white/10 p-6">
