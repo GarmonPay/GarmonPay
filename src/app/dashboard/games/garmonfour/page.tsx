@@ -140,10 +140,11 @@ export default function GarmonFourLobbyPage() {
   }, [token, supabase, loadOpen, loadMyWaiting, loadBalance]);
 
   useEffect(() => {
+    if (loadingSession) return;
     if (!token) {
       router.replace("/login?next=/dashboard/games/garmonfour");
     }
-  }, [token, router]);
+  }, [token, router, loadingSession]);
 
   const settlement = computeGarmonFourSettlement(entry);
   const canAfford = myBalance >= entry;

@@ -175,6 +175,13 @@ export default function GarmonFourRoomPage() {
   }, [supabase]);
 
   useEffect(() => {
+    if (loadingSession) return;
+    if (!token || !userId) {
+      router.replace(`/login?next=${encodeURIComponent(`/dashboard/games/garmonfour/${roomId}`)}`);
+    }
+  }, [loadingSession, token, userId, router, roomId]);
+
+  useEffect(() => {
     if (!userId || !roomId || !supabase) return;
     void fetchRoom();
     const ch = supabase
@@ -408,8 +415,11 @@ export default function GarmonFourRoomPage() {
   }
 
   if (!token || !userId) {
-    router.replace(`/login?next=${encodeURIComponent(`/dashboard/games/garmonfour/${roomId}`)}`);
-    return null;
+    return (
+      <div className={`flex min-h-[200px] items-center justify-center text-white/50 ${dm.className}`} style={{ background: "#0e0118" }}>
+        Redirecting…
+      </div>
+    );
   }
 
   if (loadError || !room) {

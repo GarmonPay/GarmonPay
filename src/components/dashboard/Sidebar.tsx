@@ -54,6 +54,12 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
           p.startsWith(L.coinFlip) || p.startsWith("/dashboard/coin-flip"),
       },
       {
+        href: L.garmonfour,
+        label: "GarmonFour",
+        icon: "🔴🟡",
+        isActive: (p) => p.startsWith(L.garmonfour),
+      },
+      {
         href: L.arena,
         label: "Arena",
         icon: "⚔️",
