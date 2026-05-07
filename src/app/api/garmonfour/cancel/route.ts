@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
-import { createAdminClient } from "@/lib/supabase";
+import { getAuthUserIdStrict } from "@/lib/auth-request";
+import { createServerClient } from "@/lib/supabase";
 
 type RpcPayload = {
   success?: boolean;
@@ -9,17 +9,19 @@ type RpcPayload = {
 };
 
 export async function POST(request: Request) {
-  const userId = await getAuthUserIdBearerOrCookie(request);
+  const userId = await getAuthUserIdStrict(request);
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const admin = createAdminClient();
-  if (!admin) {
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const client = createServerClient(bearerToken ?? undefined);
+  if (!client) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { roomId?: unknown; reference?: unknown };
+  let body: { roomId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -31,15 +33,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "roomId required" }, { status: 400 });
   }
 
-  const reference = typeof body.reference === "string" ? body.reference.trim() : "";
-  if (!reference) {
-    return NextResponse.json({ message: "reference required" }, { status: 400 });
-  }
-
-  const { data, error } = await admin.rpc("garmonfour_cancel_waiting_atomic", {
+  const { data, error } = await client.rpc("garmonfour_cancel_room", {
     p_room_id: roomId,
-    p_user_id: userId,
-    p_reference: reference,
   });
 
   if (error) {

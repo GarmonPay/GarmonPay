@@ -115,8 +115,8 @@ export default function GarmonFourRoomPage() {
   const [copyLinkDone, setCopyLinkDone] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** One-shot repair when active game has two players but DB never got current_turn (nobody can move). */
-  const repairStuckTurnRef = useRef(false);
+  const [repairTurnErr, setRepairTurnErr] = useState<string | null>(null);
+  const cancelledRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -222,15 +222,30 @@ export default function GarmonFourRoomPage() {
   }, [userId, roomId, supabase, fetchRoom]);
 
   useEffect(() => {
-    repairStuckTurnRef.current = false;
+    setRepairTurnErr(null);
   }, [roomId]);
 
+  /** Active game with two players but null current_turn — retry repair until fixed (single-shot ref previously blocked all retries on failure). */
   useEffect(() => {
     if (!token || !roomId || !userId || !room) return;
     if (room.status !== "active" || !room.opponent_id || room.current_turn) return;
-    if (repairStuckTurnRef.current) return;
-    repairStuckTurnRef.current = true;
-    void (async () => {
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 45;
+    let intervalId: number | null = null;
+
+    const run = async () => {
+      if (cancelled) return;
+      if (attempts >= maxAttempts) {
+        if (intervalId != null) {
+          window.clearInterval(intervalId);
+          intervalId = null;
+        }
+        setRepairTurnErr("Could not restore the first turn. Try refreshing the page.");
+        return;
+      }
+      attempts += 1;
       try {
         const res = await fetch(`${API}/repair-turn`, {
           method: "POST",
@@ -238,11 +253,22 @@ export default function GarmonFourRoomPage() {
           headers: authHeaders(),
           body: JSON.stringify({ roomId }),
         });
-        if (res.ok) void fetchRoom();
+        if (res.ok) {
+          setRepairTurnErr(null);
+          void fetchRoom();
+        }
       } catch {
-        /* leave repairStuckTurnRef true to avoid request spam; refresh retries */
+        /* network — interval will retry */
       }
-    })();
+    };
+
+    void run();
+    intervalId = window.setInterval(() => void run(), 3000);
+    return () => {
+      cancelled = true;
+      if (intervalId != null) window.clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- full `room` would restart polling on every board sync
   }, [token, roomId, userId, room?.status, room?.opponent_id, room?.current_turn, fetchRoom, authHeaders]);
 
   useEffect(() => {
@@ -408,8 +434,17 @@ export default function GarmonFourRoomPage() {
   useEffect(() => {
     return () => {
       if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+      if (cancelledRedirectTimerRef.current) clearTimeout(cancelledRedirectTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (room?.status !== "cancelled") return;
+    if (cancelledRedirectTimerRef.current) clearTimeout(cancelledRedirectTimerRef.current);
+    cancelledRedirectTimerRef.current = setTimeout(() => {
+      router.replace("/dashboard/games/garmonfour");
+    }, 1600);
+  }, [room?.status, router]);
 
   const handleCopyRoomLink = useCallback(async () => {
     const url =
@@ -535,6 +570,19 @@ export default function GarmonFourRoomPage() {
     );
   }
 
+  if (room.status === "cancelled") {
+    return (
+      <div className={`mx-auto max-w-md px-4 py-10 text-center ${dm.className}`} style={{ background: "#0e0118" }}>
+        <p className={`text-2xl text-[#f5c842] ${cinzel.className}`}>Room cancelled</p>
+        <p className="mt-2 text-sm text-white/70">This room was cancelled and refunded.</p>
+        <p className="mt-1 text-xs text-white/50">Returning to lobby…</p>
+        <Link href="/dashboard/games/garmonfour" className="mt-4 inline-block text-[#7c3aed] underline">
+          Back to lobby now
+        </Link>
+      </div>
+    );
+  }
+
   const myPiece = pieceForUser(room, userId);
   const isParticipant = myPiece !== null;
   if (!isParticipant) {
@@ -632,11 +680,56 @@ export default function GarmonFourRoomPage() {
             {platformFeeGpc.toLocaleString()} GPC (10%) · Winner takes {winnerPayoutGpc.toLocaleString()} GPC
           </p>
           <p className="mt-1 text-xs text-white/45">Your balance: {formatGPC(sweepsCoins)}</p>
+
+          {room.creator_id === userId &&
+            (room.status === "waiting" || room.status === "active") && (
+              <div className="mt-4 space-y-2 border-t border-[#7c3aed]/25 pt-4">
+                <p className="text-xs text-white/55">
+                  {room.status === "waiting"
+                    ? "Share this link so your opponent can join — they need the same stake in the lobby or this URL."
+                    : "Invite link — send this URL to your opponent if they need to reopen the room."}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1 rounded-lg border border-[#7c3aed]/45 bg-black/35 px-3 py-2">
+                    <p
+                      className="select-text truncate font-mono text-[11px] leading-snug text-white/95 sm:text-xs"
+                      title={roomUrl || undefined}
+                    >
+                      {roomUrl || "…"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyRoomLink()}
+                      className="rounded-lg border border-[#f5c842]/55 bg-[#f5c842]/12 px-3 py-1.5 text-xs font-medium text-[#f5c842] transition hover:bg-[#f5c842]/22 sm:px-4 sm:py-2 sm:text-sm"
+                    >
+                      {copyLinkDone ? "Copied!" : "Copy invite link"}
+                    </button>
+                    {canNativeShare && (
+                      <button
+                        type="button"
+                        onClick={() => void handleNativeShareRoom()}
+                        className="rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:bg-[#7c3aed]/28 sm:px-4 sm:py-2 sm:text-sm"
+                      >
+                        Share
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
         </div>
 
         {oppDisconnected && (
           <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
             Opponent may be disconnected — they might miss the realtime update until they return.
+          </div>
+        )}
+
+        {repairTurnErr && (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            {repairTurnErr}
           </div>
         )}
 
@@ -758,48 +851,6 @@ export default function GarmonFourRoomPage() {
           </div>
         )}
 
-        {room.status === "waiting" && room.creator_id === userId && (
-          <div className="mt-6 space-y-4">
-            <p className="text-center text-sm text-white/60">
-              Share this link or wait — an opponent can join from the lobby.
-            </p>
-            <div
-              className="rounded-xl border border-[#7c3aed] px-3 py-3 sm:px-4"
-              style={{
-                background: "linear-gradient(145deg, rgba(26,10,46,0.95), rgba(14,1,24,0.92))",
-              }}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1 rounded-lg border border-[#7c3aed]/55 bg-black/40 px-3 py-2.5">
-                  <p
-                    className="select-text truncate font-mono text-xs leading-snug text-white/95 sm:text-sm"
-                    title={roomUrl || undefined}
-                  >
-                    {roomUrl || "…"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyRoomLink()}
-                    className="rounded-lg border border-[#f5c842]/55 bg-[#f5c842]/12 px-4 py-2 text-sm font-medium text-[#f5c842] transition hover:bg-[#f5c842]/22"
-                  >
-                    {copyLinkDone ? "Copied!" : "Copy Link"}
-                  </button>
-                  {canNativeShare && (
-                    <button
-                      type="button"
-                      onClick={() => void handleNativeShareRoom()}
-                      className="rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
-                    >
-                      Share
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
@@ -24,6 +24,12 @@ type OpenRoom = {
   creatorLabel: string;
 };
 
+type MyWaitingRoom = {
+  id: string;
+  entryAmountMinor: number;
+  status: string;
+};
+
 export default function GarmonFourLobbyPage() {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserClient(), []);
@@ -32,10 +38,12 @@ export default function GarmonFourLobbyPage() {
   const [myBalance, setMyBalance] = useState(0);
   const [entry, setEntry] = useState(500);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
-  const [myWaitingId, setMyWaitingId] = useState<string | null>(null);
+  const [myWaitingRoom, setMyWaitingRoom] = useState<MyWaitingRoom | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const myActiveRoomRef = useRef<HTMLDivElement | null>(null);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -80,17 +88,32 @@ export default function GarmonFourLobbyPage() {
     } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!uid) {
-      setMyWaitingId(null);
+      setMyWaitingRoom(null);
       return;
     }
     const { data } = await supabase
       .from("garmonfour_rooms")
-      .select("id")
+      .select("id, entry_amount_minor, status")
       .eq("creator_id", uid)
       .eq("status", "waiting")
       .maybeSingle();
-    setMyWaitingId((data as { id?: string } | null)?.id ?? null);
+    const row = data as { id?: string; entry_amount_minor?: number; status?: string } | null;
+    if (!row?.id) {
+      setMyWaitingRoom(null);
+      return;
+    }
+    setMyWaitingRoom({
+      id: row.id,
+      entryAmountMinor: Math.max(0, Math.floor(Number(row.entry_amount_minor ?? 0))),
+      status: String(row.status ?? "waiting"),
+    });
   }, [supabase, token]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (!supabase) {
@@ -152,6 +175,11 @@ export default function GarmonFourLobbyPage() {
   async function handleCreate() {
     if (!token) return;
     setErr(null);
+    if (myWaitingRoom) {
+      setToast("You already have an active room");
+      myActiveRoomRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (entry < GARMONFOUR_MIN_ENTRY_GPC || !canAfford) {
       setErr(`Need at least ${GARMONFOUR_MIN_ENTRY_GPC} GPC and sufficient balance`);
       return;
@@ -209,17 +237,16 @@ export default function GarmonFourLobbyPage() {
   }
 
   async function handleCancelWaiting() {
-    if (!token || !myWaitingId) return;
+    if (!token || !myWaitingRoom?.id) return;
     if (!window.confirm("Cancel your open table? Your entry will be refunded.")) return;
     setErr(null);
     setBusy(true);
     try {
-      const reference = `garmonfour_cancel_${myWaitingId}_${crypto.randomUUID()}`;
       const res = await fetch(`${API}/cancel`, {
         method: "POST",
         credentials: "include",
         headers: authHeaders(),
-        body: JSON.stringify({ roomId: myWaitingId, reference }),
+        body: JSON.stringify({ roomId: myWaitingRoom.id }),
       });
       const j = (await res.json().catch(() => ({}))) as { message?: string };
       if (!res.ok) {
@@ -255,6 +282,11 @@ export default function GarmonFourLobbyPage() {
       style={{ background: "#0e0118" }}
     >
       <div className="mx-auto w-full max-w-lg px-4 pt-6">
+        {toast && (
+          <div className="fixed left-1/2 top-4 z-[120] w-[min(92vw,420px)] -translate-x-1/2 rounded-xl border border-[#f5c842]/50 bg-[#1a0a2e]/95 px-4 py-2 text-center text-sm text-[#f5c842] shadow-xl">
+            {toast}
+          </div>
+        )}
         <p
           className="text-center font-mono text-[10px] text-[#A855F7] sm:text-[11px]"
           style={{ letterSpacing: "0.15em" }}
@@ -327,31 +359,36 @@ export default function GarmonFourLobbyPage() {
           >
             {busy ? "Working…" : "Create room"}
           </button>
-
-          {myWaitingId && (
-            <div className="flex flex-col gap-2 rounded-xl border border-[#7c3aed]/40 bg-[#7c3aed]/10 p-3">
-              <p className="text-sm text-white/80">You have a table waiting for an opponent.</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => router.push(`/dashboard/games/garmonfour/${myWaitingId}`)}
-                  className="rounded-lg border border-[#f5c842]/50 px-4 py-2 text-sm font-semibold text-[#f5c842]"
-                >
-                  Open table
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleCancelWaiting()}
-                  className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white/70"
-                >
-                  Cancel & refund
-                </button>
-              </div>
-            </div>
-          )}
         </div>
+
+        {myWaitingRoom && (
+          <div ref={myActiveRoomRef} className="mt-10 rounded-2xl border border-[#f5c842]/35 bg-[#f5c842]/[0.07] p-4">
+            <h2 className={`mb-2 text-lg text-[#f5c842] ${cinzel.className}`}>Your Active Room</h2>
+            <p className="text-sm text-white/80">Waiting for opponent…</p>
+            <p className="mt-1 text-xs font-mono text-white/65">
+              Room code: {myWaitingRoom.id.slice(0, 8).toUpperCase()} · Entry{" "}
+              {myWaitingRoom.entryAmountMinor.toLocaleString()} GPC · Status {myWaitingRoom.status}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => router.push(`/dashboard/games/garmonfour/${myWaitingRoom.id}`)}
+                className="rounded-lg border border-[#f5c842]/50 px-4 py-2 text-sm font-semibold text-[#f5c842]"
+              >
+                Open room
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleCancelWaiting()}
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white/80"
+              >
+                Cancel Room
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="mt-10">
           <h2 className={`mb-3 text-lg text-[#f5c842] ${cinzel.className}`}>Open rooms</h2>
