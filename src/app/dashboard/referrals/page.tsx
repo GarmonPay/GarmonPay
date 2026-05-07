@@ -27,7 +27,9 @@ function formatDate(iso: string | null | undefined) {
 export default function ReferralsPage() {
   const router = useRouter();
   const [data, setData] = useState<Awaited<ReturnType<typeof getReferralDashboard>> | null>(null);
-  const [leaderboard, setLeaderboard] = useState<Array<{ rank: number; email: string; totalReferrals: number; totalEarningsGpc: number }>>([]);
+  const [leaderboard, setLeaderboard] = useState<
+    Array<{ rank: number; username: string; email: string; totalReferrals: number; totalEarningsGpc: number }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -265,7 +267,7 @@ export default function ReferralsPage() {
                 {leaderboard.map((row) => (
                   <tr key={row.rank} className="border-b border-white/5 hover:bg-white/5">
                     <td className="p-3 text-white font-medium">#{row.rank}</td>
-                    <td className="p-3 text-fintech-muted text-sm">{row.email}</td>
+                    <td className="p-3 text-fintech-muted text-sm">{row.username || row.email}</td>
                     <td className="p-3 text-white">{row.totalReferrals}</td>
                     <td className="p-3 text-fintech-money">{formatGpc(row.totalEarningsGpc)}</td>
                   </tr>
@@ -298,7 +300,7 @@ export default function ReferralsPage() {
               <tbody>
                 {referredUsers.map((u) => (
                   <tr key={u.referredUserId} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="p-3 text-white text-sm">{u.name ?? u.email}</td>
+                    <td className="p-3 text-white text-sm">{u.username ?? u.name ?? u.email}</td>
                     <td className="p-3 text-fintech-muted text-sm whitespace-nowrap">{formatDate(u.joinedAt)}</td>
                     <td className="p-3 text-fintech-highlight capitalize">{tierLabel(u.membership)}</td>
                     <td className="p-3">

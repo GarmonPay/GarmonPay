@@ -361,6 +361,7 @@ export async function getReferralDashboard(accessTokenOrUserId: string, isToken:
     referralLink: string;
     referredUsers: Array<{
       referredUserId: string;
+      username?: string | null;
       email: string;
       name?: string;
       joinedAt?: string;
@@ -402,8 +403,14 @@ export async function convertToAdCredit(accessTokenOrUserId: string, isToken: bo
 
 export async function getLeaderboard(accessTokenOrUserId: string, isToken: boolean) {
   return api<{
-    topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }>;
-    topEarners: Array<{ userId: string; email: string; totalEarningsGpc: number }>;
+    topReferrers: Array<{
+      userId: string;
+      username: string;
+      email: string;
+      totalReferrals: number;
+      totalEarningsGpc: number;
+    }>;
+    topEarners: Array<{ userId: string; username: string; email: string; totalEarningsGpc: number }>;
   }>("/leaderboard", { headers: authHeaders(accessTokenOrUserId, isToken) });
 }
 

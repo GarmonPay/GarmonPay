@@ -10,6 +10,7 @@ import { ActionButton } from "@/components/admin/ActionButton";
 type UserRow = {
   id: string;
   email: string | null;
+  username?: string | null;
   role?: string;
   balance?: number;
   referral_code?: string | null;
@@ -171,10 +172,11 @@ function AdminUsersInner() {
           <>
             <AdminScrollHint />
             <AdminTableWrap>
-              <table className="w-full min-w-[880px] text-left text-sm">
+              <table className="w-full min-w-[980px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/10 bg-black/30">
                     <th className="p-3 pr-4 text-xs font-semibold uppercase text-white/50">Email</th>
+                    <th className="p-3 pr-4 text-xs font-semibold uppercase text-white/50">Username</th>
                     <th className="p-3 pr-4 text-xs font-semibold uppercase text-white/50 hidden sm:table-cell">
                       ID
                     </th>
@@ -206,6 +208,9 @@ function AdminUsersInner() {
                             {u.referred_by && <span>referred_by {String(u.referred_by).slice(0, 8)}…</span>}
                           </span>
                         )}
+                      </td>
+                      <td className="max-w-[140px] truncate p-3 pr-4 text-sm text-[#f5c842]">
+                        {u.username?.trim() || "—"}
                       </td>
                       <td className="hidden p-3 pr-4 font-mono text-xs text-white/50 sm:table-cell">
                         {u.id.slice(0, 8)}…

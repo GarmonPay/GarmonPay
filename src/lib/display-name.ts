@@ -10,19 +10,19 @@ export type UserDisplayProfile = {
 
 /**
  * Human-readable label for chat / seat list / badges.
- * Order: display_name → full_name → username → email local-part → Player + last 4 of id.
+ * Order: username → full_name → display_name → email local-part → Player + last 4 of id.
  */
 export function resolveDisplayName(
   profile: UserDisplayProfile | null | undefined,
   userId: string
 ): string {
   const id = String(userId ?? "").trim();
-  const dn = String(profile?.display_name ?? "").trim();
-  if (dn) return dn;
-  const fn = String(profile?.full_name ?? "").trim();
-  if (fn) return fn;
   const un = String(profile?.username ?? "").trim();
   if (un) return un;
+  const fn = String(profile?.full_name ?? "").trim();
+  if (fn) return fn;
+  const dn = String(profile?.display_name ?? "").trim();
+  if (dn) return dn;
   const em = String(profile?.email ?? "").trim();
   if (em && em.includes("@")) {
     const local = em.split("@")[0]?.trim();

@@ -11,18 +11,22 @@ function formatGpc(gpc: unknown) {
   return `${localeInt(gpc)} GPC`;
 }
 
-function maskEmail(email: string) {
-  const [local, domain] = email.split("@");
-  if (!domain) return email;
-  const show = local.length <= 2 ? local : local.slice(0, 2) + "***";
-  return `${show}@${domain}`;
+function userLabel(username: string, email: string) {
+  const un = String(username ?? "").trim();
+  if (un) return un;
+  const local = String(email ?? "").split("@")[0]?.trim();
+  return local || "Player";
 }
 
 export default function LeaderboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ tokenOrId: string; isToken: boolean } | null>(null);
-  const [topReferrers, setTopReferrers] = useState<Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }>>([]);
-  const [topEarners, setTopEarners] = useState<Array<{ userId: string; email: string; totalEarningsGpc: number }>>([]);
+  const [topReferrers, setTopReferrers] = useState<
+    Array<{ userId: string; username: string; email: string; totalReferrals: number; totalEarningsGpc: number }>
+  >([]);
+  const [topEarners, setTopEarners] = useState<
+    Array<{ userId: string; username: string; email: string; totalEarningsGpc: number }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,7 +103,7 @@ export default function LeaderboardPage() {
                   {topReferrers.map((r, i) => (
                     <tr key={r.userId} className="border-b border-white/5 hover:bg-white/5">
                       <td className="p-3 font-medium text-fintech-highlight">{i + 1}</td>
-                      <td className="p-3 text-white">{maskEmail(r.email)}</td>
+                      <td className="p-3 text-white">{userLabel(r.username, r.email)}</td>
                       <td className="p-3 text-right text-white font-medium">{r.totalReferrals}</td>
                       <td className="p-3 text-right text-fintech-money font-medium">{formatGpc(r.totalEarningsGpc)}</td>
                     </tr>
@@ -133,7 +137,7 @@ export default function LeaderboardPage() {
                   {topEarners.map((e, i) => (
                     <tr key={e.userId} className="border-b border-white/5 hover:bg-white/5">
                       <td className="p-3 font-medium text-fintech-highlight">{i + 1}</td>
-                      <td className="p-3 text-white">{maskEmail(e.email)}</td>
+                      <td className="p-3 text-white">{userLabel(e.username, e.email)}</td>
                       <td className="p-3 text-right text-fintech-money font-bold">{formatGpc(e.totalEarningsGpc)}</td>
                     </tr>
                   ))}

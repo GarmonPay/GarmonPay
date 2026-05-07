@@ -74,9 +74,16 @@ export async function createReferral(params: {
   }
 }
 
-/** Leaderboard: rank, user id/email, total referrals, total earnings (from referral_rewards + referral_bonus). */
+/** Leaderboard: rank, user id/username, total referrals, total earnings (from referral_rewards + referral_bonus). */
 export async function getLeaderboard(limit = 50): Promise<
-  { rank: number; userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }[]
+  {
+    rank: number;
+    userId: string;
+    username: string;
+    email: string;
+    totalReferrals: number;
+    totalEarningsGpc: number;
+  }[]
 > {
   try {
     const { data: refs } = await supabase().from("viral_referrals").select("referrer_user_id");
@@ -108,13 +115,19 @@ export async function getLeaderboard(limit = 50): Promise<
       earningsByUser.set(uid, (earningsByUser.get(uid) ?? 0) + Number((b as { amount: number }).amount));
     }
 
-    const { data: users } = await supabase().from("users").select("id, email").in("id", userIds);
-    const emailMap = new Map((users ?? []).map((u: { id: string; email: string }) => [u.id, u.email]));
+    const { data: users } = await supabase().from("users").select("id, username, email").in("id", userIds);
+    const profileMap = new Map(
+      (users ?? []).map((u: { id: string; username: string | null; email: string }) => [
+        u.id,
+        { username: u.username ?? "", email: u.email ?? "" },
+      ])
+    );
 
     return sorted.map((s, i) => ({
       rank: i + 1,
       userId: s.userId,
-      email: (emailMap.get(s.userId) ?? "—").toString(),
+      username: (profileMap.get(s.userId)?.username ?? "").toString(),
+      email: (profileMap.get(s.userId)?.email ?? "—").toString(),
       totalReferrals: s.totalReferrals,
       totalEarningsGpc: earningsByUser.get(s.userId) ?? 0,
     }));

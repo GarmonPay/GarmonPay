@@ -73,6 +73,7 @@ export async function GET(request: Request) {
     type ReferredUserRow = {
       id: string;
       email: string;
+      username: string | null;
       membership: string;
       full_name: string | null;
       created_at: string | null;
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
     const referredUsersRaw =
       ((await supabase
         .from("users")
-        .select("id, email, membership, full_name, created_at, membership_tier")
+        .select("id, email, username, membership, full_name, created_at, membership_tier")
         .eq("referred_by", userId)
         .order("created_at", { ascending: false })).data ?? []) as ReferredUserRow[];
 
@@ -145,10 +146,14 @@ export async function GET(request: Request) {
 
     const referredUsers = referredUsersRaw.map((u) => {
       const tier = (tierByUser.get(u.id) ?? u.membership_tier ?? u.membership ?? "free").toString();
+      const username = typeof u.username === "string" ? u.username.trim() : "";
+      const fullName =
+        typeof u.full_name === "string" && u.full_name.trim() ? u.full_name.trim() : null;
       const displayName =
-        (typeof u.full_name === "string" && u.full_name.trim() ? u.full_name.trim() : null) ?? maskEmail(u.email);
+        username || fullName || maskEmail(u.email);
       return {
         referredUserId: u.id,
+        username: username || null,
         email: maskEmail(u.email),
         name: displayName,
         joinedAt: u.created_at ?? "",

@@ -6,18 +6,52 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
 
+const RESERVED_USERNAMES = new Set([
+  "admin",
+  "garmonpay",
+  "support",
+  "mod",
+  "moderator",
+  "system",
+  "official",
+  "bishop",
+  "anthropic",
+  "claude",
+  "root",
+  "null",
+]);
+
+type UsernameState = "idle" | "checking" | "available" | "invalid" | "reserved" | "taken";
+
+function validateUsernameFormat(value: string): { ok: boolean; reason?: string; state?: UsernameState } {
+  if (value.length < 3 || value.length > 20) {
+    return { ok: false, reason: "Must be 3-20 characters", state: "invalid" };
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+    return { ok: false, reason: "Letters, numbers, and underscore only", state: "invalid" };
+  }
+  if (RESERVED_USERNAMES.has(value.toLowerCase())) {
+    return { ok: false, reason: "Reserved", state: "reserved" };
+  }
+  return { ok: true };
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const supabase = createBrowserClient();
 
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [usernameState, setUsernameState] = useState<UsernameState>("idle");
+  const [usernameMessage, setUsernameMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -25,6 +59,46 @@ export default function RegisterPage() {
     const ref = params.get("ref")?.trim();
     if (ref) setReferralCode(ref);
   }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const candidate = username.trim();
+    if (!candidate) {
+      setUsernameState("idle");
+      setUsernameMessage("");
+      return;
+    }
+
+    const format = validateUsernameFormat(candidate);
+    if (!format.ok) {
+      setUsernameState(format.state ?? "invalid");
+      setUsernameMessage(format.reason ?? "Invalid username");
+      return;
+    }
+
+    setUsernameState("checking");
+    setUsernameMessage("Checking...");
+
+    const timeout = window.setTimeout(async () => {
+      const { data, error: rpcError } = await supabase.rpc("check_username_available", {
+        candidate,
+      });
+      if (rpcError) {
+        setUsernameState("taken");
+        setUsernameMessage("Already taken");
+        return;
+      }
+      if (data === true) {
+        setUsernameState("available");
+        setUsernameMessage("Available");
+      } else {
+        setUsernameState("taken");
+        setUsernameMessage("Already taken");
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timeout);
+  }, [username, supabase]);
 
   const handleSubmit = async () => {
     setError("");
@@ -38,12 +112,26 @@ export default function RegisterPage() {
       setError("Please enter your full name");
       return;
     }
+    const usernameTrimmed = username.trim();
+    const usernameValidation = validateUsernameFormat(usernameTrimmed);
+    if (!usernameValidation.ok) {
+      setError(usernameValidation.reason ?? "Invalid username");
+      return;
+    }
     if (!email.trim() || !email.includes("@")) {
       setError("Please enter a valid email");
       return;
     }
     if (!password || password.length < 8) {
       setError("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (usernameState !== "available") {
+      setError(usernameMessage || "Please choose an available username");
       return;
     }
     if (!agreed) {
@@ -63,6 +151,8 @@ export default function RegisterPage() {
         options: {
           data: {
             full_name: fullName.trim(),
+            username: usernameTrimmed,
+            referral_code: refTrim || undefined,
           },
           emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
         },
@@ -89,6 +179,7 @@ export default function RegisterPage() {
             id: data.user.id,
             email: data.user.email ?? trimmedEmail,
             full_name: fullName.trim(),
+            username: usernameTrimmed,
             referralCode: refTrim || undefined,
             welcome: true,
           }),
@@ -177,6 +268,16 @@ export default function RegisterPage() {
     );
   }
 
+  const passwordsMismatch = password.length > 0 && confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit =
+    !loading &&
+    fullName.trim().length > 0 &&
+    email.trim().includes("@") &&
+    password.length >= 8 &&
+    !passwordsMismatch &&
+    usernameState === "available" &&
+    agreed;
+
   return (
     <div
       style={{
@@ -255,6 +356,47 @@ export default function RegisterPage() {
         </div>
 
         <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>USERNAME</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="your_username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              borderRadius: 8,
+              color: "#fff",
+              fontSize: 15,
+              boxSizing: "border-box",
+              outline: "none",
+            }}
+          />
+          {usernameState !== "idle" && (
+            <p
+              style={{
+                marginTop: 6,
+                marginBottom: 0,
+                fontSize: 12,
+                color:
+                  usernameState === "available"
+                    ? "#22c55e"
+                    : usernameState === "checking"
+                      ? "#9CA3AF"
+                      : "#EF4444",
+              }}
+            >
+              {usernameState === "available" ? "✓ " : usernameState === "checking" ? "⏳ " : "✕ "}
+              {usernameMessage}
+            </p>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
           <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>EMAIL</label>
           <input
             type="email"
@@ -294,6 +436,32 @@ export default function RegisterPage() {
               outline: "none",
             }}
           />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#aaa", fontSize: 12, display: "block", marginBottom: 5 }}>CONFIRM PASSWORD</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter password"
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              borderRadius: 8,
+              color: "#fff",
+              fontSize: 15,
+              boxSizing: "border-box",
+              outline: "none",
+            }}
+          />
+          {passwordsMismatch && (
+            <p style={{ marginTop: 6, marginBottom: 0, color: "#EF4444", fontSize: 12 }}>
+              Passwords do not match
+            </p>
+          )}
         </div>
 
         <div style={{ marginBottom: 20 }}>
@@ -346,17 +514,17 @@ export default function RegisterPage() {
         <button
           type="button"
           onClick={() => void handleSubmit()}
-          disabled={loading}
+          disabled={!canSubmit}
           style={{
             width: "100%",
             padding: "15px 24px",
-            background: loading ? "#333" : "linear-gradient(135deg, #F5C842, #D4A017)",
-            color: loading ? "#666" : "#0e0118",
+            background: canSubmit ? "linear-gradient(135deg, #F5C842, #D4A017)" : "#333",
+            color: canSubmit ? "#0e0118" : "#666",
             border: "none",
             borderRadius: 10,
             fontWeight: "bold",
             fontSize: 17,
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: canSubmit ? "pointer" : "not-allowed",
             marginBottom: 16,
           }}
         >

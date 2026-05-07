@@ -12,12 +12,19 @@ export async function GET() {
     });
   }
 
-  let topReferrers: Array<{ userId: string; email: string; totalReferrals: number; totalEarningsGpc: number }> = [];
-  let topEarners: Array<{ userId: string; email: string; totalEarningsGpc: number }> = [];
+  let topReferrers: Array<{
+    userId: string;
+    username: string;
+    email: string;
+    totalReferrals: number;
+    totalEarningsGpc: number;
+  }> = [];
+  let topEarners: Array<{ userId: string; username: string; email: string; totalEarningsGpc: number }> = [];
   try {
     const refLeaderboard = await getReferralLeaderboard(30);
     topReferrers = refLeaderboard.map((r) => ({
       userId: r.userId,
+      username: r.username,
       email: r.email,
       totalReferrals: r.totalReferrals,
       totalEarningsGpc: r.totalEarningsGpc,
@@ -25,7 +32,12 @@ export async function GET() {
     topEarners = [...refLeaderboard]
       .sort((a, b) => b.totalEarningsGpc - a.totalEarningsGpc)
       .slice(0, 20)
-      .map((r) => ({ userId: r.userId, email: r.email, totalEarningsGpc: r.totalEarningsGpc }));
+      .map((r) => ({
+        userId: r.userId,
+        username: r.username,
+        email: r.email,
+        totalEarningsGpc: r.totalEarningsGpc,
+      }));
   } catch {
     // viral tables may be missing
   }

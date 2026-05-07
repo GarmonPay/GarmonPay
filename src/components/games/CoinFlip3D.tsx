@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Public URLs — same assets as all Coin Flip UI (see `CoinFlipDiscFace`). */
-export const COIN_FLIP_HEADS_IMAGE = "/images/coin-heads.png";
-export const COIN_FLIP_TAILS_IMAGE = "/images/coin-tails.png";
+export const COIN_FLIP_HEADS_IMAGE = "/images/coin-heads.svg";
+export const COIN_FLIP_TAILS_IMAGE = "/images/coin-tails.svg";
 
 const COIN_HEADS = COIN_FLIP_HEADS_IMAGE;
 const COIN_TAILS = COIN_FLIP_TAILS_IMAGE;
@@ -18,7 +18,7 @@ export type CoinFlipDiscFaceProps = {
 };
 
 /**
- * Single face of the Coin Flip PNG pair — same multiply + border treatment as `CoinFlip3D`.
+ * Single face of the Coin Flip artwork — same asset URLs + border treatment as `CoinFlip3D`.
  * Use for compact contexts (e.g. Connect Four cells) without duplicating asset paths or styling.
  */
 export function CoinFlipDiscFace({
@@ -42,7 +42,6 @@ export function CoinFlipDiscFace({
         width={sizePx ?? undefined}
         height={sizePx ?? undefined}
         className="h-full w-full rounded-full object-cover"
-        style={{ mixBlendMode: "multiply" }}
         draggable={false}
       />
     </div>
@@ -165,7 +164,6 @@ export function CoinFlip3D({
                 width={200}
                 height={200}
                 className="h-[200px] w-[200px] rounded-full object-cover"
-                style={{ mixBlendMode: "multiply" }}
                 draggable={false}
               />
             </div>
@@ -180,7 +178,7 @@ export function CoinFlip3D({
                 width={200}
                 height={200}
                 className="block h-[200px] w-[200px] rounded-full object-cover"
-                style={{ objectFit: "cover", borderRadius: "50%", mixBlendMode: "multiply" }}
+                style={{ objectFit: "cover", borderRadius: "50%" }}
                 draggable={false}
               />
             </div>
@@ -210,7 +208,6 @@ export function CoinFlip3D({
                 width={200}
                 height={200}
                 className="h-[200px] w-[200px] rounded-full object-cover"
-                style={{ mixBlendMode: "multiply" }}
                 draggable={false}
               />
             </div>
@@ -228,7 +225,6 @@ export function CoinFlip3D({
                 style={{
                   objectFit: "cover",
                   borderRadius: "50%",
-                  mixBlendMode: "multiply",
                 }}
                 draggable={false}
               />

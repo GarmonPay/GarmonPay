@@ -11,6 +11,37 @@ import { referralCodeFromUserId } from "@/lib/referral-code";
 const REFERRAL_SIGNUP_BONUS_GPC = 50;
 
 const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes — only allow syncing recently created auth users
+const RESERVED_USERNAMES = new Set([
+  "admin",
+  "garmonpay",
+  "support",
+  "mod",
+  "moderator",
+  "system",
+  "official",
+  "bishop",
+  "anthropic",
+  "claude",
+  "root",
+  "null",
+]);
+
+function normalizeUsername(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function usernameValidationError(username: string): string | null {
+  if (username.length < 3 || username.length > 20) {
+    return "Must be 3-20 characters";
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return "Letters, numbers, and underscore only";
+  }
+  if (RESERVED_USERNAMES.has(username.toLowerCase())) {
+    return "Reserved";
+  }
+  return null;
+}
 
 /** Sync auth user into public.users. Requires either Bearer token (sub === id) or id must be a recently created auth user. */
 export async function POST(req: Request) {
@@ -28,6 +59,7 @@ export async function POST(req: Request) {
     const fullName = typeof (body?.full_name ?? userPayload?.full_name) === "string"
       ? (body?.full_name ?? userPayload?.full_name).trim()
       : "";
+    const usernameFromBody = normalizeUsername(body?.username ?? userPayload?.username);
     const rawDob =
       typeof (body?.date_of_birth ?? userPayload?.date_of_birth) === "string"
         ? (body?.date_of_birth ?? userPayload?.date_of_birth).trim()
@@ -50,6 +82,7 @@ export async function POST(req: Request) {
     const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     let allowed = false;
 
+    let authUserForMetadata: { user_metadata?: Record<string, unknown> | null } | null = null;
     if (bearerToken) {
       const { createServerClient } = await import("@/lib/supabase");
       const server = createServerClient(bearerToken);
@@ -64,6 +97,7 @@ export async function POST(req: Request) {
       if (authErr || !authUser?.user) {
         return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
       }
+      authUserForMetadata = authUser.user;
       const createdAt = authUser.user.created_at
         ? new Date(authUser.user.created_at).getTime()
         : 0;
@@ -76,6 +110,18 @@ export async function POST(req: Request) {
     if (!allowed) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+
+    if (!authUserForMetadata) {
+      const { data: authUserLookup, error: authLookupErr } = await supabase.auth.admin.getUserById(id);
+      if (authLookupErr || !authUserLookup?.user) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
+      authUserForMetadata = authUserLookup.user;
+    }
+
+    const usernameFromMetadata = normalizeUsername(authUserForMetadata?.user_metadata?.username);
+    const username = usernameFromBody || usernameFromMetadata;
+    const usernameError = usernameValidationError(username);
 
     if (rawDob && !isAtLeastAge(rawDob, 18)) {
       return NextResponse.json(
@@ -97,7 +143,7 @@ export async function POST(req: Request) {
 
     const { data: existing } = await supabase
       .from("users")
-      .select("id")
+      .select("id, username")
       .eq("id", id)
       .maybeSingle();
 
@@ -106,12 +152,43 @@ export async function POST(req: Request) {
       residence_state: rawState || null,
     };
 
+    if (usernameError) {
+      if (!existing) {
+        await supabase.auth.admin.deleteUser(id).catch(() => {});
+      }
+      return NextResponse.json({ message: usernameError }, { status: 409 });
+    }
+
+    const existingUsername = normalizeUsername((existing as { username?: unknown } | null)?.username);
+    const shouldSetUsername = !existingUsername;
+
+    if (shouldSetUsername) {
+      const { data: usernameAvailable, error: usernameCheckError } = await supabase.rpc(
+        "check_username_available",
+        { candidate: username }
+      );
+      if (usernameCheckError) {
+        console.error("Sync-user username check error:", usernameCheckError);
+        return NextResponse.json({ success: false, message: usernameCheckError.message }, { status: 500 });
+      }
+      if (usernameAvailable !== true) {
+        if (!existing) {
+          await supabase.auth.admin.deleteUser(id).catch(() => {});
+        }
+        return NextResponse.json(
+          { success: false, message: "Username just taken — please choose another" },
+          { status: 409 }
+        );
+      }
+    }
+
     if (existing) {
       const updatePayload: Record<string, unknown> = {
         email: emailVal,
         ...complianceFields,
       };
       if (fullName) updatePayload.full_name = fullName;
+      if (!existingUsername) updatePayload.username = username;
       const { error: updateError } = await supabase
         .from("users")
         .update(updatePayload)
@@ -126,6 +203,7 @@ export async function POST(req: Request) {
         id,
         email: emailVal,
         full_name: fullName || null,
+        username,
         ...complianceFields,
         role: "user",
         // Canonical signup bonus: 50 GPC. We avoid fractional GC because GC is whole-unit in this schema.
