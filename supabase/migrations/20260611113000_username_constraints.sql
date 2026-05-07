@@ -6,29 +6,42 @@ DECLARE
   v_base text;
   v_candidate text;
   v_suffix int;
-  v_missing int;
+  v_bad int;
   v_reserved text[] := ARRAY[
     'admin', 'garmonpay', 'support', 'mod', 'moderator', 'system',
     'official', 'bishop', 'anthropic', 'claude', 'root', 'null'
   ];
 BEGIN
   LOOP
-    SELECT id, email
+    SELECT id, email, username
     INTO v_row
     FROM public.users
-    WHERE username IS NULL OR trim(username) = ''
+    WHERE
+      username IS NULL
+      OR trim(username) = ''
+      OR username !~ '^[a-zA-Z0-9_]{3,20}$'
+      OR lower(username) = ANY(v_reserved)
+      OR EXISTS (
+        SELECT 1
+        FROM public.users dupe
+        WHERE lower(dupe.username) = lower(public.users.username)
+          AND dupe.id <> public.users.id
+      )
     LIMIT 1;
 
     EXIT WHEN NOT FOUND;
 
-    v_base := lower(
-      regexp_replace(
-        split_part(COALESCE(v_row.email, ''), '@', 1),
-        '[^a-zA-Z0-9_]+',
-        '',
-        'g'
-      )
-    );
+    v_base := lower(regexp_replace(COALESCE(v_row.username, ''), '[^a-zA-Z0-9_]+', '', 'g'));
+    IF v_base IS NULL OR v_base = '' THEN
+      v_base := lower(
+        regexp_replace(
+          split_part(COALESCE(v_row.email, ''), '@', 1),
+          '[^a-zA-Z0-9_]+',
+          '',
+          'g'
+        )
+      );
+    END IF;
 
     IF v_base IS NULL OR v_base = '' THEN
       v_base := 'user' || right(replace(v_row.id::text, '-', ''), 4);
@@ -65,12 +78,22 @@ BEGIN
     WHERE id = v_row.id;
   END LOOP;
 
-  SELECT count(*) INTO v_missing
+  SELECT count(*) INTO v_bad
   FROM public.users
-  WHERE username IS NULL OR trim(username) = '';
+  WHERE
+    username IS NULL
+    OR trim(username) = ''
+    OR username !~ '^[a-zA-Z0-9_]{3,20}$'
+    OR lower(username) = ANY(v_reserved)
+    OR EXISTS (
+      SELECT 1
+      FROM public.users dupe
+      WHERE lower(dupe.username) = lower(public.users.username)
+        AND dupe.id <> public.users.id
+    );
 
-  IF v_missing > 0 THEN
-    RAISE EXCEPTION 'username backfill incomplete; % rows still null/empty', v_missing;
+  IF v_bad > 0 THEN
+    RAISE EXCEPTION 'username backfill incomplete; % rows still invalid/duplicate', v_bad;
   END IF;
 END
 $$;

@@ -18,7 +18,6 @@ import {
   type ConnectFourBoard,
 } from "@/lib/connect-four";
 import { useCoins } from "@/hooks/useCoins";
-import { CoinFlipDiscFace } from "@/components/games/CoinFlip3D";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -78,6 +77,33 @@ function lowestEmptyRow(b: ConnectFourBoard, col: number): number | null {
     if (b[r][col] === 0) return r;
   }
   return null;
+}
+
+function ClassicDisc({
+  piece,
+  highlighted = false,
+  ghost = false,
+  className = "",
+}: {
+  piece: 1 | 2;
+  highlighted?: boolean;
+  ghost?: boolean;
+  className?: string;
+}) {
+  const fill = piece === 1 ? "#f5c842" : "#dc2626";
+  return (
+    <div
+      className={`rounded-full ${className}`}
+      style={{
+        background: fill,
+        border: "1px solid rgba(255,255,255,0.25)",
+        boxShadow: highlighted
+          ? `0 0 0 2px rgba(255,255,255,0.35), 0 0 18px ${fill}, inset 0 -5px 10px rgba(0,0,0,0.25)`
+          : "inset 0 -5px 10px rgba(0,0,0,0.25)",
+        opacity: ghost ? 0.45 : 1,
+      }}
+    />
+  );
 }
 
 export default function GarmonFourRoomPage() {
@@ -657,7 +683,7 @@ export default function GarmonFourRoomPage() {
           <div className="flex flex-wrap gap-5 text-sm">
             <div className="flex min-w-0 items-start gap-2.5">
               <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
-                <CoinFlipDiscFace face="heads" className="h-full w-full" />
+                <ClassicDisc piece={1} className="h-full w-full" />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-white/45">Heads · Host</p>
@@ -666,7 +692,7 @@ export default function GarmonFourRoomPage() {
             </div>
             <div className="flex min-w-0 items-start gap-2.5">
               <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
-                <CoinFlipDiscFace face="tails" className="h-full w-full" />
+                <ClassicDisc piece={2} className="h-full w-full" />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-white/45">Tails · Guest</p>
@@ -756,7 +782,7 @@ export default function GarmonFourRoomPage() {
               const canClickCol =
                 room.status === "active" && room.current_turn === userId && !busy && !colFull(c);
               const lr = lowestEmptyRow(board, c);
-              const previewFace = myPiece === 1 ? "heads" : "tails";
+              const previewPiece: 1 | 2 = myPiece === 2 ? 2 : 1;
               const columnLit = (canClickCol && hoverCol === c) || pulseCol === c;
               return (
                 <div
@@ -789,7 +815,7 @@ export default function GarmonFourRoomPage() {
                     const v = board[r][c];
                     const isHi = highlight?.has(`${r},${c}`);
                     const isDrop = dropFlash?.r === r && dropFlash?.c === c;
-                    const face = v === 1 ? "heads" : v === 2 ? "tails" : null;
+                    const piece = v === 1 ? 1 : v === 2 ? 2 : null;
                     const showGhost =
                       canClickCol && hoverCol === c && lr !== null && lr === r && v === 0;
                     return (
@@ -801,15 +827,15 @@ export default function GarmonFourRoomPage() {
                           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.45)",
                         }}
                       >
-                        {face ? (
+                        {piece ? (
                           <div
                             className={`flex aspect-square h-[76%] w-[76%] max-h-[34px] max-w-[34px] items-center justify-center sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px] ${isDrop ? "[animation:gf-drop_0.45s_ease-in]" : ""}`}
                           >
-                            <CoinFlipDiscFace face={face} highlighted={isHi} className="h-full w-full" />
+                            <ClassicDisc piece={piece} highlighted={isHi} className="h-full w-full" />
                           </div>
                         ) : showGhost ? (
                           <div className="flex aspect-square h-[76%] w-[76%] max-h-[34px] max-w-[34px] items-center justify-center opacity-45 sm:h-[78%] sm:w-[78%] sm:max-h-[42px] sm:max-w-[42px]">
-                            <CoinFlipDiscFace face={previewFace} className="h-full w-full" />
+                            <ClassicDisc piece={previewPiece} ghost className="h-full w-full" />
                           </div>
                         ) : (
                           <div
