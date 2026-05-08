@@ -61,7 +61,7 @@ export async function GET(req: Request) {
   /** Display + membership live on `public.users` (avatar_url / full_name are not on `profiles`). */
   const { data: urow, error: userErr } = await admin
     .from("users")
-    .select("id, email, full_name, avatar_url, membership, referral_code")
+    .select("id, email, full_name, avatar_url, membership, referral_code, username")
     .eq("id", userId)
     .maybeSingle();
 
@@ -96,7 +96,29 @@ export async function GET(req: Request) {
     avatar_url?: string | null;
     membership?: string | null;
     referral_code?: string | null;
+    username?: string | null;
   } | null;
+
+  let nextUsernameChangeAt: string | null = null;
+  const { data: lastSelfChange, error: histErr } = await admin
+    .from("username_history")
+    .select("changed_at")
+    .eq("user_id", userId)
+    .eq("reason", "self_change")
+    .order("changed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (histErr && (histErr as { code?: string }).code !== "42P01") {
+    console.error("[profile GET] username_history", histErr);
+  }
+  if (!histErr && lastSelfChange && typeof (lastSelfChange as { changed_at?: string }).changed_at === "string") {
+    const last = new Date((lastSelfChange as { changed_at: string }).changed_at).getTime();
+    const unlock = last + 30 * 24 * 60 * 60 * 1000;
+    if (unlock > Date.now()) {
+      nextUsernameChangeAt = new Date(unlock).toISOString();
+    }
+  }
 
   const tax = taxErr
     ? null
@@ -115,10 +137,12 @@ export async function GET(req: Request) {
   return NextResponse.json({
     id: userId,
     email: r?.email ?? emailFallback,
+    username: typeof r?.username === "string" ? r.username : "",
     full_name: typeof r?.full_name === "string" ? r.full_name : "",
     avatar_url: typeof r?.avatar_url === "string" ? r.avatar_url : "",
     membership: typeof r?.membership === "string" ? r.membership : null,
     referral_code: typeof r?.referral_code === "string" ? r.referral_code : null,
+    next_username_change_at: nextUsernameChangeAt,
     reportable_earnings_cents: reportableEarningsCents,
     tax_info_submitted_at: taxSubmitted,
     tax_info_required: taxInfoRequired,
@@ -226,7 +250,7 @@ export async function PATCH(req: Request) {
     .from("users")
     .update(payload)
     .eq("id", userId)
-    .select("id, email, full_name, avatar_url, membership, referral_code")
+    .select("id, email, full_name, avatar_url, membership, referral_code, username")
     .maybeSingle();
 
   if (error) {
@@ -247,6 +271,7 @@ export async function PATCH(req: Request) {
     avatar_url?: string | null;
     membership?: string | null;
     referral_code?: string | null;
+    username?: string | null;
   };
 
   return NextResponse.json({
@@ -258,6 +283,7 @@ export async function PATCH(req: Request) {
       avatar_url: typeof u.avatar_url === "string" ? u.avatar_url : "",
       membership: u.membership ?? null,
       referral_code: u.referral_code ?? null,
+      username: typeof u.username === "string" ? u.username : "",
     },
     remainingEditsThisHour: rl.remaining,
     limitPerHour: PROFILE_EDITS_PER_HOUR,

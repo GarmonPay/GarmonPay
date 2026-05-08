@@ -5,36 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
-
-const RESERVED_USERNAMES = new Set([
-  "admin",
-  "garmonpay",
-  "support",
-  "mod",
-  "moderator",
-  "system",
-  "official",
-  "bishop",
-  "anthropic",
-  "claude",
-  "root",
-  "null",
-]);
-
-type UsernameState = "idle" | "checking" | "available" | "invalid" | "reserved" | "taken";
-
-function validateUsernameFormat(value: string): { ok: boolean; reason?: string; state?: UsernameState } {
-  if (value.length < 3 || value.length > 20) {
-    return { ok: false, reason: "Must be 3-20 characters", state: "invalid" };
-  }
-  if (!/^[a-zA-Z0-9_]+$/.test(value)) {
-    return { ok: false, reason: "Letters, numbers, and underscore only", state: "invalid" };
-  }
-  if (RESERVED_USERNAMES.has(value.toLowerCase())) {
-    return { ok: false, reason: "Reserved", state: "reserved" };
-  }
-  return { ok: true };
-}
+import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
+import { validateUsernameFormat } from "@/lib/username-validation";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -50,8 +22,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [usernameState, setUsernameState] = useState<UsernameState>("idle");
-  const [usernameMessage, setUsernameMessage] = useState("");
+  const { state: usernameState, message: usernameMessage } = useUsernameAvailability(supabase, username);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -59,46 +30,6 @@ export default function RegisterPage() {
     const ref = params.get("ref")?.trim();
     if (ref) setReferralCode(ref);
   }, []);
-
-  useEffect(() => {
-    if (!supabase) return;
-    const candidate = username.trim();
-    if (!candidate) {
-      setUsernameState("idle");
-      setUsernameMessage("");
-      return;
-    }
-
-    const format = validateUsernameFormat(candidate);
-    if (!format.ok) {
-      setUsernameState(format.state ?? "invalid");
-      setUsernameMessage(format.reason ?? "Invalid username");
-      return;
-    }
-
-    setUsernameState("checking");
-    setUsernameMessage("Checking...");
-
-    const timeout = window.setTimeout(async () => {
-      const { data, error: rpcError } = await supabase.rpc("check_username_available", {
-        candidate,
-      });
-      if (rpcError) {
-        setUsernameState("taken");
-        setUsernameMessage("Already taken");
-        return;
-      }
-      if (data === true) {
-        setUsernameState("available");
-        setUsernameMessage("Available");
-      } else {
-        setUsernameState("taken");
-        setUsernameMessage("Already taken");
-      }
-    }, 400);
-
-    return () => window.clearTimeout(timeout);
-  }, [username, supabase]);
 
   const handleSubmit = async () => {
     setError("");

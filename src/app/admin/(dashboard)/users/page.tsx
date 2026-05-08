@@ -1,11 +1,22 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminApiHeaders } from "@/lib/admin-supabase";
 import { AdminScrollHint, AdminTableWrap } from "@/components/admin/AdminTableScroll";
 import { AdminPageGate, useAdminSession } from "@/components/admin/AdminPageGate";
 import { ActionButton } from "@/components/admin/ActionButton";
+import { createBrowserClient } from "@/lib/supabase";
+import { UsernameAvailabilityField } from "@/components/auth/UsernameAvailabilityField";
+import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
+import { validateUsernameFormat } from "@/lib/username-validation";
+
+type AdminUsernameHistRow = {
+  old_username: string;
+  new_username: string;
+  changed_at: string;
+  reason?: string | null;
+};
 
 type UserRow = {
   id: string;
@@ -39,6 +50,21 @@ function AdminUsersInner() {
   const [creditAmount, setCreditAmount] = useState("");
   const [creditReason, setCreditReason] = useState("");
   const [creditBusy, setCreditBusy] = useState(false);
+
+  const supabase = useMemo(() => createBrowserClient(), []);
+  const [changeUser, setChangeUser] = useState<UserRow | null>(null);
+  const [changeUsernameValue, setChangeUsernameValue] = useState("");
+  const [changeReason, setChangeReason] = useState("");
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeErr, setChangeErr] = useState("");
+
+  const [historyUser, setHistoryUser] = useState<UserRow | null>(null);
+  const [historyRows, setHistoryRows] = useState<AdminUsernameHistRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const { state: adminNewUsernameState } = useUsernameAvailability(supabase, changeUsernameValue, {
+    excludeUserId: changeUser?.id ?? null,
+  });
 
   async function load() {
     setLoading(true);
@@ -107,6 +133,71 @@ function AdminUsersInner() {
     }
   }
 
+  async function openUsernameHistory(u: UserRow) {
+    setHistoryUser(u);
+    setHistoryRows([]);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/username-history`, {
+        credentials: "include",
+        headers: adminApiHeaders(session),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setHistoryRows([]);
+        return;
+      }
+      setHistoryRows((data as { rows?: AdminUsernameHistRow[] }).rows ?? []);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function submitAdminUsernameChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (!changeUser) return;
+    setChangeErr("");
+    const trimmed = changeUsernameValue.trim();
+    const v = validateUsernameFormat(trimmed);
+    if (!v.ok) {
+      setChangeErr(v.reason ?? "Invalid username");
+      return;
+    }
+    if (adminNewUsernameState !== "available") {
+      setChangeErr("Username is not available.");
+      return;
+    }
+    const reason = changeReason.trim();
+    if (!reason) {
+      setChangeErr("Reason is required.");
+      return;
+    }
+    setChangeBusy(true);
+    try {
+      const res = await fetch("/api/admin/users/change-username", {
+        method: "POST",
+        credentials: "include",
+        headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: changeUser.id,
+          newUsername: trimmed,
+          reason,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setChangeErr((data as { message?: string }).message ?? "Failed");
+        return;
+      }
+      setChangeUser(null);
+      setChangeUsernameValue("");
+      setChangeReason("");
+      load();
+    } finally {
+      setChangeBusy(false);
+    }
+  }
+
   async function submitBan(u: UserRow, banned: boolean) {
     setBanSubmitting(u.id);
     try {
@@ -128,11 +219,14 @@ function AdminUsersInner() {
   }
 
   const filtered = search.trim()
-    ? users.filter(
-        (u) =>
-          (u.email ?? "").toLowerCase().includes(search.trim().toLowerCase()) ||
-          (u.id ?? "").toLowerCase().includes(search.trim().toLowerCase())
-      )
+    ? users.filter((u) => {
+        const q = search.trim().toLowerCase();
+        return (
+          (u.email ?? "").toLowerCase().includes(q) ||
+          (u.username ?? "").toLowerCase().includes(q) ||
+          (u.id ?? "").toLowerCase().includes(q)
+        );
+      })
     : users;
 
   return (
@@ -153,7 +247,7 @@ function AdminUsersInner() {
         <div className="mb-4">
           <input
             type="search"
-            placeholder="Search by email or user ID…"
+            placeholder="Search by email, username, or user ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full max-w-md rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white placeholder-white/40"
@@ -172,7 +266,7 @@ function AdminUsersInner() {
           <>
             <AdminScrollHint />
             <AdminTableWrap>
-              <table className="w-full min-w-[980px] text-left text-sm">
+              <table className="w-full min-w-[1180px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/10 bg-black/30">
                     <th className="p-3 pr-4 text-xs font-semibold uppercase text-white/50">Email</th>
@@ -282,6 +376,26 @@ function AdminUsersInner() {
                               {banSubmitting === u.id ? "…" : "Ban"}
                             </ActionButton>
                           )}
+                          <ActionButton
+                            variant="primary"
+                            className="!bg-[#7c3aed] hover:!bg-[#6d28d9]"
+                            disabled={!supabase}
+                            onClick={() => {
+                              setChangeUser(u);
+                              setChangeUsernameValue("");
+                              setChangeReason("");
+                              setChangeErr("");
+                            }}
+                          >
+                            Username
+                          </ActionButton>
+                          <ActionButton
+                            variant="primary"
+                            className="!bg-[#0e0118] !ring-1 !ring-[#7c3aed]/50"
+                            onClick={() => void openUsernameHistory(u)}
+                          >
+                            @ history
+                          </ActionButton>
                         </div>
                       </td>
                     </tr>
@@ -297,6 +411,122 @@ function AdminUsersInner() {
           </p>
         )}
       </div>
+
+      {changeUser && supabase && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <form
+            onSubmit={submitAdminUsernameChange}
+            className="w-full max-w-md rounded-xl border border-[#7c3aed]/30 bg-[#0e0118] p-6 shadow-xl"
+          >
+            <h2 className="text-lg font-semibold text-[#f5c842]">Change username</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Target: {changeUser.email ?? changeUser.id} · current{" "}
+              <span className="text-[#f5c842]">{changeUser.username?.trim() || "—"}</span>
+            </p>
+            <div className="mt-4 space-y-3">
+              <UsernameAvailabilityField
+                supabase={supabase}
+                value={changeUsernameValue}
+                onChange={setChangeUsernameValue}
+                excludeUserId={changeUser.id}
+                disabled={changeBusy}
+                id="admin_new_username"
+                label="New username"
+                labelClassName="block text-xs font-medium text-white/50 mb-1"
+                inputClassName="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7c3aed]/60 focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30"
+              />
+              <div>
+                <label htmlFor="admin_username_reason" className="block text-xs font-medium text-white/50 mb-1">
+                  Reason (required)
+                </label>
+                <textarea
+                  id="admin_username_reason"
+                  required
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7c3aed]/60 focus:outline-none"
+                  placeholder="e.g. User request, compliance, typo fix…"
+                />
+              </div>
+              {changeErr ? <p className="text-sm text-red-400">{changeErr}</p> : null}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setChangeUser(null);
+                  setChangeErr("");
+                }}
+                className="rounded-lg border border-white/20 px-4 py-2 text-white"
+              >
+                Cancel
+              </button>
+              <ActionButton
+                type="submit"
+                disabled={
+                  changeBusy ||
+                  adminNewUsernameState !== "available" ||
+                  !validateUsernameFormat(changeUsernameValue.trim()).ok
+                }
+                variant="gold"
+                className="!text-[#0e0118]"
+              >
+                {changeBusy ? "…" : "Submit"}
+              </ActionButton>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {historyUser && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-[#7c3aed]/30 bg-[#0e0118] p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-[#f5c842]">Username history</h2>
+            <p className="mt-1 text-sm text-white/60">
+              {historyUser.email ?? historyUser.id} · @{historyUser.username?.trim() || "—"}
+            </p>
+            <div className="mt-4 max-h-72 overflow-y-auto text-sm">
+              {historyLoading ? (
+                <p className="text-white/50">Loading…</p>
+              ) : historyRows.length === 0 ? (
+                <p className="text-white/50">No changes recorded.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {historyRows.map((r) => (
+                    <li key={`${r.changed_at}-${r.old_username}`} className="border-b border-white/10 pb-2 text-white/85">
+                      <span className="text-[#f5c842]">{r.old_username}</span>
+                      <span className="mx-1 text-white/40">→</span>
+                      <span className="text-emerald-300">{r.new_username}</span>
+                      <div className="mt-0.5 text-xs text-white/45">
+                        {new Date(r.changed_at).toLocaleString()}
+                        {r.reason ? ` · ${r.reason}` : ""}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHistoryUser(null)}
+                className="rounded-lg border border-white/20 px-4 py-2 text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {credit && (
         <div
