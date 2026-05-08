@@ -2603,7 +2603,10 @@ export default function CeloRoomPage() {
         : "Start the round when ready.";
     }
     if (roomStatusLc === "waiting" && isBanker && seatedPlayerCount < 1) {
-      return "No players seated yet.";
+      // seatedAtTable includes the banker; seatedPlayerCount is role===player only.
+      return seatedAtTable >= 1
+        ? "You’re at the table as banker — waiting for players to take a seat."
+        : "No players seated yet.";
     }
     if (
       (roomStatusLc === "entry_phase" || roomStatusLc === "active") &&
