@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { WATCH_SECONDS_REQUIRED } from "@/lib/watch-earn";
@@ -44,6 +44,7 @@ async function authFetch(path: string, init?: RequestInit) {
 
 export default function WatchEarnPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videos, setVideos] = useState<FeedVideo[]>([]);
   const [index, setIndex] = useState(0);
@@ -56,8 +57,17 @@ export default function WatchEarnPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [coinPop, setCoinPop] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const current = videos[index] ?? null;
+
+  useEffect(() => {
+    const n = searchParams.get("notice");
+    if (n === "social-retired") {
+      setNotice("Social tasks are retired. Earn GPC by watching creator videos below.");
+      router.replace("/dashboard/earn");
+    }
+  }, [searchParams, router]);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -198,6 +208,12 @@ export default function WatchEarnPage() {
           Upload your video →
         </Link>
       </div>
+
+      {notice && (
+        <p className="rounded-xl border border-[#eab308]/40 bg-[#eab308]/10 px-4 py-3 text-sm text-[#fde047]">
+          {notice}
+        </p>
+      )}
 
       {error && (
         <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
