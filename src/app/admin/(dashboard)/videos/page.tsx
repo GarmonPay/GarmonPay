@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getApiRoot } from "@/lib/api";
 import { adminApiHeaders } from "@/lib/admin-supabase";
@@ -186,11 +187,10 @@ function AdminVideosInner() {
   const [tab, setTab] = useState<Tab>("pending");
   const [videos, setVideos] = useState<VideoRow[]>([]);
   const [watchStats, setWatchStats] = useState({ gpcLast24h: 0, gpcAllTime: 0 });
-  const [watchPayoutGpc, setWatchPayoutGpc] = useState("10");
+  const [watchPayoutGpc, setWatchPayoutGpc] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rateMsg, setRateMsg] = useState<string | null>(null);
 
   const [editVideo, setEditVideo] = useState<VideoRow | null>(null);
   const [editFields, setEditFields] = useState<VideoFormFields>(EMPTY_FORM);
@@ -231,7 +231,7 @@ function AdminVideosInner() {
 
       const settingsData = await settingsRes.json();
       if (settingsRes.ok && settingsData.watch_payout_gpc != null) {
-        setWatchPayoutGpc(String(settingsData.watch_payout_gpc));
+        setWatchPayoutGpc(Number(settingsData.watch_payout_gpc));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
@@ -390,27 +390,6 @@ function AdminVideosInner() {
     }
   }
 
-  async function saveWatchRate() {
-    setRateMsg(null);
-    const gpc = Math.floor(Number(watchPayoutGpc));
-    if (!Number.isFinite(gpc) || gpc < 1) {
-      setRateMsg("Enter a valid GPC amount (min 1)");
-      return;
-    }
-    const res = await fetch(`${API_BASE}/admin/platform-settings`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { ...adminApiHeaders(session), "Content-Type": "application/json" },
-      body: JSON.stringify({ watch_payout_gpc: gpc }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setRateMsg(data.message ?? "Save failed");
-      return;
-    }
-    setRateMsg("Watch payout saved.");
-  }
-
   const tabs: Tab[] = ["pending", "approved", "flagged", "depleted", "rejected", "all"];
 
   return (
@@ -438,19 +417,12 @@ function AdminVideosInner() {
         </div>
         <div>
           <p className="text-fintech-muted mb-1">GPC per 30s watch</p>
-          <div className="flex gap-2">
-            <input
-              value={watchPayoutGpc}
-              onChange={(e) => setWatchPayoutGpc(e.target.value)}
-              type="number"
-              min={1}
-              className="w-24 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-white"
-            />
-            <ActionButton onClick={saveWatchRate} disabled={!!busy}>
-              Save
-            </ActionButton>
-          </div>
-          {rateMsg && <p className="text-xs text-fintech-muted mt-1">{rateMsg}</p>}
+          <p className="text-lg font-bold text-white">
+            {watchPayoutGpc != null ? localeInt(watchPayoutGpc) : "—"} GPC
+          </p>
+          <Link href="/admin/config" className="text-xs text-fintech-accent hover:underline mt-1 inline-block">
+            Edit in Settings → Platform Config
+          </Link>
         </div>
       </div>
 
