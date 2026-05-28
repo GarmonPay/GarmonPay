@@ -72,21 +72,13 @@ const SECTIONS: { heading: string | null; items: NavItem[] }[] = [
     heading: "EARN",
     items: [
       {
-        href: L.earnAds,
-        label: "Watch Ads",
+        href: L.earnWatch,
+        label: "Watch & Earn",
         icon: "📺",
         isActive: (p) =>
           p === L.earnRoot ||
-          p.startsWith(L.earnAds) ||
-          (p.startsWith("/dashboard/earn") &&
-            !p.startsWith(L.earnSocial) &&
-            !p.startsWith("/dashboard/earn/calculator")),
-      },
-      {
-        href: L.earnSocial,
-        label: "Social Tasks",
-        icon: "✅",
-        isActive: (p) => p.startsWith(L.earnSocial),
+          p.startsWith("/dashboard/earn") ||
+          p.startsWith(L.createVideo),
       },
       {
         href: L.referral,

@@ -29,12 +29,11 @@ const tabs: {
   },
   {
     href: APP_SHELL_LINKS.earnRoot,
-    label: "Earn",
+    label: "Watch",
     icon: "📺",
     isActive: (p) =>
       p.startsWith("/dashboard/earn") ||
-      p.startsWith(APP_SHELL_LINKS.referral) ||
-      p.startsWith(APP_SHELL_LINKS.referrals),
+      p.startsWith(APP_SHELL_LINKS.createVideo),
   },
   {
     href: APP_SHELL_LINKS.buyGc,
