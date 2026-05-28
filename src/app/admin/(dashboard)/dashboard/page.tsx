@@ -387,7 +387,7 @@ function DashboardInner() {
           </h2>
           <p className="text-xs text-fintech-muted mb-4">
             Aggregated from <code className="text-fintech-muted">platform_earnings</code> (game fees, etc.). Fight arena
-            fees remain on the <a className="text-emerald-400/90 underline" href="/admin/revenue">Revenue</a> page.
+            fees remain on the <a className="text-emerald-400/90 underline" href="/admin/finance">Platform Finance</a> page.
           </p>
           {gameRevenueError && (
             <p className="text-sm text-amber-300/90 mb-3">{gameRevenueError}</p>
