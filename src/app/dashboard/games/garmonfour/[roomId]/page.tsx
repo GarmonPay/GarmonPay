@@ -26,7 +26,6 @@ const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] })
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
 
 const API = "/api/garmonfour";
-const RESULT_BANNER_MS = 4000;
 const DROP_ANIM_MS = 450;
 
 type UserEmbed = {
@@ -131,14 +130,7 @@ export default function GarmonFourRoomPage() {
   const [highlight, setHighlight] = useState<Set<string> | null>(null);
   const [dropFlash, setDropFlash] = useState<{ r: number; c: number } | null>(null);
   const prevBoardRef = useRef<ConnectFourBoard | null>(null);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const completionBannerKeyRef = useRef<string | null>(null);
-
-  const [resultBanner, setResultBanner] = useState<{
-    title: string;
-    subtitle?: string;
-    kind: "win" | "loss" | "draw" | "info";
-  } | null>(null);
+  const completionRefreshKeyRef = useRef<string | null>(null);
 
   const [roomUrl, setRoomUrl] = useState("");
   const [copyLinkDone, setCopyLinkDone] = useState(false);
@@ -155,18 +147,6 @@ export default function GarmonFourRoomPage() {
       return h;
     },
     [token]
-  );
-
-  const showBanner = useCallback(
-    (b: { title: string; subtitle?: string; kind: "win" | "loss" | "draw" | "info" }) => {
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-      setResultBanner(b);
-      bannerTimerRef.current = setTimeout(() => {
-        setResultBanner(null);
-        bannerTimerRef.current = null;
-      }, RESULT_BANNER_MS);
-    },
-    []
   );
 
   const fetchRoom = useCallback(async () => {
@@ -414,68 +394,11 @@ export default function GarmonFourRoomPage() {
     const visualDraw = isConnectFourBoardFull(boardNow) && visualWinner === null;
     if (room.status === "active" && visualWinner === null && !visualDraw) return;
 
-    const bannerKey = `${room.id}:${room.completed_at ?? room.updated_at ?? "done"}:${visualWinner ?? "draw"}`;
-    if (completionBannerKeyRef.current === bannerKey) return;
-    completionBannerKeyRef.current = bannerKey;
-
-    const entry = Math.max(GARMONFOUR_MIN_ENTRY_GPC, Math.floor(room.entry_amount_minor));
-    const { winnerPayoutGpc, totalPotGpc, platformFeeGpc } = computeGarmonFourSettlement(entry);
-
-    const effectiveWinnerId =
-      room.winner_id ??
-      (visualWinner === 1
-        ? room.creator_id
-        : visualWinner === 2
-          ? room.opponent_id
-          : null);
-
-    if (visualDraw && !effectiveWinnerId) {
-      const share = Math.floor((totalPotGpc - platformFeeGpc) / 2);
-      showBanner({
-        title: "Draw",
-        subtitle: `Board full. Each player refunded ~${share.toLocaleString()} GPC after 10% fee on the pot.`,
-        kind: "draw",
-      });
-      void refresh();
-      return;
-    }
-
-    if (!effectiveWinnerId) return;
-
-    const boardParsed = parseConnectFourBoard(room.board_state);
-    const winnerPiece: 1 | 2 | null =
-      effectiveWinnerId === room.creator_id ? 1 : effectiveWinnerId === room.opponent_id ? 2 : null;
-    const endedByForfeit =
-      boardParsed && winnerPiece !== null && !boardHasConnectFour(boardParsed, winnerPiece);
-
-    if (effectiveWinnerId === userId) {
-      showBanner({
-        title: "You won!",
-        subtitle: endedByForfeit
-          ? `Opponent forfeited. You take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`
-          : `You take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`,
-        kind: "win",
-      });
-    } else {
-      showBanner({
-        title: "You lost",
-        subtitle: endedByForfeit
-          ? "You forfeited the match."
-          : `${labelFor(
-              effectiveWinnerId === room.creator_id ? room.creator : room.opponent,
-              effectiveWinnerId
-            )} connected four.`,
-        kind: "loss",
-      });
-    }
+    const refreshKey = `${room.id}:${room.completed_at ?? room.updated_at ?? "done"}:${visualWinner ?? "draw"}`;
+    if (completionRefreshKeyRef.current === refreshKey) return;
+    completionRefreshKeyRef.current = refreshKey;
     void refresh();
-  }, [room, userId, showBanner, refresh, formatGPC]);
-
-  useEffect(() => {
-    return () => {
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-    };
-  }, []);
+  }, [room, userId, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -802,28 +725,6 @@ export default function GarmonFourRoomPage() {
       className={`min-h-screen w-full pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-white tablet:pb-8 ${dm.className}`}
       style={{ background: "#0e0118" }}
     >
-      {resultBanner && (
-        <div
-          className="fixed left-1/2 z-[10001] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border px-4 py-3 shadow-xl"
-          style={{
-            top: "calc(var(--dashboard-top-stack-height, 4rem) + 0.75rem)",
-            borderColor:
-              resultBanner.kind === "win"
-                ? "rgba(245,200,66,0.55)"
-                : resultBanner.kind === "loss"
-                  ? "rgba(239,68,68,0.45)"
-                  : "rgba(124,58,237,0.45)",
-            background: "linear-gradient(145deg, rgba(26,10,46,0.98), rgba(14,1,24,0.98))",
-            boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-          }}
-        >
-          <p className={`text-lg font-bold ${cinzel.className}`} style={{ color: "#f5c842" }}>
-            {resultBanner.title}
-          </p>
-          {resultBanner.subtitle && <p className="mt-1 text-sm text-white/75">{resultBanner.subtitle}</p>}
-        </div>
-      )}
-
       {gameResult && (
         <div
           className="fixed inset-0 z-[10000] flex items-center justify-center px-4"
