@@ -10,10 +10,13 @@ import { resolveDisplayName } from "@/lib/display-name";
 import {
   boardHasConnectFour,
   computeGarmonFourSettlement,
+  detectBoardWinner,
+  findBoardWinningLine,
   findLastPlacedCell,
   findWinningLine,
   createEmptyConnectFourBoard,
   GARMONFOUR_MIN_ENTRY_GPC,
+  isConnectFourBoardFull,
   parseConnectFourBoard,
   type ConnectFourBoard,
 } from "@/lib/connect-four";
@@ -371,18 +374,26 @@ export default function GarmonFourRoomPage() {
     }
     prevBoardRef.current = board;
 
-    if (room.status === "completed") {
-      if (room.winner_id) {
-        const wPiece = pieceForUser(room, room.winner_id);
-        if (wPiece) {
-          for (let r = 0; r < 6; r++) {
-            for (let c = 0; c < 7; c++) {
-              if (board[r][c] === wPiece) {
-                const line = findWinningLine(board, r, c, wPiece);
-                if (line) {
-                  setHighlight(new Set(line.map(([rr, cc]) => `${rr},${cc}`)));
-                  return;
-                }
+    const boardWinner = detectBoardWinner(board);
+    const highlightPiece =
+      room.winner_id != null
+        ? pieceForUser(room, room.winner_id)
+        : boardWinner;
+
+    if (room.status === "completed" || boardWinner !== null) {
+      if (highlightPiece) {
+        const line = findBoardWinningLine(board, highlightPiece);
+        if (line) {
+          setHighlight(new Set(line.map(([rr, cc]) => `${rr},${cc}`)));
+          return;
+        }
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 7; c++) {
+            if (board[r][c] === highlightPiece) {
+              const fallback = findWinningLine(board, r, c, highlightPiece);
+              if (fallback) {
+                setHighlight(new Set(fallback.map(([rr, cc]) => `${rr},${cc}`)));
+                return;
               }
             }
           }
@@ -396,16 +407,29 @@ export default function GarmonFourRoomPage() {
 
   useEffect(() => {
     if (!room || !userId) return;
-    if (room.status !== "completed" || !room.completed_at) return;
+    if (room.status !== "completed" && room.status !== "active") return;
 
-    const bannerKey = `${room.id}:${room.completed_at}`;
+    const boardNow = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
+    const visualWinner = detectBoardWinner(boardNow);
+    const visualDraw = isConnectFourBoardFull(boardNow) && visualWinner === null;
+    if (room.status === "active" && visualWinner === null && !visualDraw) return;
+
+    const bannerKey = `${room.id}:${room.completed_at ?? room.updated_at ?? "done"}:${visualWinner ?? "draw"}`;
     if (completionBannerKeyRef.current === bannerKey) return;
     completionBannerKeyRef.current = bannerKey;
 
     const entry = Math.max(GARMONFOUR_MIN_ENTRY_GPC, Math.floor(room.entry_amount_minor));
     const { winnerPayoutGpc, totalPotGpc, platformFeeGpc } = computeGarmonFourSettlement(entry);
 
-    if (!room.winner_id) {
+    const effectiveWinnerId =
+      room.winner_id ??
+      (visualWinner === 1
+        ? room.creator_id
+        : visualWinner === 2
+          ? room.opponent_id
+          : null);
+
+    if (visualDraw && !effectiveWinnerId) {
       const share = Math.floor((totalPotGpc - platformFeeGpc) / 2);
       showBanner({
         title: "Draw",
@@ -416,13 +440,15 @@ export default function GarmonFourRoomPage() {
       return;
     }
 
+    if (!effectiveWinnerId) return;
+
     const boardParsed = parseConnectFourBoard(room.board_state);
     const winnerPiece: 1 | 2 | null =
-      room.winner_id === room.creator_id ? 1 : room.opponent_id === room.winner_id ? 2 : null;
+      effectiveWinnerId === room.creator_id ? 1 : effectiveWinnerId === room.opponent_id ? 2 : null;
     const endedByForfeit =
       boardParsed && winnerPiece !== null && !boardHasConnectFour(boardParsed, winnerPiece);
 
-    if (room.winner_id === userId) {
+    if (effectiveWinnerId === userId) {
       showBanner({
         title: "You won!",
         subtitle: endedByForfeit
@@ -436,8 +462,8 @@ export default function GarmonFourRoomPage() {
         subtitle: endedByForfeit
           ? "You forfeited the match."
           : `${labelFor(
-              room.winner_id === room.creator_id ? room.creator : room.opponent,
-              room.winner_id
+              effectiveWinnerId === room.creator_id ? room.creator : room.opponent,
+              effectiveWinnerId
             )} connected four.`,
         kind: "loss",
       });
@@ -508,6 +534,7 @@ export default function GarmonFourRoomPage() {
     if (!token || !userId || !room || busy) return;
     if (room.status !== "active" || room.current_turn !== userId) return;
     const b = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
+    if (detectBoardWinner(b) !== null) return;
     if (b[0][col] !== 0) return;
     setPulseCol(col);
     window.setTimeout(() => setPulseCol(null), 280);
@@ -530,14 +557,16 @@ export default function GarmonFourRoomPage() {
         message?: string;
         outcome?: string;
         winnerId?: string | null;
+        room?: RoomRow | null;
       };
       if (!res.ok) {
         setApiErr(j.message ?? "Move failed");
         return;
       }
-      void fetchRoom();
-      if (j.outcome === "win") {
-        /* banner via room effect */
+      if (j.room) {
+        setRoom(j.room);
+      } else {
+        void fetchRoom();
       }
     } finally {
       setBusy(false);
@@ -631,27 +660,153 @@ export default function GarmonFourRoomPage() {
   const creatorName = labelFor(room.creator, room.creator_id);
   const opponentName = room.opponent_id ? labelFor(room.opponent, room.opponent_id) : "Waiting…";
 
+  const boardWinnerPiece = detectBoardWinner(board);
+  const boardIsDraw = isConnectFourBoardFull(board) && boardWinnerPiece === null;
+  const isGameEnded =
+    room.status === "completed" || boardWinnerPiece !== null || boardIsDraw;
+
+  const resolvedWinnerId =
+    room.winner_id ??
+    (boardWinnerPiece === 1
+      ? room.creator_id
+      : boardWinnerPiece === 2
+        ? room.opponent_id
+        : null);
+
+  const resolvedWinnerName =
+    resolvedWinnerId === room.creator_id
+      ? creatorName
+      : resolvedWinnerId === room.opponent_id
+        ? opponentName
+        : null;
+
+  const winnerName =
+    room.winner_id === room.creator_id
+      ? creatorName
+      : room.winner_id === room.opponent_id
+        ? opponentName
+        : resolvedWinnerName;
+
+  const boardParsed = parseConnectFourBoard(room.board_state);
+  const winnerPiece: 1 | 2 | null =
+    room.winner_id === room.creator_id
+      ? 1
+      : room.opponent_id === room.winner_id
+        ? 2
+        : boardWinnerPiece;
+  const endedByForfeit =
+    isGameEnded &&
+    boardParsed !== null &&
+    winnerPiece !== null &&
+    !boardHasConnectFour(boardParsed, winnerPiece);
+
+  const settlementPending =
+    room.status === "active" && (boardWinnerPiece !== null || boardIsDraw);
+
+  const gameResult = isGameEnded
+    ? boardIsDraw && !resolvedWinnerId
+      ? {
+          kind: "draw" as const,
+          title: "Draw",
+          subtitle: settlementPending
+            ? "Board full. Settlement is finishing — refresh in a moment."
+            : `Board full. Each player refunded ~${Math.floor((totalPotGpc - platformFeeGpc) / 2).toLocaleString()} GPC after the 10% pot fee.`,
+        }
+      : resolvedWinnerId === userId
+        ? {
+            kind: "win" as const,
+            title: "You won!",
+            subtitle: endedByForfeit
+              ? `Opponent forfeited. You take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`
+              : settlementPending
+                ? `You connected four! Payout ${winnerPayoutGpc.toLocaleString()} GPC is processing — refresh shortly.`
+                : `You connected four and take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`,
+          }
+        : resolvedWinnerId
+          ? {
+              kind: "loss" as const,
+              title: `${resolvedWinnerName ?? "Opponent"} wins`,
+              subtitle: endedByForfeit
+                ? "You forfeited the match."
+                : `${resolvedWinnerName ?? "Your opponent"} connected four.`,
+            }
+          : null
+    : null;
+
   const turnLabel =
     room.status === "waiting"
       ? "Waiting for opponent"
       : room.status === "active"
-        ? !room.current_turn
-          ? "Starting game…"
-          : room.current_turn === userId
-            ? "Your turn"
-            : `Waiting for ${room.current_turn === room.creator_id ? creatorName : opponentName}`
-        : "Game over";
+        ? gameResult
+          ? gameResult.title
+          : !room.current_turn
+            ? "Starting game…"
+            : room.current_turn === userId
+              ? "Your turn"
+              : `Waiting for ${room.current_turn === room.creator_id ? creatorName : opponentName}`
+        : gameResult?.title ?? "Game over";
 
   const colFull = (c: number) => board[0][c] !== 0;
 
   const oppDisconnected = room.status === "active" && room.opponent_id && opponentAway;
 
+  const celebrationStyle = gameResult
+    ? {
+        borderColor:
+          gameResult.kind === "win"
+            ? "rgba(245,200,66,0.55)"
+            : gameResult.kind === "loss"
+              ? "rgba(239,68,68,0.45)"
+              : "rgba(124,58,237,0.45)",
+        background:
+          gameResult.kind === "win"
+            ? "linear-gradient(145deg, rgba(245,200,66,0.14), rgba(14,1,24,0.92))"
+            : gameResult.kind === "loss"
+              ? "linear-gradient(145deg, rgba(239,68,68,0.1), rgba(14,1,24,0.92))"
+              : "linear-gradient(145deg, rgba(124,58,237,0.12), rgba(14,1,24,0.92))",
+      }
+    : undefined;
+
+  const celebrationBody = gameResult ? (
+    <>
+      <p
+        className={`text-2xl font-bold sm:text-3xl ${cinzel.className}`}
+        style={{
+          color:
+            gameResult.kind === "win"
+              ? "#f5c842"
+              : gameResult.kind === "loss"
+                ? "#fca5a5"
+                : "#c4b5fd",
+        }}
+      >
+        {gameResult.kind === "win" ? "Victory!" : gameResult.title}
+      </p>
+      <p className="mt-2 text-sm text-white/80">{gameResult.subtitle}</p>
+      {gameResult.kind === "win" && (resolvedWinnerName ?? winnerName) && (
+        <p className="mt-1 text-xs uppercase tracking-wider text-[#f5c842]/70">
+          {myPiece === 1 ? "Heads" : "Tails"} · {resolvedWinnerName ?? winnerName}
+        </p>
+      )}
+      <Link
+        href="/dashboard/games/garmonfour"
+        className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
+      >
+        Back to lobby
+      </Link>
+    </>
+  ) : null;
+
   return (
-    <div className={`min-h-screen w-full pb-28 text-white ${dm.className}`} style={{ background: "#0e0118" }}>
+    <div
+      className={`min-h-screen w-full pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-white tablet:pb-8 ${dm.className}`}
+      style={{ background: "#0e0118" }}
+    >
       {resultBanner && (
         <div
-          className="fixed left-1/2 top-4 z-[200] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border px-4 py-3 shadow-xl"
+          className="fixed left-1/2 z-[10001] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border px-4 py-3 shadow-xl"
           style={{
+            top: "calc(var(--dashboard-top-stack-height, 4rem) + 0.75rem)",
             borderColor:
               resultBanner.kind === "win"
                 ? "rgba(245,200,66,0.55)"
@@ -666,6 +821,20 @@ export default function GarmonFourRoomPage() {
             {resultBanner.title}
           </p>
           {resultBanner.subtitle && <p className="mt-1 text-sm text-white/75">{resultBanner.subtitle}</p>}
+        </div>
+      )}
+
+      {gameResult && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center px-4"
+          style={{ background: "rgba(5,0,12,0.72)" }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border px-5 py-6 text-center shadow-2xl"
+            style={celebrationStyle}
+          >
+            {celebrationBody}
+          </div>
         </div>
       )}
 
@@ -700,8 +869,15 @@ export default function GarmonFourRoomPage() {
               </div>
             </div>
           </div>
-          <p className="mt-3 text-sm text-white/70">{turnLabel}</p>
-          <p className="mt-1 font-mono text-xs text-white/55">
+          {gameResult ? (
+            <p className="mt-3 text-sm font-semibold text-white/85">{gameResult.title}</p>
+          ) : (
+            <p className="mt-3 text-sm text-white/70">{turnLabel}</p>
+          )}
+          {gameResult && (
+            <p className="mt-1 text-sm text-white/75">{gameResult.subtitle}</p>
+          )}
+          <p className="mt-3 font-mono text-xs text-white/55 sm:mt-2">
             Entry {entry.toLocaleString()} GPC each · Pot {totalPotGpc.toLocaleString()} GPC · Fee{" "}
             {platformFeeGpc.toLocaleString()} GPC (10%) · Winner takes {winnerPayoutGpc.toLocaleString()} GPC
           </p>
@@ -763,7 +939,7 @@ export default function GarmonFourRoomPage() {
           <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{apiErr}</div>
         )}
 
-        {room.status === "active" && (
+        {room.status === "active" && !isGameEnded && (
           <p className="mt-6 text-center text-xs text-white/50">
             Tap a column to drop — you are{" "}
             <span className="font-semibold text-[#f5c842]">{myPiece === 1 ? "Heads" : "Tails"}</span>
@@ -780,7 +956,11 @@ export default function GarmonFourRoomPage() {
           >
             {[0, 1, 2, 3, 4, 5, 6].map((c) => {
               const canClickCol =
-                room.status === "active" && room.current_turn === userId && !busy && !colFull(c);
+                room.status === "active" &&
+                !isGameEnded &&
+                room.current_turn === userId &&
+                !busy &&
+                !colFull(c);
               const lr = lowestEmptyRow(board, c);
               const previewPiece: 1 | 2 = myPiece === 2 ? 2 : 1;
               const columnLit = (canClickCol && hoverCol === c) || pulseCol === c;
