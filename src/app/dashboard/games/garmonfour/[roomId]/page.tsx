@@ -23,6 +23,7 @@ import {
 import { useCoins } from "@/hooks/useCoins";
 import { scToUsdDisplay } from "@/lib/coins";
 import { GPAY_COINS_TICKER } from "@/lib/gpay-coins-branding";
+import { getReferralLink } from "@/lib/site-url";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -128,6 +129,7 @@ function GarmonFourWinConfetti({ fireKey }: { fireKey: string }) {
         ticks: 240,
         gravity: 1.05,
         scalar: 0.92,
+        zIndex: 10001,
         colors: ["#f5c842", "#eab308", "#fde68a", "#c4b5fd"],
       });
       window.setTimeout(() => {
@@ -138,6 +140,7 @@ function GarmonFourWinConfetti({ fireKey }: { fireKey: string }) {
           origin: { y: 0.76, x: 0.58 },
           ticks: 190,
           scalar: 0.85,
+          zIndex: 10001,
           colors: ["#fde68a", "#f5c842", "#a78bfa"],
         });
       }, 340);
@@ -181,21 +184,61 @@ function GarmonFourWinModalBody({
   endedByForfeit,
   settlementPending,
   winnerName,
-  myPiece,
+  referralLink,
   cinzelClassName,
 }: {
   payoutGpc: number;
   endedByForfeit: boolean;
   settlementPending: boolean;
   winnerName: string | null;
-  myPiece: 1 | 2;
+  referralLink: string;
   cinzelClassName: string;
 }) {
   const animatedPayout = usePayoutCountUp(settlementPending ? 0 : payoutGpc);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const payoutLine =
     settlementPending && payoutGpc > 0
       ? `${payoutGpc.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(payoutGpc)})`
       : `${animatedPayout.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(animatedPayout)})`;
+
+  useEffect(() => {
+    return () => {
+      if (shareCopiedTimerRef.current) clearTimeout(shareCopiedTimerRef.current);
+    };
+  }, []);
+
+  const handleShareWin = useCallback(async () => {
+    const shareText = `I just won ${payoutGpc.toLocaleString()} ${GPAY_COINS_TICKER} on GarmonPay 🎮 Think you can beat me? Who's next?`;
+    const clipboardText = referralLink ? `${shareText}\n${referralLink}` : shareText;
+
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          text: shareText,
+          ...(referralLink ? { url: referralLink } : {}),
+        });
+      } catch {
+        /* user dismissed or share failed */
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(clipboardText);
+      setShareCopied(true);
+      if (shareCopiedTimerRef.current) clearTimeout(shareCopiedTimerRef.current);
+      shareCopiedTimerRef.current = setTimeout(() => {
+        setShareCopied(false);
+        shareCopiedTimerRef.current = null;
+      }, 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [payoutGpc, referralLink]);
+
+  const actionBtnClass =
+    "inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28";
 
   return (
     <>
@@ -215,16 +258,16 @@ function GarmonFourWinModalBody({
         )}
       </p>
       {winnerName && (
-        <p className="mt-1 text-xs uppercase tracking-wider text-[#f5c842]/70">
-          {myPiece === 1 ? "Heads" : "Tails"} · {winnerName}
-        </p>
+        <p className="mt-1 text-xs uppercase tracking-wider text-[#f5c842]/70">{winnerName}</p>
       )}
-      <Link
-        href="/dashboard/games/garmonfour"
-        className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
-      >
-        Back to lobby
-      </Link>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <button type="button" onClick={() => void handleShareWin()} className={actionBtnClass}>
+          {shareCopied ? "Copied!" : "Share"}
+        </button>
+        <Link href="/dashboard/games/garmonfour" className={actionBtnClass}>
+          Back to lobby
+        </Link>
+      </div>
     </>
   );
 }
@@ -280,6 +323,7 @@ export default function GarmonFourRoomPage() {
   const completionRefreshKeyRef = useRef<string | null>(null);
 
   const [roomUrl, setRoomUrl] = useState("");
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   const [copyLinkDone, setCopyLinkDone] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -552,6 +596,19 @@ export default function GarmonFourRoomPage() {
     setRoomUrl(window.location.href);
     setCanNativeShare(typeof navigator.share === "function");
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !userId) return;
+    void supabase
+      .from("users")
+      .select("referral_code")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const code = (data as { referral_code?: string | null } | null)?.referral_code?.trim() ?? "";
+        setReferralCode(code || null);
+      });
+  }, [supabase, userId]);
 
   useEffect(() => {
     return () => {
@@ -835,6 +892,8 @@ export default function GarmonFourRoomPage() {
       }
     : undefined;
 
+  const referralLink = referralCode ? getReferralLink(referralCode) : "";
+
   const celebrationBody =
     gameResult?.kind === "win" ? (
       <GarmonFourWinModalBody
@@ -842,7 +901,7 @@ export default function GarmonFourRoomPage() {
         endedByForfeit={gameResult.endedByForfeit}
         settlementPending={gameResult.settlementPending}
         winnerName={resolvedWinnerName ?? winnerName}
-        myPiece={myPiece === 2 ? 2 : 1}
+        referralLink={referralLink}
         cinzelClassName={cinzel.className}
       />
     ) : gameResult?.kind === "loss" || gameResult?.kind === "draw" ? (
