@@ -92,3 +92,32 @@ export function boardHasConnectFour(board: ConnectFourBoard, piece: 1 | 2): bool
   }
   return false;
 }
+
+export function findBoardWinningLine(
+  board: ConnectFourBoard,
+  piece: 1 | 2
+): [number, number][] | null {
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 7; c++) {
+      if (board[r][c] === piece) {
+        const line = findWinningLine(board, r, c, piece);
+        if (line) return line;
+      }
+    }
+  }
+  return null;
+}
+
+/** Which side connected four, if any (1 = heads / creator, 2 = tails / guest). */
+export function detectBoardWinner(board: ConnectFourBoard): 1 | 2 | null {
+  if (boardHasConnectFour(board, 1)) return 1;
+  if (boardHasConnectFour(board, 2)) return 2;
+  return null;
+}
+
+export function isConnectFourBoardFull(board: ConnectFourBoard): boolean {
+  for (let c = 0; c < 7; c++) {
+    if (board[0][c] === 0) return false;
+  }
+  return true;
+}
