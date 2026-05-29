@@ -21,6 +21,8 @@ import {
   type ConnectFourBoard,
 } from "@/lib/connect-four";
 import { useCoins } from "@/hooks/useCoins";
+import { scToUsdDisplay } from "@/lib/coins";
+import { GPAY_COINS_TICKER } from "@/lib/gpay-coins-branding";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
@@ -146,6 +148,111 @@ function GarmonFourWinConfetti({ fireKey }: { fireKey: string }) {
   }, [fireKey]);
 
   return null;
+}
+
+function usePayoutCountUp(target: number, durationMs = 800): number {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    const goal = Math.max(0, Math.floor(target));
+    if (goal === 0) {
+      setValue(0);
+      return;
+    }
+    let start: number | null = null;
+    let raf = 0;
+    const easeOut = (t: number) => 1 - (1 - t) ** 3;
+    const tick = (ts: number) => {
+      if (start == null) start = ts;
+      const progress = Math.min(1, (ts - start) / durationMs);
+      setValue(Math.round(goal * easeOut(progress)));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+      else setValue(goal);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+
+  return value;
+}
+
+function GarmonFourWinModalBody({
+  payoutGpc,
+  endedByForfeit,
+  settlementPending,
+  winnerName,
+  myPiece,
+  cinzelClassName,
+}: {
+  payoutGpc: number;
+  endedByForfeit: boolean;
+  settlementPending: boolean;
+  winnerName: string | null;
+  myPiece: 1 | 2;
+  cinzelClassName: string;
+}) {
+  const animatedPayout = usePayoutCountUp(settlementPending ? 0 : payoutGpc);
+  const payoutLine =
+    settlementPending && payoutGpc > 0
+      ? `${payoutGpc.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(payoutGpc)})`
+      : `${animatedPayout.toLocaleString()} ${GPAY_COINS_TICKER} (${scToUsdDisplay(animatedPayout)})`;
+
+  return (
+    <>
+      <p
+        className={`gf-victory-heading text-2xl font-bold sm:text-3xl ${cinzelClassName}`}
+        style={{ color: "#f5c842" }}
+      >
+        Victory!
+      </p>
+      <p className="mt-2 text-sm text-white/80">
+        {endedByForfeit ? (
+          <>Opponent forfeited. You take {payoutLine}.</>
+        ) : settlementPending ? (
+          <>You connected four! Payout {payoutLine} is processing — refresh shortly.</>
+        ) : (
+          <>You connected four and take {payoutLine}.</>
+        )}
+      </p>
+      {winnerName && (
+        <p className="mt-1 text-xs uppercase tracking-wider text-[#f5c842]/70">
+          {myPiece === 1 ? "Heads" : "Tails"} · {winnerName}
+        </p>
+      )}
+      <Link
+        href="/dashboard/games/garmonfour"
+        className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
+      >
+        Back to lobby
+      </Link>
+    </>
+  );
+}
+
+function GarmonFourPlainResultBody({
+  gameResult,
+  cinzelClassName,
+}: {
+  gameResult: { kind: "loss" | "draw"; title: string; subtitle: string };
+  cinzelClassName: string;
+}) {
+  return (
+    <>
+      <p
+        className={`text-2xl font-bold sm:text-3xl ${cinzelClassName}`}
+        style={{ color: gameResult.kind === "loss" ? "#fca5a5" : "#c4b5fd" }}
+      >
+        {gameResult.title}
+      </p>
+      <p className="mt-2 text-sm text-white/80">{gameResult.subtitle}</p>
+      <Link
+        href="/dashboard/games/garmonfour"
+        className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
+      >
+        Back to lobby
+      </Link>
+    </>
+  );
 }
 
 export default function GarmonFourRoomPage() {
@@ -679,11 +786,9 @@ export default function GarmonFourRoomPage() {
         ? {
             kind: "win" as const,
             title: "You won!",
-            subtitle: endedByForfeit
-              ? `Opponent forfeited. You take ${formatGPC(winnerPayoutGpc)}.`
-              : settlementPending
-                ? `You connected four! Payout ${formatGPC(winnerPayoutGpc)} is processing — refresh shortly.`
-                : `You connected four and take ${formatGPC(winnerPayoutGpc)}.`,
+            payoutGpc: winnerPayoutGpc,
+            endedByForfeit,
+            settlementPending,
           }
         : resolvedWinnerId
           ? {
@@ -730,35 +835,19 @@ export default function GarmonFourRoomPage() {
       }
     : undefined;
 
-  const celebrationBody = gameResult ? (
-    <>
-      <p
-        className={`text-2xl font-bold sm:text-3xl ${cinzel.className}`}
-        style={{
-          color:
-            gameResult.kind === "win"
-              ? "#f5c842"
-              : gameResult.kind === "loss"
-                ? "#fca5a5"
-                : "#c4b5fd",
-        }}
-      >
-        {gameResult.kind === "win" ? "Victory!" : gameResult.title}
-      </p>
-      <p className="mt-2 text-sm text-white/80">{gameResult.subtitle}</p>
-      {gameResult.kind === "win" && (resolvedWinnerName ?? winnerName) && (
-        <p className="mt-1 text-xs uppercase tracking-wider text-[#f5c842]/70">
-          {myPiece === 1 ? "Heads" : "Tails"} · {resolvedWinnerName ?? winnerName}
-        </p>
-      )}
-      <Link
-        href="/dashboard/games/garmonfour"
-        className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
-      >
-        Back to lobby
-      </Link>
-    </>
-  ) : null;
+  const celebrationBody =
+    gameResult?.kind === "win" ? (
+      <GarmonFourWinModalBody
+        payoutGpc={gameResult.payoutGpc}
+        endedByForfeit={gameResult.endedByForfeit}
+        settlementPending={gameResult.settlementPending}
+        winnerName={resolvedWinnerName ?? winnerName}
+        myPiece={myPiece === 2 ? 2 : 1}
+        cinzelClassName={cinzel.className}
+      />
+    ) : gameResult?.kind === "loss" || gameResult?.kind === "draw" ? (
+      <GarmonFourPlainResultBody gameResult={gameResult} cinzelClassName={cinzel.className} />
+    ) : null;
 
   return (
     <div
@@ -766,7 +855,7 @@ export default function GarmonFourRoomPage() {
       style={{ background: "#0e0118" }}
     >
       {gameResult && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 px-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 px-4">
           {gameResult.kind === "win" && (
             <GarmonFourWinConfetti
               fireKey={`${room.id}:${room.completed_at ?? room.updated_at ?? "win"}`}
@@ -813,12 +902,9 @@ export default function GarmonFourRoomPage() {
             </div>
           </div>
           {gameResult ? (
-            <p className="mt-3 text-sm font-semibold text-white/85">{gameResult.title}</p>
+            <p className="mt-3 text-sm text-white/70">Game over</p>
           ) : (
             <p className="mt-3 text-sm text-white/70">{turnLabel}</p>
-          )}
-          {gameResult && (
-            <p className="mt-1 text-sm text-white/75">{gameResult.subtitle}</p>
           )}
           <p className="mt-3 font-mono text-xs text-white/55 sm:mt-2">
             Entry {entry.toLocaleString()} GPC each · Pot {totalPotGpc.toLocaleString()} GPC · Fee{" "}
@@ -984,6 +1070,15 @@ export default function GarmonFourRoomPage() {
             0% { transform: translateY(-220%); opacity: 0.85; }
             70% { transform: translateY(4%); }
             100% { transform: translateY(0); opacity: 1; }
+          }
+          @keyframes gf-victory-glow {
+            0%, 100% { filter: drop-shadow(0 0 6px rgba(245, 200, 66, 0.35)); }
+            50% { filter: drop-shadow(0 0 16px rgba(245, 200, 66, 0.55)); }
+          }
+          .gf-victory-heading {
+            animation:
+              celo-banner-winner-pop 0.45s ease-out both,
+              gf-victory-glow 2.2s ease-in-out 0.45s 2;
           }
         `}</style>
 
