@@ -108,6 +108,46 @@ function ClassicDisc({
   );
 }
 
+/** Same burst pattern as C-Lo result banner — fires once per completion key. */
+function GarmonFourWinConfetti({ fireKey }: { fireKey: string }) {
+  const firedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (firedRef.current === fireKey) return;
+    firedRef.current = fireKey;
+    let cancelled = false;
+    void import("canvas-confetti").then((mod) => {
+      if (cancelled) return;
+      const fire = mod.default;
+      fire({
+        particleCount: 88,
+        spread: 58,
+        origin: { y: 0.72 },
+        ticks: 240,
+        gravity: 1.05,
+        scalar: 0.92,
+        colors: ["#f5c842", "#eab308", "#fde68a", "#c4b5fd"],
+      });
+      window.setTimeout(() => {
+        if (cancelled) return;
+        fire({
+          particleCount: 42,
+          spread: 68,
+          origin: { y: 0.76, x: 0.58 },
+          ticks: 190,
+          scalar: 0.85,
+          colors: ["#fde68a", "#f5c842", "#a78bfa"],
+        });
+      }, 340);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fireKey]);
+
+  return null;
+}
+
 export default function GarmonFourRoomPage() {
   const params = useParams();
   const roomId = typeof params?.roomId === "string" ? params.roomId : "";
@@ -640,10 +680,10 @@ export default function GarmonFourRoomPage() {
             kind: "win" as const,
             title: "You won!",
             subtitle: endedByForfeit
-              ? `Opponent forfeited. You take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`
+              ? `Opponent forfeited. You take ${formatGPC(winnerPayoutGpc)}.`
               : settlementPending
-                ? `You connected four! Payout ${winnerPayoutGpc.toLocaleString()} GPC is processing — refresh shortly.`
-                : `You connected four and take ${winnerPayoutGpc.toLocaleString()} GPC (${formatGPC(winnerPayoutGpc)}).`,
+                ? `You connected four! Payout ${formatGPC(winnerPayoutGpc)} is processing — refresh shortly.`
+                : `You connected four and take ${formatGPC(winnerPayoutGpc)}.`,
           }
         : resolvedWinnerId
           ? {
@@ -726,10 +766,12 @@ export default function GarmonFourRoomPage() {
       style={{ background: "#0e0118" }}
     >
       {gameResult && (
-        <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center px-4"
-          style={{ background: "rgba(5,0,12,0.72)" }}
-        >
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 px-4">
+          {gameResult.kind === "win" && (
+            <GarmonFourWinConfetti
+              fireKey={`${room.id}:${room.completed_at ?? room.updated_at ?? "win"}`}
+            />
+          )}
           <div
             className="w-full max-w-md rounded-2xl border px-5 py-6 text-center shadow-2xl"
             style={celebrationStyle}
