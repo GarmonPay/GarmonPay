@@ -5,6 +5,9 @@ import { createAdminClient } from "@/lib/supabase";
 type RpcPayload = {
   success?: boolean;
   message?: string;
+  winner_id?: string;
+  idempotent?: boolean;
+  room?: Record<string, unknown>;
 };
 
 export async function POST(request: Request) {
@@ -18,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { roomId?: unknown };
+  let body: { roomId?: unknown; reference?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -30,23 +33,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "roomId required" }, { status: 400 });
   }
 
-  const { data, error } = await admin.rpc("garmonfour_repair_turn_atomic", {
+  const reference = typeof body.reference === "string" ? body.reference.trim() : "";
+  if (!reference) {
+    return NextResponse.json({ message: "reference required" }, { status: 400 });
+  }
+
+  const { data, error } = await admin.rpc("garmondrop_forfeit_atomic", {
     p_room_id: roomId,
     p_user_id: userId,
+    p_reference: reference,
   });
 
   if (error) {
-    console.error("[garmonfour/repair-turn] rpc error", error);
+    console.error("[garmondrop/forfeit] rpc error", error);
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 
   const payload = data as RpcPayload;
   if (!payload?.success) {
     return NextResponse.json(
-      { message: typeof payload?.message === "string" ? payload.message : "Repair failed" },
+      { message: typeof payload?.message === "string" ? payload.message : "Forfeit failed" },
       { status: 400 }
     );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    winnerId: payload.winner_id ?? null,
+    idempotent: payload.idempotent === true,
+    room: payload.room ?? null,
+  });
 }

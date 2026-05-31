@@ -161,10 +161,10 @@ export default function DashboardGamesPage() {
           <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">View →</span>
         </Link>
 
-        <Link href="/dashboard/games/garmonfour" className={`${cardBase} block no-underline text-inherit`}>
+        <Link href="/dashboard/games/garmondrop" className={`${cardBase} block no-underline text-inherit`}>
           <div className="flex items-center gap-3 mb-3">
             <span className="text-3xl" aria-hidden>🔴🟡</span>
-            <h2 className="text-lg font-semibold text-white">GarmonFour</h2>
+            <h2 className="text-lg font-semibold text-white">GarmonDrop</h2>
           </div>
           <p className="text-sm text-fintech-muted mb-4">
             Drop discs and connect four. Beat your opponent and take the pot.

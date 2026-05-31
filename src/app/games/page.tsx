@@ -73,7 +73,7 @@ export default function GamesPage() {
             </span>
           </div>
         </Link>
-        <Link href="/dashboard/games/garmonfour">
+        <Link href="/dashboard/games/garmondrop">
           <div
             style={{
               background: "linear-gradient(135deg, #1a0a2e, #3d1060)",
@@ -92,7 +92,7 @@ export default function GamesPage() {
                 marginBottom: "4px",
               }}
             >
-              GarmonFour
+              GarmonDrop
             </h2>
             <p
               style={{

@@ -259,7 +259,7 @@ export default function CaptureHomePage() {
               items={[
                 "Earn up to $25/day on Elite tier",
                 "Watch videos you actually want to see",
-                "Play games with your GPC (C-Lo, GarmonFour, Coin Flip)",
+                "Play games with your GPC (C-Lo, GarmonDrop, Coin Flip)",
                 "Cash out to $GPAY when token launches",
               ]}
             />

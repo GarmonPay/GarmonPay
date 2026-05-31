@@ -7,15 +7,15 @@ import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
 import {
-  computeGarmonFourSettlement,
-  GARMONFOUR_MIN_ENTRY_GPC,
+  computeGarmonDropSettlement,
+  GARMONDROP_MIN_ENTRY_GPC,
 } from "@/lib/connect-four";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
 
 const ENTRY_PILLS = [100, 500, 1000, 2500, 5000] as const;
-const API = "/api/garmonfour";
+const API = "/api/garmondrop";
 
 type OpenRoom = {
   id: string;
@@ -30,7 +30,7 @@ type MyWaitingRoom = {
   status: string;
 };
 
-export default function GarmonFourLobbyPage() {
+export default function GarmonDropLobbyPage() {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserClient(), []);
   const [token, setToken] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function GarmonFourLobbyPage() {
       return;
     }
     const { data } = await supabase
-      .from("garmonfour_rooms")
+      .from("garmondrop_rooms")
       .select("id, entry_amount_minor, status")
       .eq("creator_id", uid)
       .eq("status", "waiting")
@@ -147,10 +147,10 @@ export default function GarmonFourLobbyPage() {
     void loadOpen();
     void loadMyWaiting();
     const ch = supabase
-      .channel("garmonfour-lobby")
+      .channel("garmondrop-lobby")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "garmonfour_rooms" },
+        { event: "*", schema: "public", table: "garmondrop_rooms" },
         () => {
           void loadOpen();
           void loadMyWaiting();
@@ -165,11 +165,11 @@ export default function GarmonFourLobbyPage() {
   useEffect(() => {
     if (loadingSession) return;
     if (!token) {
-      router.replace("/login?next=/dashboard/games/garmonfour");
+      router.replace("/login?next=/dashboard/games/garmondrop");
     }
   }, [token, router, loadingSession]);
 
-  const settlement = computeGarmonFourSettlement(entry);
+  const settlement = computeGarmonDropSettlement(entry);
   const canAfford = myBalance >= entry;
 
   async function handleCreate() {
@@ -180,13 +180,13 @@ export default function GarmonFourLobbyPage() {
       myActiveRoomRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    if (entry < GARMONFOUR_MIN_ENTRY_GPC || !canAfford) {
-      setErr(`Need at least ${GARMONFOUR_MIN_ENTRY_GPC} GPC and sufficient balance`);
+    if (entry < GARMONDROP_MIN_ENTRY_GPC || !canAfford) {
+      setErr(`Need at least ${GARMONDROP_MIN_ENTRY_GPC} GPC and sufficient balance`);
       return;
     }
     setBusy(true);
     try {
-      const reference = `garmonfour_create_${crypto.randomUUID()}`;
+      const reference = `garmondrop_create_${crypto.randomUUID()}`;
       const res = await fetch(`${API}/post-entry`, {
         method: "POST",
         credentials: "include",
@@ -199,7 +199,7 @@ export default function GarmonFourLobbyPage() {
         return;
       }
       if (j.roomId) {
-        router.push(`/dashboard/games/garmonfour/${j.roomId}`);
+        router.push(`/dashboard/games/garmondrop/${j.roomId}`);
       }
     } finally {
       setBusy(false);
@@ -215,7 +215,7 @@ export default function GarmonFourLobbyPage() {
     }
     setBusy(true);
     try {
-      const reference = `garmonfour_join_${roomId}_${crypto.randomUUID()}`;
+      const reference = `garmondrop_join_${roomId}_${crypto.randomUUID()}`;
       const res = await fetch(`${API}/post-entry`, {
         method: "POST",
         credentials: "include",
@@ -229,7 +229,7 @@ export default function GarmonFourLobbyPage() {
         return;
       }
       if (j.roomId) {
-        router.push(`/dashboard/games/garmonfour/${j.roomId}`);
+        router.push(`/dashboard/games/garmondrop/${j.roomId}`);
       }
     } finally {
       setBusy(false);
@@ -301,7 +301,7 @@ export default function GarmonFourLobbyPage() {
             WebkitTextFillColor: "transparent",
           }}
         >
-          GarmonFour
+          GarmonDrop
         </h1>
         <p className="mt-2 text-center text-sm text-white/60">
           Drop discs and connect four. Beat your opponent and take the pot.
@@ -349,7 +349,7 @@ export default function GarmonFourLobbyPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             type="button"
-            disabled={busy || entry < GARMONFOUR_MIN_ENTRY_GPC || !canAfford}
+            disabled={busy || entry < GARMONDROP_MIN_ENTRY_GPC || !canAfford}
             onClick={() => void handleCreate()}
             className="w-full rounded-xl py-3.5 text-base font-bold text-black transition disabled:opacity-40"
             style={{
@@ -373,7 +373,7 @@ export default function GarmonFourLobbyPage() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => router.push(`/dashboard/games/garmonfour/${myWaitingRoom.id}`)}
+                onClick={() => router.push(`/dashboard/games/garmondrop/${myWaitingRoom.id}`)}
                 className="rounded-lg border border-[#f5c842]/50 px-4 py-2 text-sm font-semibold text-[#f5c842]"
               >
                 Open room

@@ -1,6 +1,6 @@
 import { computePvpCoinFlipSettlement } from "@/lib/coin-flip";
 
-export const GARMONFOUR_MIN_ENTRY_GPC = 100;
+export const GARMONDROP_MIN_ENTRY_GPC = 100;
 
 export type ConnectFourBoard = number[][];
 
@@ -10,7 +10,7 @@ export function createEmptyConnectFourBoard(): ConnectFourBoard {
 }
 
 /** Settlement preview: same 10% of total pot as Coin Flip PvP. */
-export function computeGarmonFourSettlement(entryPerPlayerGpc: number) {
+export function computeGarmonDropSettlement(entryPerPlayerGpc: number) {
   return computePvpCoinFlipSettlement(entryPerPlayerGpc);
 }
 

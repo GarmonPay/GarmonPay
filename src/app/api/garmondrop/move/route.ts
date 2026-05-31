@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "reference required" }, { status: 400 });
   }
 
-  const { data, error } = await admin.rpc("garmonfour_make_move_atomic", {
+  const { data, error } = await admin.rpc("garmondrop_make_move_atomic", {
     p_room_id: roomId,
     p_user_id: userId,
     p_column: column,
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    console.error("[garmonfour/move] rpc error", error);
+    console.error("[garmondrop/move] rpc error", error);
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { GARMONFOUR_MIN_ENTRY_GPC } from "@/lib/connect-four";
+import { GARMONDROP_MIN_ENTRY_GPC } from "@/lib/connect-four";
 
 type RpcPayload = {
   success?: boolean;
@@ -45,9 +45,9 @@ export async function POST(request: Request) {
 
   const amtRaw = Number(body.entryAmount ?? body.entry_amount ?? NaN);
   const entryAmount = Math.floor(amtRaw);
-  if (!Number.isFinite(amtRaw) || entryAmount < GARMONFOUR_MIN_ENTRY_GPC) {
+  if (!Number.isFinite(amtRaw) || entryAmount < GARMONDROP_MIN_ENTRY_GPC) {
     return NextResponse.json(
-      { message: `entryAmount must be an integer GPC amount (min ${GARMONFOUR_MIN_ENTRY_GPC})` },
+      { message: `entryAmount must be an integer GPC amount (min ${GARMONDROP_MIN_ENTRY_GPC})` },
       { status: 400 }
     );
   }
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "roomId required for join" }, { status: 400 });
   }
 
-  const { data, error } = await admin.rpc("garmonfour_post_entry_atomic", {
+  const { data, error } = await admin.rpc("garmondrop_post_entry_atomic", {
     p_op: opRaw,
     p_room_id: opRaw === "create" ? null : roomId,
     p_user_id: userId,
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    console.error("[garmonfour/post-entry] rpc error", error);
+    console.error("[garmondrop/post-entry] rpc error", error);
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 

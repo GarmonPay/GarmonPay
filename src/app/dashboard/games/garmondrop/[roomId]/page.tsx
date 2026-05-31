@@ -9,13 +9,13 @@ import { CELO_USER_PROFILE_FIELDS } from "@/lib/celo-player-state";
 import { resolveDisplayName } from "@/lib/display-name";
 import {
   boardHasConnectFour,
-  computeGarmonFourSettlement,
+  computeGarmonDropSettlement,
   detectBoardWinner,
   findBoardWinningLine,
   findLastPlacedCell,
   findWinningLine,
   createEmptyConnectFourBoard,
-  GARMONFOUR_MIN_ENTRY_GPC,
+  GARMONDROP_MIN_ENTRY_GPC,
   isConnectFourBoardFull,
   parseConnectFourBoard,
   type ConnectFourBoard,
@@ -28,7 +28,7 @@ import { getReferralLink } from "@/lib/site-url";
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
 const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
 
-const API = "/api/garmonfour";
+const API = "/api/garmondrop";
 const DROP_ANIM_MS = 450;
 
 type UserEmbed = {
@@ -112,7 +112,7 @@ function ClassicDisc({
 }
 
 /** Same burst pattern as C-Lo result banner — fires once per completion key. */
-function GarmonFourWinConfetti({ fireKey }: { fireKey: string }) {
+function GarmonDropWinConfetti({ fireKey }: { fireKey: string }) {
   const firedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -179,7 +179,7 @@ function usePayoutCountUp(target: number, durationMs = 800): number {
   return value;
 }
 
-function GarmonFourWinModalBody({
+function GarmonDropWinModalBody({
   payoutGpc,
   endedByForfeit,
   settlementPending,
@@ -264,7 +264,7 @@ function GarmonFourWinModalBody({
         <button type="button" onClick={() => void handleShareWin()} className={actionBtnClass}>
           {shareCopied ? "Copied!" : "Share"}
         </button>
-        <Link href="/dashboard/games/garmonfour" className={actionBtnClass}>
+        <Link href="/dashboard/games/garmondrop" className={actionBtnClass}>
           Back to lobby
         </Link>
       </div>
@@ -272,7 +272,7 @@ function GarmonFourWinModalBody({
   );
 }
 
-function GarmonFourPlainResultBody({
+function GarmonDropPlainResultBody({
   gameResult,
   cinzelClassName,
 }: {
@@ -289,7 +289,7 @@ function GarmonFourPlainResultBody({
       </p>
       <p className="mt-2 text-sm text-white/80">{gameResult.subtitle}</p>
       <Link
-        href="/dashboard/games/garmonfour"
+        href="/dashboard/games/garmondrop"
         className="mt-4 inline-block rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-[#7c3aed]/28"
       >
         Back to lobby
@@ -298,7 +298,7 @@ function GarmonFourPlainResultBody({
   );
 }
 
-export default function GarmonFourRoomPage() {
+export default function GarmonDropRoomPage() {
   const params = useParams();
   const roomId = typeof params?.roomId === "string" ? params.roomId : "";
   const router = useRouter();
@@ -343,7 +343,7 @@ export default function GarmonFourRoomPage() {
   const fetchRoom = useCallback(async () => {
     if (!supabase || !roomId) return;
     const { data, error } = await supabase
-      .from("garmonfour_rooms")
+      .from("garmondrop_rooms")
       .select(
         `*, creator:creator_id(${CELO_USER_PROFILE_FIELDS}), opponent:opponent_id(${CELO_USER_PROFILE_FIELDS})`
       )
@@ -394,7 +394,7 @@ export default function GarmonFourRoomPage() {
   useEffect(() => {
     if (loadingSession) return;
     if (!token || !userId) {
-      router.replace(`/login?next=${encodeURIComponent(`/dashboard/games/garmonfour/${roomId}`)}`);
+      router.replace(`/login?next=${encodeURIComponent(`/dashboard/games/garmondrop/${roomId}`)}`);
     }
   }, [loadingSession, token, userId, router, roomId]);
 
@@ -402,13 +402,13 @@ export default function GarmonFourRoomPage() {
     if (!userId || !roomId || !supabase) return;
     void fetchRoom();
     const ch = supabase
-      .channel(`garmonfour-room-${roomId}`)
+      .channel(`garmondrop-room-${roomId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "garmonfour_rooms",
+          table: "garmondrop_rooms",
           filter: `id=eq.${roomId}`,
         },
         () => {
@@ -490,7 +490,7 @@ export default function GarmonFourRoomPage() {
       return;
     }
 
-    const ch = supabase.channel(`garmonfour-presence:${roomId}`, {
+    const ch = supabase.channel(`garmondrop-presence:${roomId}`, {
       config: { presence: { key: userId } },
     });
 
@@ -621,7 +621,7 @@ export default function GarmonFourRoomPage() {
     if (room?.status !== "cancelled") return;
     if (cancelledRedirectTimerRef.current) clearTimeout(cancelledRedirectTimerRef.current);
     cancelledRedirectTimerRef.current = setTimeout(() => {
-      router.replace("/dashboard/games/garmonfour");
+      router.replace("/dashboard/games/garmondrop");
     }, 1600);
   }, [room?.status, router]);
 
@@ -648,8 +648,8 @@ export default function GarmonFourRoomPage() {
     if (!url || typeof navigator.share !== "function") return;
     try {
       await navigator.share({
-        title: "GarmonFour — join my game",
-        text: "Join my GarmonFour game on GarmonPay",
+        title: "GarmonDrop — join my game",
+        text: "Join my GarmonDrop game on GarmonPay",
         url,
       });
     } catch {
@@ -668,7 +668,7 @@ export default function GarmonFourRoomPage() {
     setApiErr(null);
     setBusy(true);
     try {
-      const reference = `garmonfour_move_${roomId}_${room.move_seq}_${crypto.randomUUID()}`;
+      const reference = `garmondrop_move_${roomId}_${room.move_seq}_${crypto.randomUUID()}`;
       const res = await fetch(`${API}/move`, {
         method: "POST",
         credentials: "include",
@@ -707,7 +707,7 @@ export default function GarmonFourRoomPage() {
     setApiErr(null);
     setBusy(true);
     try {
-      const reference = `garmonfour_forfeit_${roomId}_${crypto.randomUUID()}`;
+      const reference = `garmondrop_forfeit_${roomId}_${crypto.randomUUID()}`;
       const res = await fetch(`${API}/forfeit`, {
         method: "POST",
         credentials: "include",
@@ -745,7 +745,7 @@ export default function GarmonFourRoomPage() {
     return (
       <div className={`mx-auto max-w-md px-4 py-10 text-center ${dm.className}`} style={{ background: "#0e0118" }}>
         <p className="text-amber-200/90">{loadError ?? "Loading room…"}</p>
-        <Link href="/dashboard/games/garmonfour" className="mt-4 inline-block text-[#7c3aed] underline">
+        <Link href="/dashboard/games/garmondrop" className="mt-4 inline-block text-[#7c3aed] underline">
           Back to lobby
         </Link>
       </div>
@@ -758,7 +758,7 @@ export default function GarmonFourRoomPage() {
         <p className={`text-2xl text-[#f5c842] ${cinzel.className}`}>Room cancelled</p>
         <p className="mt-2 text-sm text-white/70">This room was cancelled and refunded.</p>
         <p className="mt-1 text-xs text-white/50">Returning to lobby…</p>
-        <Link href="/dashboard/games/garmonfour" className="mt-4 inline-block text-[#7c3aed] underline">
+        <Link href="/dashboard/games/garmondrop" className="mt-4 inline-block text-[#7c3aed] underline">
           Back to lobby now
         </Link>
       </div>
@@ -771,7 +771,7 @@ export default function GarmonFourRoomPage() {
     return (
       <div className={`mx-auto max-w-md px-4 py-10 text-center ${dm.className}`} style={{ background: "#0e0118" }}>
         <p className="text-white/80">You are not a player in this room.</p>
-        <Link href="/dashboard/games/garmonfour" className="mt-4 inline-block text-[#7c3aed] underline">
+        <Link href="/dashboard/games/garmondrop" className="mt-4 inline-block text-[#7c3aed] underline">
           Back to lobby
         </Link>
       </div>
@@ -780,8 +780,8 @@ export default function GarmonFourRoomPage() {
 
   const board = parseConnectFourBoard(room.board_state) ?? createEmptyConnectFourBoard();
   const entry = Math.floor(room.entry_amount_minor);
-  const { winnerPayoutGpc, totalPotGpc, platformFeeGpc } = computeGarmonFourSettlement(
-    Math.max(GARMONFOUR_MIN_ENTRY_GPC, entry)
+  const { winnerPayoutGpc, totalPotGpc, platformFeeGpc } = computeGarmonDropSettlement(
+    Math.max(GARMONDROP_MIN_ENTRY_GPC, entry)
   );
 
   const creatorName = labelFor(room.creator, room.creator_id);
@@ -896,7 +896,7 @@ export default function GarmonFourRoomPage() {
 
   const celebrationBody =
     gameResult?.kind === "win" ? (
-      <GarmonFourWinModalBody
+      <GarmonDropWinModalBody
         payoutGpc={gameResult.payoutGpc}
         endedByForfeit={gameResult.endedByForfeit}
         settlementPending={gameResult.settlementPending}
@@ -905,7 +905,7 @@ export default function GarmonFourRoomPage() {
         cinzelClassName={cinzel.className}
       />
     ) : gameResult?.kind === "loss" || gameResult?.kind === "draw" ? (
-      <GarmonFourPlainResultBody gameResult={gameResult} cinzelClassName={cinzel.className} />
+      <GarmonDropPlainResultBody gameResult={gameResult} cinzelClassName={cinzel.className} />
     ) : null;
 
   return (
@@ -916,7 +916,7 @@ export default function GarmonFourRoomPage() {
       {gameResult && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 px-4">
           {gameResult.kind === "win" && (
-            <GarmonFourWinConfetti
+            <GarmonDropWinConfetti
               fireKey={`${room.id}:${room.completed_at ?? room.updated_at ?? "win"}`}
             />
           )}
@@ -931,11 +931,11 @@ export default function GarmonFourRoomPage() {
 
       <div className="mx-auto w-full max-w-2xl px-3 pt-5 sm:px-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <Link href="/dashboard/games/garmonfour" className="text-sm text-[#7c3aed] underline">
+          <Link href="/dashboard/games/garmondrop" className="text-sm text-[#7c3aed] underline">
             ← Lobby
           </Link>
           <p className="font-mono text-[10px] text-[#A855F7]" style={{ letterSpacing: "0.12em" }}>
-            GARMONFOUR
+            GARMONDROP
           </p>
         </div>
 

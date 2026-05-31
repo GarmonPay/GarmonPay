@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   const { data: rows, error } = await admin
-    .from("garmonfour_rooms")
+    .from("garmondrop_rooms")
     .select("id, created_at, entry_amount_minor, creator_id")
     .eq("status", "waiting")
     .is("opponent_id", null)

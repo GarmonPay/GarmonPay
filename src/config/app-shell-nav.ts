@@ -8,7 +8,7 @@ export const APP_SHELL_LINKS = {
   gamesHub: "/dashboard/games",
   celo: "/dashboard/games/celo",
   /** Connect Four PvP lobby (same shell as other dashboard games). */
-  garmonfour: "/dashboard/games/garmonfour",
+  garmondrop: "/dashboard/games/garmondrop",
   coinFlip: "/dashboard/coinflip",
   arena: "/dashboard/arena",
   earnRoot: "/dashboard/earn",
