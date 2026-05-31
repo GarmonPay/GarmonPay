@@ -946,7 +946,7 @@ export default function GarmonDropRoomPage() {
                 <ClassicDisc piece={1} className="h-full w-full" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-white/45">Heads · Host</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/45">Host</p>
                 <p className="font-semibold text-[#f5c842]">{creatorName}</p>
               </div>
             </div>
@@ -955,7 +955,7 @@ export default function GarmonDropRoomPage() {
                 <ClassicDisc piece={2} className="h-full w-full" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-white/45">Tails · Guest</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/45">Guest</p>
                 <p className="font-semibold text-[#c4b5fd]">{opponentName}</p>
               </div>
             </div>
