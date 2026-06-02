@@ -1,10 +1,62 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
 import { computePvpCoinFlipSettlement, flipCoin } from "@/lib/coin-flip";
 import { COIN_FLIP_MIN_BET_SC } from "@/lib/coin-flip";
 import { recordCoinFlipPvpPlatformFee } from "@/lib/coin-flip-ledger";
 import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
+
+function isDuplicateLedgerMessage(message: string | undefined): boolean {
+  return typeof message === "string" && message.toLowerCase().includes("duplicate");
+}
+
+/** Join stake debit: idempotent retry when stake already recorded; fresh ref after race refund. */
+async function debitCoinFlipJoinStake(
+  supabase: SupabaseClient,
+  userId: string,
+  gameId: string,
+  betAmountSc: number
+): Promise<{ success: boolean; message?: string }> {
+  const baseRef = `coin_flip_join_${gameId}`;
+  const refundRef = `coin_flip_join_refund_${gameId}`;
+
+  const attemptDebit = (reference: string) =>
+    debitGpayCoins(
+      userId,
+      betAmountSc,
+      `Coin flip stake (join) ${gameId}`,
+      reference,
+      "coin_flip_stake"
+    );
+
+  let debit = await attemptDebit(baseRef);
+  if (debit.success) return debit;
+  if (!isDuplicateLedgerMessage(debit.message)) return debit;
+
+  const { data: stakeTx } = await supabase
+    .from("coin_transactions")
+    .select("id")
+    .eq("reference", baseRef)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!stakeTx) return debit;
+
+  const { data: refundTx } = await supabase
+    .from("coin_transactions")
+    .select("id")
+    .eq("reference", refundRef)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (refundTx) {
+    return attemptDebit(`${baseRef}_r_${Date.now()}`);
+  }
+
+  // Stake recorded, not refunded — safe to continue settlement (retry after failed update).
+  return { success: true };
+}
 
 export async function POST(request: Request) {
   const userId = await getAuthUserIdBearerOrCookie(request);
@@ -66,14 +118,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
   }
 
-  const debitRef = `coin_flip_join_${gameId}`;
-  const debit = await debitGpayCoins(
-    userId,
-    betAmountSc,
-    `Coin flip stake (join) ${gameId}`,
-    debitRef,
-    "coin_flip_stake"
-  );
+  const debit = await debitCoinFlipJoinStake(supabase, userId, gameId, betAmountSc);
 
   if (!debit.success) {
     console.warn("[coin-flip/join] debit failed", { gameId, userId, betAmountSc, message: debit.message });
