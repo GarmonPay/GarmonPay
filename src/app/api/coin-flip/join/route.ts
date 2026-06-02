@@ -17,18 +17,20 @@ async function debitCoinFlipJoinStake(
   userId: string,
   gameId: string,
   betAmountSc: number
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; debitReference?: string }> {
   const baseRef = `coin_flip_join_${gameId}`;
-  const refundRef = `coin_flip_join_refund_${gameId}`;
+  const baseRefundRef = `coin_flip_join_refund_${gameId}`;
 
-  const attemptDebit = (reference: string) =>
-    debitGpayCoins(
+  const attemptDebit = async (reference: string) => {
+    const result = await debitGpayCoins(
       userId,
       betAmountSc,
       `Coin flip stake (join) ${gameId}`,
       reference,
       "coin_flip_stake"
     );
+    return { ...result, debitReference: result.success ? reference : undefined };
+  };
 
   let debit = await attemptDebit(baseRef);
   if (debit.success) return debit;
@@ -46,16 +48,21 @@ async function debitCoinFlipJoinStake(
   const { data: refundTx } = await supabase
     .from("coin_transactions")
     .select("id")
-    .eq("reference", refundRef)
+    .eq("reference", baseRefundRef)
     .eq("user_id", userId)
     .maybeSingle();
 
   if (refundTx) {
-    return attemptDebit(`${baseRef}_r_${Date.now()}`);
+    const retryRef = `${baseRef}_r_${Date.now()}`;
+    return attemptDebit(retryRef);
   }
 
   // Stake recorded, not refunded — safe to continue settlement (retry after failed update).
-  return { success: true };
+  return { success: true, debitReference: baseRef };
+}
+
+function joinRefundReference(debitReference: string): string {
+  return debitReference.replace(/^coin_flip_join_/, "coin_flip_join_refund_");
 }
 
 export async function POST(request: Request) {
@@ -128,6 +135,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const debitReference = debit.debitReference ?? `coin_flip_join_${gameId}`;
+
   const afterDebit = await getUserCoins(userId);
   console.info("[coin-flip/join] joiner debited", {
     gameId,
@@ -166,11 +175,17 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (updErr || !updated) {
+    console.error("[coin-flip/join] game update failed", {
+      gameId,
+      userId,
+      updErr: updErr?.message,
+      code: (updErr as { code?: string } | null)?.code,
+    });
     const refund = await creditGpayIdempotent(
       userId,
       betAmountSc,
       `Coin flip join refund (race) ${gameId}`,
-      `coin_flip_join_refund_${gameId}`,
+      joinRefundReference(debitReference),
       "coin_flip_refund"
     );
     if (!refund.success) {
