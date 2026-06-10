@@ -20,6 +20,14 @@ export function getReferralLinkR(referralCode: string): string {
   return `${getSiteUrl()}/r/${encodeURIComponent((referralCode || "").trim())}`;
 }
 
+/** Referral + coin flip invite: friend signs up and joins a specific waiting flip. */
+export function getReferralCoinFlipLink(referralCode: string, gameId: string): string {
+  const code = (referralCode || "").trim();
+  const id = (gameId || "").trim();
+  const base = `${getSiteUrl()}/invite/flip/${encodeURIComponent(id)}`;
+  return code ? `${base}?ref=${encodeURIComponent(code)}` : base;
+}
+
 /** Base URL for auth redirects: {siteUrl}/dashboard etc. */
 export function getDashboardUrl(): string {
   return `${getSiteUrl()}/dashboard`;

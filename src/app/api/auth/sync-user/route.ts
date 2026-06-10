@@ -266,33 +266,45 @@ export async function POST(req: Request) {
         const { data: referrer } = await supabase.from("users").select("id").eq("referral_code", refCode).maybeSingle();
         const referrerId = (referrer as { id?: string } | null)?.id;
         if (referrerId && referrerId !== id) {
-          await supabase.from("users").update({
-            referred_by_code: refCode,
-            referred_by: referrerId,
-            updated_at: new Date().toISOString(),
-          }).eq("id", id);
-          const { createReferral } = await import("@/lib/viral-referral-db");
-          await createReferral({
-            referrerUserId: referrerId,
-            referredUserId: id,
-            referralCode: refCode,
-            referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
-          });
-          referralApplied = true;
-          const refKey = `referral_signup_bonus_${id}`;
-          const bonus = await creditCoins(
-            referrerId,
-            0,
-            REFERRAL_SIGNUP_BONUS_GPC,
-            `Referral signup bonus — ${REFERRAL_SIGNUP_BONUS_GPC} GPC`,
-            refKey,
-            "referral_bonus"
-          );
-          if (
-            bonus.success === false &&
-            !/duplicate/i.test((bonus.message ?? "").toLowerCase())
-          ) {
-            console.warn("sync-user referral bonus:", bonus.message);
+          const { data: referredRow } = await supabase
+            .from("users")
+            .select("referred_by")
+            .eq("id", id)
+            .maybeSingle();
+          const alreadyReferred = !!(referredRow as { referred_by?: string | null } | null)?.referred_by;
+
+          if (!alreadyReferred) {
+            await supabase
+              .from("users")
+              .update({
+                referred_by_code: refCode,
+                referred_by: referrerId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", id);
+            const { createReferral } = await import("@/lib/viral-referral-db");
+            await createReferral({
+              referrerUserId: referrerId,
+              referredUserId: id,
+              referralCode: refCode,
+              referredIp: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? null,
+            });
+            referralApplied = true;
+            const refKey = `referral_signup_bonus_${id}`;
+            const bonus = await creditCoins(
+              referrerId,
+              0,
+              REFERRAL_SIGNUP_BONUS_GPC,
+              `Referral signup bonus — ${REFERRAL_SIGNUP_BONUS_GPC} GPC`,
+              refKey,
+              "referral_bonus"
+            );
+            if (
+              bonus.success === false &&
+              !/duplicate/i.test((bonus.message ?? "").toLowerCase())
+            ) {
+              console.warn("sync-user referral bonus:", bonus.message);
+            }
           }
         }
       } catch (refErr) {

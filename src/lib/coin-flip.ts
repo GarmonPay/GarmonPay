@@ -5,6 +5,9 @@ export type CoinSide = "heads" | "tails";
 /** Coin flip stakes use GPay Coins; minimum bet (GPC). */
 export const COIN_FLIP_MIN_BET_SC = 100;
 
+/** Refer-a-friend invite flips: fixed stake per player (GPC). */
+export const REFERRAL_FLIP_STAKE_GPC = 50;
+
 /** PvP only: total pot = both stakes; fee = 10% of pot taken from pot; winner gets remainder. */
 export function computePvpCoinFlipSettlement(betPerPlayerGpc: number): {
   totalPotGpc: number;

@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     .select("id, created_at, bet_amount_minor, creator_side, creator_id")
     .eq("status", "waiting")
     .eq("mode", "vs_player")
+    .eq("is_referral_flip", false)
     .neq("creator_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);

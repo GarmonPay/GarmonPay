@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const { data: rows, error } = await supabase
     .from("coin_flip_games")
     .select(
-      "id, created_at, mode, status, bet_amount_minor, creator_id, creator_side, result, winner_id, opponent_id, loser_user_id, house_cut_minor, total_pot_minor, winner_payout_minor, resolved_at, settled_at"
+      "id, created_at, mode, status, bet_amount_minor, creator_id, creator_side, is_referral_flip, result, winner_id, opponent_id, loser_user_id, house_cut_minor, total_pot_minor, winner_payout_minor, resolved_at, settled_at"
     )
     .or(`creator_id.eq.${userId},opponent_id.eq.${userId}`)
     .order("created_at", { ascending: false })
@@ -34,7 +34,8 @@ export async function GET(request: Request) {
     status: string;
     bet_amount_minor: number;
     creator_id: string;
-    creator_side: string;
+    creator_side: string | null;
+    is_referral_flip: boolean;
     result: string | null;
     winner_id: string | null;
     opponent_id: string | null;
@@ -93,6 +94,7 @@ export async function GET(request: Request) {
       betAmountMinor: bet,
       result: r.result,
       creatorSide: r.creator_side,
+      isReferralFlip: !!r.is_referral_flip,
       won,
       payoutMinor,
       netMinor,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
+import { getReferralFlipRedirectPath } from "@/lib/referral-flip-invite";
 
 export default function AuthConfirmPage() {
   const router = useRouter();
@@ -18,7 +19,8 @@ export default function AuthConfirmPage() {
 
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        router.push("/dashboard");
+        const dest = getReferralFlipRedirectPath() ?? "/dashboard";
+        router.push(dest);
       }
     });
 

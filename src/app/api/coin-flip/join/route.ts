@@ -2,13 +2,31 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthUserIdBearerOrCookie } from "@/lib/auth-request";
 import { createAdminClient } from "@/lib/supabase";
-import { computePvpCoinFlipSettlement, flipCoin } from "@/lib/coin-flip";
-import { COIN_FLIP_MIN_BET_SC } from "@/lib/coin-flip";
+import {
+  computePvpCoinFlipSettlement,
+  flipCoin,
+  COIN_FLIP_MIN_BET_SC,
+  REFERRAL_FLIP_STAKE_GPC,
+  type CoinSide,
+} from "@/lib/coin-flip";
 import { recordCoinFlipPvpPlatformFee } from "@/lib/coin-flip-ledger";
 import { creditGpayIdempotent, debitGpayCoins, getUserCoins } from "@/lib/coins";
 
+const BUY_GOLD_URL = "/dashboard/buy-coins";
+
 function isDuplicateLedgerMessage(message: string | undefined): boolean {
   return typeof message === "string" && message.toLowerCase().includes("duplicate");
+}
+
+function insufficientGpcResponse(needGpc: number, isReferralFlip: boolean) {
+  return NextResponse.json(
+    {
+      message: `Insufficient GPay Coins. You need ${needGpc} GPC to join${isReferralFlip ? " this invite flip" : ""}. Buy Gold Coins and convert to GPC to play.`,
+      code: "INSUFFICIENT_GPC",
+      buyGoldUrl: BUY_GOLD_URL,
+    },
+    { status: 400 }
+  );
 }
 
 /** Join stake debit: idempotent retry when stake already recorded; fresh ref after race refund. */
@@ -65,6 +83,10 @@ function joinRefundReference(debitReference: string): string {
   return debitReference.replace(/^coin_flip_join_/, "coin_flip_join_refund_");
 }
 
+function oppositeSide(side: CoinSide): CoinSide {
+  return side === "heads" ? "tails" : "heads";
+}
+
 export async function POST(request: Request) {
   const userId = await getAuthUserIdBearerOrCookie(request);
   if (!userId) {
@@ -76,7 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
   }
 
-  let body: { gameId?: unknown };
+  let body: { gameId?: unknown; side?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -88,9 +110,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "gameId required" }, { status: 400 });
   }
 
+  const joinSide =
+    body.side === "heads" || body.side === "tails" ? (body.side as CoinSide) : null;
+
   const { data: game, error: fetchErr } = await supabase
     .from("coin_flip_games")
-    .select("id, status, mode, bet_amount_minor, creator_id, creator_side")
+    .select("id, status, mode, bet_amount_minor, creator_id, creator_side, is_referral_flip")
     .eq("id", gameId)
     .maybeSingle();
 
@@ -104,7 +129,8 @@ export async function POST(request: Request) {
     mode: string;
     bet_amount_minor: number;
     creator_id: string;
-    creator_side: string;
+    creator_side: string | null;
+    is_referral_flip: boolean;
   };
 
   if (g.mode !== "vs_player" || g.status !== "waiting") {
@@ -115,14 +141,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "You cannot join your own game" }, { status: 403 });
   }
 
+  const isReferralFlip = !!g.is_referral_flip;
   const betAmountSc = Math.trunc(Number(g.bet_amount_minor));
-  if (!Number.isFinite(betAmountSc) || betAmountSc < COIN_FLIP_MIN_BET_SC) {
-    return NextResponse.json({ message: "Invalid game stake" }, { status: 400 });
+
+  if (isReferralFlip) {
+    if (!joinSide) {
+      return NextResponse.json(
+        { message: "side (heads|tails) required for referral invite flips" },
+        { status: 400 }
+      );
+    }
+    if (betAmountSc !== REFERRAL_FLIP_STAKE_GPC) {
+      return NextResponse.json({ message: "Invalid referral flip stake" }, { status: 400 });
+    }
+    if (g.creator_side != null && g.creator_side !== oppositeSide(joinSide)) {
+      return NextResponse.json({ message: "Side conflict for this game" }, { status: 409 });
+    }
+  } else {
+    if (!Number.isFinite(betAmountSc) || betAmountSc < COIN_FLIP_MIN_BET_SC) {
+      return NextResponse.json({ message: "Invalid game stake" }, { status: 400 });
+    }
+    if (g.creator_side !== "heads" && g.creator_side !== "tails") {
+      return NextResponse.json({ message: "Invalid game configuration" }, { status: 400 });
+    }
   }
 
   const { gpayCoins } = await getUserCoins(userId);
   if (gpayCoins < betAmountSc) {
-    return NextResponse.json({ message: "Insufficient GPay Coins (GPC)" }, { status: 400 });
+    return insufficientGpcResponse(betAmountSc, isReferralFlip);
   }
 
   const debit = await debitCoinFlipJoinStake(supabase, userId, gameId, betAmountSc);
@@ -145,8 +191,12 @@ export async function POST(request: Request) {
     gpayCoinsAfterDebit: afterDebit.gpayCoins,
   });
 
+  const creatorSide: CoinSide = isReferralFlip
+    ? oppositeSide(joinSide!)
+    : (g.creator_side as CoinSide);
+
   const result = flipCoin();
-  const creatorWins = result === g.creator_side;
+  const creatorWins = result === creatorSide;
   const winnerId = creatorWins ? g.creator_id : userId;
   const loserId = creatorWins ? userId : g.creator_id;
 
@@ -154,20 +204,25 @@ export async function POST(request: Request) {
 
   const resolvedAt = new Date().toISOString();
 
+  const updatePayload: Record<string, unknown> = {
+    opponent_id: userId,
+    status: "completed",
+    result,
+    winner_id: winnerId,
+    loser_user_id: loserId,
+    house_cut_minor: platformFeeGpc,
+    total_pot_minor: totalPotGpc,
+    winner_payout_minor: winnerPayoutGpc,
+    resolved_at: resolvedAt,
+    settled_at: resolvedAt,
+  };
+  if (isReferralFlip) {
+    updatePayload.creator_side = creatorSide;
+  }
+
   const { data: updated, error: updErr } = await supabase
     .from("coin_flip_games")
-    .update({
-      opponent_id: userId,
-      status: "completed",
-      result,
-      winner_id: winnerId,
-      loser_user_id: loserId,
-      house_cut_minor: platformFeeGpc,
-      total_pot_minor: totalPotGpc,
-      winner_payout_minor: winnerPayoutGpc,
-      resolved_at: resolvedAt,
-      settled_at: resolvedAt,
-    })
+    .update(updatePayload)
     .eq("id", gameId)
     .eq("status", "waiting")
     .neq("creator_id", userId)

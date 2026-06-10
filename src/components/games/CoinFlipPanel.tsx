@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { CoinFlip3D } from "@/components/games/CoinFlip3D";
 import { useCoins } from "@/hooks/useCoins";
+import { REFERRAL_FLIP_STAKE_GPC } from "@/lib/coin-flip";
+import { getReferralCoinFlipLink } from "@/lib/site-url";
 
 const MIN_BET = 100;
 const BET_PRESETS = [100, 500, 1000, 2500] as const;
@@ -56,6 +58,7 @@ type HistoryRow = {
   mode: string;
   status: string;
   betAmountMinor: number;
+  isReferralFlip?: boolean;
   totalPotMinor?: number;
   platformFeeMinor?: number;
   winnerPayoutMinor?: number;
@@ -101,6 +104,10 @@ export function CoinFlipPanel() {
 
   const [openGames, setOpenGames] = useState<OpenGame[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [waitingInviteLink, setWaitingInviteLink] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = useCallback(
     (json = true) => {
@@ -174,6 +181,41 @@ export function CoinFlipPanel() {
     loadOpen();
   }, [token, refresh, loadHistory, loadOpen]);
 
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    if (!supabase || !token) return;
+    supabase.auth.getUser().then(({ data }) => {
+      const uid = data.user?.id;
+      if (!uid) return;
+      supabase
+        .from("users")
+        .select("referral_code")
+        .eq("id", uid)
+        .maybeSingle()
+        .then(({ data: row }) => {
+          const code = (row as { referral_code?: string | null } | null)?.referral_code?.trim() ?? "";
+          setReferralCode(code || null);
+        });
+    });
+  }, [token]);
+
+  useEffect(() => {
+    const waiting = history.find(
+      (h) => h.status === "waiting" && h.isReferralFlip && h.betAmountMinor === REFERRAL_FLIP_STAKE_GPC
+    );
+    if (waiting && referralCode) {
+      setWaitingInviteLink(getReferralCoinFlipLink(referralCode, waiting.id));
+    } else {
+      setWaitingInviteLink(null);
+    }
+  }, [history, referralCode]);
+
+  useEffect(() => {
+    return () => {
+      if (shareCopiedTimerRef.current) clearTimeout(shareCopiedTimerRef.current);
+    };
+  }, []);
+
   const handleCoinResult = useCallback(
     (resultFace: "heads" | "tails") => {
       const p = pendingRef.current;
@@ -206,6 +248,84 @@ export function CoinFlipPanel() {
   const betValid = Number.isFinite(bet) && betAmountMinor >= MIN_BET;
   const flipDisabled = busy || isFlipping || !betValid || !canAfford;
   const joinDisabled = busy || isFlipping;
+
+  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  async function handleShareInviteLink(link: string) {
+    const shareText = `Join my ${REFERRAL_FLIP_STAKE_GPC} GPC coin flip on GarmonPay — pick heads or tails!`;
+    if (canNativeShare) {
+      try {
+        await navigator.share({ text: shareText, url: link });
+      } catch {
+        /* dismissed */
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n${link}`);
+      setShareCopied(true);
+      if (shareCopiedTimerRef.current) clearTimeout(shareCopiedTimerRef.current);
+      shareCopiedTimerRef.current = setTimeout(() => {
+        setShareCopied(false);
+        shareCopiedTimerRef.current = null;
+      }, 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  async function handleCreateReferralFlip() {
+    if (!token) return;
+    setError(null);
+    if (waitingInviteLink) {
+      setError("You already have an open invite flip — share that link or wait for your friend.");
+      return;
+    }
+    if (sweepsCoins < REFERRAL_FLIP_STAKE_GPC) {
+      setError(`You need ${REFERRAL_FLIP_STAKE_GPC} GPC to invite a friend.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/create`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(),
+        body: JSON.stringify({ mode: "vs_player", referralFlip: true }),
+      });
+      const d = (await r.json().catch(() => ({}))) as {
+        message?: string;
+        gpayCoins?: number;
+        new_balance?: number;
+        shareLink?: string;
+        gameId?: string;
+      };
+      if (!r.ok) {
+        setError(typeof d.message === "string" ? d.message : "Could not create invite flip");
+        return;
+      }
+      const authoritative =
+        typeof d.gpayCoins === "number"
+          ? d.gpayCoins
+          : typeof d.new_balance === "number"
+            ? d.new_balance
+            : null;
+      if (authoritative != null) {
+        applyServerGpayBalance(authoritative);
+      }
+      const link =
+        typeof d.shareLink === "string" && d.shareLink
+          ? d.shareLink
+          : referralCode && d.gameId
+            ? getReferralCoinFlipLink(referralCode, d.gameId)
+            : null;
+      if (link) setWaitingInviteLink(link);
+      await refresh();
+      loadHistory();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleCreatePlayer() {
     if (!token) return;
@@ -389,6 +509,42 @@ export function CoinFlipPanel() {
 
       {tab === "player" && (
         <div className="space-y-6">
+          <section className="rounded-xl border border-[#7c3aed]/30 bg-[#7c3aed]/5 p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-white">Invite a friend (50 GPC)</h2>
+            <p className="text-sm text-white/60">
+              Fixed {REFERRAL_FLIP_STAKE_GPC} GPC stake each. Your friend picks heads or tails from your
+              share link — not listed in the public lobby.
+            </p>
+            {waitingInviteLink ? (
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <p className="text-sm font-medium text-[#f5c842]">Waiting for your friend…</p>
+                <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <p className="truncate font-mono text-[11px] text-white/90" title={waitingInviteLink}>
+                    {waitingInviteLink}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleShareInviteLink(waitingInviteLink)}
+                    className="rounded-xl border border-[#f5c842]/40 bg-[#f5c842]/10 px-4 py-2 text-sm font-semibold text-[#f5c842]"
+                  >
+                    {shareCopied ? "Copied!" : canNativeShare ? "Share invite" : "Copy invite link"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={busy || isFlipping || sweepsCoins < REFERRAL_FLIP_STAKE_GPC}
+                onClick={() => void handleCreateReferralFlip()}
+                className="w-full rounded-xl border border-[#7c3aed]/50 bg-[#7c3aed]/15 py-3.5 font-semibold text-white disabled:opacity-40"
+              >
+                {busy ? "Working…" : `Create invite flip (${REFERRAL_FLIP_STAKE_GPC} GPC)`}
+              </button>
+            )}
+          </section>
+
           <section className="rounded-xl border border-white/10 bg-fintech-bg-card p-6 space-y-4">
             <h2 className="text-lg font-semibold text-white">Create game</h2>
             <div>

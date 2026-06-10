@@ -55,6 +55,16 @@ export async function POST(request: Request) {
   if (referrerId === userId) {
     return NextResponse.json({ message: "Self-referral not allowed" }, { status: 400 });
   }
+
+  const { data: selfRow } = await supabase
+    .from("users")
+    .select("referred_by")
+    .eq("id", userId)
+    .maybeSingle();
+  if ((selfRow as { referred_by?: string | null } | null)?.referred_by) {
+    return NextResponse.json({ ok: true, alreadySet: true });
+  }
+
   const { error } = await supabase
     .from("users")
     .update({
@@ -62,7 +72,8 @@ export async function POST(request: Request) {
       referred_by_code: referrerCode,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", userId);
+    .eq("id", userId)
+    .is("referred_by", null);
   if (error) {
     return NextResponse.json({ message: "Failed to attach referrer" }, { status: 500 });
   }

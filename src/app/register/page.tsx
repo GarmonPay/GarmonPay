@@ -5,6 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSiteUrl } from "@/lib/site-url";
+import {
+  inviteFlipPath,
+  persistReferralFlipInvite,
+  REFERRAL_FLIP_GAME_STORAGE_KEY,
+  REFERRAL_FLIP_REF_STORAGE_KEY,
+} from "@/lib/referral-flip-invite";
 import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
 import { validateUsernameFormat } from "@/lib/username-validation";
 
@@ -28,7 +34,11 @@ export default function RegisterPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref")?.trim();
+    const flip = params.get("flip")?.trim();
     if (ref) setReferralCode(ref);
+    if (flip) {
+      persistReferralFlipInvite(flip, ref || undefined);
+    }
   }, []);
 
   const handleSubmit = async () => {
@@ -122,7 +132,21 @@ export default function RegisterPage() {
         }
 
         if (data.session) {
-          router.push("/dashboard?welcome_gpc=100");
+          const flipGameId =
+            typeof sessionStorage !== "undefined"
+              ? sessionStorage.getItem(REFERRAL_FLIP_GAME_STORAGE_KEY)?.trim()
+              : "";
+          const flipRef =
+            typeof sessionStorage !== "undefined"
+              ? sessionStorage.getItem(REFERRAL_FLIP_REF_STORAGE_KEY)?.trim() ||
+                refTrim ||
+                undefined
+              : refTrim || undefined;
+          if (flipGameId) {
+            router.push(inviteFlipPath(flipGameId, flipRef));
+          } else {
+            router.push("/dashboard?welcome_gpc=50");
+          }
           router.refresh();
           return;
         }
