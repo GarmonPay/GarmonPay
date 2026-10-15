@@ -27,7 +27,7 @@ export function MemberShell({ children }: { children: React.ReactNode }) {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
         <p className="mb-6 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50" role="status">
-          Wallet sign-in is paused on this build. Mainnet trading, advertising charges, deposits, withdrawals, and referral payouts stay off. Nothing on this workspace is a withdrawable balance.
+          This workspace does not attach your signed wallet. Mainnet trading, advertising charges, deposits, withdrawals, and referral payouts stay off. Nothing on this workspace is a withdrawable balance.
         </p>
         {children}
       </main>

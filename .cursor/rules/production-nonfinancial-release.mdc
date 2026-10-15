@@ -1,0 +1,12 @@
+---
+description: Release completed nonfinancial features through the shared production workflow
+alwaysApply: true
+---
+
+# Production release of nonfinancial features
+
+When a nonfinancial feature is complete and its tests and production build pass, release it through the linked Vercel project `garmon-pay` from `/Users/bishop/Desktop/GarmonPay`. Do not deploy from an isolated worktree.
+
+Preserve newer Solana, Phantom, trading, and security changes. Keep `FINANCIAL_OPERATIONS_PAUSED` true. Do not enable payments, real earnings, withdrawals, or Mainnet trades. Do not apply unreviewed or destructive database migrations. Do not replace signed wallet identity with staging profiles.
+
+If those limits would be broken, stop and report the blocker instead of publishing.

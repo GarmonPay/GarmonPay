@@ -3,6 +3,8 @@ node_modules
 
 # Next.js
 .next
+.next-integrate-build
+.next-release
 out
 tsconfig.tsbuildinfo
 
