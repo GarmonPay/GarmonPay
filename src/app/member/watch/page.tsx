@@ -5,7 +5,7 @@ import { finishVerifiedView, openVerifiedView, pulseVerifiedView } from "@/app/m
 import { useMember } from "@/components/member/useMember";
 
 export default function WatchPage() {
-  const { id, snapshot, ready, reload } = useMember();
+  const { id, snapshot, ready } = useMember();
   const [watchId, setWatchId] = useState<string | null>(null);
   const [required, setRequired] = useState(0);
   const [message, setMessage] = useState("");
@@ -18,22 +18,16 @@ export default function WatchPage() {
   }, [watchId, id]);
 
   async function start(campaignId: string) {
-    if (!id) return;
+    if (!id) { setError("Connect and sign in with your wallet before a verified view."); return; }
     setError("");
     const result = await openVerifiedView({ memberId: id, campaignId });
-    if (!result.ok) { setError(result.error); return; }
-    setWatchId(result.watchId);
-    setRequired(result.requiredSeconds);
-    setMessage(`View open. Keep this page open for ${result.requiredSeconds} seconds. The server records the time.`);
+    setError(result.error);
   }
 
   async function finish() {
     if (!id || !watchId) return;
     const result = await finishVerifiedView({ memberId: id, watchId, webdriver: navigator.webdriver === true });
-    if (!result.ok) { setError(result.error); return; }
-    setWatchId(null);
-    setMessage(result.status === "verified" ? "View server-verified. The reward is not funded and was not paid." : result.reason ?? "The view was not verified.");
-    await reload();
+    setError("error" in result ? result.error : "Verified views are not funded.");
   }
 
   if (!ready || !snapshot) return <p className="text-violet-200">Loading Watch & Earn…</p>;

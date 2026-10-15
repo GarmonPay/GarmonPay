@@ -1,6 +1,8 @@
-import { periodStart, rankPaperTraders, rankVerifiedLive } from "@/lib/member-platform/leaderboard";
-import { readLedger } from "@/lib/member-platform/repository";
 import { formatLamports } from "@/lib/member-platform/economics";
+import { rankVerifiedLive } from "@/lib/member-platform/leaderboard";
+import { loadPaperRankings } from "@/lib/member-platform/wallet-account";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -11,19 +13,19 @@ export async function GET(request: Request) {
     const live = rankVerifiedLive();
     return Response.json({ ...live, period: windowName }, { headers: { "Cache-Control": "no-store" } });
   }
-  const state = readLedger();
-  const nowMs = Date.now();
-  const rows = rankPaperTraders({ nowMs, period: windowName, members: state.members, fills: state.paperFills }).map((row) => ({
+  const rankings = await loadPaperRankings(windowName);
+  const rows = rankings.rows.map((row) => ({
     ...row,
     realizedSol: formatLamports(row.realizedLamports),
-    virtual: true,
+    virtual: true as const,
   }));
   return Response.json({
     book: "paper",
-    available: true,
+    available: rankings.persistence === "ready",
     period: windowName,
-    startsAt: new Date(periodStart(nowMs, windowName)).toISOString(),
     rows,
-    note: "Paper rankings use realized virtual results. They are not live trades and cannot be reset from this page.",
+    note: rankings.persistence === "ready"
+      ? "Paper rankings use realized virtual results. They are not live trades and cannot be reset from this page."
+      : "Paper rankings stay empty until verified paper fills are stored. Nothing is estimated.",
   }, { headers: { "Cache-Control": "no-store" } });
 }

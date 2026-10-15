@@ -2,14 +2,13 @@
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createStagingMember } from "@/app/member/actions";
 import { useMember } from "@/components/member/useMember";
 import { formatLamports } from "@/lib/member-platform/economics";
 
 function ReferralsWorkspace() {
   const params = useSearchParams();
   const invite = params.get("invite") ?? "";
-  const { id, snapshot, ready, saveId, reload } = useMember();
+  const { snapshot, ready } = useMember();
   const [purchase, setPurchase] = useState("1");
   const [firstPurchase, setFirstPurchase] = useState(true);
   const [earning, setEarning] = useState("0");
@@ -20,7 +19,7 @@ function ReferralsWorkspace() {
   useEffect(() => {
     if (!invite) return;
     fetch(`/api/member-platform/invites?code=${encodeURIComponent(invite)}`).then((response) => response.json()).then((body) => {
-      setInviteNote(body.active ? `Invite from @${body.handle}. Creating a profile attributes one direct referral. It does not pay a commission.` : "This invite code is not active.");
+      setInviteNote(body.active ? `Invite from @${body.handle}. Sign in with your wallet on My Dashboard. A new wallet keeps this referrer. It does not pay a commission.` : "This invite code is not active.");
     }).catch(() => setInviteNote("The invite could not be checked."));
   }, [invite]);
 
@@ -31,19 +30,6 @@ function ReferralsWorkspace() {
     const body = await response.json();
     if (!response.ok) { setQuote(""); setError(body.error ?? "The server could not calculate that quote."); return; }
     setQuote(`${body.sequence === "first" ? "First" : "Later"} qualifying purchase: advertiser commission ${formatLamports(body.commissionLamports)} SOL at ${body.advertiserBps / 100}%. Viewer keeps ${formatLamports(body.viewerLamports)} SOL. A separate ${formatLamports(body.viewerMatchLamports)} SOL match is reserved at ${body.viewerMatchBps / 100}%. This is an illustration. Payouts are off.`);
-  }
-
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const result = await createStagingMember({
-      displayName: String(form.get("displayName") ?? ""),
-      handle: String(form.get("handle") ?? ""),
-      inviteCode: invite,
-    });
-    if (!result.ok) { setError(result.error); return; }
-    await saveId(result.id);
-    await reload();
   }
 
   if (!ready || !snapshot) return <p className="text-violet-200">Loading referrals…</p>;
@@ -59,22 +45,17 @@ function ReferralsWorkspace() {
         <section className="rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
           <h2 className="text-lg font-semibold">Your invite</h2>
           <p className="mt-2 break-all text-amber-200">{snapshot.profile.invitePath}</p>
-          <p className="mt-2 text-sm text-violet-200">Wallet invites use /join. Legacy /r links still go to registration and are unchanged.</p>
+          <p className="mt-2 text-sm text-violet-200">This link opens wallet sign-in. The referrer is stored only when that wallet is new. Legacy /r links still go to registration.</p>
           <button type="button" className="mt-4 rounded-xl bg-amber-300 px-4 py-3 font-semibold text-black" onClick={() => navigator.clipboard.writeText(window.location.origin + snapshot.profile!.invitePath)}>Copy invite link</button>
         </section>
       ) : (
-        <form onSubmit={create} className="grid gap-3 rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
-          <h2 className="text-lg font-semibold">Attribute this invite</h2>
-          <label className="grid gap-1 text-sm">Display name<input name="displayName" required maxLength={40} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <label className="grid gap-1 text-sm">Handle<input name="handle" required minLength={3} maxLength={24} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <button type="submit" className="rounded-xl bg-amber-300 px-4 py-3 font-semibold text-black">Create profile with this invite</button>
-        </form>
+        <p className="rounded-2xl border border-white/10 bg-[#150d24] p-4 text-sm text-violet-100">Connect and sign in on My Dashboard to see your invite link. Referral ownership is stored with that signed wallet, and nothing is paid.</p>
       )}
       <section className="rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
         <h2 className="text-lg font-semibold">Direct referrals</h2>
         {snapshot.referrals.direct.length === 0 ? <p className="mt-3 text-sm text-violet-200">No direct referrals yet.</p> : (
           <ul className="mt-3 space-y-2">
-            {snapshot.referrals.direct.map((item) => <li key={item.handle} className="text-sm text-violet-100">@{item.handle} · {item.verified ? "Verified" : "Unverified"} · not payable</li>)}
+            {snapshot.referrals.direct.map((item) => <li key={item.handle} className="text-sm text-violet-100">@{item.handle} · signed wallet · not payable</li>)}
           </ul>
         )}
         <p className="mt-3 text-sm text-violet-300">{snapshot.referrals.historyNote}</p>

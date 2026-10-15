@@ -27,7 +27,7 @@ export function MemberShell({ children }: { children: React.ReactNode }) {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
         <p className="mb-6 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50" role="status">
-          This workspace does not attach your signed wallet. Mainnet trading, advertising charges, deposits, withdrawals, and referral payouts stay off. Nothing on this workspace is a withdrawable balance.
+          A signed wallet identifies this workspace. A saved browser ID is not accepted. Mainnet trading, advertising charges, deposits, withdrawals, and referral payouts stay off. Paper SOL is virtual and cannot be withdrawn.
         </p>
         {children}
       </main>

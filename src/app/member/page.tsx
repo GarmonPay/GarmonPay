@@ -2,27 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { createStagingMember, saveMemberProfile } from "@/app/member/actions";
+import { saveMemberProfile } from "@/app/member/actions";
+import { WalletSignIn } from "@/components/solana/WalletSignIn";
 import { useMember } from "@/components/member/useMember";
 
 export default function MemberDashboardPage() {
-  const { id, snapshot, ready, error, saveId, reload } = useMember();
+  const { id, snapshot, ready, error, reload } = useMember();
   const [message, setMessage] = useState("");
   const [formError, setFormError] = useState("");
-
-  async function createProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError("");
-    const form = new FormData(event.currentTarget);
-    const result = await createStagingMember({
-      displayName: String(form.get("displayName") ?? ""),
-      handle: String(form.get("handle") ?? ""),
-      inviteCode: String(form.get("inviteCode") ?? ""),
-    });
-    if (!result.ok) { setFormError(result.error); return; }
-    await saveId(result.id);
-    setMessage("Staging profile saved on this server. It is not a funded wallet.");
-  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,11 +20,12 @@ export default function MemberDashboardPage() {
       memberId: id,
       displayName: String(form.get("displayName") ?? ""),
       biography: String(form.get("biography") ?? ""),
-      profilePublic: form.get("profilePublic") === "on",
+      walletPublic: form.get("walletPublic") === "on",
+      handle: String(form.get("handle") ?? ""),
     });
     if (!result.ok) { setFormError(result.error); return; }
     await reload();
-    setMessage("Profile updated.");
+    setMessage("Profile saved for this signed wallet.");
   }
 
   if (!ready || !snapshot) {
@@ -49,30 +37,25 @@ export default function MemberDashboardPage() {
       <header>
         <p className="text-xs uppercase tracking-[0.18em] text-violet-300">Your member dashboard</p>
         <h1 className="mt-2 text-3xl font-semibold text-amber-300">{snapshot.profile ? snapshot.profile.displayName : "Welcome"}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-100">
-          {snapshot.identity.note} Production membership uses a signed wallet. This page does not create that session.
-        </p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-100">{snapshot.identity.note}</p>
       </header>
 
-      {!snapshot.profile && (
-        <form onSubmit={createProfile} className="grid gap-3 rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
-          <h2 className="text-lg font-semibold">Create a staging profile</h2>
-          <p className="text-sm text-violet-200">New profiles receive 10 virtual SOL for paper trading after they are created. That amount is not issued until you save this form.</p>
-          <label className="grid gap-1 text-sm">Display name<input name="displayName" required maxLength={40} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <label className="grid gap-1 text-sm">Handle<input name="handle" required minLength={3} maxLength={24} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <label className="grid gap-1 text-sm">Invite code, optional<input name="inviteCode" maxLength={32} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          {formError && <p className="text-sm text-red-300">{formError}</p>}
-          <button type="submit" className="rounded-xl bg-amber-300 px-4 py-3 font-semibold text-black">Save staging profile</button>
-        </form>
+      <WalletSignIn />
+
+      {!snapshot.walletConnected && (
+        <p className="rounded-2xl border border-white/10 bg-[#150d24] p-4 text-sm text-violet-100">Sign in above to open your profile, referrals, and paper trading. Nothing on this page accepts a saved browser ID as a member.</p>
       )}
 
       {snapshot.profile && (
         <form onSubmit={saveProfile} className="grid gap-3 rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
           <h2 className="text-lg font-semibold">Profile</h2>
-          <p className="text-sm text-violet-200">@{snapshot.profile.handle} · {snapshot.profile.verified ? "Verified" : "Unverified staging profile"} · {snapshot.profile.followers} followers</p>
-          <label className="grid gap-1 text-sm">Display name<input name="displayName" defaultValue={snapshot.profile.displayName} required maxLength={40} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
+          <p className="text-sm text-violet-200">@{snapshot.profile.handle} · Signed wallet · {snapshot.profile.followers} followers</p>
+          <label className="grid gap-1 text-sm">Display name<input name="displayName" defaultValue={snapshot.profile.displayName === "Member" ? "" : snapshot.profile.displayName} maxLength={32} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
+          <label className="grid gap-1 text-sm">Public handle<input name="handle" placeholder={snapshot.profile.handle} maxLength={24} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
           <label className="grid gap-1 text-sm">Biography<textarea name="biography" defaultValue={snapshot.profile.biography} maxLength={280} className="min-h-24 rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="profilePublic" defaultChecked={snapshot.profile.profilePublic} /> Show my profile and activity publicly</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="walletPublic" defaultChecked={snapshot.profile.profilePublic} /> Show my wallet address on the public Solana directory</label>
+          {formError && <p className="text-sm text-red-300">{formError}</p>}
+          {message && <p className="text-sm text-emerald-300">{message}</p>}
           <button type="submit" className="w-fit rounded-xl border border-amber-300/40 px-4 py-3 text-amber-200">Update profile</button>
         </form>
       )}
@@ -111,7 +94,7 @@ export default function MemberDashboardPage() {
 
       <section className="rounded-2xl border border-amber-300/20 bg-[#150d24] p-4 sm:p-6">
         <h2 className="text-lg font-semibold text-amber-200">Paper trading</h2>
-        {snapshot.paper ? <p className="mt-2 text-sm text-violet-100">{snapshot.paper.cashSol} virtual SOL. This is not a real asset and cannot be withdrawn.</p> : <p className="mt-2 text-sm text-violet-200">A new staging profile starts with 10 virtual SOL. None is issued before you create a profile.</p>}
+        {snapshot.paper ? <p className="mt-2 text-sm text-violet-100">{snapshot.paper.cashSol} virtual SOL. This is not a real asset and cannot be withdrawn.</p> : <p className="mt-2 text-sm text-violet-200">{snapshot.walletConnected ? "10 virtual SOL is issued when the reviewed paper ledger is approved. None is stored yet, and none of it is real SOL." : "Connect your wallet to open a free paper account of 10 virtual SOL. It is not real SOL."}</p>}
         <Link href="/member/paper" className="mt-3 inline-block text-amber-300">Open paper trading</Link>
       </section>
 

@@ -6,7 +6,7 @@ import {DevnetCoinShelf} from './DevnetCoinShelf';
 import {DevnetHoldings} from './DevnetHoldings';
 import {reviewAdvertisingPlan} from './AdvertisingPlanner';
 import {validateTokenMetadata} from '@/lib/solana/token-metadata';
-const keys=['garmonpay-free-learning-v1','garmonpay-advertising-plan-v1','garmonpay-project-plan-v1'];
+const keys=['garmonpay-free-learning-v1','garmonpay-advertising-plan-v2','garmonpay-project-plan-v1'];
 function stored(key:string){const raw=localStorage.getItem(key);return raw&&raw.length<=5000?JSON.parse(raw):null;}
 export function DashboardStarter(){
  const [snapshot,setSnapshot]=useState<{courses:number;campaign:string|null;project:string|null;readable:boolean}|null>(null);
