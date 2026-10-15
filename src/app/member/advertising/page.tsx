@@ -30,7 +30,7 @@ export default function AdvertisingPage() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!id) { setError("Create a staging profile on the dashboard before saving a draft."); return; }
+    if (!id) { setError("Connect and sign in with your wallet before saving a draft."); return; }
     const form = new FormData(event.currentTarget);
     const result = await saveAdvertisingDraft({
       memberId: id,

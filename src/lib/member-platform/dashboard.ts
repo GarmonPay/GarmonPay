@@ -54,7 +54,7 @@ export function buildSnapshot(state: LedgerState, memberId: string | null, nowMs
     },
     referrals: {
       direct: directs.map((item) => ({ handle: item.handle, displayName: item.displayName, at: item.createdAt, verified: item.verified })),
-      historyNote: "Direct referrals only. Unverified staging profiles do not create a payable commission.",
+      historyNote: "Direct referrals only. Ownership is stored with the signed wallet. Commissions are not paid.",
     },
     advertising: {
       drafts: member ? state.campaigns.filter((item) => item.ownerId === member.id).length : 0,

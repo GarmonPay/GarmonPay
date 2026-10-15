@@ -22,7 +22,7 @@ export default function PaperPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!id) { setError("Create a staging profile before paper trading."); return; }
+    if (!id) { setError("Connect and sign in with your wallet before paper trading."); return; }
     setError("");
     const result = await submitPaperFill({ memberId: id, symbol, side, amount });
     if (!result.ok) { setError(result.error); return; }

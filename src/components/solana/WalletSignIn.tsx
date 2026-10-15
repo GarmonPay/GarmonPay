@@ -331,7 +331,7 @@ export function WalletSignIn() {
     {mode === "browse" && !wallet && !insideWallet && <a className="gp-sol-text-link" href={install}>Install {walletName}</a>}
     <p className="gp-sol-muted">{shownMode === "in-app" && !wallet ? `Tap Sign in with ${walletName}. This page does not connect until you tap. ` : mode === "browse" && !wallet ? `Connect opens this page in ${walletName}. Sign-in continues there. ` : ""}Sign-in does not authorize a transaction or transfer. If Phantom says this request is blocked, stop. GarmonPay cannot override that warning.</p>
     {status && <p className="text-sm mt-3 text-purple-100" role="status">{status}</p>}
-    {wallet && <p className="text-sm mt-3 text-green-300" role="status">Signed in.</p>}
+    {wallet && <p className="text-sm mt-3 text-green-300" role="status">Signed in. <a className="gp-sol-text-link" href="/member">Open My Dashboard</a></p>}
     {error && <p className="text-sm mt-3 text-red-300 max-w-md" role="alert">{error}</p>}
   </div>;
 }

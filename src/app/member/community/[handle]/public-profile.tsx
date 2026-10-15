@@ -10,18 +10,16 @@ export function PublicProfile({ handle }: { handle: string }) {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const headers: Record<string, string> = {};
-    if (id) headers["x-member-staging-id"] = id;
-    const response = await fetch(`/api/member-platform/directory?handle=${encodeURIComponent(handle)}`, { headers, cache: "no-store" });
+    const response = await fetch(`/api/member-platform/directory?handle=${encodeURIComponent(handle)}`, { cache: "no-store" });
     const body = await response.json();
     if (!response.ok) { setError(body.error ?? "This profile is unavailable."); return; }
     setProfile(body);
-  }, [handle, id]);
+  }, [handle]);
 
   useEffect(() => { void load(); }, [load]);
 
   async function toggle() {
-    if (!id || !profile) { setError("Create a staging profile before following."); return; }
+    if (!id || !profile) { setError("Connect and sign in with your wallet before following."); return; }
     const result = await followHandle({ memberId: id, handle: profile.handle, follow: !profile.isFollowing });
     if (!result.ok) { setError(result.error); return; }
     await load();
