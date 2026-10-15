@@ -1,10 +1,14 @@
 # GarmonPay handoff
 
-Updated October 14, 2026, after the Phantom “Request blocked” investigation and local Devnet trade-safety changes. Those safety changes are not deployed. No secrets belong in this file. The pending `gp_sol_devnet_launches` registry SQL was not executed. Mainnet financial operations stay disabled.
+Updated October 14, 2026, after the Phantom review draft and the removal of the 5% price-impact exception. Those changes are not deployed. No secrets belong in this file. The pending `gp_sol_devnet_launches` registry SQL was not executed. Mainnet financial operations stay disabled.
 
-Phantom’s public blocklist, whitelist, and fuzzylist do not contain garmonpay.com. The mobile warning is Phantom’s domain block on the connection request. It is not a decoded drain in the Devnet CPMM transaction. Do not tell anyone to proceed anyway. Official review, if the owner asks for it later, goes to review@phantom.com, review@blowfish.xyz, or a whitelist pull request on github.com/phantom/blocklist. Nothing was submitted.
+The domain-review draft is `docs/solana/phantom-domain-review.md`. It has not been emailed or submitted. Do not tell anyone to proceed past Phantom’s warning.
 
-An unsigned Devnet buy of 0.00001 SOL simulated at 5.02% impact, expected 453,785.436086 FOXNEW, minimum 449,247.581725 FOXNEW, and a 5,000 lamport network fee. The admin wallet’s FOXNEW balance read was 0. A 100 FOXNEW sell quoted 4.44% impact and 2 lamports out. A 0.00005 SOL buy and a 1,000,000 FOXNEW sell were refused by the 5.00% limit. Nothing was signed or broadcast. Production remains `dpl_CkG65Vvcd2QGzXnfSWGgGK4J98zr`.
+Sign-in defaults to message network `mainnet` and mobile cluster `mainnet-beta` because that is Phantom’s sign-in chain. The session stores a wallet address only. Devnet trades always use `https://api.devnet.solana.com`.
+
+Admin wallet `HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE` still has Devnet token account `Ah9UJqSHzfa6Rq5SoLndXpHDbjB39hEqgwUzpe2mYUkd`. Its FOXNEW balance is 0. Confirmed Devnet transaction `5fubPJ87zLZVxiBXeuQyqo9FsFCYhbFxKFAWNJPx7HoN2GYCsWHzVCPxBkZWesnfYwYpAPBKG89A6awyYgdEVRy7` at 2026-10-15T01:05:24Z is a CPMM `SwapBaseInput`. It moved 7,931,000 FOXNEW from that wallet into pool authority `CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq` and credited the wallet about 0.000790706 SOL. The mint does not exist on Mainnet. The tokens were sold into the Devnet pool. They were not found on another network.
+
+Every trade at 5.00% impact or more is blocked, including the 0.00001 SOL FOXNEW buy. A 100 FOXNEW unsigned sell still quotes under 5%. Nothing was signed or broadcast. Production remains `dpl_CkG65Vvcd2QGzXnfSWGgGK4J98zr`.
 
 ## 1. Current status and Git revision
 
