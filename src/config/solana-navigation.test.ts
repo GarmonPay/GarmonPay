@@ -10,6 +10,7 @@ describe("public navigation", () => {
   it("keeps every primary destination in one header", () => {
     expect(SOLANA_NAVIGATION.map((item) => item.href)).toEqual([
       "/",
+      "/member",
       "/solana/members",
       "/solana/launchpad",
       "/solana/trade",

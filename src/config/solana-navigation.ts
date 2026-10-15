@@ -1,5 +1,6 @@
 export const SOLANA_NAVIGATION = [
   { href: "/", label: "Home" },
+  { href: "/member", label: "My Dashboard" },
   { href: "/solana/members", label: "Members" },
   { href: "/solana/launchpad", label: "Launchpad" },
   { href: "/solana/trade", label: "Trade" },

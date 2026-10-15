@@ -10,6 +10,7 @@ export function PublicFooterWrapper() {
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/member") ||
     (pathname.startsWith("/games") && !isPublicGameRoute(pathname))
   ) {
     return null;
