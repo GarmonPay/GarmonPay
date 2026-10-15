@@ -1,0 +1,16 @@
+{
+  "url": "https://garmonpay.com",
+  "deploymentUrl": "https://garmon-1721c1ugz-garmonpays-projects.vercel.app",
+  "deploymentId": "dpl_3czLNj4UW5uBFPcVZCGHbwnwypz7",
+  "status": "READY",
+  "source": "/private/tmp/garmonpay-solana-release",
+  "previousDeploymentId": "dpl_GcZshasyFZPc2CmNn9hzdVx9ZSQE",
+  "workingTests": 283,
+  "releaseTests": 213,
+  "typeScript": "passed",
+  "productionBuild": "passed",
+  "productionSmokeChecks": 44,
+  "financialActivation": false,
+  "databaseChanges": false,
+  "standaloneWorkerDeploymentVerified": false
+}

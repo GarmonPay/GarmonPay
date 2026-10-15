@@ -1,15 +1,16 @@
 import { redirect } from "next/navigation";
 
 /** Legacy /wallet URLs redirect to dashboard wallet (GC, GPC, $GPAY). */
-export default function WalletRedirectPage({
+export default async function WalletRedirectPage({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const resolved = await searchParams;
   const q = new URLSearchParams();
   const copy = ["success", "funded", "canceled"] as const;
   for (const key of copy) {
-    const v = searchParams[key];
+    const v = resolved[key];
     if (typeof v === "string") q.set(key, v);
   }
   const suffix = q.toString() ? `?${q.toString()}` : "";

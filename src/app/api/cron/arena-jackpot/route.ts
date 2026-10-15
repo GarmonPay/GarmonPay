@@ -1,11 +1,10 @@
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 
 /** Run Friday after midnight UTC: pay previous week jackpot to a random eligible user (arena_daily_login that week). */
 export async function GET(req: Request) {
-  const auth = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || process.env.ARENA_JOIN_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const supabase = createAdminClient();

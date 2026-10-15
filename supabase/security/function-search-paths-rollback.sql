@@ -1,0 +1,22 @@
+-- Restore inspected mutable function paths only. No row changes.
+BEGIN;
+ALTER FUNCTION public.coin_flip_pvp_only_guard() RESET search_path;
+ALTER FUNCTION public.garmon_date_utc(timestamp with time zone) RESET search_path;
+ALTER FUNCTION public.update_referral_count() RESET search_path;
+ALTER FUNCTION public.create_wallet_for_new_user() RESET search_path;
+ALTER FUNCTION public.handle_stripe_deposit(uuid,numeric) RESET search_path;
+ALTER FUNCTION public.escape_room_set_updated_at() RESET search_path;
+ALTER FUNCTION public.update_daily_profit_summary() RESET search_path;
+ALTER FUNCTION public.check_platform_balance_integrity() RESET search_path;
+ALTER FUNCTION public.garmon_margin_last_24h() RESET search_path;
+ALTER FUNCTION public.garmondrop_empty_board() RESET search_path;
+ALTER FUNCTION public.garmondrop_cell(jsonb,integer,integer) RESET search_path;
+ALTER FUNCTION public.garmondrop_count_dir(jsonb,integer,integer,integer,integer,integer) RESET search_path;
+ALTER FUNCTION public.garmondrop_has_winner(jsonb,integer,integer,integer) RESET search_path;
+ALTER FUNCTION public.garmondrop_board_full(jsonb) RESET search_path;
+ALTER FUNCTION public.add_deposit(uuid,numeric) RESET search_path;
+ALTER FUNCTION public.add_game_reward(uuid,numeric) RESET search_path;
+ALTER FUNCTION public.debit_gpay_coins(uuid,integer) RESET search_path;
+ALTER FUNCTION public.increment_wallet(uuid,integer) RESET search_path;
+ALTER FUNCTION public.request_withdrawal(uuid,numeric) RESET search_path;
+COMMIT;

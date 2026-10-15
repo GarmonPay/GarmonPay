@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeCeloUserId } from "@/lib/celo-player-state";
 
 /**
  * When the room bank hits zero: remove the old banker from the seat (or assign a bust winner).
@@ -48,6 +49,48 @@ export async function handleCeloBankBustAndBankerTransfer(params: {
   );
 
   if (rpcError) throw new Error(rpcError.message);
+
+  if (bustParam) {
+    const { data: afterRaw } = await admin
+      .from("celo_rooms")
+      .select("banker_id, bank_busted, status, current_bank_sc, current_bank_cents")
+      .eq("id", roomId)
+      .maybeSingle();
+    const after = afterRaw as {
+      banker_id?: string | null;
+      bank_busted?: boolean | null;
+      status?: string | null;
+      current_bank_sc?: number | null;
+      current_bank_cents?: number | null;
+    } | null;
+    const afterBank = Math.max(
+      0,
+      Math.floor(Number(after?.current_bank_sc ?? after?.current_bank_cents ?? 0))
+    );
+    const afterBanker =
+      after?.banker_id != null && String(after.banker_id).trim() !== ""
+        ? String(after.banker_id)
+        : null;
+    if (
+      afterBanker &&
+      normalizeCeloUserId(afterBanker) === normalizeCeloUserId(bustParam) &&
+      afterBank <= 0 &&
+      (after?.bank_busted !== true ||
+        String(after?.status ?? "").toLowerCase() !== "bank_takeover")
+    ) {
+      await admin
+        .from("celo_rooms")
+        .update({
+          bank_busted: true,
+          status: "bank_takeover",
+          current_bank_sc: 0,
+          current_bank_cents: 0,
+          last_activity: new Date().toISOString(),
+        })
+        .eq("id", roomId)
+        .eq("banker_id", afterBanker);
+    }
+  }
 
   const row = rpcData as {
     success?: boolean;

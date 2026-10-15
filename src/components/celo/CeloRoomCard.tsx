@@ -29,7 +29,7 @@ export function CeloRoomCard({ room }: { room: CeloRoomCardData }) {
   const m = minEntry(room);
   const b = bank(room);
   return (
-    <div className="mb-4 rounded-2xl border border-amber-400/12 bg-gradient-to-b from-[#0c0618] to-[#05020d] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-amber-400/20">
+    <div className="gp-surface mb-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 text-lg font-bold text-white">
           {room.name}
@@ -61,13 +61,13 @@ export function CeloRoomCard({ room }: { room: CeloRoomCardData }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href={`/dashboard/games/celo/${room.id}`}
-          className="min-h-[40px] flex-1 min-w-0 rounded-lg border border-purple-500/40 py-2 text-center text-xs font-bold text-violet-300 transition hover:border-violet-400 hover:bg-white/5"
+          className="min-h-[44px] flex-1 min-w-0 rounded-lg border border-purple-500/40 py-2 text-center text-xs font-bold text-violet-300 transition hover:border-violet-400 hover:bg-white/5"
         >
           Watch
         </Link>
         <Link
           href={`/dashboard/games/celo/${room.id}`}
-          className="min-h-[40px] min-w-0 flex-[1.4] rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 py-2 text-center text-xs font-bold text-black shadow-md transition hover:opacity-90"
+          className="min-h-[44px] min-w-0 flex-[1.4] rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 py-2 text-center text-xs font-bold text-black shadow-md transition hover:opacity-90"
         >
           Join
         </Link>

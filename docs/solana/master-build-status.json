@@ -1,0 +1,857 @@
+{
+  "directive": "bfa9bf82-730e-4ccf-b008-32d4f1543292",
+  "complete": false,
+  "financialOperationsEnabled": false,
+  "requirements": [
+    {
+      "requirement": "premium_site",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Premium purple-and-gold Phase 2/3 site live; prior mobile/navigation audit passed. Further complete workflows depend on staged backend integration."
+    },
+    {
+      "requirement": "launchpad",
+      "status": "blocked",
+      "evidenceAndRemainingWork": "Metadata, config, provenance and unsigned-transaction review implemented locally. Verified platform config, actual protocol-inclusive economics, SDK simulation and graduation beneficiary acceptance outstanding."
+    },
+    {
+      "requirement": "wallet_authentication",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Existing signed challenge/SIWS/session protection preserved. Read-only Solana settlement transport validates finalized status, network, signature, signer, native transfer and exact safe amount with posting disabled. Real wallet mobile/desktop, transport and payout acceptance remain; flags false."
+    },
+    {
+      "requirement": "advertising",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Local integrated PostgreSQL flow now binds immutable approved tier/rate quotes to unique finalized deposit receipts and advertiser liability, atomically funding viewer and referral reserves. Production RPC decoder, staged transport/UI, top-ups, approvals and advertiser commissions remain."
+    },
+    {
+      "requirement": "watch_earn",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Local verified-view claims atomically post reward and referral journals against receipt-backed reserves, with twelve-connection idempotency and crash rollback tested. Trusted heartbeat/risk ingestion, recovery/reversal and production acceptance remain."
+    },
+    {
+      "requirement": "learn_earn",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Local versioned lesson/video/quiz completion gates integrated with the same receipt-backed reward ledger; twelve concurrent completions post one journal. Viewer referral matches exclude lesson rewards. Lesson administration and trusted transport/verifier acceptance remain."
+    },
+    {
+      "requirement": "viewer_referrals",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Lifetime 50% eligible advertising-view match is separately reserved and journaled; odd-lamport carry tested across campaigns. Only verified attribution qualifies; lesson rewards excluded. Attribution fraud lifecycle, refunds/reversals and payout acceptance remain."
+    },
+    {
+      "requirement": "advertiser_referrals",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Approved 10% first / 5% subsequent arithmetic and cumulative refund reversal reviewed. Durable purchase classification, attribution, commission posting and adjustments remain."
+    },
+    {
+      "requirement": "games",
+      "status": "blocked",
+      "evidenceAndRemainingWork": "Existing games preserved and financial pause enforced. Local fight-worker tests pass; configured Render endpoint active but deployed source/pause unverified. No worker changes published."
+    },
+    {
+      "requirement": "member_dashboard",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Premium unified workspace live with honest unavailable states and legacy links. New authenticated SOL record integration remains disabled pending readiness."
+    },
+    {
+      "requirement": "admin_center",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Existing admin authorization retained. New SOL pricing/content/fraud/reconciliation controls, role matrix and audit integration remain."
+    },
+    {
+      "requirement": "security_accounting",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "Receipt-backed campaign funding, atomic reward/referral journals, independently funded verified lessons, immutable commercial bindings, campaign reconciliation/drift detection and $2 withdrawal reservations pass native tests. Read-only RPC decoder passes fixture tests. Live trusted transport/RPC acceptance, recovery/reversals, commissions and legacy reconciliation remain."
+    },
+    {
+      "requirement": "database_privileges",
+      "status": "awaiting_authorization",
+      "evidenceAndRemainingWork": "134-table audit split into 67 tested reversible DDL batches; no production batch applied. Separate explicit approval and dependency/drift review required."
+    },
+    {
+      "requirement": "financial_activation",
+      "status": "awaiting_authorization",
+      "evidenceAndRemainingWork": "All financial flags remain false. No live chain transaction or payout authorized; technical and compliance gates remain."
+    },
+    {
+      "requirement": "private_render_evidence",
+      "status": "awaiting_authorization",
+      "evidenceAndRemainingWork": "Prior automatic review rejected private dashboard read; exact read-only provider approval or owner-supplied deployment metadata remains required."
+    },
+    {
+      "requirement": "testing_deployment",
+      "status": "in_progress",
+      "evidenceAndRemainingWork": "389 unit/security tests, 13 auth integrations, TypeScript and production build/lint passed; integrated backend funding/reward orchestration tested against twelve native PostgreSQL connections. Browser wallet/mobile and live provider acceptance still pending. Prior nonfinancial production release unchanged."
+    }
+  ],
+  "milestones": [
+    {
+      "id": "campaign-ledger-integration",
+      "status": "completed_local_staging",
+      "evidence": "master-campaign-ledger-tests.json",
+      "productionApplied": false,
+      "scope": "Approved quote -> posted deposit receipt -> advertiser liability -> campaign reserves -> verified ad or lesson -> immutable reward journals; $2 withdrawal reservation and lifetime match carry"
+    },
+    {
+      "id": "funded-learning-withdrawal-reconciliation",
+      "status": "completed_local_staging",
+      "productionApplied": false,
+      "evidence": "master-campaign-ledger-tests.json",
+      "scope": "Authenticated backend orchestration -> native campaign/reward SQL; funded lesson gate; immutable campaign/budget bindings; $2 atomic withdrawal holds; reconciliation drift detection; read-only RPC decoder fixture tests"
+    },
+    {
+      "id": "live-free-learning-library",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/solana/learn",
+      "productionApplied": true,
+      "scope": "Three free courses, working quiz feedback and explicit browser-saved progress. No funded rewards."
+    },
+    {
+      "id": "live-public-connect-four",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/games/connect-four",
+      "productionApplied": true,
+      "scope": "Public navigation, same-device free Connect Four, winning round/reset and mobile fit. No financial play."
+    },
+    {
+      "id": "live-advertising-planner",
+      "status": "verified_production",
+      "productionApplied": true,
+      "url": "https://garmonpay.com/solana/advertise",
+      "scope": "Approved package estimate, $5/1,000-view limits and browser draft save/reload/edit. No funding."
+    },
+    {
+      "id": "live-homepage-actions",
+      "status": "verified_production",
+      "url": "https://garmonpay.com",
+      "productionApplied": true,
+      "scope": "Hero links to campaign planning and free learning; learning tile and games showcase link to the actual new features."
+    },
+    {
+      "id": "live-referral-program-information",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/solana/referrals",
+      "productionApplied": true,
+      "scope": "Both lifetime programs displayed correctly and empty commission filters removed. Existing account link retained."
+    },
+    {
+      "id": "live-launchpad-project-preparation-and-discovery-status",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/solana/launchpad",
+      "productionApplied": true,
+      "scope": "Prepare project label, server-reviewed browser draft save/reload, unsupported ranking controls removed, read-only API reports paused directory status."
+    },
+    {
+      "id": "live-wallet-and-trading-availability",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/solana/wallet",
+      "productionApplied": true,
+      "scope": "Wallet information link and noninteractive pause notice; wallet safety course link; inactive trading demos removed."
+    },
+    {
+      "id": "live-starting-dashboard",
+      "status": "verified_production",
+      "url": "https://garmonpay.com/solana/dashboard",
+      "productionApplied": true,
+      "scope": "Real device-saved learning/draft summaries, working saved-plan/project deep links, free game and existing account links."
+    },
+    {
+      "milestone": "Phase 1 member persistence and paused public release",
+      "status": "staging_verified_public_information_live",
+      "evidence": "docs/solana/phase1-member-release.json",
+      "remaining": "Actual desktop/mobile wallet UI acceptance, production schema approval and separate authentication activation approval."
+    },
+    {
+      "milestone": "Phase 1 authenticated synthetic browser acceptance",
+      "status": "verified_except_real_wallet_and_picture_selection",
+      "evidence": "docs/solana/phase1-member-release.json",
+      "remaining": [
+        "Actual Phantom and Solflare desktop/mobile wallet approval, cancellation and account-switch acceptance",
+        "Profile-picture browser file-selection acceptance (Chrome extension file access blocked)",
+        "Production Supabase schema/privilege approval (requested; no approval assumed)",
+        "Separate production wallet-authentication activation approval after acceptance"
+      ]
+    },
+    {
+      "milestone": "Phase 1 inactive authentication hardening and actor isolation",
+      "status": "public_release_verified_authentication_paused",
+      "deployment": "dpl_149fusP3CBCSEWtiMx3xhouiuaCM",
+      "productionDatabase": "unchanged by explicit user decision",
+      "evidence": "docs/solana/phase1-member-release.json"
+    },
+    {
+      "name": "Phase 1 image pixel verification and reversible least-privilege setup",
+      "status": "implemented; safe inactive photo handler deployed; activation blocked",
+      "deploymentId": "dpl_GP1TbxdKHnBp3PZUUprvPxfKuqy9",
+      "productionVerified": "public pause page, responsive width and unsigned security checks only",
+      "productionDatabaseChanges": false,
+      "actualWalletAcceptance": false,
+      "stagingEnvironment": "none; real desktop handoff available against disposable local data",
+      "evidence": "docs/solana/phase1-members-acceptance.md"
+    },
+    {
+      "name": "Members-only HTTPS staging and end-to-end automated transport acceptance",
+      "status": "verified with generated test wallets; human wallet/device and Supabase HTTP acceptance pending",
+      "url": "https://handed-teens-shortcuts-kent.trycloudflare.com/solana/members",
+      "financialOperationsEnabled": false,
+      "productionDatabaseChanges": false,
+      "applicationRestartPersistence": true,
+      "evidence": "docs/solana/phase1-https-staging-acceptance.json"
+    },
+    {
+      "name": "Verified isolated Supabase setup and real database security acceptance",
+      "status": "database setup and checks passed; Supabase-backed app/device acceptance blocked",
+      "stagingRef": "bhxheuaoofiklsaurqlu",
+      "productionRef": "zfnwypoxggqpairmwnja",
+      "productionDatabaseChanged": false,
+      "securityWarnings": 0,
+      "evidence": "docs/solana/phase1-member-release.json"
+    }
+  ],
+  "activeWork": "Phase 1 only. Production database must remain unchanged by explicit user decision; wallet authentication and finances stay paused.",
+  "liveWebsiteEvidence": "live-website-fixes.json",
+  "phase1MemberRelease": {
+    "scope": "Phase 1 only",
+    "complete": false,
+    "deployment": {
+      "id": "dpl_GP1TbxdKHnBp3PZUUprvPxfKuqy9",
+      "status": "READY",
+      "url": "https://garmonpay.com/solana/members",
+      "deploymentUrl": "https://garmon-9124fvt0j-garmonpays-projects.vercel.app",
+      "productionVerified": true,
+      "verifiedScope": "live page rendering, responsive layout, paused wallet/member endpoints and public security smoke; no active production member uploads or sign-in"
+    },
+    "live": [
+      "Responsive member landing page",
+      "Members navigation",
+      "Explicit production pause notice"
+    ],
+    "stagingImplemented": [
+      "Verified wallet signup creates permanent member ID atomically",
+      "Case-insensitive unique usernames and biographies",
+      "Bounded raster profile pictures persisted in Supabase member rows",
+      "Public-wallet default and server-enforced hiding",
+      "Public profiles and member search",
+      "Idempotent owner-bound follow/unfollow",
+      "Unique referral codes and first-verified-signup attribution"
+    ],
+    "acceptanceOutstanding": [
+      "Supabase secret and HTTPS switch to staging bhxheuaoofiklsaurqlu completed 2026-10-12; do not repeat",
+      "Supabase-backed HTTPS member, photo, referral, and security checks passed; see phase1SupabaseApplicationAcceptance",
+      "Actual Phantom/Solflare desktop and physical-mobile acceptance",
+      "Actual device photo selection/upload/display acceptance",
+      "Separate production migration and authentication activation approvals after all acceptance gates"
+    ],
+    "productionWalletAuthentication": false,
+    "productionFinancialOperations": false,
+    "productionDatabaseChanges": false,
+    "deployedSourceHashes": {
+      "src/components/solana/MemberCommunity.tsx": "2e8761955d6f558276a8588d648e2030e3c60983d1bb403d33b276f852c3e998",
+      "src/config/solana-navigation.ts": "1a45851cedc23ac7dc104bff188200b900bc5abc2479bfb2b0dd048a6a480615",
+      "src/lib/solana/members.ts": "96e832d018b1dd06f65dec5be13f0a657a5d2d02e1bf8b7036223b8959d43e45",
+      "src/app/api/solana/members/route.ts": "38279c6a06dd569f901922191c0c9e414d8f13b9aca26f88b457925b0639252c",
+      "src/app/api/solana/members/me/route.ts": "ffafb1e2214b2ba27c5a443494c1851166a1181cc58ee971479cb49fd0196e82",
+      "src/app/api/solana/members/follow/route.ts": "d0eb0f580233403d7ba4de8f8954f58047e88501e3223cd696852c65433a38ad",
+      "src/app/solana/members/page.tsx": "6a10d6328b04864dbdf5f22898a4c8a1a55c9f964e06393741a6c8f8b36348da",
+      "src/app/solana/members/[username]/page.tsx": "7ceccd598b43a22fe87eda44d4aafe98777f981801795bf0b6b30be3cf8015ee",
+      "src/lib/solana/auth-crypto.ts": "80ec3c79856c9f39b2b77a244dcea6aadce66fa01924b66104c4a4e272ff16c0",
+      "src/components/Navbar.tsx": "b5820e9970a16abf7118af0781af5d3426c90c79e2cbdbb3773740bf9226ba1a",
+      "src/components/Footer.tsx": "cb9adef2c67f9761d2ead1869756a1a94216591ddf3d77c95c3f235144ce9176",
+      "package.json": "c7bb4f6ddf1a5b3281790f20cd50f4043e619fb1b880222421aa89ad4ec662de",
+      "package-lock.json": "aea0e03a873ca44cc5e69f37ee1f3e4a1a486bfe7d92498ed1c105dcb959e5d2",
+      "src/lib/solana/member-picture.ts": "28fff8bb3b2c722fdbf0d722e91bfb35230d42531f13dc4a9cb81740210bdcf7"
+    },
+    "localOnlyFiles": [
+      "supabase/security/staging/phase1-wallet-identity.sql",
+      "supabase/security/staging/phase3-session-rotation.sql",
+      "supabase/security/staging/phase1-members.sql",
+      "src/app/api/solana/auth/verify/route.ts",
+      "src/components/solana/WalletSignIn.tsx",
+      "src/lib/solana/wallet-provider.ts",
+      "src/lib/security/financial-pause.ts"
+    ],
+    "note": "Latest paused public release includes strict signature verification, actor-bound member endpoints and responsive member UI. Active member-creating auth verification, wallet-app adapter/session hardening, staging middleware admission and all database setup remain local-only.",
+    "syntheticBrowserAcceptance": {
+      "profileCreation": true,
+      "usernameAndBiographySave": true,
+      "duplicateUsernameRejected": true,
+      "hiddenWalletPublicProjection": true,
+      "reloadRecovery": true,
+      "memberSearch": true,
+      "publicProfiles": true,
+      "followAndUnfollow": true,
+      "stableWalletRepeatLogin": true,
+      "referralAttributionAndNoRepeatInflation": true,
+      "signOutClearsEditor": true,
+      "mobileFormWithinPanel": true,
+      "pictureSelection": false,
+      "boundary": "Disposable local SQL adapter and synthetic Ed25519 signer fixture; not real wallet-extension or production Supabase HTTP acceptance.",
+      "staleTabActorIsolation": true,
+      "sessionPollingPreservesUnsavedDraft": true
+    },
+    "productionSchemaPreflight": {
+      "tablesPresent": false,
+      "functionsPresent": false,
+      "readOnly": true,
+      "dataRowsRead": false
+    },
+    "reviewMigrations": [
+      "supabase/security/phase1-review/supabase/migrations/20261012221838_phase1_01_wallet_identity.sql",
+      "supabase/security/phase1-review/supabase/migrations/20261012221840_phase1_02_session_rotation.sql",
+      "supabase/security/phase1-review/supabase/migrations/20261012221843_phase1_03_members.sql"
+    ],
+    "localSourceHashes": {
+      "src/components/solana/MemberCommunity.tsx": "2e8761955d6f558276a8588d648e2030e3c60983d1bb403d33b276f852c3e998",
+      "src/components/solana/WalletSignIn.tsx": "9c137d262d710e37043f298fc0ce050dcaf763e65dbc3e8e66c86099d20d9945",
+      "src/lib/solana/auth-crypto.ts": "80ec3c79856c9f39b2b77a244dcea6aadce66fa01924b66104c4a4e272ff16c0",
+      "src/lib/solana/members.ts": "96e832d018b1dd06f65dec5be13f0a657a5d2d02e1bf8b7036223b8959d43e45",
+      "src/lib/solana/wallet-provider.ts": "96b80409a29881299c8c8ad77541811676bf63da4ea487a6e4f2ae94be2572aa",
+      "src/lib/security/financial-pause.ts": "992fc3006d8f9c2ee345ae7f6cf32d60917158b0429c91a3295146a4ab239266"
+    },
+    "productionSchemaDecision": "User explicitly chose to keep production database unchanged. Review migrations remain unapplied.",
+    "strictKeyVerification": {
+      "smallOrderForgeryRejected": true,
+      "nonPrimeOrderKeysRejectedByPolicy": true,
+      "canonicalBase64Required": true,
+      "genuineWalletInteroperabilityVerified": true,
+      "dependency": "@noble/curves 1.9.7",
+      "productionStatus": "Deployed behind disabled production wallet authentication; blocked endpoints verified",
+      "regressionVectors": [
+        "Trivial small-order signature",
+        "Mixed-order public key with cofactored signature proof",
+        "Noncanonical base64 padding bits",
+        "Normal wallet signatures and tampered messages"
+      ]
+    },
+    "previousDeployment": {
+      "id": "dpl_149fusP3CBCSEWtiMx3xhouiuaCM",
+      "status": "READY",
+      "url": "https://garmonpay.com/solana/members",
+      "deploymentUrl": "https://garmon-ff1t3nvhs-garmonpays-projects.vercel.app",
+      "productionVerified": true
+    },
+    "acceptanceContinuation": {
+      "photoPixelValidation": "server-decodes pixels; 64px JPEG; strips EXIF/ICC; corrupt uploads leave saved profile unchanged",
+      "databasePermissions": "all five tables remove inherited role grants; browser roles denied; permanent member DELETE denied",
+      "rollback": "native PostgreSQL verifies exact grants and unchanged identity/member/follow rows through hold and restore",
+      "unitTests": 413,
+      "routeSqlIntegrationTests": 23,
+      "optionalLocalValidatorTransactionTest": "skipped, outside signature-only Phase 1 acceptance",
+      "productionSmokeChecks": 51,
+      "builds": "repository, isolated release and Vercel passed",
+      "realDesktopWallets": "pending human handoff",
+      "realMobileWallets": "not performed; HTTPS handoff now available",
+      "supabaseHttpAcceptance": "passed 2026-10-12 against staging bhxheuaoofiklsaurqlu; see phase1SupabaseApplicationAcceptance",
+      "localDesktopHandoff": "http://127.0.0.1:4326/solana/members",
+      "productionDatabaseChanged": false,
+      "readyForActivation": false,
+      "localRestartPersistence": "passed through actual HTTPS application restart; local store only"
+    },
+    "httpsStaging": {
+      "origin": "https://handed-teens-shortcuts-kent.trycloudflare.com",
+      "automatedTestWallets": true,
+      "applicationRestartPersistence": true,
+      "realWalletApplicationAcceptance": false,
+      "physicalMobileAcceptance": false,
+      "supabaseHttpAcceptance": true,
+      "productionAccess": false,
+      "checks": [
+        "Independent signed test wallets create separate permanent accounts over HTTPS with secure session cookies",
+        "Profile photo normalization, reload persistence, unique usernames and cross-account write rejection",
+        "Wallet privacy, idempotent follow/unfollow and first-signup-only referrals",
+        "Consumed challenge replay and forged signatures rejected; Origin protection, fixture/admin exclusion, denied financial mutations and logout revocation",
+        "Application restart preserves wallet identity, member ID, profile photo, privacy, referral code and existing valid session"
+      ],
+      "membersUrl": "https://handed-teens-shortcuts-kent.trycloudflare.com/solana/members",
+      "temporary": true,
+      "financialOperationsEnabled": false,
+      "storage": "staging Supabase bhxheuaoofiklsaurqlu as of 2026-10-12; earlier local store is no longer the HTTPS database",
+      "source": "/private/tmp/garmonpay-member-mobile-stage",
+      "database": "https://bhxheuaoofiklsaurqlu.supabase.co",
+      "proxy": "scripts/staging/member-https-proxy.mjs",
+      "realDeviceChecklist": "docs/solana/phase1-device-acceptance.md",
+      "supabaseStagingOrganizationChoice": "approved $0 only; staging identified and migrations applied; server-secret configuration pending",
+      "browserChecks": {
+        "usernameSearch": "verified through the browser UI against persisted generated test members",
+        "publicProfileNavigation": "verified",
+        "savedPictureDisplay": "decoded 64x64 portrait verified as loaded in browser",
+        "hiddenWalletProjection": "verified in signed-out public profile",
+        "mobileWidthEmulation": "390px without horizontal overflow",
+        "actualPhotoFileSelection": "not verified",
+        "physicalMobileDevice": "not verified"
+      }
+    },
+    "supabaseStagingSetup": {
+      "organizationId": "ztrgyjmcpirottbaclnw",
+      "organizationName": "GarmonPay",
+      "organizationPlan": "free",
+      "maximumAdditionalCost": 0,
+      "userOrganizationApproval": true,
+      "userReportedCreated": true,
+      "verifiedProjectId": "bhxheuaoofiklsaurqlu",
+      "connectorInventory": "project verified by explicit get_project reference",
+      "dashboardInventory": "project verified by exact dashboard reference",
+      "connectorCreationPrerequisites": "get_cost and confirm_cost UNAVAILABLE",
+      "preparedName": "garmonpay-phase1-staging",
+      "preparedDefaults": {
+        "automaticTableExposure": false,
+        "automaticRls": true
+      },
+      "pending": "Physical Phantom/Solflare and device photo-selection acceptance only. Secret configuration is complete.",
+      "productionUnchanged": true,
+      "stagingClientGuardTests": "passed",
+      "supabaseHttpAcceptance": true,
+      "preparedAcceptance": {
+        "serverClient": "scripts/staging/member-supabase-client.ts",
+        "clientGuardTests": "2 passed",
+        "runtimeIsolationCheck": "scripts/staging/assert-member-staging-isolation.mjs; prepared, not run against a real staging configuration",
+        "httpsAcceptance": "scripts/staging/verify-member-https.mjs; extended to require actual Supabase REST account IDs/photo/privacy and anonymous table/RPC denial before marking Supabase acceptance passed",
+        "productionMigrationApplied": false
+      },
+      "migrationsApplied": [
+        "phase1_01_wallet_identity",
+        "phase1_02_session_rotation",
+        "phase1_03_members",
+        "phase1_04_staging_security"
+      ],
+      "securityWarnings": 0,
+      "securityInformational": "five private RLS tables deliberately have no browser allow policies",
+      "serverCredentialState": "configured only in the private staging .env.local; not printed or committed",
+      "existingSecretKey": "default exists in verified staging dashboard; no new key created",
+      "secretUseApproval": "user authorized existing staging key for private HTTPS server only"
+    },
+    "environments": {
+      "production": {
+        "ref": "zfnwypoxggqpairmwnja",
+        "url": "https://zfnwypoxggqpairmwnja.supabase.co",
+        "changed": false
+      },
+      "staging": {
+        "ref": "bhxheuaoofiklsaurqlu",
+        "url": "https://bhxheuaoofiklsaurqlu.supabase.co",
+        "identityVerified": true,
+        "organizationId": "ztrgyjmcpirottbaclnw",
+        "plan": "free",
+        "status": "ACTIVE_HEALTHY",
+        "createdAt": "2026-10-12T23:33:05.236562Z",
+        "initialPublicTables": 0,
+        "initialGarmonPayFunctions": 0
+      }
+    },
+    "realSupabaseDatabaseAcceptance": {
+      "syntheticFixturesOnly": true,
+      "memberIdsAndWalletIsolation": true,
+      "uniqueUsernames": true,
+      "privacyProjection": true,
+      "followIsolationAndIdempotency": true,
+      "firstSignupReferralAttribution": true,
+      "revokedSessionDenial": true,
+      "browserBindingAndReplayDenial": true,
+      "walletChallengeRateLimits": true,
+      "publishableCredentialRawTableAndRpcDenial": true,
+      "restrictedRoleReadDenials": 10,
+      "browserCrudGrantChecks": 40,
+      "unexpectedBrowserCrudGrants": 0,
+      "fullCrudExecutionMatrix": "cancelled; not claimed as passed",
+      "rollbackPreservesAllFiveTablesAndExactGrants": true,
+      "walletAppAcceptance": false,
+      "physicalMobileAcceptance": false,
+      "supabaseBackedHttpsMemberOperations": true,
+      "photoSelectionAndUploadViaSupabaseBackedApp": false,
+      "productionTouched": false,
+      "regressionUnitTests": 413,
+      "syntheticRouteSqlTests": 23
+    }
+  },
+  "phase1CredentialAndRegressionFollowup": {
+    "date": "2026-10-12",
+    "unitTestsPassed": 413,
+    "routeSqlIntegrationTestsPassed": 23,
+    "stagingConnectionGuardTestsPassed": 2,
+    "nativePostgresConcurrencyAndRollbackPassed": true,
+    "credentialStatus": "Expected private .env.local SUPABASE_SERVICE_ROLE_KEY remains empty; requested saved file path only.",
+    "supabaseHttpsAcceptance": false,
+    "realDesktopWalletAcceptance": false,
+    "physicalMobileWalletAcceptance": false,
+    "devicePhotoSelectionAcceptance": false,
+    "productionChanged": false,
+    "change": "Staging client and isolation guard reject publishable and incomplete secret keys before SDK use."
+  },
+  "credentialRecoveryAudit": {
+    "date": "2026-10-12",
+    "configurationFilesExamined": 19,
+    "productionSecretFound": true,
+    "productionProjectVerifiedFromCredentialClaim": "zfnwypoxggqpairmwnja",
+    "productionCredentialUsed": false,
+    "stagingSecretFound": false,
+    "stagingPublicConfigurationVerified": "bhxheuaoofiklsaurqlu",
+    "secretValuesExposed": false,
+    "remainingAction": "Completed later the same day. See phase1SupabaseApplicationAcceptance. Do not recreate the secret."
+  },
+  "phase1SupabaseApplicationAcceptance": {
+    "date": "2026-10-12",
+    "stagingRef": "bhxheuaoofiklsaurqlu",
+    "productionRef": "zfnwypoxggqpairmwnja",
+    "productionTouched": false,
+    "productionDeployed": false,
+    "financialOperationsEnabled": false,
+    "secretStoredOnlyIn": "/private/tmp/garmonpay-member-mobile-stage/.env.local",
+    "secretPrintedOrCommitted": false,
+    "newKeyCreated": false,
+    "httpsOrigin": "https://handed-teens-shortcuts-kent.trycloudflare.com",
+    "app": "/private/tmp/garmonpay-member-mobile-stage",
+    "listen": "127.0.0.1:4327",
+    "supabaseHttpAcceptance": true,
+    "applicationRestartPersistence": true,
+    "evidence": "docs/solana/phase1-supabase-https-acceptance.json",
+    "unitTestsPassed": 413,
+    "routeSqlIntegrationTestsPassed": 23,
+    "optionalLocalValidatorTest": "skipped",
+    "stagingClientGuardTestsPassed": 2,
+    "isolationCheck": "passed",
+    "codeChange": "scripts/staging/member-supabase-client.ts narrows the checked secret for TypeScript",
+    "doNotRunNpmInstallInStagingApp": "node_modules is a symlink to the main project; npm install deletes it",
+    "realDesktopWalletAcceptance": false,
+    "physicalMobileWalletAcceptance": false,
+    "devicePhotoSelectionAcceptance": false,
+    "readyForProductionActivation": false
+  },
+  "stagingCallbackAcceptance": {
+    "date": "2026-10-12",
+    "stagingProject": "bhxheuaoofiklsaurqlu",
+    "credentialVerifiedByReadOnlyStagingRequest": true,
+    "supabaseHttpsAcceptance": true,
+    "restartPersistence": true,
+    "unitTestsPassed": 429,
+    "routeSqlIntegrationTestsPassed": 23,
+    "stagingBuildPassed": true,
+    "browserSecretScanPassed": true,
+    "browserSignedInProfileObserved": true,
+    "iphonePhantomRetestRequired": true,
+    "realDesktopAndMobileApprovalTestsPerformedByAgent": false,
+    "productionChanged": false,
+    "fixes": [
+      "Process returned wallet callbacks even inside wallet browser",
+      "Confirm cookie-backed expected session before reporting sign-in",
+      "Report member profile load failures",
+      "Supply Wallet Standard registration API in app-ready event",
+      "Preserve Wallet Standard account and use variadic signing call",
+      "Safe verify-request/session-create-failed/session-cookie-issued diagnostics without credential payloads"
+    ]
+  },
+  "iphonePhantomLifecycleRepair": {
+    "date": "2026-10-13",
+    "stagingOnly": true,
+    "productionChanged": false,
+    "stagingProject": "bhxheuaoofiklsaurqlu",
+    "confirmedImplementationDefects": [
+      "Safari selected wallet browse navigation rather than connect/signMessage return lifecycle",
+      "Expected unauthenticated profile 401 was displayed as a generic profile failure"
+    ],
+    "fixes": [
+      "Official encrypted connect followed by signed-message callback to original HTTPS origin",
+      "10-minute request-state binding with same-browser cross-tab recovery and expiry cleanup",
+      "Injected provider preserved for direct Phantom browser sign-in",
+      "Session confirmation before authenticated profile refresh",
+      "Safe callback/HTTP/nonce/signature/session diagnostic stages without payloads",
+      "Silence expected pre-auth profile 401; retain genuine service errors"
+    ],
+    "tests": {
+      "unitPassed": 432,
+      "routeSqlIntegrationPassed": 24,
+      "encryptedMobileCallbackIntegrationPassed": true,
+      "supabaseHttpsMemberAcceptancePassed": true,
+      "stagingBuildPassed": true,
+      "browserSecretIsolationPassed": true,
+      "existingMemberRecordChecksumsUnchanged": true,
+      "browserProfileReloadObserved": true
+    },
+    "physicalIphoneRetestPassed": false,
+    "deviceSpecificFailingStage": "Not established from screenshot alone; prior symptom showed no recognized session. New diagnostics identify callback, signature and cookie failures.",
+    "remaining": [
+      "Safari connection approval AND separate message approval, authenticated return and reload",
+      "Direct Phantom built-in browser authentication",
+      "Check which browser iOS uses for HTTPS return; Safari and Phantom browser cookies are separate",
+      "Physical device photo chooser/save/reload"
+    ]
+  },
+  "phantomChainMessageStagingRepair": {
+    "date": "2026-10-13",
+    "cause": "Running staging build still used solana:mainnet while repository correction used mainnet.",
+    "stagingMessageVerified": "Chain ID: mainnet",
+    "tests": {
+      "chainChallengeCryptoUnitPassed": 37,
+      "routeSqlIntegrationPassed": 24,
+      "stagingBuildPassed": true,
+      "liveHttpsSignatureSessionAndProfilePassed": true,
+      "secretExposureScanPassed": true
+    },
+    "physicalPhantomAcceptancePassed": false,
+    "productionChanged": false
+  },
+  "sharedAuthMobileRelease": {
+    "date": "2026-10-13",
+    "productionBeforeDeployment": "dpl_8oQKee9oAXPGRJ6JJtHqJJ7ZWMAp",
+    "confirmedDesktopCause": "Phantom UI explicitly reported Testnet Mode while the shared server-issued message used mainnet.",
+    "productionChallengeBeforeFix": "mainnet",
+    "stagingChallengeBeforeFix": "mainnet",
+    "activeInjectedMethod": "connect + signMessage",
+    "walletStandardSignMessageChainParameter": "none; API accepts account and raw message bytes",
+    "walletStandardSignInActive": false,
+    "correctIdentifiers": {
+      "mainnet": {
+        "message": "mainnet",
+        "standard": "solana:mainnet",
+        "mobileCluster": "mainnet-beta"
+      },
+      "devnet": {
+        "message": "devnet",
+        "standard": "solana:devnet",
+        "mobileCluster": "devnet"
+      }
+    },
+    "actualDesktopPhantomStagingAccepted": true,
+    "actualDesktopAcceptedMessageNetwork": "devnet",
+    "physicalIphoneNewNetworkRetestPassed": false,
+    "profileStaging": {
+      "HolyGhostPersistence": true,
+      "biographyPersistence": true,
+      "optionalHandlePreservesAccount": true,
+      "invalidDisplayNameDenied": true,
+      "crossAccountEditDenied": true,
+      "referralDuplicatesDenied": true,
+      "hiddenWalletNotExposed": true
+    },
+    "mobileViewportChecks": {
+      "width": 390,
+      "documentWidth": 390,
+      "dialogLeft": 12,
+      "dialogRight": 378,
+      "allFiveActionsVisible": true,
+      "reducedHeight": 390,
+      "disconnectReachableByKeyboard": true
+    },
+    "productionDatabaseMigrationApplied": true,
+    "privacyDefaultAppliedToStagingOnly": false,
+    "productionFinancialOperationsEnabled": false,
+    "tests": {
+      "unitPassed": 481,
+      "unitSkipped": 1,
+      "routeSqlIntegrationPassed": 24,
+      "stagingBuildPassed": true,
+      "scopedReleaseBuildPassed": true,
+      "stagingSecretNotInBrowserAssets": true,
+      "stagingSecurityAdvisorWarnings": 0
+    },
+    "productionActualSignInBlocked": null,
+    "deploymentId": "dpl_BgJSBkDc5J8d7ommKHrmr2L74FTm",
+    "deploymentStatus": "READY",
+    "productionUrl": "https://garmonpay.com/solana/members",
+    "productionChecks": {
+      "membersPage": 200,
+      "launchpadPage": 200,
+      "publicMemberNames": 200,
+      "unsignedOwnProfile": 401,
+      "mobileWidth": 390,
+      "documentWidth": 390,
+      "walletMenuBounds": {
+        "left": 12,
+        "right": 378,
+        "bottom": 832
+      },
+      "walletChoicesDeduplicated": true
+    },
+    "productionMigrationScope": "Approved wallet_public default false only; existing member count and full row digest unchanged",
+    "productionMemberSecurityAdvisorWarnings": 0,
+    "productionActualWalletAcceptance": "PASSED actual existing desktop Phantom signMessage Mainnet; user unlocked and approved; authenticated profile persisted after two reloads; server session active.",
+    "sessionPersistenceCorrection": {
+      "cause": "Deployed WalletSignIn treated injected provider disconnect as explicit server logout. Production session revoked approximately 10 seconds after creation.",
+      "change": "Remove provider disconnect server revocation; preserve explicit user logout and server session validation. Temporary polling errors preserve local UI state.",
+      "stagingReloadPassed": true,
+      "productionRetestPassed": true,
+      "activeProductionSessionAfterReload": true,
+      "existingProductionMembersUnchanged": true,
+      "productionMemberCount": 2,
+      "evidence": "docs/design/live-fixes/production-phantom-authenticated-profile.png"
+    },
+    "deploymentUrl": "https://garmon-hiss9bo84-garmonpays-projects.vercel.app",
+    "actualDesktopPhantomProductionAccepted": true,
+    "fontBuildRepair": "Bundled existing identical DM Sans Latin asset with its OFL license for two game-page declarations after repeated Google font URL processing failures; financial game code unchanged.",
+    "remainingActualDeviceChecks": [
+      "Physical iPhone Phantom updated release sign-in/reload",
+      "Native iPhone photo selection/save/reload",
+      "Native share sheet"
+    ]
+  },
+  "createCoinTransactionFix": {
+    "date": "2026-10-14",
+    "productionBefore": "dpl_BsoEB33cPgfEK1zQBLUzcw1YMXoB",
+    "liveUrl": "https://garmonpay.com/solana/create",
+    "rootCause": "The deployed platform validator required exactly one instruction; unsigned platform setup omitted compute budget instructions, meeting Phantom priority-fee augmentation conditions. Wallet-returned extra instructions trigger the shape guard after signing and before sendRawTransaction. Original signed bytes were not retained in logs; exact added instruction data cannot be independently recovered.",
+    "stage": "Platform config setup, before mint generation and before RPC broadcast",
+    "network": "devnet",
+    "signedFormat": "Solana legacy Transaction",
+    "approvedEnvelope": "setComputeUnitLimit 400000; setComputeUnitPrice 0; exactly one Devnet LaunchLab instruction, exact fee payer/accounts/signers/message validation",
+    "programId": "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6",
+    "platformId": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+    "rpcEvidence": {
+      "network": "devnet",
+      "genesisVerified": true,
+      "platformId": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+      "platformExists": false,
+      "configOwner": "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6",
+      "blockhashValid": true,
+      "submitted": false,
+      "signature": null,
+      "tokenCreated": false,
+      "step": "platform",
+      "simulationPassed": true,
+      "networkFeeLamports": 5000,
+      "estimatedRentLamports": 5445760,
+      "priorityFeeLamports": 0
+    },
+    "costs": {
+      "platformRentDevnetSol": 0.00544576,
+      "platformNetworkFeeDevnetSol": 5e-06,
+      "platformPriorityFeeDevnetSol": 0,
+      "applicationFeeDevnetSol": 0
+    },
+    "tests": {
+      "focusedWithRealDevnetConfig": 15,
+      "readOnlyDevnetPreflight": 1,
+      "fullRegressionPassed": 497,
+      "optionalSkipped": 2,
+      "productionBuildPassed": true
+    },
+    "signature": null,
+    "transactionId": null,
+    "actualMint": null,
+    "onChainTokenCreated": false,
+    "physicalPhantomLaunchRetestPassed": false,
+    "mainnetOperationsEnabled": false,
+    "databaseMigrationsApplied": false,
+    "references": [
+      "https://docs.phantom.com/developer-powertools/solana-priority-fees",
+      "https://github.com/raydium-io/raydium-sdk-V2/blob/master/src/raydium/launchpad/instrument.ts"
+    ],
+    "deploymentStatus": "READY",
+    "deploymentId": "dpl_Dik4eG7jCvpW6QL3UbkXm1mvxXk1",
+    "deploymentUrl": "https://garmon-7h057pz2j-garmonpays-projects.vercel.app",
+    "livePreparationSimulationPassed": true,
+    "liveCostReviewRendered": true,
+    "liveCancellationBeforeSignaturePassed": true,
+    "walletSignatureRequestedDuringAcceptance": false,
+    "originalWalletSelectedNetwork": "Not retained in production logs; application construction and submission are pinned to Devnet",
+    "gpaySuffixEnforcedBeforeSigning": true,
+    "envelope": {
+      "format": "legacy",
+      "network": "devnet",
+      "feePayer": "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE",
+      "requiredSigners": [
+        "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE"
+      ],
+      "signaturesPresent": false,
+      "instructionCount": 3,
+      "programIds": [
+        "ComputeBudget111111111111111111111111111111",
+        "ComputeBudget111111111111111111111111111111",
+        "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6"
+      ],
+      "launchLabAccounts": [
+        {
+          "address": "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "3hJxH4AQYMf9rC45zSDDnFcMP4Ywqi2R9mKAKr3uaAKG",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "2xv49RSdmb9UnbAbfyULM5TnCZg7CB8TwWRjX65C1ccN",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "5WxHPiUZaiB6KNPg61figSRX2rXbRLnZqwtLKEhqSenn",
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "computeLimit": 400000,
+      "computePriceMicroLamports": "0",
+      "directSolTransfer": false
+    },
+    "screenshot": "docs/design/live-fixes/production-create-coin-devnet-cost-review.png"
+  },
+  "launchButtonFix": {
+    "date": "2026-10-14",
+    "url": "https://garmonpay.com/solana/create",
+    "rootCause": "Actual live page contained valid AI fields and was waiting in cost review above the form. Launch was disabled while the stale suggestion note remained visible. There was no requirement to edit a valid AI suggestion. Wallet/RPC/review waits were unbounded and startup could admit duplicate attempts.",
+    "fixes": [
+      "Shared AI/manual metadata validation before wallet connection",
+      "AI updates all controlled fields and does not require a dirty/edit event",
+      "Synchronous single-flight launch/suggestion guards",
+      "Visible stage-specific Launch labels",
+      "Cost review next to Launch with automatic scroll/focus",
+      "Bounded wallet/RPC/review waits, cancellation and late-result isolation",
+      "Bounded lowercase-gpay search with progress and cancellation",
+      "Phase-specific actionable network/validation errors",
+      "Preserve exact Devnet transaction validation and simulation",
+      "Wipe temporary mint secret on success and failure"
+    ],
+    "acceptance": {
+      "originalValidAIProductionStateObserved": true,
+      "fixtureAIToControlledFormWithoutManualEdits": true,
+      "stagingActualPhantomConnection": true,
+      "stagingRealDevnetPreflightPassed": true,
+      "stagingReviewAutomaticallyFocused": true,
+      "stagingReviewTimeoutRestoredLaunch": true,
+      "productionExplicitFormValidationPassed": true,
+      "productionRealDevnetPreflightPassed": true,
+      "productionReviewVisibleAndFocused": true,
+      "productionCancelRestoredLaunch": true,
+      "signatureRequested": false,
+      "transactionSubmitted": false,
+      "onChainTokenCreated": false,
+      "paidAIProviderReinvoked": false
+    },
+    "tests": {
+      "fullRegressionPassed": 519,
+      "optionalSkipped": 2,
+      "productionBuildPassed": true,
+      "stagingIsolationPassed": true
+    },
+    "preservedNewerProductionBaseline": "dpl_HH16Pd5xyFLjcZ2mJhQaRwSDTUD8",
+    "newerBlockhashRefreshPreserved": true,
+    "mainnetFinancialOperationsEnabled": false,
+    "productionDatabaseChanged": false,
+    "deploymentStatus": "READY",
+    "screenshot": "docs/design/live-fixes/launch-button-live-review.png",
+    "deploymentId": "dpl_GRtFvdcmQme1N9vPMc469gcyRYZH",
+    "deploymentUrl": "https://garmon-lyyji69ne-garmonpays-projects.vercel.app",
+    "productionAcceptanceAfterFinalDeployment": true,
+    "mintSecretCleanupOnSuccessRestored": true
+  }
+}

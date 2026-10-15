@@ -1,3 +1,4 @@
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { normalizeUserMembershipTier, membershipTierRank } from "@/lib/garmon-plan-config";
@@ -15,10 +16,7 @@ const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
  * Vercel Cron invokes GET; manual runs may use POST.
  */
 async function runMembershipRenewal(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const secret = (request.headers.get("x-cron-secret") ?? (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "")).trim();
-  const expected = process.env.CRON_SECRET?.trim();
-  if (expected && secret !== expected) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 

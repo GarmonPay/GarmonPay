@@ -1,9 +1,9 @@
-import DashboardLayout from "@/components/layout/DashboardLayout";
+import { GamesRouteShell } from "@/components/games/GamesRouteShell";
 
 export default function GamesRouteLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return <GamesRouteShell>{children}</GamesRouteShell>;
 }

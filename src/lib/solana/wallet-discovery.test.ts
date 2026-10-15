@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { APP_READY_EVENT, REGISTER_WALLET_EVENT, announceAppReady, currentProviders, insideWalletBrowser, rememberedInApp, rememberInApp, walletErrorText, type WalletHost } from "./wallet-discovery";
+import { APP_READY_EVENT, REGISTER_WALLET_EVENT, announceAppReady, currentProviders, insideWalletBrowser, rememberedInApp, rememberInApp, solanaWalletIdentity, walletErrorText, type WalletHost } from "./wallet-discovery";
 import { handoffAppFrom, handoffResume, walletReferrer } from "./wallet-deeplink";
 import { connectPlan } from "./wallet-environment";
 
@@ -40,6 +40,35 @@ describe("Phantom provider discovery", () => {
     expect(await provider!.signMessage(new Uint8Array([1]), "utf8")).toBeInstanceOf(Uint8Array);
   });
 
+  it("keeps one Solana MetaMask and hides an Ethereum-only provider", async () => {
+    const view = host();
+    const account = { address, publicKey: new Uint8Array(32) };
+    const sign = async () => [{ signature: new Uint8Array(64) }];
+    const connect = async () => ({ accounts: [account] });
+    const metamask = (name: string, chains: string[]) => ({
+      name,
+      chains,
+      features: { "standard:connect": { connect }, "solana:signMessage": { signMessage: sign } },
+    });
+    for (const name of ["MetaMask", "MetaMask ", "MetaMask 2", "MetaMask (Solana)", "MetaMask #12", "MetaMask\u200b"]) {
+      announceAppReady(view);
+      view.dispatchEvent(new CustomEvent(REGISTER_WALLET_EVENT, { detail: (api: { register: (...wallets: unknown[]) => void }) => api.register(metamask(name, ["solana:mainnet", "eip155:1"])) }));
+    }
+    announceAppReady(view);
+    view.dispatchEvent(new CustomEvent(APP_READY_EVENT, { detail: { register: (...wallets: ReturnType<typeof metamask>[]) => {
+      wallets.forEach(() => {});
+    } } }));
+    const ethereumOnly = { name: "MetaMask", chains: ["eip155:1"], features: { "standard:connect": { connect }, "solana:signMessage": { signMessage: sign } } };
+    const glow = metamask("Glow", ["solana:mainnet"]);
+    view.dispatchEvent(new CustomEvent(REGISTER_WALLET_EVENT, { detail: (api: { register: (...wallets: unknown[]) => void }) => api.register(ethereumOnly, glow, glow) }));
+    const others = currentProviders(view).others;
+    expect(others.map(option => option.key)).toEqual(["metamask", "glow"]);
+    expect(solanaWalletIdentity(ethereumOnly)).toBeNull();
+    expect((await others[0].provider.connect())?.publicKey?.toString()).toBe(address);
+    expect(await others[0].provider.signMessage(new Uint8Array([1]), "utf8")).toBeInstanceOf(Uint8Array);
+    expect(view.__gpWallets).toHaveLength(2);
+  });
+
   it("does not open a browse link when the page is already inside a wallet", () => {
     expect(connectPlan({ surface: "iphone", injected: false, insideWallet: true })).toBe("unavailable");
     expect(connectPlan({ surface: "iphone", injected: true, insideWallet: true })).toBe("injected");
@@ -72,8 +101,9 @@ describe("Phantom provider discovery", () => {
     const act = source.slice(source.indexOf("async function act"), source.indexOf("return <div className=\"gp-sol-wallet\""));
     const signIn = source.slice(source.indexOf("async function runInjectedSignIn"), source.indexOf("async function act"));
     expect(signIn.indexOf("connectWithDeadline(")).toBeGreaterThan(-1);
-    expect(signIn.indexOf("connectWithDeadline(")).toBeLessThan(signIn.indexOf("/api/solana/auth/challenge"));
-    expect(signIn.indexOf("signWithDeadline(")).toBeGreaterThan(signIn.indexOf("/api/solana/auth/challenge"));
+    expect(signIn.indexOf("connectWithDeadline(")).toBeLessThan(signIn.indexOf("requestChallenge("));
+    expect(signIn.indexOf("signWithDeadline(")).toBeGreaterThan(signIn.indexOf("requestChallenge("));
+    expect(source.match(/\/api\/solana\/auth\/challenge/g)?.length).toBe(1);
     expect(source.slice(0, source.indexOf("async function runInjectedSignIn"))).not.toContain("runInjectedSignIn(");
     expect(source).toContain("pollProvider(");
     expect(source).toContain("inAppDecision(");

@@ -1,0 +1,66 @@
+[
+  {
+    "path": "src/config/solana-navigation.ts",
+    "sha256": "63a780c33ebe76c37358c54907d7aee067a10956161774507265fca43ff7ad30"
+  },
+  {
+    "path": "src/components/Navbar.tsx",
+    "sha256": "9655a6e6b38aab65cc60af5c003c1e13703f192c374ccdfacdaabfaa0a24a362"
+  },
+  {
+    "path": "src/components/solana/SolanaSurface.tsx",
+    "sha256": "7cdd4e6f065c4c0e2eaf78cce902401b7adb8b4c3e61ddb162604d8af7b26d94"
+  },
+  {
+    "path": "src/components/solana/SolanaHome.tsx",
+    "sha256": "c38f19dba701bfd7edf1dac0a8388cff6d3b72b129702b8445030a7355a1ecce"
+  },
+  {
+    "path": "src/components/solana/FeaturePreview.tsx",
+    "sha256": "1dfb1e3c304b981dc94325defdb73e212203e3aba33b0557e09889c777351f4b"
+  },
+  {
+    "path": "src/components/solana/Spotlight.tsx",
+    "sha256": "e3e08fdde1a5229c7626be7eae928020cf6f086e48d88cffc6762c667e0a7f4d"
+  },
+  {
+    "path": "src/components/solana/Spotlight.test.ts",
+    "sha256": "51d7dcf18f50b3b2edbc696ede43af0673856bc174d2f5321b76425f5386f4f8"
+  },
+  {
+    "path": "src/app/solana.css",
+    "sha256": "7d4310d22602470fe3c2cf931fd7729fe2a1f81fae5ba21afc4deb00a0d8d45f"
+  },
+  {
+    "path": "src/app/solana/[section]/page.tsx",
+    "sha256": "1710f2b120c17b392f2161872be0dd01954b910ccf829db9a5238c7d0671a994"
+  },
+  {
+    "path": "src/components/solana/WalletSignIn.tsx",
+    "sha256": "1a2f3d8fa9a915d8b07941cae203d37037c2ec9ea5eb7d90c1caea31c174e215"
+  },
+  {
+    "path": "src/app/api/solana/auth/verify/route.ts",
+    "sha256": "fbf1e7182ede0f1b368447ab7e3d3ddf0c51c79d5ec87bd92d3f6bcfcccdb7e9"
+  },
+  {
+    "path": "src/lib/solana/auth-routes.test.ts",
+    "sha256": "6f5ad1b0c0027a5384be9e030eedd50890a7fb1d25b0064de115b190601df5ff"
+  },
+  {
+    "path": "src/lib/solana/wallet-paused.test.ts",
+    "sha256": "55083e58c5f79a9d6647b704dcd5e5aa475eae8a00c3aafd17c1dc71e0061bce"
+  },
+  {
+    "path": "src/lib/security/financial-pause.ts",
+    "sha256": "bf229be8968809227a5d375884ca6ad25a331edcb61ac84028ab313286ba27dd"
+  },
+  {
+    "path": "src/lib/security/financial-pause.test.ts",
+    "sha256": "88b2255cefb68e3297b101a8b591600d374c8c73a08a559fe8611fc6edd5c169"
+  },
+  {
+    "path": "scripts/security/smoke-security-release.mjs",
+    "sha256": "73eeb0fbebffaaa098d8a659c2644940726e2293cf9000802006e5181fcdf31e"
+  }
+]

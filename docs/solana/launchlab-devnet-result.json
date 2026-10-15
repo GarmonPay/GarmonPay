@@ -1,0 +1,12 @@
+{
+  "created": false,
+  "confirmed": false,
+  "submitted": false,
+  "platformExists": false,
+  "airdrop": "unavailable",
+  "airdropError": "429 Too Many Requests:  {\"jsonrpc\":\"2.0\",\"error\":{\"code\": 429, \"message\":\"You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://fau",
+  "protocolFeeRate": "2500",
+  "curveType": 0,
+  "secretExposed": false,
+  "checkedAt": "2026-10-13T21:55:52.883Z"
+}

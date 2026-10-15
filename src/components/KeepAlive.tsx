@@ -5,7 +5,7 @@ import { startKeepAlive } from "@/lib/keepAlive";
 
 export function KeepAlive() {
   useEffect(() => {
-    startKeepAlive();
+    return startKeepAlive();
   }, []);
   return null;
 }

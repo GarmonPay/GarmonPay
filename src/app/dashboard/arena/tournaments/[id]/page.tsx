@@ -25,7 +25,7 @@ export default function ArenaTournamentBracketPage() {
     if (!s || !id) return;
     setSession(s);
     const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(`${getApiRoot()}/arena/tournaments/${id}`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.tournament) setTournament(data.tournament);

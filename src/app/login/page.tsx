@@ -149,10 +149,10 @@ function LoginForm() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
-      style={{ background: "#0e0118", color: "#fff" }}
+      style={{ background: "transparent", color: "#fff" }}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]"
+        className="gp-auth-card w-full max-w-md rounded-2xl bg-[#12081f]/95 p-8 shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)]"
         style={{ border: "1px solid rgba(245,200,66,0.35)" }}
       >
         <h1
@@ -306,7 +306,7 @@ export default function LoginPage() {
       fallback={
         <div
           className="min-h-screen flex items-center justify-center"
-          style={{ background: "#0e0118", color: "rgba(196,181,253,0.8)" }}
+          style={{ background: "transparent", color: "rgba(196,181,253,0.8)" }}
         >
           Loading…
         </div>

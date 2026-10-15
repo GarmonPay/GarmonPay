@@ -1,0 +1,22 @@
+{
+  "origin": "https://handed-teens-shortcuts-kent.trycloudflare.com",
+  "permanentHosting": false,
+  "serverReplaced": false,
+  "preRestartProfilesStillServed": 3,
+  "automatedEd25519Wallets": true,
+  "realWalletApplicationAcceptance": false,
+  "physicalMobileAcceptance": false,
+  "devicePhotoSelectionAcceptance": false,
+  "financialOperationsEnabled": false,
+  "productionAccess": false,
+  "searchedUsername": "qa_e0aa7513e1e4",
+  "checks": [
+    "Replacement server still serves member profiles saved before its process started",
+    "Signed wallet session saves a profile and reloads the normalized photo",
+    "Photo replace, removal, reload, and corrupt-upload rejection preserve the saved profile",
+    "Username search and the signed-out profile hide the wallet address",
+    "Follow, unfollow, and first-signup referral attribution do not inflate on repeat login",
+    "Sign-out and sign-in recover the same permanent member, username, and referral link",
+    "Staging Supabase confirms the saved profile, and the publishable key cannot read member rows"
+  ]
+}

@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+type InstallPrompt = { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 export function PwaInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<{ prompt: () => Promise<{ outcome: string }> } | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<InstallPrompt | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    try { if (sessionStorage.getItem("gp-install-dismissed") === "1") setDismissed(true); } catch { /* Optional preference storage. */ }
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches
       || (window.navigator as { standalone?: boolean }).standalone === true
       || document.referrer.includes("android-app://");
@@ -18,8 +20,7 @@ export function PwaInstallPrompt() {
     }
     const handler = (e: Event) => {
       e.preventDefault();
-      const ev = e as unknown as { prompt: () => Promise<{ outcome: string }> };
-      setDeferredPrompt({ prompt: () => ev.prompt() });
+      setDeferredPrompt(e as unknown as InstallPrompt);
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
@@ -28,7 +29,8 @@ export function PwaInstallPrompt() {
   const handleInstall = async () => {
     if (!deferredPrompt) return;
     try {
-      const { outcome } = await deferredPrompt.prompt();
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") setInstalled(true);
       setDeferredPrompt(null);
       setDismissed(true);
@@ -42,24 +44,24 @@ export function PwaInstallPrompt() {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-40 rounded-xl bg-[#111827] border border-white/20 shadow-lg p-4 flex items-center justify-between gap-3">
+    <aside aria-label="Install GarmonPay" className="gp-install-prompt">
       <p className="text-sm text-white">Install GarmonPay on your device for a better experience.</p>
       <div className="flex gap-2 shrink-0">
         <button
           type="button"
           onClick={handleInstall}
-          className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium text-sm"
+          className="gp-button gp-button-gold"
         >
           Install
         </button>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
-          className="px-3 py-2 rounded-lg border border-white/20 text-[#9ca3af] hover:bg-white/5 text-sm"
+          onClick={() => { setDismissed(true); try { sessionStorage.setItem("gp-install-dismissed", "1"); } catch { /* Optional preference storage. */ } }}
+          className="gp-button"
         >
           Not now
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

@@ -1,0 +1,1944 @@
+{
+  "tables": [
+    {
+      "relname": "ad_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "fights",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "fight_escrow",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "fight_bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ad_blocked_keywords",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_daily_spin",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "deposits",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "withdrawals",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "earnings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "revenue",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_activity_log",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "referrals",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "advertisers",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "ads",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "admin_logs",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gamification",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "settings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "revenue_transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "stripe_payments",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "reward_budget",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "balances",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "free_entries",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "tournaments",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "referral_commissions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "wallet",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "analytics_events",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "game_rewards",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "security_logs",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "tournament_players",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "referral_commission_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gc_conversions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "badges",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "fight_history",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "boxing_profiles",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "wallet_balances",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "referral_bonus",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "wallet_ledger",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_notifications",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "platform_balance",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "game_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gpay_redemptions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_pause_votes",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "profit",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "recovered_stripe_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "wallets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ad_streak",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "owner_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "games_rewards",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "reward_budget_global",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "reward_spend_log",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "spin_wheel_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "mystery_box_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "mystery_box_opens",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "streak_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "user_streaks",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "mission_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "mission_completions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "rank_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_settings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "advertisements",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "game_station_scores",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_player_status",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_flags",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "escape_room_payouts",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "daily_rewards",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "user_badges",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "pinball_scores",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "platform_activities",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "pinball_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_blocked_ips",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ads",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "security_events",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ad_banned_users",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "game_waitlist",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "throttle_log",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_fighters",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "platform_settings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_fights",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_tournaments",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_challenges",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "subscriptions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "subscription_payments",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "pinball_jackpot",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_season_pass",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "pinball_games",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "ad_packages",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_model_queue",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_daily_login",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_spectators",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "withdrawal_requests",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "membership_bonuses",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "teams",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "team_members",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "ad_clicks",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "boxing_matches",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "boxing_escrow",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "balance_audit_log",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "boxing_bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "boxing_tournaments",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "banners",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "platform_revenue",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmondrop_moves",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "viral_referrals",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "referral_rewards",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gamification_rewards",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "fighters",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_store_items",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_fighter_inventory",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_coins",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_jackpot",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_achievements",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_trash_talk",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_highlights",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "cpu_fighters",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "profiles",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_users",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_chat",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_audit_log",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_transactions_full",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "users",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "social_task_completions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "social_tasks",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "social_fraud_flags",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gpay_ledger",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gpay_balances",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "platform_earnings",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "waitlist",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "user_referral_flip_welcome_bonus_claims",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gpay_claims",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gamification_config",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "coin_flip_games",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "gc_packages",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "creator_videos",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "video_watch_sessions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "video_watch_completions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "launch_checklist",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "coin_transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": true,
+      "auth_truncate": true,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_action_receipts",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_rooms",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_room_players",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_rounds",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_player_rolls",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "celo_side_bets",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=rm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "backup_transactions",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "daily_profit_summary",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "classified_campaigns",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "arena_weight_classes",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    },
+    {
+      "relname": "packages",
+      "relrowsecurity": true,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}",
+      "anon_truncate": false,
+      "auth_truncate": false,
+      "server_crud": true
+    }
+  ],
+  "columns": [
+    {
+      "relname": "profiles",
+      "attname": "id",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "email",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "balance",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "created_at",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "ad_credits",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "total_earned",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "total_withdrawn",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "balance_cents",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "referral_code",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "referred_by",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "role",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "full_name",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "username",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "membership_tier",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "sweeps_coins",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "gold_coins",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "date_of_birth",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "residence_state",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "reportable_earnings_cents",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "profiles",
+      "attname": "tax_info_submitted_at",
+      "attacl": null,
+      "auth_update": true,
+      "auth_insert": true
+    },
+    {
+      "relname": "users",
+      "attname": "id",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "email",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "role",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "is_admin",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "is_super_admin",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "created_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "balance",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "earnings",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "total_deposits",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "updated_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "ad_credit_balance",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "referral_code",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "referred_by",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "referrer_user_id",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "referral_count",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "stripe_account_id",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "banned",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "banned_reason",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "failed_login_attempts",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "locked_until",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "last_login_ip",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "last_login_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "registration_ip",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "arena_coins",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "arena_free_generation_used",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "withdrawable_balance",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "pending_balance",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_earnings",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "rank_code",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "referred_by_code",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "total_earnings",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "total_referrals",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "balance_cents",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "kyc_verified",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership_tier",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "full_name",
+      "attacl": "{authenticated=w/postgres}",
+      "auth_update": true,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "avatar_url",
+      "attacl": "{authenticated=w/postgres}",
+      "auth_update": true,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "social_trust_score",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "social_strikes",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "social_banned",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "sweeps_coins",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "gold_coins",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "social_strike_count",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership_expires_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "date_of_birth",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "residence_state",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "stripe_subscription_id",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "subscription_status",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership_payment_source",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "gpay_coins",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_sc_earned",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_gc_purchased",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "gpay_tokens",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "last_monthly_bonus_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "username",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership_started_at",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    },
+    {
+      "relname": "users",
+      "attname": "membership_period_end",
+      "attacl": null,
+      "auth_update": false,
+      "auth_insert": false
+    }
+  ]
+}

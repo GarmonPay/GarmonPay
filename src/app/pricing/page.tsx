@@ -184,7 +184,7 @@ export default function PricingPage() {
       setDashLoading(true);
       const headers: Record<string, string> = {};
       if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-      else if (session.userId) headers["X-User-Id"] = session.userId;
+
       try {
         const dashRes = await fetch("/api/dashboard", { headers, cache: "no-store" });
         const d = await dashRes.json().catch(() => ({}));
@@ -247,7 +247,7 @@ export default function PricingPage() {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-      else if (session.userId) headers["X-User-Id"] = session.userId;
+
       const res = await fetch("/api/stripe/create-membership-session", {
         method: "POST",
         headers,
@@ -366,7 +366,7 @@ export default function PricingPage() {
   }, [orderedPlans]);
 
   return (
-    <main className="min-h-screen bg-[#05020a] text-white">
+    <main className="gp-pricing-page min-h-screen text-white">
       <div className="border-b border-[#eab308]/40 bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#fbbf24] px-4 py-5 text-center shadow-[0_8px_40px_-8px_rgba(234,179,8,0.45)]">
         <p className="mx-auto max-w-4xl text-base font-bold leading-snug text-[#0c0618] sm:text-lg md:text-xl">
           Free members earn from day one. Paid plans multiply your earnings. No credit card ever required to start.
@@ -378,7 +378,7 @@ export default function PricingPage() {
             className={`${cinzel.className} text-3xl font-bold sm:text-4xl md:text-5xl`}
           >
             <span className="bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent">
-              Choose Your GarmonPay Plan
+              Find your kind of membership
             </span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base text-violet-200/90 sm:text-lg">
@@ -409,7 +409,7 @@ export default function PricingPage() {
           )}
         </header>
 
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="gp-plan-grid mt-12">
           {loading && (
             <p className="col-span-full text-center text-violet-300/90">Loading…</p>
           )}
@@ -424,7 +424,7 @@ export default function PricingPage() {
               return (
                 <div
                   key={p.id}
-                  className={`relative flex flex-col rounded-2xl border bg-[#0c0618]/80 p-6 backdrop-blur ${chrome.badge ? "pt-10" : ""} ${chrome.border} ${chrome.extraClass}`}
+                  className={`gp-plan-card relative flex flex-col ${chrome.badge ? "pt-10" : ""} ${chrome.border} ${chrome.extraClass}`}
                 >
                   {chrome.badge ? (
                     <div

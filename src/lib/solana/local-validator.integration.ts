@@ -1,0 +1,40 @@
+import {describe,it,expect} from 'vitest';
+import {Connection,Keypair,SystemProgram,Transaction} from '@solana/web3.js';
+import {readFinalizedSettlement} from './rpc-settlement';
+import {reviewTransactionRecovery} from './transaction-recovery';
+import {writeFile} from 'node:fs/promises';
+const enabled=process.env.SOL_LOCAL_VALIDATOR_TEST==='1';
+describe.skipIf(!enabled)('Actual disposable local Solana transaction acceptance',()=>{
+ it('confirms exact transfer, rejects duplicate credit and records finalized failure',async()=>{
+  const endpoint=process.env.SOL_LOCAL_VALIDATOR_URL||'http://127.0.0.1:18899';
+  const url=new URL(endpoint);
+  if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.username||url.password)throw new Error('Loopback-only validator required');
+  const rpc=new Connection(endpoint,'finalized'),source=Keypair.generate(),destination=Keypair.generate();
+  const genesis=await rpc.getGenesisHash();
+  const airdrop=await rpc.requestAirdrop(source.publicKey,1000000000);
+  await rpc.confirmTransaction(airdrop,'finalized');
+  const latest=await rpc.getLatestBlockhash('finalized');
+  const tx=new Transaction({feePayer:source.publicKey,...latest}).add(SystemProgram.transfer({fromPubkey:source.publicKey,toPubkey:destination.publicKey,lamports:1000000}));
+  tx.sign(source);const raw=tx.serialize(),signature=await rpc.sendRawTransaction(raw);
+  await rpc.confirmTransaction({...latest,signature},'finalized');
+  const parsed=await rpc.getParsedTransaction(signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
+  expect(parsed?.meta?.err).toBe(null);
+  const blockTime=parsed!.blockTime!;
+  const intent={id:'00000000-0000-4000-8000-000000000009',purpose:'deposit' as const,genesisHash:genesis,source:source.publicKey.toBase58(),destination:destination.publicKey.toBase58(),amountLamports:'1000000',signature,instructionIndex:0,minimumSlot:0,issuedAtSeconds:blockTime-60,expiresAtSeconds:blockTime+60};
+  const verified=await readFinalizedSettlement(rpc,intent);
+  expect(verified.receipt.amountLamports).toBe('1000000');
+  try {expect(await rpc.sendRawTransaction(raw)).toBe(signature);} catch(error) {expect(String(error)).toMatch(/already been processed/);}
+  expect((await readFinalizedSettlement(rpc,intent)).receipt.receiptKey).toBe(verified.receipt.receiptKey);
+  expect(await rpc.getBalance(destination.publicKey,'finalized')).toBe(1000000);
+  await expect(readFinalizedSettlement(rpc,{...intent,amountLamports:'1000001'})).rejects.toThrow();
+  const failedBlock=await rpc.getLatestBlockhash('finalized');
+  const failed=new Transaction({feePayer:source.publicKey,...failedBlock}).add(SystemProgram.transfer({fromPubkey:source.publicKey,toPubkey:destination.publicKey,lamports:2000000000}));
+  failed.sign(source);const failedSignature=await rpc.sendRawTransaction(failed.serialize(),{skipPreflight:true});
+  const failedResult=await rpc.confirmTransaction({...failedBlock,signature:failedSignature},'finalized');
+  expect(failedResult.value.err).not.toBe(null);
+  expect(await rpc.getBalance(destination.publicKey,'finalized')).toBe(1000000);
+  await expect(readFinalizedSettlement(rpc,{...intent,signature:failedSignature})).rejects.toThrow();
+  expect(reviewTransactionRecovery({confirmation:'finalized',error:failedResult.value.err,currentBlockHeight:100,lastValidBlockHeight:110,historySearched:true,previouslyFinalized:false,receiptMatches:false}).releaseReservation).toBe(false);
+  await writeFile('docs/solana/local-validator-acceptance.json',JSON.stringify({passed:true,syntheticOnly:true,endpoint,publicChainAccess:false,checks:['actual finalized System transfer','trusted RPC decoder','duplicate submission credits destination once','amount mismatch rejection','actual finalized insufficient-funds failure','failure leaves destination unchanged','no automatic reservation release'],checkedAt:new Date().toISOString()},null,2)+'\n');
+ },90000);
+});

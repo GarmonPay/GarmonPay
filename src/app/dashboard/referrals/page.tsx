@@ -1,4 +1,5 @@
 "use client";
+import { PageHeading } from "@/components/ui/garmon-ui";
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -95,13 +96,8 @@ export default function ReferralsPage() {
   const earningsHistory = data?.earningsHistory ?? [];
 
   return (
-    <div className="space-y-4 tablet:space-y-6">
-      <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
-        <h1 className="text-xl font-bold text-white mb-1">Referral Dashboard</h1>
-        <p className="text-fintech-muted text-sm">
-          Share your link to refer members. When they subscribe, you earn one-time and monthly commissions.
-        </p>
-      </div>
+    <div className="gp-referral-page mx-auto space-y-4 tablet:space-y-6">
+      <PageHeading eyebrow="YOUR COMMUNITY" title="Refer friends. Grow together." description="Share your personal link, track real referral activity, and explore your commission benefits."/>
 
       {/* Referral summary */}
       <section className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
@@ -137,7 +133,7 @@ export default function ReferralsPage() {
         <p className="text-fintech-muted text-sm mb-4">
           When your referrals upgrade, you earn a percentage of their upgrade payment in GPay Coins (100 GPC = $1.00 face value).
         </p>
-        <div className="overflow-x-auto -mx-6 sm:mx-0">
+        <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[280px]">
             <thead>
               <tr className="border-b border-white/10">
@@ -253,7 +249,7 @@ export default function ReferralsPage() {
         {leaderboard.length === 0 ? (
           <p className="text-fintech-muted italic">No leaderboard data yet.</p>
         ) : (
-          <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[320px]">
               <thead>
                 <tr className="border-b border-white/10">
@@ -286,7 +282,7 @@ export default function ReferralsPage() {
         {referredUsers.length === 0 ? (
           <p className="text-fintech-muted italic">No referred users yet. Share your referral link to get started.</p>
         ) : (
-          <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[520px]">
               <thead>
                 <tr className="border-b border-white/10">
@@ -325,7 +321,7 @@ export default function ReferralsPage() {
         {earningsHistory.length === 0 ? (
           <p className="text-fintech-muted italic">No referral earnings yet.</p>
         ) : (
-          <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[400px]">
               <thead>
                 <tr className="border-b border-white/10">

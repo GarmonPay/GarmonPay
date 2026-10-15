@@ -8,11 +8,12 @@ const http = require("http");
 const { Server } = require("socket.io");
 const crypto = require("crypto");
 
-const PORT = process.env.ARENA_PORT || 3001;
+const FINANCIAL_OPERATIONS_PAUSED = true;
+const PORT = process.env.PORT || process.env.ARENA_PORT || 3001;
 const CORS_ORIGIN =
   process.env.CORS_ORIGIN ||
   (process.env.NODE_ENV === "production" ? "https://garmonpay.com" : "*");
-const ARENA_JOIN_SECRET = process.env.ARENA_JOIN_SECRET || "arena-join-secret-change-in-production";
+const ARENA_JOIN_SECRET = process.env.ARENA_JOIN_SECRET || "";
 
 const CPU_USER_IDS = [
   "a0000000-0000-0000-0000-000000000001",
@@ -36,18 +37,28 @@ const STYLE_TENDENCIES = {
 };
 
 function verifyJoinToken(token) {
+  if (ARENA_JOIN_SECRET.length < 32 || ARENA_JOIN_SECRET === "arena-join-secret-change-in-production") return null;
+  if (typeof token !== "string" || token.length > 4096) return null;
   try {
     const raw = Buffer.from(token, "base64url").toString("utf8");
     const payload = JSON.parse(raw);
-    if (!payload.fightId || !payload.userId || !payload.fighterAId || !payload.exp || !payload.sig) return null;
-    if (Date.now() > payload.exp) return null;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (![payload.fightId, payload.userId, payload.fighterAId].every(value => typeof value === "string" && uuid.test(value))) return null;
+    if (!Number.isSafeInteger(payload.exp) || payload.exp <= Date.now() || payload.exp > Date.now() + 330000) return null;
     const str = JSON.stringify({ fightId: payload.fightId, userId: payload.userId, fighterAId: payload.fighterAId, exp: payload.exp });
     const sig = crypto.createHmac("sha256", ARENA_JOIN_SECRET).update(str).digest("hex");
-    if (sig !== payload.sig) return null;
+    if (typeof payload.sig !== "string" || !/^[a-f0-9]{64}$/.test(payload.sig) ||
+        !crypto.timingSafeEqual(Buffer.from(sig,"hex"), Buffer.from(payload.sig,"hex"))) return null;
     return payload;
   } catch {
     return null;
   }
+}
+
+function authorizeFightJoin(payload, fight, fighter) {
+  return payload.fightId === fight.id && payload.fighterAId === fighter.id &&
+    payload.userId === fighter.user_id && fight.fighter_a_id === fighter.id &&
+    !fight.winner_id && !fight.winner_cpu_fighter_id;
 }
 
 /** difficulty 1–10: higher = slightly more aggressive / heavier punches */
@@ -105,11 +116,11 @@ function applyGearBonuses(fighter, bonusesByItemId) {
 async function loadFight(supabase, fightId) {
   const { data: fight, error: fightErr } = await supabase
     .from("arena_fights")
-    .select("id, fighter_a_id, fighter_b_id, cpu_fighter_id, fight_type")
+    .select("id, fighter_a_id, fighter_b_id, cpu_fighter_id, fight_type, winner_id, winner_cpu_fighter_id")
     .eq("id", fightId)
     .single();
   const fightType = fight?.fight_type || "cpu";
-  if (fightErr || !fight) return null;
+  if (fightErr || !fight || fight.winner_id || fight.winner_cpu_fighter_id) return null;
 
   const { data: fa, error: faErr } = await supabase
     .from("arena_fighters")
@@ -184,6 +195,7 @@ async function loadFight(supabase, fightId) {
 const ADMIN_CUT_PCT = 0.10;
 
 async function closeBetting(supabase, fightId) {
+  if (FINANCIAL_OPERATIONS_PAUSED) return;
   await supabase.from("arena_fights").update({ betting_open: false }).eq("id", fightId);
 }
 
@@ -207,6 +219,7 @@ function getWeekRange() {
  * @param {string|null} winnerCpuFighterId — cpu_fighters.id when catalog CPU wins
  */
 async function saveFightResult(supabase, fightId, winnerArenaFighterId, winnerCpuFighterId, fightLog, fightType) {
+  if (FINANCIAL_OPERATIONS_PAUSED) return;
   await supabase
     .from("arena_fights")
     .update({
@@ -309,15 +322,22 @@ async function saveFightResult(supabase, fightId, winnerArenaFighterId, winnerCp
   }
 }
 
+/** Non-secret deployment evidence. Does not certify the host or its credentials. */
+function workerHealth() {
+  const revision = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT_SHA || "";
+  return {
+    status: "alive", timestamp: new Date().toISOString(), service: "garmonpay-fight-server",
+    healthVersion: "security-pause-v2", settlementPaused: FINANCIAL_OPERATIONS_PAUSED,
+    buildRevision: /^[a-f0-9]{40}$/i.test(revision) ? revision : null,
+    joinSecretConfigured: ARENA_JOIN_SECRET.length >= 32 && ARENA_JOIN_SECRET !== "arena-join-secret-change-in-production",
+  };
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.setHeader("Content-Type", "application/json");
     res.end(
-      JSON.stringify({
-        status: "alive",
-        timestamp: new Date().toISOString(),
-        service: "garmonpay-fight-server",
-      })
+      JSON.stringify(workerHealth())
     );
     return;
   }
@@ -400,8 +420,12 @@ io.on("connection", (socket) => {
       return;
     }
     const { fight, fighterA, fighterB, isCpu, cpuDifficulty } = loaded;
-    if (parsed.fighterAId !== fighterA.id) {
+    if (!authorizeFightJoin(parsed, fight, fighterA)) {
       ack?.({ ok: false, message: "Fighter mismatch" });
+      return;
+    }
+    if (fightState.has(fightId)) {
+      ack?.({ ok: false, message: "Fight already has an active session" });
       return;
     }
     socket.join(`fight:${fightId}`);
@@ -586,6 +610,7 @@ const TOURNAMENT_RUNNER_UP_PCT = 0.25;
 const TOURNAMENT_SEMI_PCT = 0.15;
 
 async function advanceTournamentBracket(supabase, fightId, winnerId) {
+  if (FINANCIAL_OPERATIONS_PAUSED) return;
   const { data: tournaments } = await supabase.from("arena_tournaments").select("id, bracket, prize_pool, status").eq("status", "in_progress");
   if (!tournaments || tournaments.length === 0) return;
   let tournament = null;

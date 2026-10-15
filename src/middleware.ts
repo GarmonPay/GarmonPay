@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-cookie";
 import { getClientIp, checkRateLimit } from "@/lib/rate-limit";
+import { isOperationPaused, financialPauseResponse } from "@/lib/security/financial-pause";
+import { requestRateLimit } from "@/lib/security/request-rate-key";
 
 const PRODUCTION_ORIGIN = "https://garmonpay.com";
-const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
 
 /**
@@ -50,36 +51,37 @@ function hasAdminCookie(request: NextRequest): boolean {
   return !!request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
 }
 
-/** Paths and methods that are rate limited (10/min per IP). */
-function isRateLimitedPath(pathname: string, method: string): string | null {
-  if (pathname.startsWith("/api/admin")) return "admin";
-  if (pathname === "/api/wallet/fund" && method === "POST") return "wallet-fund";
-  if (pathname === "/api/create-checkout-session" && method === "POST") return "checkout";
-  if (pathname === "/api/stripe/add-funds" && method === "POST") return "add-funds";
-  return null;
-}
-
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const method = request.method;
 
+  // Retire gameplay and matchmaking; preserve privileged historical audit endpoints.
+  if (pathname === "/api/celo" || pathname.startsWith("/api/celo/") || pathname === "/dashboard/games/celo" || pathname.startsWith("/dashboard/games/celo/") || pathname === "/games/celo" || pathname.startsWith("/games/celo/")) {
+    return NextResponse.json({ message: "This game has been retired." }, { status: 410, headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (isOperationPaused(pathname, method)) return financialPauseResponse();
+
   // Public marketing/auth routes (e.g. /register, /login) are not gated here—no session required.
 
   // IP-based rate limiting for sensitive API routes
-  const rateKey = isRateLimitedPath(pathname, method);
-  if (rateKey) {
+  const rateLimit = requestRateLimit(pathname, method);
+  if (rateLimit) {
     const ip = getClientIp(request);
-    const result = checkRateLimit(ip, rateKey, RATE_LIMIT, RATE_WINDOW_MS);
+    const result = checkRateLimit(ip, rateLimit.key, rateLimit.limit, RATE_WINDOW_MS);
     if (!result.allowed) {
       const retryAfter = String(result.retryAfterSec);
+      const body = rateLimit.key === "solana-session-read"
+        ? { error: "Sign-in check is busy. Your account is unchanged.", message: "Too Many Requests", retryAfter: result.retryAfterSec }
+        : { error: "Too Many Requests", retryAfter: result.retryAfterSec };
       return new NextResponse(
-        JSON.stringify({ message: "Too Many Requests", retryAfter: result.retryAfterSec }),
+        JSON.stringify(body),
         {
           status: 429,
           headers: {
             "Content-Type": "application/json",
             "Retry-After": retryAfter,
-            "X-RateLimit-Limit": String(RATE_LIMIT),
+            "X-RateLimit-Limit": String(rateLimit.limit),
             "X-RateLimit-Remaining": "0",
           },
         }

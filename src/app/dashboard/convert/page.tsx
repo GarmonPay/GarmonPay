@@ -1,35 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import { DM_Sans } from "next/font/google";
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-export default function DashboardConvertPage() {
-  return (
-    <div className={`mx-auto max-w-lg space-y-6 px-4 py-8 ${dmSans.className}`}>
-      <h1 className="text-2xl font-bold text-[#F5C842]">Convert GC → $GPAY</h1>
-      <p className="leading-relaxed text-violet-200/85">
-        Purchase Gold Coin packages (many include bonus $GPAY), or open your wallet for balance tools. In the
-        wallet, Gold Coins convert to GPay Coins at 1 GC = 97 GPC (3% platform fee).
-      </p>
-      <Link
-        href="/dashboard/buy-coins"
-        className="block w-full rounded-2xl py-4 text-center text-base font-bold text-black transition-opacity hover:opacity-95"
-        style={{ background: "#F5C842" }}
-      >
-        Buy Gold Coins
-      </Link>
-      <Link
-        href="/dashboard/wallet"
-        className="block w-full rounded-2xl border border-[#7C3AED]/50 bg-[#7C3AED]/15 py-4 text-center text-base font-semibold text-violet-100 transition-colors hover:bg-[#7C3AED]/25"
-      >
-        Open wallet
-      </Link>
-    </div>
-  );
-}
+import { ArrowLeftRight, Coins } from "lucide-react";
+import { PageHeading, Surface, StatusBadge } from "@/components/ui/garmon-ui";
+import { GC_TO_GPC_RATE_DISPLAY } from "@/lib/gc-gpc-convert";
+export default function DashboardConvertPage(){return <div className="mx-auto max-w-3xl space-y-6"><PageHeading eyebrow="YOUR COINS, READY TO PLAY" title="Convert GC to GPC." description="Move from Gold Coins to your on-platform game balance using the conversion tools in your wallet."/><Surface><span className="gp-icon-tile"><ArrowLeftRight size={22}/></span><h2 className="mt-6 text-2xl font-bold">Gold Coins → GPay Coins</h2><p className="gp-description">{GC_TO_GPC_RATE_DISPLAY}</p><div className="mt-6 flex flex-wrap gap-3"><Link href="/dashboard/wallet#convert" className="gp-button gp-button-violet">Open conversion tools</Link><Link href="/dashboard/buy-coins" className="gp-button gp-button-ghost"><Coins size={17}/>Buy Gold Coins</Link></div></Surface><Surface><StatusBadge tone="muted">COMING SOON</StatusBadge><h2 className="mt-4 text-lg font-semibold">$GPAY redemption</h2><p className="gp-description">Token redemption remains unavailable. This conversion is for GPC.</p><Link href="/dashboard/redeem" className="gp-button gp-button-ghost mt-5">View redemption status</Link></Surface></div>;}

@@ -2,12 +2,24 @@
 
 Set these in your hosting provider (e.g. Vercel → Project → Settings → Environment Variables) for **Production**. Do not commit real keys to the repo.
 
+## Phase 3 verification boundary — October 12, 2026
+
+Wallet sign-in, fight creation/entry, checkout, payouts and settlement remain paused. The older interactive checks below are historical acceptance steps, not authorization to execute them against production. Use the public health endpoint and deployment metadata for the current worker investigation; do not create fights or run financial flows as a configuration test.
+
+`render.yaml` still names `garmonpay-fight-server` and starts `node server/fight-server.js`; the example and local public boxing URL point to `https://garmonpay-fight-server.onrender.com`. The endpoint responded HTTP 200 with `ok`, `queue_length` and `rooms`, which differs from the current source's service/revision/pause health format. Render remains the repository's intended host; the deployed revision and financial pause are unverified. No movement, inactivity or source equivalence can be inferred from the earlier short timeouts.
+
+The production Vercel environment listing contains `NEXT_PUBLIC_BOXING_WS_URL`, but not `NEXT_PUBLIC_ARENA_WS_URL` or `NEXT_PUBLIC_FIGHT_SERVER_URL`. Values were not decrypted. Fight-creation responses use the boxing variable. Public health origin selection now prefers an explicit HTTP origin, then the boxing URL, then the legacy arena URL. All must be bare secure origins; browser pings omit credentials and read no response data. `wss://garmonpay.com` is valid only if a separately verified same-host WebSocket proxy exists; the website host alone does not establish that.
+
+Private Render revision/start-command/environment-name inspection requires separate read-only account access approval. No worker disablement, deletion, configuration update or redeployment was performed. Local source now supports Render's `PORT`, reports non-secret health metadata and strengthens token/owner checks; these source changes are not proof of the live worker's state.
+
 ## Required for Arena + Stripe + AI
 
 | Variable | Example / value | Used for |
 |----------|-----------------|----------|
 | `NEXT_PUBLIC_API_URL` | `https://garmonpay.com` | API base URL for client requests (dashboard, arena, admin). |
-| `NEXT_PUBLIC_ARENA_WS_URL` | `wss://garmonpay.com` | WebSocket URL for Arena fights and tournament bracket updates. Must match where the fight server is (same host or subdomain). |
+| `NEXT_PUBLIC_BOXING_WS_URL` | `wss://<verified-fight-server-host>` | Actual fight-creation API WebSocket URL. Verify its host and deployed worker revision separately. |
+| `NEXT_PUBLIC_FIGHT_SERVER_URL` | `https://<verified-fight-server-host>` | Optional explicit public HTTP origin for health pings. |
+| `NEXT_PUBLIC_ARENA_WS_URL` | `wss://<verified-fight-server-host>` | Legacy public health fallback; same-host use requires a verified WebSocket proxy. |
 | `ANTHROPIC_API_KEY` | `sk-ant-...` | Arena AI opponent (Claude). Omit if you don’t use “Fight AI Opponent”. |
 | `STRIPE_SECRET_KEY` | `sk_live_...` | Stripe API (checkout, subscriptions, webhook). |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_...` | Stripe webhook signature verification. Webhook URL: `https://garmonpay.com/api/stripe/webhook`. |

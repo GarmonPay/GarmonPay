@@ -1,0 +1,63 @@
+{
+  "productionReleaseFiles": [
+    {
+      "path": "src/lib/keepAlive.ts",
+      "sha256": "effa2d7f93caacc17f1a0dcbd5aa0872fc567b82ae8ed4cc418120586a0ee63d"
+    },
+    {
+      "path": "src/lib/keepAlive.test.ts",
+      "sha256": "806418931f372859c45f367553ea463c9e2cc16a90774615a2dddaaeccb67b3e"
+    },
+    {
+      "path": "src/components/KeepAlive.tsx",
+      "sha256": "88b1f5b4d343498b6c8dd982237d6796cdc2631b94abbc05b76eda856bea77dd"
+    },
+    {
+      "path": "src/app/api/arena/store/items/route.ts",
+      "sha256": "64fab02347da626839d3757045c0023f0fde180b70cb9208847ba1915bae48b4"
+    },
+    {
+      "path": "src/lib/security/arena-store-read.test.ts",
+      "sha256": "24ccd78ecfef4ed41ecb6c57286b695f2c3897d5a9a552f3b9474a25242d47fa"
+    },
+    {
+      "path": "src/components/solana/PlatformWorkspace.tsx",
+      "sha256": "f929bcad1b3aea73e5d8e03e910c8ab9edc5ab2f411d449deed36fdc968a43ef"
+    },
+    {
+      "path": "src/lib/fight-server-config.ts",
+      "sha256": "59dd3848c29107c73e1c744f0bfacf4a8bf4f7be3663b81c5c0212ea23571ca3"
+    },
+    {
+      "path": "src/app/api/arena/health-origin/route.ts",
+      "sha256": "5ac1764be9bd96170f522495ffe6bc2d545008a678f6e5bc5db18909dcdbd9c0"
+    },
+    {
+      "path": "src/lib/security/health-origin.test.ts",
+      "sha256": "95990202100ae807443368d183b47cfe0aa1a86169e119494ef673af2e3aded2"
+    }
+  ],
+  "localOnly": [
+    "src/lib/solana/auth.integration.ts",
+    "src/lib/solana/siws.ts",
+    "src/lib/solana/siws.test.ts",
+    "src/lib/solana/transaction-review.ts",
+    "src/lib/solana/transaction-review.test.ts",
+    "src/lib/solana/auth-crypto.ts",
+    "src/app/api/solana/auth/challenge/route.ts",
+    "src/app/api/solana/auth/verify/route.ts",
+    "server/fight-server.js",
+    "src/lib/security/arena-worker.test.ts",
+    "vitest.staging.config.ts",
+    "supabase/security/staging/",
+    "supabase/security/proposals/phase3-ddl-batches/",
+    "scripts/staging/verify-local-fight-worker.mjs",
+    "scripts/security/prepare-phase3-ddl-batches.mjs",
+    "scripts/security/validate-phase3-ddl-batches.mjs",
+    "scripts/security/validate-phase3-deposits.mjs"
+  ],
+  "verificationFiles": [
+    "scripts/security/smoke-security-release.mjs"
+  ],
+  "hashesVerifiedAfterPublication": true
+}

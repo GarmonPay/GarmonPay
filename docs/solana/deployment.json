@@ -1,0 +1,101 @@
+{
+  "deploymentId": "dpl_8iRCAekaacwkuWoQQFzdjgiRZe9c",
+  "url": "https://garmon-2umtfzm0q-garmonpays-projects.vercel.app",
+  "productionUrl": "https://garmonpay.com",
+  "status": "READY",
+  "databaseMigrationApplied": false,
+  "walletAuthEnabled": false,
+  "financialFeaturesEnabled": false,
+  "smokeChecks": [
+    {
+      "path": "/",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/launchpad",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/watch",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/learn",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/withdraw",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/creators",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/referrals",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/games",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/celo/rooms",
+      "method": "GET",
+      "status": 410
+    },
+    {
+      "path": "/api/celo/room/join",
+      "method": "POST",
+      "status": 410
+    },
+    {
+      "path": "/dashboard/games/celo",
+      "method": "GET",
+      "status": 410
+    },
+    {
+      "path": "/api/wallet",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/dashboard",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/admin/users",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/solana/auth/session",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/solana/auth/challenge",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/solana/launches/validate",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/solana/discovery",
+      "method": "GET",
+      "status": 200
+    }
+  ]
+}

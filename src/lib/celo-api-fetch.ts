@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const pendingActions=new Map<string,string>();
+function pendingActionId(key:string):string{
+ let saved=pendingActions.get(key);try{saved=saved??sessionStorage.getItem(key)??undefined;}catch{/* partitioned storage */}
+ const id=saved??crypto.randomUUID();pendingActions.set(key,id);try{sessionStorage.setItem(key,id);}catch{/* in-memory retry remains available */}return id;
+}
+function clearPendingAction(key:string){pendingActions.delete(key);try{sessionStorage.removeItem(key);}catch{/* storage unavailable */}}
+
 const CELO_AUTH_ERR = "Session expired. Please log in again.";
 
 const CELO_401_JSON = JSON.stringify({
@@ -72,6 +79,12 @@ export async function fetchCeloApi(
 
   const h = new Headers(init.headers);
   h.set("Content-Type", "application/json");
+  let actionKey:string|null=null;
+  if ((init.method ?? "GET").toUpperCase() !== "GET" && !h.has("x-celo-request-id")){
+    const {data}=await supabase.auth.getSession();
+    actionKey=`celo-pending:${data.session?.user?.id??'session'}:${input}:${typeof init.body==='string'?init.body:''}`;
+    h.set("x-celo-request-id",pendingActionId(actionKey));
+  }
   h.set("Authorization", `Bearer ${accessToken}`);
   console.log("[C-Lo Auth] token sent", {
     path: input,
@@ -79,6 +92,10 @@ export async function fetchCeloApi(
   });
 
   const res = await fetch(input, { ...init, headers: h, credentials: "include" });
+  if(actionKey){
+    if(res.status>=400&&res.status<500)clearPendingAction(actionKey);
+    else if(res.ok){try{await res.clone().json();clearPendingAction(actionKey);}catch{/* retain nonce until a readable server reply */}}
+  }
   if (res.status === 401) {
     console.log("[C-Lo API] auth failed", { path: input, status: res.status });
   }

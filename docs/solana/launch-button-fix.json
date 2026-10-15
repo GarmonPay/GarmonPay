@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-14",
+  "url": "https://garmonpay.com/solana/create",
+  "rootCause": "Actual live page contained valid AI fields and was waiting in cost review above the form. Launch was disabled while the stale suggestion note remained visible. There was no requirement to edit a valid AI suggestion. Wallet/RPC/review waits were unbounded and startup could admit duplicate attempts.",
+  "fixes": [
+    "Shared AI/manual metadata validation before wallet connection",
+    "AI updates all controlled fields and does not require a dirty/edit event",
+    "Synchronous single-flight launch/suggestion guards",
+    "Visible stage-specific Launch labels",
+    "Cost review next to Launch with automatic scroll/focus",
+    "Bounded wallet/RPC/review waits, cancellation and late-result isolation",
+    "Bounded lowercase-gpay search with progress and cancellation",
+    "Phase-specific actionable network/validation errors",
+    "Preserve exact Devnet transaction validation and simulation",
+    "Wipe temporary mint secret on success and failure"
+  ],
+  "acceptance": {
+    "originalValidAIProductionStateObserved": true,
+    "fixtureAIToControlledFormWithoutManualEdits": true,
+    "stagingActualPhantomConnection": true,
+    "stagingRealDevnetPreflightPassed": true,
+    "stagingReviewAutomaticallyFocused": true,
+    "stagingReviewTimeoutRestoredLaunch": true,
+    "productionExplicitFormValidationPassed": true,
+    "productionRealDevnetPreflightPassed": true,
+    "productionReviewVisibleAndFocused": true,
+    "productionCancelRestoredLaunch": true,
+    "signatureRequested": false,
+    "transactionSubmitted": false,
+    "onChainTokenCreated": false,
+    "paidAIProviderReinvoked": false
+  },
+  "tests": {
+    "fullRegressionPassed": 519,
+    "optionalSkipped": 2,
+    "productionBuildPassed": true,
+    "stagingIsolationPassed": true
+  },
+  "preservedNewerProductionBaseline": "dpl_HH16Pd5xyFLjcZ2mJhQaRwSDTUD8",
+  "newerBlockhashRefreshPreserved": true,
+  "mainnetFinancialOperationsEnabled": false,
+  "productionDatabaseChanged": false,
+  "deploymentStatus": "READY",
+  "screenshot": "docs/design/live-fixes/launch-button-live-review.png",
+  "deploymentId": "dpl_GRtFvdcmQme1N9vPMc469gcyRYZH",
+  "deploymentUrl": "https://garmon-lyyji69ne-garmonpays-projects.vercel.app",
+  "productionAcceptanceAfterFinalDeployment": true,
+  "mintSecretCleanupOnSuccessRestored": true
+}

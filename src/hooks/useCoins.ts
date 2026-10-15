@@ -121,7 +121,8 @@ export function useCoins() {
         .subscribe();
     }
 
-    void setup();
+    // A refused websocket must not interrupt the room or its wallet display.
+    void setup().catch(() => { if (!cancelled) void refresh(); });
 
     return () => {
       cancelled = true;

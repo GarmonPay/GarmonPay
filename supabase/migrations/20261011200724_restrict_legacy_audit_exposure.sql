@@ -1,0 +1,21 @@
+-- Restrict historical recovery data and admin-only finance views. No row changes.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+ALTER TABLE public.backup_transactions_clean ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_transactions_clean_v2 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_transactions_full ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_profiles_balance_fix ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recovered_stripe_sessions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.backup_transactions_clean FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.backup_transactions_clean_v2 FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.backup_transactions FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.backup_users FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.backup_transactions_full FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.backup_profiles_balance_fix FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.recovered_stripe_sessions FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.admin_finance_overview FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.admin_stats FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.total_deposits FROM PUBLIC, anon, authenticated;
+COMMIT;

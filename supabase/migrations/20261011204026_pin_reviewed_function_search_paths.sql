@@ -1,0 +1,23 @@
+-- Pin only the nineteen inspected function paths; bodies, grants and data unchanged.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+ALTER FUNCTION public.coin_flip_pvp_only_guard() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmon_date_utc(timestamp with time zone) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.update_referral_count() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.create_wallet_for_new_user() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.handle_stripe_deposit(uuid,numeric) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.escape_room_set_updated_at() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.update_daily_profit_summary() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.check_platform_balance_integrity() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmon_margin_last_24h() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmondrop_empty_board() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmondrop_cell(jsonb,integer,integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmondrop_count_dir(jsonb,integer,integer,integer,integer,integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmondrop_has_winner(jsonb,integer,integer,integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.garmondrop_board_full(jsonb) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.add_deposit(uuid,numeric) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.add_game_reward(uuid,numeric) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.debit_gpay_coins(uuid,integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.increment_wallet(uuid,integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.request_withdrawal(uuid,numeric) SET search_path = pg_catalog, public, pg_temp;
+COMMIT;

@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const {PGlite}=await import(process.env.SOL_FOUNDATION_PGLITE_MODULE||'@electric-sql/pglite');
+const audit=JSON.parse(readFileSync('docs/solana/security-catalog-before.json','utf8'));
+const perms=JSON.parse(readFileSync('docs/solana/security-permissions-before.json','utf8'));
+const fixture=JSON.parse(readFileSync('docs/solana/security-schema-fixture.json','utf8'));
+const q=x=>'"'+x.replaceAll('"','""')+'"';
+const db=new PGlite();
+await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+CREATE SCHEMA auth; GRANT USAGE ON SCHEMA public,auth TO anon,authenticated,service_role;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS $$ SELECT current_user::text $$;
+CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_build_object('role',current_user) $$;`);
+const tables=new Map();
+for(const c of fixture.columns){if(!tables.has(c.relname))tables.set(c.relname,[]);tables.get(c.relname).push(`${q(c.attname)} ${c.type}`);}
+for(const [t,columns]of tables)await db.exec(`CREATE TABLE public.${q(t)}(${columns.join(',')}); ALTER TABLE public.${q(t)} ENABLE ROW LEVEL SECURITY;`);
+const chars={a:'INSERT',r:'SELECT',w:'UPDATE',d:'DELETE',D:'TRUNCATE',x:'REFERENCES',t:'TRIGGER'};
+for(const t of perms.tables)for(const a of(t.relacl||'').slice(1,-1).split(',')){
+ const [role,rest]=a.split('=');if(!['anon','authenticated','service_role',''].includes(role)||!rest)continue;
+ const rights=[...rest.split('/')[0]].filter(c=>chars[c]).map(c=>chars[c]);
+ if(rights.length)await db.exec(`GRANT ${rights.join(',')} ON public.${q(t.relname)} TO ${role?q(role):'PUBLIC'};`);
+}
+for(const c of perms.columns)if(c.attacl)await db.exec(`GRANT UPDATE(${q(c.attname)}) ON public.${q(c.relname)} TO authenticated;`);
+for(const f of audit.functions){await db.exec(f.definition);await db.exec(`REVOKE EXECUTE ON FUNCTION public.${f.signature} FROM PUBLIC;`);for(const a of(f.proacl||'').slice(1,-1).split(',')){
+ const [role,rest]=a.split('=');if(['anon','authenticated','service_role',''].includes(role)&&rest?.startsWith('X'))await db.exec(`GRANT EXECUTE ON FUNCTION public.${f.signature} TO ${role?q(role):'PUBLIC'};`);
+}}
+for(const p of audit.policies.filter(p=>p.schemaname==='public'))await db.exec(`CREATE POLICY ${q(p.policyname)} ON public.${q(p.tablename)} FOR ${p.cmd} TO ${p.roles.map(r=>r==='public'?'PUBLIC':q(r)).join(',')}${p.qual?` USING (${p.qual})`:''}${p.with_check?` WITH CHECK (${p.with_check})`:''};`);
+for(const v of audit.views){await db.exec(`CREATE VIEW public.${q(v.relname)} AS ${v.definition}`);for(const role of['anon','authenticated','service_role'])if(v.relacl.includes(role+'='))await db.exec(`GRANT ALL ON public.${q(v.relname)} TO ${role}`);}
+await db.exec('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon,authenticated,service_role; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,authenticated,service_role;');
+
+const targets=["profiles", "advertisers", "garmon_ads", "garmon_engagement_sessions", "video_watch_sessions", "ad_sessions", "withdrawals", "withdrawal_requests", "gc_conversions", "gpay_redemptions", "bets", "referrals"];
+await db.exec(readFileSync('supabase/migrations/20261011203916_restrict_financial_client_writes.sql','utf8'));
+for(const role of ['anon','authenticated']){
+ for(const t of targets)for(const right of['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await db.query('SELECT has_table_privilege($1,$2,$3) AS ok',[role,t,right])).rows[0].ok,false);
+ await db.exec(`SET ROLE ${role}`);
+ for(const t of targets)await assert.rejects(db.query(`INSERT INTO ${t} DEFAULT VALUES`),/permission denied/);
+ await assert.rejects(db.query('UPDATE profiles SET balance=1000000'),/permission denied/);
+ await assert.rejects(db.query("UPDATE profiles SET role='admin'"),/permission denied/);
+ await db.exec('RESET ROLE');
+}
+await db.exec('SET ROLE service_role');
+for(const t of targets)await db.exec(`INSERT INTO ${t} DEFAULT VALUES`);
+await db.exec('RESET ROLE');
+for(const t of ['packages','gc_packages','arena_weight_classes','cpu_fighters']){
+ await db.exec(`INSERT INTO ${t} DEFAULT VALUES; SET ROLE anon;`);
+ assert.equal((await db.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n,1);
+ await db.exec('RESET ROLE');
+}
+await db.exec(readFileSync('supabase/security/financial-client-writes-rollback.sql','utf8'));
+for(const t of targets)assert.equal((await db.query("SELECT has_table_privilege('authenticated',$1,'INSERT') AS ok",[t])).rows[0].ok,true);
+// All previously protected objects keep their inspected grants through migration and rollback.
+for(const t of perms.tables.filter(t=>!t.anon_truncate))assert.equal((await db.query("SELECT has_table_privilege('anon',$1,'TRUNCATE') AS ok",[t.relname])).rows[0].ok,false);
+for(const t of targets)assert.equal((await db.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n,1);
+await db.close();console.log('Narrow financial permissions passed: twelve verified tables reject browser mutations, trusted server writes and four catalogs preserved, rollback and prior protections preserved. Synthetic schema/data only.');

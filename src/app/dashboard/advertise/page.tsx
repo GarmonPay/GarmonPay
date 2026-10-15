@@ -1,4 +1,5 @@
 "use client";
+import { PageHeading } from "@/components/ui/garmon-ui";
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -245,11 +246,8 @@ export default function AdvertisePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="card-lux p-4 tablet:p-6">
-        <h1 className="text-xl font-bold text-white mb-1">Advertise</h1>
-        <p className="text-fintech-muted text-sm">Get Seen. Get Known. Get Rewarded.</p>
-      </div>
+    <div className="gp-advertise-page mx-auto space-y-6">
+      <PageHeading eyebrow="GARMONPAY FOR ADVERTISERS" title="Your next audience starts here." description="Choose your campaign, set your package budget, and track real performance."/>
 
       {error && (
         <div className="rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 text-sm">

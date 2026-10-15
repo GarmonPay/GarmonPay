@@ -47,8 +47,9 @@ export class AppErrorBoundary extends React.Component<
             Something went wrong
           </h1>
           <p style={{ color: "#9ca3af", marginBottom: "1rem" }}>{message}</p>
-          <a
-            href="/"
+          <button
+            type="button"
+            onClick={() => window.location.assign("/")}
             style={{
               padding: "0.5rem 1rem",
               borderRadius: "0.5rem",
@@ -58,7 +59,7 @@ export class AppErrorBoundary extends React.Component<
             }}
           >
             Go home
-          </a>
+          </button>
         </div>
       );
     }

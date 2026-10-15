@@ -107,3 +107,16 @@ describe("evaluateRoll (C-Lo classification)", () => {
     expect(d3(6, 6, 6).rollName).toBe("TRIPS 6 • AUTOMATIC WIN");
   });
 });
+
+describe('complete 216-outcome rule space',()=>{
+ it('preserves all face permutations and established outcome frequencies',()=>{
+  const counts={instant_win:0,instant_loss:0,point:0,no_count:0};
+  for(let a=1;a<=6;a++)for(let b=1;b<=6;b++)for(let c=1;c<=6;c++){
+   const faces=[a,b,c] as Parameters<typeof evaluateRoll>[0];const result=evaluateRoll(faces);
+   const reordered=evaluateRoll([c,a,b] as Parameters<typeof evaluateRoll>[0]);
+   expect([result.result,result.point,result.isCelo,result.rollName]).toEqual([reordered.result,reordered.point,reordered.isCelo,reordered.rollName]);
+   expect(result.dice).toEqual(faces);counts[result.result]++;
+  }
+  expect(counts).toEqual({instant_win:27,instant_loss:21,point:60,no_count:108});
+ });
+});

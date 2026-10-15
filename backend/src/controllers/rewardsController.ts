@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { supabase } from '../services/supabase';
 
 /** POST /api/rewards/credit — credit reward to user wallet (e.g. after ad view). */
-export async function creditReward(req: Request, res: Response): Promise<void> {
+async function legacyCreditReward(req: Request, res: Response): Promise<void> {
   const userId = (req as any).userId;
   const body = req.body as { userId?: string; amount?: number; eventType?: string };
   const targetUserId = body.userId || userId;
@@ -55,4 +55,9 @@ export async function creditReward(req: Request, res: Response): Promise<void> {
   });
 
   res.json({ success: true, newBalance, amountCents: amount });
+}
+
+/** Disabled until this legacy endpoint has trusted, server-side reward rules. */
+export async function creditReward(_req: Request, res: Response): Promise<void> {
+  res.status(410).json({ message: 'Direct reward crediting is disabled' });
 }

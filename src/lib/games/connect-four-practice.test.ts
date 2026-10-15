@@ -1,0 +1,5 @@
+import {it,expect} from 'vitest';
+import {dropPracticeDisc,emptyPracticeBoard} from './connect-four-practice';
+it('detects a vertical win without changing the input board',()=>{let board=emptyPracticeBoard();const initial=board;for(let i=0;i<3;i++)board=dropPracticeDisc(board,0,1)!.board;expect(dropPracticeDisc(board,0,1)?.winner).toBe(1);expect(initial.flat().every(c=>c===0)).toBe(true);});
+it('rejects a full column and out-of-range moves',()=>{let board=emptyPracticeBoard();for(let i=0;i<6;i++)board=dropPracticeDisc(board,0,i%2?2:1)!.board;expect(dropPracticeDisc(board,0,1)).toBe(null);expect(()=>dropPracticeDisc(board,7,1)).toThrow();});
+it('detects horizontal and diagonal wins',()=>{const horizontal=emptyPracticeBoard();horizontal[5][0]=horizontal[5][1]=horizontal[5][2]=1;expect(dropPracticeDisc(horizontal,3,1)?.winner).toBe(1);const diagonal=emptyPracticeBoard();diagonal[5][0]=diagonal[4][1]=diagonal[3][2]=1;diagonal[5][3]=diagonal[4][3]=diagonal[3][3]=2;expect(dropPracticeDisc(diagonal,3,1)?.winner).toBe(1);});

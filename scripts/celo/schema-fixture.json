@@ -1,0 +1,1749 @@
+{
+  "columns": [
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_audit_log",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_audit_log",
+      "type": "uuid"
+    },
+    {
+      "column": "round_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_audit_log",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_audit_log",
+      "type": "uuid"
+    },
+    {
+      "column": "action",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_audit_log",
+      "type": "text"
+    },
+    {
+      "column": "details",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_audit_log",
+      "type": "jsonb"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_audit_log",
+      "type": "timestamptz"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_chat",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_chat",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_chat",
+      "type": "uuid"
+    },
+    {
+      "column": "message",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_chat",
+      "type": "text"
+    },
+    {
+      "column": "is_system",
+      "default": "false",
+      "nullable": "YES",
+      "table": "celo_chat",
+      "type": "bool"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_chat",
+      "type": "timestamptz"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_pause_votes",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_pause_votes",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_pause_votes",
+      "type": "uuid"
+    },
+    {
+      "column": "vote",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_pause_votes",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "celo_pause_votes",
+      "type": "timestamptz"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_player_rolls",
+      "type": "uuid"
+    },
+    {
+      "column": "round_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "uuid"
+    },
+    {
+      "column": "dice",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "_int4"
+    },
+    {
+      "column": "roll_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "text"
+    },
+    {
+      "column": "roll_result",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "text"
+    },
+    {
+      "column": "point",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "entry_sc",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "outcome",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "text"
+    },
+    {
+      "column": "payout_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "platform_fee_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "reroll_count",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "timestamptz"
+    },
+    {
+      "column": "player_celo_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "timestamptz"
+    },
+    {
+      "column": "roll_animation_start_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "timestamptz"
+    },
+    {
+      "column": "roll_animation_duration_ms",
+      "default": "2800",
+      "nullable": "NO",
+      "table": "celo_player_rolls",
+      "type": "int4"
+    },
+    {
+      "column": "voided_by_short_stop",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_player_rolls",
+      "type": "bool"
+    },
+    {
+      "column": "short_stop_called_by",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_player_rolls",
+      "type": "text"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_room_players",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "uuid"
+    },
+    {
+      "column": "role",
+      "default": "'player'::text",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "text"
+    },
+    {
+      "column": "seat_number",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "int4"
+    },
+    {
+      "column": "entry_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "int4"
+    },
+    {
+      "column": "joined_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "timestamptz"
+    },
+    {
+      "column": "dice_type",
+      "default": "'standard'::text",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "text"
+    },
+    {
+      "column": "dice_quantity",
+      "default": "3",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "int4"
+    },
+    {
+      "column": "dice_expires_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "timestamptz"
+    },
+    {
+      "column": "bet_cents",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_room_players",
+      "type": "int4"
+    },
+    {
+      "column": "entry_posted",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_room_players",
+      "type": "bool"
+    },
+    {
+      "column": "stake_amount_sc",
+      "default": "0",
+      "nullable": "NO",
+      "table": "celo_room_players",
+      "type": "int4"
+    },
+    {
+      "column": "player_seat_status",
+      "default": "'seated'::text",
+      "nullable": "NO",
+      "table": "celo_room_players",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "default": "'seated'::text",
+      "nullable": "NO",
+      "table": "celo_room_players",
+      "type": "text"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "uuid"
+    },
+    {
+      "column": "name",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "creator_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "uuid"
+    },
+    {
+      "column": "banker_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "uuid"
+    },
+    {
+      "column": "status",
+      "default": "'waiting'::text",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "room_type",
+      "default": "'public'::text",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "join_code",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "minimum_entry_sc",
+      "default": "500",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "current_bank_sc",
+      "default": "500",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "total_rounds",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "last_activity",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "max_players",
+      "default": "6",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "last_round_was_celo",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "bool"
+    },
+    {
+      "column": "banker_celo_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "platform_fee_pct",
+      "default": "10",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "max_bet_cents",
+      "default": "10000",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "current_bank_cents",
+      "default": "0",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "banker_reserve_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "no_short_stop",
+      "default": "false",
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "bool"
+    },
+    {
+      "column": "room_tier",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "min_bet_cents",
+      "default": "500",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "int4"
+    },
+    {
+      "column": "abandonment_checked_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "abandoned_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "abandonment_fee_charged",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "bool"
+    },
+    {
+      "column": "paused_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "paused_by",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "uuid"
+    },
+    {
+      "column": "pause_reason",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "text"
+    },
+    {
+      "column": "pause_expires_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rooms",
+      "type": "timestamptz"
+    },
+    {
+      "column": "bank_busted",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rooms",
+      "type": "bool"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "uuid"
+    },
+    {
+      "column": "round_number",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "banker_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "uuid"
+    },
+    {
+      "column": "status",
+      "default": "'waiting'::text",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "text"
+    },
+    {
+      "column": "banker_dice",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "_int4"
+    },
+    {
+      "column": "banker_dice_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "text"
+    },
+    {
+      "column": "banker_dice_result",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "text"
+    },
+    {
+      "column": "banker_point",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "prize_pool_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "platform_fee_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "banker_winnings_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "completed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "bank_covered",
+      "default": "false",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "covered_by",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "uuid"
+    },
+    {
+      "column": "current_player_seat",
+      "default": "1",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "banker_rerolls",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "roll_animation_start_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "roll_animation_duration_ms",
+      "default": "2800",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "no_short_stop",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "banker_short_stops_used",
+      "default": "0",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "banker_short_stops_max",
+      "default": "3",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "banker_roll_in_flight",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "roll_processing",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "roller_user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "uuid"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "player_celo_offer",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "player_celo_expires_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "push",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "settlement_version",
+      "default": "2",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "bank_at_round_start_sc",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "player_roll_deadline_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "timestamptz"
+    },
+    {
+      "column": "idle_preview_dice",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "jsonb"
+    },
+    {
+      "column": "terminal_bank_delta_sc",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_rounds",
+      "type": "int4"
+    },
+    {
+      "column": "terminal_room_bank_applied",
+      "default": "false",
+      "nullable": "NO",
+      "table": "celo_rounds",
+      "type": "bool"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "round_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "creator_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "acceptor_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "bet_type",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_side_bets",
+      "type": "text"
+    },
+    {
+      "column": "target_player_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "specific_point",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "int4"
+    },
+    {
+      "column": "amount_sc",
+      "default": null,
+      "nullable": "NO",
+      "table": "celo_side_bets",
+      "type": "int4"
+    },
+    {
+      "column": "odds_multiplier",
+      "default": "2.0",
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "numeric"
+    },
+    {
+      "column": "status",
+      "default": "'open'::text",
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "text"
+    },
+    {
+      "column": "winner_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "uuid"
+    },
+    {
+      "column": "platform_fee_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "int4"
+    },
+    {
+      "column": "payout_sc",
+      "default": "0",
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "int4"
+    },
+    {
+      "column": "expires_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "timestamptz"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "timestamptz"
+    },
+    {
+      "column": "settled_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "celo_side_bets",
+      "type": "timestamptz"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "uuid"
+    },
+    {
+      "column": "type",
+      "default": null,
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "text"
+    },
+    {
+      "column": "gold_coins",
+      "default": "0",
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "int4"
+    },
+    {
+      "column": "gpay_coins",
+      "default": "0",
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "int4"
+    },
+    {
+      "column": "description",
+      "default": null,
+      "nullable": "YES",
+      "table": "coin_transactions",
+      "type": "text"
+    },
+    {
+      "column": "reference",
+      "default": null,
+      "nullable": "YES",
+      "table": "coin_transactions",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "coin_transactions",
+      "type": "timestamptz"
+    },
+    {
+      "column": "reversed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "coin_transactions",
+      "type": "timestamptz"
+    },
+    {
+      "column": "reversal_reference",
+      "default": null,
+      "nullable": "YES",
+      "table": "coin_transactions",
+      "type": "text"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "platform_revenue",
+      "type": "uuid"
+    },
+    {
+      "column": "amount",
+      "default": "0",
+      "nullable": "YES",
+      "table": "platform_revenue",
+      "type": "numeric"
+    },
+    {
+      "column": "source",
+      "default": null,
+      "nullable": "YES",
+      "table": "platform_revenue",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "platform_revenue",
+      "type": "timestamptz"
+    },
+    {
+      "column": "fight_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "platform_revenue",
+      "type": "uuid"
+    },
+    {
+      "column": "boxing_match_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "platform_revenue",
+      "type": "uuid"
+    },
+    {
+      "column": "id",
+      "default": null,
+      "nullable": "NO",
+      "table": "users",
+      "type": "uuid"
+    },
+    {
+      "column": "email",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "role",
+      "default": "'user'::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "is_admin",
+      "default": "false",
+      "nullable": "YES",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "is_super_admin",
+      "default": "false",
+      "nullable": "YES",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "balance",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "earnings",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "total_deposits",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "ad_credit_balance",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int8"
+    },
+    {
+      "column": "referral_code",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "referred_by",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "referrer_user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "uuid"
+    },
+    {
+      "column": "referral_count",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "stripe_account_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "banned",
+      "default": "false",
+      "nullable": "NO",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "banned_reason",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "failed_login_attempts",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "locked_until",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "last_login_ip",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "last_login_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "registration_ip",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "arena_coins",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "arena_free_generation_used",
+      "default": "false",
+      "nullable": "YES",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "withdrawable_balance",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "pending_balance",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "lifetime_earnings",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "numeric"
+    },
+    {
+      "column": "rank_code",
+      "default": "'starter'::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "referred_by_code",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "total_earnings",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int8"
+    },
+    {
+      "column": "total_referrals",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "membership",
+      "default": "'free'::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "balance_cents",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "kyc_verified",
+      "default": "false",
+      "nullable": "NO",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "membership_tier",
+      "default": "'free'::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "full_name",
+      "default": "''::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "avatar_url",
+      "default": "''::text",
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "social_trust_score",
+      "default": "100",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "social_strikes",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "social_banned",
+      "default": "false",
+      "nullable": "YES",
+      "table": "users",
+      "type": "bool"
+    },
+    {
+      "column": "sweeps_coins",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "gold_coins",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "social_strike_count",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "membership_expires_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "date_of_birth",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "date"
+    },
+    {
+      "column": "residence_state",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "stripe_subscription_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "subscription_status",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "membership_payment_source",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "gpay_coins",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "lifetime_sc_earned",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "lifetime_gc_purchased",
+      "default": "0",
+      "nullable": "NO",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "gpay_tokens",
+      "default": "0",
+      "nullable": "YES",
+      "table": "users",
+      "type": "int4"
+    },
+    {
+      "column": "last_monthly_bonus_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "username",
+      "default": null,
+      "nullable": "NO",
+      "table": "users",
+      "type": "text"
+    },
+    {
+      "column": "membership_started_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    },
+    {
+      "column": "membership_period_end",
+      "default": null,
+      "nullable": "YES",
+      "table": "users",
+      "type": "timestamptz"
+    }
+  ],
+  "functions": [
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.credit_coins(p_user_id uuid, p_gold_coins integer, p_gpay_coins integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.users SET\n    gold_coins = COALESCE(gold_coins, 0) + COALESCE(p_gold_coins, 0),\n    gpay_coins = COALESCE(gpay_coins, 0) + COALESCE(p_gpay_coins, 0),\n    lifetime_gc_purchased = COALESCE(lifetime_gc_purchased, 0) + GREATEST(0, COALESCE(p_gold_coins, 0)),\n    lifetime_sc_earned = COALESCE(lifetime_sc_earned, 0) + GREATEST(0, COALESCE(p_gpay_coins, 0))\n  WHERE id = p_user_id;\nEND;\n$function$\n",
+      "name": "credit_coins",
+      "signature": "credit_coins(uuid,integer,integer)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_bump_room_total_rounds()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF TG_OP = 'UPDATE'\n     AND NEW.status = 'completed'\n     AND (OLD.status IS DISTINCT FROM 'completed') THEN\n    UPDATE public.celo_rooms\n    SET total_rounds = COALESCE(total_rounds, 0) + 1\n    WHERE id = NEW.room_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "name": "celo_bump_room_total_rounds",
+      "signature": "celo_bump_room_total_rounds()"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_increment_round_banker_accounting(p_round_id uuid, p_delta_pnl integer, p_delta_fee integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.celo_rounds\n  SET\n    banker_winnings_sc = COALESCE(banker_winnings_sc, 0) + p_delta_pnl,\n    platform_fee_sc = COALESCE(platform_fee_sc, 0) + p_delta_fee\n  WHERE id = p_round_id;\nEND;\n$function$\n",
+      "name": "celo_increment_round_banker_accounting",
+      "signature": "celo_increment_round_banker_accounting(uuid,integer,integer)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_post_entry_atomic(p_room_id uuid, p_user_id uuid, p_amount integer, p_reference text, p_description text DEFAULT 'C-Lo table entry'::text, p_ledger_type text DEFAULT 'celo_entry'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.celo_rooms%ROWTYPE;\n  v_player public.celo_room_players%ROWTYPE;\n  v_now timestamptz := now();\n  v_status text;\n  v_desc text := COALESCE(NULLIF(trim(p_description), ''), 'C-Lo table entry');\n  v_type text := COALESCE(NULLIF(trim(p_ledger_type), ''), 'celo_entry');\n  v_min_entry integer;\n  v_max_bank integer;\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room_id and user_id required');\n  END IF;\n  IF p_amount IS NULL OR p_amount <= 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'amount must be positive');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  SELECT *\n  INTO v_room\n  FROM public.celo_rooms\n  WHERE id = p_room_id\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  v_min_entry := GREATEST(\n    500,\n    COALESCE(v_room.minimum_entry_sc, v_room.min_bet_cents, 100)\n  );\n  v_max_bank := GREATEST(\n    0,\n    COALESCE(v_room.current_bank_sc, v_room.current_bank_cents, 0)::integer\n  );\n\n  IF p_amount < v_min_entry THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Bet must be at least the room minimum.');\n  END IF;\n  IF v_max_bank <= 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Table bank is empty.');\n  END IF;\n  IF p_amount > v_max_bank THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Bet cannot exceed the current bank.');\n  END IF;\n\n  v_status := trim(COALESCE(v_room.status, ''));\n  IF v_status = 'rolling' OR v_status = 'completed' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Cannot post entry for this room state');\n  END IF;\n  IF v_status <> ALL (ARRAY['waiting', 'active', 'entry_phase']) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Entries cannot be posted in this room state');\n  END IF;\n\n  IF v_room.banker_id IS NOT NULL AND v_room.banker_id = p_user_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'The banker cannot post a player entry');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1\n    FROM public.celo_rounds r\n    WHERE r.room_id = p_room_id\n      AND r.status IN ('banker_rolling', 'player_rolling', 'betting')\n    LIMIT 1\n  ) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'A round is already in progress');\n  END IF;\n\n  SELECT *\n  INTO v_player\n  FROM public.celo_room_players\n  WHERE room_id = p_room_id\n    AND user_id = p_user_id\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'You are not seated at this table');\n  END IF;\n\n  IF lower(trim(COALESCE(v_player.role, ''))) <> 'player' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Only players in a player seat can post an entry');\n  END IF;\n\n  IF v_player.entry_posted IS TRUE\n     OR COALESCE(v_player.stake_amount_sc, 0) > 0\n     OR COALESCE(v_player.entry_sc, 0) > 0\n     OR COALESCE(v_player.bet_cents, 0) > 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'You already posted an entry for this round');\n  END IF;\n\n  UPDATE public.users u\n  SET gpay_coins = u.gpay_coins - p_amount\n  WHERE u.id = p_user_id\n    AND u.gpay_coins >= p_amount;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient GPay Coins for this entry');\n  END IF;\n\n  INSERT INTO public.coin_transactions (\n    user_id,\n    type,\n    gold_coins,\n    gpay_coins,\n    description,\n    reference\n  )\n  VALUES (\n    p_user_id,\n    v_type,\n    0,\n    -p_amount,\n    v_desc,\n    p_reference\n  );\n\n  UPDATE public.celo_room_players\n  SET\n    entry_sc = p_amount,\n    bet_cents = p_amount,\n    entry_posted = true,\n    stake_amount_sc = p_amount,\n    status = 'active',\n    player_seat_status = 'active'\n  WHERE room_id = p_room_id\n    AND user_id = p_user_id;\n\n  IF v_status IN ('waiting', 'entry_phase') THEN\n    UPDATE public.celo_rooms\n    SET\n      status = CASE WHEN v_status = 'waiting' THEN 'active' ELSE 'entry_phase' END,\n      last_activity = v_now\n    WHERE id = p_room_id;\n  ELSE\n    UPDATE public.celo_rooms\n    SET last_activity = v_now\n    WHERE id = p_room_id;\n  END IF;\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n",
+      "name": "celo_post_entry_atomic",
+      "signature": "celo_post_entry_atomic(uuid,uuid,integer,text,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_next_free_player_seat(p_room_id uuid, p_cap integer)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  cap integer := GREATEST(2, LEAST(99, COALESCE(NULLIF(p_cap, 0), 10)));\n  s integer;\nBEGIN\n  FOR s IN 1..(cap - 1) LOOP\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.celo_room_players crp\n      WHERE crp.room_id = p_room_id\n        AND crp.seat_number IS NOT NULL\n        AND crp.seat_number = s\n    ) THEN\n      RETURN s;\n    END IF;\n  END LOOP;\n  RETURN 1;\nEND;\n$function$\n",
+      "name": "celo_next_free_player_seat",
+      "signature": "celo_next_free_player_seat(uuid,integer)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_user_in_room(_room_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.celo_room_players\n    WHERE room_id = _room_id AND user_id = auth.uid()\n  );\n$function$\n",
+      "name": "celo_user_in_room",
+      "signature": "celo_user_in_room(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_finalize_banker_terminal_round(p_round_id uuid, p_room_id uuid, p_banker_dice integer[], p_banker_dice_name text, p_banker_dice_result text, p_banker_winnings_sc integer, p_platform_fee_sc integer, p_bank_delta_sc integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_rows integer;\n  v_new_bank integer;\nBEGIN\n  IF p_round_id IS NULL OR p_room_id IS NULL THEN\n    RETURN jsonb_build_object(\n      'finalized', false,\n      'reason', 'missing_ids',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = p_room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rounds AS r\n  SET\n    banker_dice = p_banker_dice,\n    banker_dice_name = p_banker_dice_name,\n    banker_dice_result = p_banker_dice_result,\n    banker_roll_in_flight = false,\n    status = 'completed',\n    completed_at = now(),\n    platform_fee_sc = p_platform_fee_sc,\n    banker_winnings_sc = p_banker_winnings_sc,\n    terminal_bank_delta_sc = p_bank_delta_sc,\n    terminal_room_bank_applied = true\n  WHERE r.id = p_round_id\n    AND r.status = 'banker_rolling';\n\n  GET DIAGNOSTICS v_rows = ROW_COUNT;\n\n  IF v_rows = 0 THEN\n    RETURN jsonb_build_object(\n      'finalized', false,\n      'reason', 'round_not_banker_rolling',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = p_room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rooms AS c\n  SET\n    current_bank_sc = GREATEST(\n      0,\n      COALESCE(c.current_bank_sc, 0) + COALESCE(p_bank_delta_sc, 0)\n    ),\n    current_bank_cents = GREATEST(\n      0,\n      COALESCE(c.current_bank_sc, 0) + COALESCE(p_bank_delta_sc, 0)\n    )\n  WHERE c.id = p_room_id\n  RETURNING c.current_bank_sc INTO v_new_bank;\n\n  RETURN jsonb_build_object(\n    'finalized', true,\n    'reason', 'ok',\n    'new_bank_sc', COALESCE(v_new_bank, 0)\n  );\nEND;\n$function$\n",
+      "name": "celo_finalize_banker_terminal_round",
+      "signature": "celo_finalize_banker_terminal_round(uuid,uuid,integer[],text,text,integer,integer,integer)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_record_platform_fee(p_round_id uuid, p_fee_type text, p_amount_cents integer, p_description text, p_user_id uuid DEFAULT NULL::uuid, p_idempotency_key text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_amount integer := GREATEST(0, COALESCE(p_amount_cents, 0));\n  v_fee_type text := COALESCE(NULLIF(trim(p_fee_type), ''), 'celo_main_fee');\n  v_desc text := COALESCE(NULLIF(trim(p_description), ''), 'C-Lo platform fee');\n  v_key text := COALESCE(\n    NULLIF(trim(p_idempotency_key), ''),\n    CASE\n      WHEN p_round_id IS NULL THEN NULL\n      ELSE 'celo_fee:' || p_round_id::text || ':' || v_fee_type\n    END\n  );\n  v_inserted_id uuid;\nBEGIN\n  IF v_amount <= 0 THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'non_positive_amount');\n  END IF;\n  IF v_key IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'idempotency_key_required');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1 FROM public.platform_earnings pe WHERE pe.idempotency_key = v_key\n  ) THEN\n    RETURN jsonb_build_object('inserted', false, 'idempotency_key', v_key);\n  END IF;\n\n  BEGIN\n    INSERT INTO public.platform_earnings (\n      source,\n      source_id,\n      amount_cents,\n      description,\n      user_id,\n      round_id,\n      fee_type,\n      idempotency_key\n    )\n    VALUES (\n      'celo_game',\n      CASE WHEN p_round_id IS NULL THEN NULL ELSE p_round_id::text END,\n      v_amount,\n      v_desc,\n      p_user_id,\n      p_round_id,\n      v_fee_type,\n      v_key\n    )\n    RETURNING id INTO v_inserted_id;\n  EXCEPTION\n    WHEN unique_violation THEN\n      RETURN jsonb_build_object('inserted', false, 'idempotency_key', v_key);\n  END;\n\n  PERFORM public.platform_record_revenue(v_amount, 'celo_fee');\n\n  RETURN jsonb_build_object('inserted', true, 'id', v_inserted_id, 'idempotency_key', v_key);\nEND;\n$function$\n",
+      "name": "celo_record_platform_fee",
+      "signature": "celo_record_platform_fee(uuid,text,integer,text,uuid,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_handle_bank_bust_and_transfer(p_room_id uuid, p_winner_user_id uuid, p_max_players integer, p_action text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_prev uuid;\n  v_room_max integer;\n  v_cap integer;\n  v_effective_winner uuid;\n  v_out_banker uuid;\n  r RECORD;\n  v_seat integer;\nBEGIN\n  IF p_room_id IS NULL THEN\n    RAISE EXCEPTION 'celo_handle_bank_bust_and_transfer: p_room_id required';\n  END IF;\n\n  SELECT c.banker_id, c.max_players\n  INTO v_prev, v_room_max\n  FROM public.celo_rooms AS c\n  WHERE c.id = p_room_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'celo_handle_bank_bust_and_transfer: room not found %', p_room_id;\n  END IF;\n\n  v_cap := GREATEST(2, LEAST(99, COALESCE(NULLIF(p_max_players, 0), v_room_max, 10)));\n\n  -- No room-level banker: zero bank + bust flag only (matches legacy TS branch).\n  IF v_prev IS NULL THEN\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    UPDATE public.celo_rooms AS c\n    SET\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    RETURN jsonb_build_object(\n      'success', true,\n      'banker_id', 'null'::jsonb,\n      'action', to_jsonb(COALESCE(p_action, ''))\n    );\n  END IF;\n\n  -- Winner already owns the bank (refresh / duplicate settlement). Keep them.\n  IF p_winner_user_id IS NOT NULL AND p_winner_user_id = v_prev THEN\n    UPDATE public.celo_rooms AS c\n    SET\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      status = 'bank_takeover',\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    RETURN jsonb_build_object(\n      'success', true,\n      'idempotent', true,\n      'banker_id', to_jsonb(v_prev::text),\n      'action', to_jsonb(COALESCE(p_action, ''))\n    );\n  END IF;\n\n  v_effective_winner := NULL;\n  IF p_winner_user_id IS NOT NULL\n     AND p_winner_user_id IS DISTINCT FROM v_prev THEN\n    v_effective_winner := p_winner_user_id;\n  END IF;\n\n  v_out_banker := NULL;\n\n  IF v_effective_winner IS NOT NULL THEN\n    -- Demote every banker row except the successor.\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n        AND crp.user_id IS DISTINCT FROM v_effective_winner\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    INSERT INTO public.celo_room_players (\n      room_id,\n      user_id,\n      role,\n      seat_number,\n      bet_cents,\n      entry_sc,\n      stake_amount_sc,\n      entry_posted,\n      status,\n      player_seat_status,\n      joined_at\n    )\n    VALUES (\n      p_room_id,\n      v_effective_winner,\n      'banker',\n      0,\n      0,\n      0,\n      0,\n      false,\n      'seated',\n      'seated',\n      now()\n    )\n    ON CONFLICT (room_id, user_id) DO UPDATE SET\n      role = EXCLUDED.role,\n      seat_number = 0,\n      bet_cents = 0,\n      entry_sc = 0,\n      stake_amount_sc = 0,\n      entry_posted = false,\n      status = 'seated',\n      player_seat_status = 'seated';\n\n    UPDATE public.celo_rooms AS c\n    SET\n      banker_id = v_effective_winner,\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      status = 'bank_takeover',\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    v_out_banker := v_effective_winner;\n  ELSE\n    -- Had a banker but no valid successor: clear room banker and demote all banker rows.\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    UPDATE public.celo_rooms AS c\n    SET\n      banker_id = NULL,\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      last_activity = now()\n    WHERE c.id = p_room_id;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'banker_id', CASE\n      WHEN v_out_banker IS NULL THEN 'null'::jsonb\n      ELSE to_jsonb(v_out_banker::text)\n    END,\n    'action', to_jsonb(COALESCE(p_action, ''))\n  );\nEND;\n$function$\n",
+      "name": "celo_handle_bank_bust_and_transfer",
+      "signature": "celo_handle_bank_bust_and_transfer(uuid,uuid,integer,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_reconcile_terminal_room_bank(p_round_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  r RECORD;\n  v_delta integer;\n  v_new_bank integer;\nBEGIN\n  IF p_round_id IS NULL THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'missing_round_id');\n  END IF;\n\n  SELECT\n    id,\n    room_id,\n    status,\n    banker_dice_result,\n    banker_winnings_sc,\n    terminal_bank_delta_sc,\n    terminal_room_bank_applied\n  INTO r\n  FROM public.celo_rounds\n  WHERE id = p_round_id;\n\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'round_not_found');\n  END IF;\n\n  IF r.status <> 'completed' THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'round_not_completed');\n  END IF;\n\n  IF r.terminal_room_bank_applied IS TRUE THEN\n    RETURN jsonb_build_object(\n      'reconciled', false,\n      'reason', 'already_applied',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = r.room_id\n      )\n    );\n  END IF;\n\n  v_delta := r.terminal_bank_delta_sc;\n  IF v_delta IS NULL THEN\n    RETURN jsonb_build_object(\n      'reconciled', false,\n      'reason', 'no_stored_delta_set_terminal_bank_delta_sc_manually'\n    );\n  END IF;\n\n  IF v_delta = 0 THEN\n    UPDATE public.celo_rounds SET terminal_room_bank_applied = true WHERE id = p_round_id;\n    RETURN jsonb_build_object(\n      'reconciled', true,\n      'reason', 'zero_delta_marked',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = r.room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rooms AS c\n  SET\n    current_bank_sc = GREATEST(0, COALESCE(c.current_bank_sc, 0) + v_delta),\n    current_bank_cents = GREATEST(0, COALESCE(c.current_bank_sc, 0) + v_delta)\n  WHERE c.id = r.room_id\n  RETURNING c.current_bank_sc INTO v_new_bank;\n\n  UPDATE public.celo_rounds\n  SET terminal_room_bank_applied = true,\n      terminal_bank_delta_sc = COALESCE(terminal_bank_delta_sc, v_delta)\n  WHERE id = p_round_id;\n\n  RETURN jsonb_build_object(\n    'reconciled', true,\n    'reason', 'applied',\n    'new_bank_sc', COALESCE(v_new_bank, 0)\n  );\nEND;\n$function$\n",
+      "name": "celo_reconcile_terminal_room_bank",
+      "signature": "celo_reconcile_terminal_room_bank(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.credit_coins_with_ledger(p_user_id uuid, p_gold_coins integer, p_gpay_coins integer, p_type text, p_description text, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_g integer := COALESCE(p_gold_coins, 0);\n  v_s integer := COALESCE(p_gpay_coins, 0);\n  v_type text;\n  v_desc text;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'user_id required');\n  END IF;\n  IF v_g = 0 AND v_s = 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Amount cannot be zero');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_user_id) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'User not found');\n  END IF;\n\n  v_type := COALESCE(NULLIF(trim(p_type), ''), 'credit');\n  v_desc := COALESCE(NULLIF(trim(p_description), ''), 'Credit');\n\n  PERFORM public.credit_coins(p_user_id, v_g, v_s);\n\n  INSERT INTO public.coin_transactions (user_id, type, gold_coins, gpay_coins, description, reference)\n  VALUES (p_user_id, v_type, v_g, v_s, v_desc, p_reference);\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n",
+      "name": "credit_coins_with_ledger",
+      "signature": "credit_coins_with_ledger(uuid,integer,integer,text,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.debit_gpay_coins(p_user_id uuid, p_amount integer)\n RETURNS json\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  v_current_balance integer;\nBEGIN\n  -- Get current balance\n  SELECT gpay_coins\n  INTO v_current_balance\n  FROM users\n  WHERE id = p_user_id;\n\n  IF NOT FOUND THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'User not found'\n    );\n  END IF;\n\n  -- Check sufficient balance\n  IF v_current_balance < p_amount THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'Insufficient GPay Coins',\n      'balance', v_current_balance,\n      'required', p_amount\n    );\n  END IF;\n\n  -- Deduct coins\n  UPDATE users\n  SET\n    gpay_coins = gpay_coins - p_amount,\n    updated_at = now()\n  WHERE id = p_user_id;\n\n  RETURN json_build_object(\n    'success', true,\n    'debited', p_amount,\n    'new_balance', v_current_balance - p_amount\n  );\n\nEXCEPTION WHEN OTHERS THEN\n  RETURN json_build_object(\n    'success', false,\n    'error', SQLERRM\n  );\nEND;\n$function$\n",
+      "name": "debit_gpay_coins",
+      "signature": "debit_gpay_coins(uuid,integer)"
+    }
+  ],
+  "constraints": [
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_audit_log_pkey",
+      "table": "celo_audit_log"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_audit_log_room_id_fkey",
+      "table": "celo_audit_log"
+    },
+    {
+      "definition": "FOREIGN KEY (round_id) REFERENCES celo_rounds(id)",
+      "name": "celo_audit_log_round_id_fkey",
+      "table": "celo_audit_log"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id)",
+      "name": "celo_audit_log_user_id_fkey",
+      "table": "celo_audit_log"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_chat_pkey",
+      "table": "celo_chat"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_chat_room_id_fkey",
+      "table": "celo_chat"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_chat_user_id_fkey",
+      "table": "celo_chat"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_pause_votes_pkey",
+      "table": "celo_pause_votes"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_pause_votes_room_id_fkey",
+      "table": "celo_pause_votes"
+    },
+    {
+      "definition": "UNIQUE (room_id, user_id, vote)",
+      "name": "celo_pause_votes_room_id_user_id_vote_key",
+      "table": "celo_pause_votes"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_pause_votes_user_id_fkey",
+      "table": "celo_pause_votes"
+    },
+    {
+      "definition": "CHECK ((vote = ANY (ARRAY['request'::text, 'approve'::text])))",
+      "name": "celo_pause_votes_vote_check",
+      "table": "celo_pause_votes"
+    },
+    {
+      "definition": "CHECK (((outcome IS NULL) OR (outcome = ANY (ARRAY['win'::text, 'loss'::text, 'reroll'::text, 'no_count'::text, 'lost_short_stop'::text, 'push'::text]))))",
+      "name": "celo_player_rolls_outcome_check",
+      "table": "celo_player_rolls"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_player_rolls_pkey",
+      "table": "celo_player_rolls"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_player_rolls_room_id_fkey",
+      "table": "celo_player_rolls"
+    },
+    {
+      "definition": "FOREIGN KEY (round_id) REFERENCES celo_rounds(id) ON DELETE CASCADE",
+      "name": "celo_player_rolls_round_id_fkey",
+      "table": "celo_player_rolls"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_player_rolls_user_id_fkey",
+      "table": "celo_player_rolls"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_room_players_pkey",
+      "table": "celo_room_players"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_room_players_room_id_fkey",
+      "table": "celo_room_players"
+    },
+    {
+      "definition": "UNIQUE (room_id, user_id)",
+      "name": "celo_room_players_room_id_user_id_key",
+      "table": "celo_room_players"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_room_players_user_id_fkey",
+      "table": "celo_room_players"
+    },
+    {
+      "definition": "FOREIGN KEY (banker_id) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_rooms_banker_id_fkey",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_rooms_creator_id_fkey",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "UNIQUE (join_code)",
+      "name": "celo_rooms_join_code_key",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "CHECK ((max_players = ANY (ARRAY[2, 4, 6, 10])))",
+      "name": "celo_rooms_max_players_check",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "FOREIGN KEY (paused_by) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_rooms_paused_by_fkey",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_rooms_pkey",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "CHECK (((platform_fee_pct >= 0) AND (platform_fee_pct <= 100)))",
+      "name": "celo_rooms_platform_fee_pct_check",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "CHECK ((status = ANY (ARRAY['waiting'::text, 'entry_phase'::text, 'active'::text, 'rolling'::text, 'completed'::text, 'cancelled'::text, 'bank_takeover'::text])))",
+      "name": "celo_rooms_status_check",
+      "table": "celo_rooms"
+    },
+    {
+      "definition": "FOREIGN KEY (banker_id) REFERENCES users(id)",
+      "name": "celo_rounds_banker_id_fkey",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "FOREIGN KEY (covered_by) REFERENCES users(id)",
+      "name": "celo_rounds_covered_by_fkey",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_rounds_pkey",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "FOREIGN KEY (roller_user_id) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_rounds_roller_user_id_fkey",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_rounds_room_id_fkey",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "CHECK ((status = ANY (ARRAY['betting'::text, 'banker_rolling'::text, 'player_rolling'::text, 'completed'::text, 'cancelled'::text])))",
+      "name": "celo_rounds_status_check",
+      "table": "celo_rounds"
+    },
+    {
+      "definition": "FOREIGN KEY (acceptor_id) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_side_bets_acceptor_id_fkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE",
+      "name": "celo_side_bets_creator_id_fkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "name": "celo_side_bets_pkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "FOREIGN KEY (room_id) REFERENCES celo_rooms(id) ON DELETE CASCADE",
+      "name": "celo_side_bets_room_id_fkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "FOREIGN KEY (round_id) REFERENCES celo_rounds(id) ON DELETE SET NULL",
+      "name": "celo_side_bets_round_id_fkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "FOREIGN KEY (target_player_id) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_side_bets_target_player_id_fkey",
+      "table": "celo_side_bets"
+    },
+    {
+      "definition": "FOREIGN KEY (winner_id) REFERENCES users(id) ON DELETE SET NULL",
+      "name": "celo_side_bets_winner_id_fkey",
+      "table": "celo_side_bets"
+    }
+  ],
+  "realtime": [
+    "celo_rooms",
+    "celo_room_players",
+    "celo_rounds",
+    "celo_player_rolls",
+    "celo_side_bets",
+    "celo_chat"
+  ]
+}

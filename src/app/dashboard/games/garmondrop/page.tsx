@@ -1,4 +1,5 @@
 "use client";
+import { PageHeading } from "@/components/ui/garmon-ui";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -278,7 +279,7 @@ export default function GarmonDropLobbyPage() {
 
   return (
     <div
-      className={`min-h-screen w-full pb-28 text-white ${dm.className}`}
+      className={`gp-drop-lobby min-h-screen w-full pb-28 text-white ${dm.className}`}
       style={{ background: "#0e0118" }}
     >
       <div className="mx-auto w-full max-w-lg px-4 pt-6">
@@ -287,25 +288,7 @@ export default function GarmonDropLobbyPage() {
             {toast}
           </div>
         )}
-        <p
-          className="text-center font-mono text-[10px] text-[#A855F7] sm:text-[11px]"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          PVP · GPC POT · 10% PLATFORM FEE
-        </p>
-        <h1
-          className={`mt-1 text-center text-4xl font-black sm:text-5xl ${cinzel.className}`}
-          style={{
-            background: "linear-gradient(135deg, #F5C842, #D4A017)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          GarmonDrop
-        </h1>
-        <p className="mt-2 text-center text-sm text-white/60">
-          Drop discs and connect four. Beat your opponent and take the pot.
-        </p>
+        <PageHeading eyebrow="HEAD TO HEAD · CONNECT FOUR" title="GarmonDrop. Make your move." description="Gold versus violet. Connect four before your opponent does. Choose your entry and meet your opponent at the board."/>
 
         <div className="mt-6 rounded-2xl border border-[#7c3aed]/30 bg-black/25 p-4">
           <p className="font-mono text-xs text-[#f5c842]">
@@ -426,10 +409,6 @@ export default function GarmonDropLobbyPage() {
         <p className="mt-10 text-center text-xs text-white/40">
           <Link href="/games" className="text-[#7c3aed] underline">
             Game Station
-          </Link>
-          {" · "}
-          <Link href="/dashboard/games/celo" className="text-[#7c3aed] underline">
-            C-Lo
           </Link>
         </p>
       </div>

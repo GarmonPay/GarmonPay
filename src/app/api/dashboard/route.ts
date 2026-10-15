@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserById } from "@/lib/auth-store";
+import { getAuthUserId } from "@/lib/auth-request";
 import { getEarningsForUser, listAds } from "@/lib/ads-db";
 import { getTotalsForUser } from "@/lib/transactions-db";
 import { countUserReferrals, getUserReferralEarningsGpc } from "@/lib/viral-db";
@@ -18,7 +18,8 @@ import { IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS } from "@/lib/signup-compliance";
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const userIdHeader = request.headers.get("x-user-id");
+  const verifiedUserId = await getAuthUserId(request);
+  if (!verifiedUserId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   const safeDashboardPayload = {
     earningsTodayCents: 0,
@@ -51,17 +52,14 @@ export async function GET(request: Request) {
     irsReportableThresholdCents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
   };
 
-  if (bearerToken) {
-    const supabase = createServerClient(bearerToken);
+  {
+    const supabase = createAdminClient() ?? (bearerToken ? createServerClient(bearerToken) : null);
     if (!supabase) {
       return NextResponse.json(safeDashboardPayload, { status: 200 });
     }
     {
       try {
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-        if (authError || !authUser) {
-          return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        }
+        const authUser = { id: verifiedUserId };
         /** Main wallet display: `wallet_balances` via ledger (same as GET /api/wallet). */
         let balanceCents: number | null = null;
         let balanceError: string | null = null;
@@ -228,68 +226,6 @@ export async function GET(request: Request) {
         return NextResponse.json(safeDashboardPayload, { status: 200 });
       }
     }
-  }
-
-  if (userIdHeader) {
-    const user = findUserById(userIdHeader);
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-    const admin = createAdminClient();
-    let balanceCents: number | null = null;
-    let balanceError: string | null = null;
-    let profileBalanceCentsLegacy: number | null = null;
-    if (admin) {
-      balanceCents = await getCanonicalBalanceCents(userIdHeader);
-      const r1 = await admin.from("profiles").select("balance, balance_cents").eq("id", userIdHeader).maybeSingle();
-      const missingCol =
-        r1.error &&
-        (/balance_cents|column .* does not exist/i.test(r1.error.message ?? "") ||
-          (r1.error as { code?: string }).code === "42703");
-      const r2 = missingCol
-        ? await admin.from("profiles").select("balance").eq("id", userIdHeader).maybeSingle()
-        : null;
-      const prof = missingCol && r2 ? r2.data : r1.data;
-      const pe = missingCol && r2 ? r2.error : r1.error;
-      if (pe) {
-        console.error("Dashboard profiles fetch error (legacy mirror, x-user-id):", pe.message);
-      } else {
-        const resolved = resolveProfileBalanceCents(prof);
-        if (resolved.ok) profileBalanceCentsLegacy = resolved.cents;
-      }
-    } else {
-      balanceError = "Balance unavailable (server configuration)";
-    }
-    return NextResponse.json({
-      earningsTodayCents: 0,
-      earningsWeekCents: 0,
-      earningsMonthCents: 0,
-      balanceCents,
-      balanceError,
-      profileBalanceCentsLegacy,
-      adCreditBalanceCents: 0,
-      goldCoins: 0,
-      totalEarningsCents: 0,
-      totalWithdrawnCents: 0,
-      totalDepositsCents: 0,
-      membershipTier: "free",
-      membershipTierDb: "",
-      membershipExpiresAt: null,
-      membershipPaymentSource: null,
-      stripeSubscriptionId: null,
-      referralCode: user.referralCode,
-      referralEarningsGpc: 0,
-      totalReferrals: 0,
-      activeReferralSubscriptions: 0,
-      monthlyReferralCommissionGpc: 0,
-      lifetimeReferralCommissionGpc: 0,
-      announcements: [],
-      availableAds: [],
-      reportableEarningsCents: 0,
-      taxInfoSubmittedAt: null,
-      taxInfoRequired: false,
-      irsReportableThresholdCents: IRS_REPORTABLE_PAYOUT_THRESHOLD_CENTS,
-    });
   }
 
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

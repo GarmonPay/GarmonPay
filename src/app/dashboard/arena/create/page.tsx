@@ -29,7 +29,7 @@ export default function CreateFighterEntryPage() {
         const token = session.accessToken ?? session.userId;
         const headers: Record<string, string> = session.accessToken
           ? { Authorization: `Bearer ${token}` }
-          : { "X-User-Id": token };
+          : {};
         return fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {

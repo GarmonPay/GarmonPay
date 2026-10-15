@@ -25,7 +25,7 @@ export default async function AdminDashboardLayout({
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !anonKey) {
+  if (!url || !anonKey || !serviceKey) {
     redirect("/admin/login");
   }
 
@@ -37,26 +37,24 @@ export default async function AdminDashboardLayout({
     redirect("/admin/login");
   }
 
-  const roleClient = serviceKey
-    ? createClient(url, serviceKey)
-    : authClient;
+  const roleClient = createClient(url, serviceKey);
   const { data: profile, error: profileError } = await roleClient
     .from("users")
-    .select("role, is_super_admin")
+    .select("role, is_super_admin, banned")
     .eq("id", user.id)
     .maybeSingle();
 
   if (profileError || !profile) {
     redirect("/admin/login");
   }
-  const row = profile as { role?: string; is_super_admin?: boolean };
+  const row = profile as { role?: string; is_super_admin?: boolean; banned?: boolean };
   const rl = row.role?.toLowerCase() ?? "";
   const isAdmin =
     !!row.is_super_admin ||
     rl === "admin" ||
     rl === "game_admin" ||
     rl === "super_admin";
-  if (!isAdmin) {
+  if (!isAdmin || row.banned !== false) {
     redirect("/admin/login");
   }
 

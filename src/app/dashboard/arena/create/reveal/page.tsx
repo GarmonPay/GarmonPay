@@ -65,7 +65,7 @@ export default function CreateFighterRevealPage() {
     getSessionAsync().then((session) => {
       if (!session || cancelled) return;
       const token = session.accessToken ?? session.userId;
-      const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+      const headers: Record<string, string> = session.accessToken ? { Authorization: `Bearer ${token}` } : {};
       fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {

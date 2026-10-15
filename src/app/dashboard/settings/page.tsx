@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { UsernameAvailabilityField } from "@/components/auth/UsernameAvailabilityField";
+import { LogoutSection } from "@/components/dashboard/LogoutSection";
 import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
 import { validateUsernameFormat } from "@/lib/username-validation";
 
@@ -231,7 +232,8 @@ export default function SettingsPage() {
     newUsername.trim() !== (profile.username ?? "").trim();
 
   return (
-    <div className="space-y-4 tablet:space-y-6">
+    <div className="flex flex-col gap-4 tablet:gap-6">
+      <LogoutSection className="order-first tablet:order-last" />
       <div className="animate-slide-up rounded-xl bg-fintech-bg-card border border-white/10 p-4 tablet:p-6">
         <h1 className="text-xl font-bold text-white mb-2">Settings</h1>
         <p className="text-fintech-muted mb-6">Account and profile.</p>

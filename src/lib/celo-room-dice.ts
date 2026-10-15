@@ -137,6 +137,7 @@ export type CeloServerVisibleDice = {
     | "banker_in_flight"
     | "banker_idle_preview"
     | "banker_round"
+    | "roll_event"
     | "banker_point_phase"
     | "player_anim_banker_bg"
     | "player_roll"
@@ -163,6 +164,8 @@ export function getVisibleDiceFromServer(
   });
   if (!round) return none();
 
+  const accepted = realDiceTripletFromUnknown(round.last_roll_dice);
+  if (accepted && round.banker_roll_in_flight !== true && round.roll_processing !== true) return {triplet:accepted,rollId:`${round.id}:${round.roll_seq}`,rollerUserId:String(round.last_roll_user_id ?? ""),source:"roll_event"};
   const status = String(round.status ?? "").toLowerCase();
   const bankerDice = realDiceTripletFromUnknown(round.banker_dice);
   const bankerInFlight = round.banker_roll_in_flight === true;
@@ -184,17 +187,6 @@ export function getVisibleDiceFromServer(
         rollId: null,
         rollerUserId: null,
         source: "banker_round",
-      };
-    }
-    const idlePreview = realDiceTripletFromUnknown(
-      (round as { idle_preview_dice?: unknown }).idle_preview_dice
-    );
-    if (idlePreview) {
-      return {
-        triplet: idlePreview,
-        rollId: null,
-        rollerUserId: null,
-        source: "banker_idle_preview",
       };
     }
     return none();

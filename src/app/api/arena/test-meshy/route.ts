@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-/** GET /api/arena/test-meshy — Test Meshy API connection (no auth required for diagnostics). */
-export async function GET() {
+/** GET /api/arena/test-meshy — Test Meshy API connection (legacy implementation retained; route disabled). */
+async function legacyMeshyDiagnostic() {
   const apiKey = process.env.MESHY_API_KEY;
 
   if (!apiKey) {
@@ -42,4 +42,9 @@ export async function GET() {
       error: message,
     });
   }
+}
+
+/** No diagnostic request may consume paid Meshy credits. */
+export async function GET() {
+  return NextResponse.json({ message: "Paid Meshy diagnostics are disabled" }, { status: 410 });
 }

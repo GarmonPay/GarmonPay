@@ -44,11 +44,11 @@ const STYLES: Record<
   }
 > = {
   standard: {
-    face: "linear-gradient(145deg, #EF4444 0%, #B91C1C 45%, #7F1D1D 100%)",
-    rim: "linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(0,0,0,0.25) 100%)",
-    dot: "#FAFAFA",
-    dotGlow: "rgba(255,255,255,0.45)",
-    pipShadow: "0 2px 4px rgba(0,0,0,0.55)",
+    face: "linear-gradient(145deg, #4a4a52 0%, #1c1c22 42%, #0a0a0e 100%)",
+    rim: "linear-gradient(180deg, rgba(245,200,66,0.55) 0%, rgba(0,0,0,0.65) 100%)",
+    dot: "#F5C842",
+    dotGlow: "rgba(245,200,66,0.65)",
+    pipShadow: "0 1px 2px rgba(0,0,0,0.85)",
   },
   gold: {
     face: "linear-gradient(145deg, #FDE68A 0%, #F5C842 35%, #B45309 100%)",

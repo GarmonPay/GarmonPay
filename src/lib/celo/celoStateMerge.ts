@@ -118,6 +118,7 @@ export function resolveRound<Rn extends Record<string, unknown>>(
   if (incoming === null) return isIncomingNewer ? null : prev;
   if (!prev) return incoming as Rn;
   if (isIncomingNewer) {
+    if (prev.id !== incoming.id) return incoming;
     return { ...(prev as object), ...(incoming as object) } as Rn;
   }
   return prev;
@@ -173,7 +174,7 @@ export function applyCeloStateUpdate<
    * never drop the update. Otherwise use revision ordering (room/round timestamps count).
    */
   const isIncomingNewer =
-    (!hasTopLevelUpdatedAt && nextTime === 0) || nextTime >= prevTime;
+    opts?.playersSnapshot === true || (!hasTopLevelUpdatedAt && nextTime === 0) || nextTime >= prevTime;
 
   let nextRoom: Rm | null = prev.room;
   if (isIncomingNewer && incoming.room !== undefined) {

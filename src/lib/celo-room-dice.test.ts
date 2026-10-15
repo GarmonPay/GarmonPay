@@ -103,7 +103,7 @@ describe("getVisibleDiceFromServer", () => {
     expect(v.source).toBe("banker_round");
   });
 
-  it("banker rolling, no real dice yet → idle_preview_dice for all viewers", () => {
+  it("unaccepted legacy preview never becomes an authoritative result", () => {
     const v = getVisibleDiceFromServer(
       {
         status: "banker_rolling",
@@ -114,8 +114,8 @@ describe("getVisibleDiceFromServer", () => {
       [],
       { rollerUserId: null }
     );
-    expect(v.triplet).toEqual([3, 1, 6]);
-    expect(v.source).toBe("banker_idle_preview");
+    expect(v.triplet).toBeNull();
+    expect(v.source).toBe("none");
   });
 
   it("banker_dice wins over idle_preview when both present", () => {
@@ -242,4 +242,15 @@ describe("computeCeloVisualDiceMode", () => {
       })
     ).toBe("idle");
   });
+});
+
+describe('accepted server roll events',()=>{
+ it('uses the latest accepted faces for both banker and player events',()=>{
+  const visible=getVisibleDiceFromServer({id:'round',roll_seq:2,last_roll_dice:[4,5,6],last_roll_user_id:'player',banker_dice:[2,2,4],status:'completed'},[],{rollerUserId:null});
+  expect(visible.triplet).toEqual([4,5,6]);expect(visible.source).toBe('roll_event');
+ });
+ it('does not reveal an accepted event while the next server roll is pending',()=>{
+  const visible=getVisibleDiceFromServer({id:'round',roll_seq:1,last_roll_dice:[2,2,4],last_roll_user_id:'banker',banker_roll_in_flight:true,status:'banker_rolling'},[],{rollerUserId:null});
+  expect(visible.source).not.toBe('roll_event');
+ });
 });

@@ -1,0 +1,23 @@
+{
+  "origin": "https://garmonpay-fight-server.onrender.com",
+  "publicHealthStatus": 200,
+  "healthFields": [
+    "ok",
+    "queue_length",
+    "rooms"
+  ],
+  "publicHealthShapeMatchesCurrentSource": false,
+  "deployedRevisionVerified": false,
+  "financialPauseVerified": false,
+  "remoteWebSocketActionsSent": false,
+  "workerChanged": false,
+  "repositoryServiceName": "garmonpay-fight-server",
+  "repositoryStartCommand": "node server/fight-server.js",
+  "productionEnvNamesObserved": [
+    "NEXT_PUBLIC_BOXING_WS_URL"
+  ],
+  "privateProviderAccess": "blocked_pending_explicit_read_only_approval",
+  "localWorkerIntegration": "passed_with_synthetic_secrets_and_no_production_credentials",
+  "productionPublicHealthOrigin": "https://garmonpay-fight-server.onrender.com",
+  "configuredRenderOriginConfirmed": true
+}

@@ -1,0 +1,3235 @@
+{
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "ad_sessions",
+      "policyname": "Service role full access ad_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ad_sessions",
+      "policyname": "Users can insert own ad_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ad_sessions",
+      "policyname": "Users can select own ad_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fights",
+      "policyname": "Authenticated can read fights",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fights",
+      "policyname": "Service role full access fights",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_escrow",
+      "policyname": "Authenticated can read fight_escrow",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_escrow",
+      "policyname": "Service role full access fight_escrow",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_bets",
+      "policyname": "Authenticated can read fight_bets",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_bets",
+      "policyname": "Service role full access fight_bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "deposits",
+      "policyname": "Service role full access deposits",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawals",
+      "policyname": "Service role full access withdrawals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawals",
+      "policyname": "Users can insert own withdrawals (via service role in practice)",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawals",
+      "policyname": "Users can read own withdrawals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawals",
+      "policyname": "users see own withdrawals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "earnings",
+      "policyname": "Service role full access earnings",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "earnings",
+      "policyname": "Users can read own earnings",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referrals",
+      "policyname": "Service role full access referrals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referrals",
+      "policyname": "Users can insert own referrals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referrals",
+      "policyname": "Users can update own referrals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referrals",
+      "policyname": "Users can view own referrals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "advertisers",
+      "policyname": "Service role advertisers",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "advertisers",
+      "policyname": "Users manage own advertiser profile",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ads",
+      "policyname": "Ads readable when authenticated",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ads",
+      "policyname": "Service role full access ads",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "revenue_transactions",
+      "policyname": "Service role full access revenue_transactions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stripe_payments",
+      "policyname": "Service role full access stripe_payments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stripe_payments",
+      "policyname": "Users can read own stripe_payments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reward_budget",
+      "policyname": "Service role reward_budget",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_engagement_sessions",
+      "policyname": "Service role engagement sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_engagement_sessions",
+      "policyname": "Users own engagement sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "free_entries",
+      "policyname": "Users create own entries",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "free_entries",
+      "policyname": "Users read own entries",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tournaments",
+      "policyname": "Authenticated can read tournaments",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tournaments",
+      "policyname": "Service role tournaments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_commissions",
+      "policyname": "Referrers read own commissions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = referrer_user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_commissions",
+      "policyname": "Service role referral_commissions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet",
+      "policyname": "Service role full access wallet",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet",
+      "policyname": "users can view their wallet",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "analytics_events",
+      "policyname": "Service role full access analytics_events",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tournament_players",
+      "policyname": "Authenticated can read tournament_players",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tournament_players",
+      "policyname": "Service role tournament_players",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_commission_config",
+      "policyname": "Anyone read commission config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_commission_config",
+      "policyname": "Service role full access referral_commission_config",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gc_conversions",
+      "policyname": "Users create conversions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gc_conversions",
+      "policyname": "Users read own conversions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_history",
+      "policyname": "Authenticated can read fight_history",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fight_history",
+      "policyname": "Service role full access fight_history",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_profiles",
+      "policyname": "Anyone can read boxing_profiles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_profiles",
+      "policyname": "Service role full access boxing_profiles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_profiles",
+      "policyname": "Users can insert own boxing_profiles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_profiles",
+      "policyname": "Users can update own boxing_profiles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_balances",
+      "policyname": "Service role full access wallet_balances",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_balances",
+      "policyname": "Users read own wallet_balances",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_bonus",
+      "policyname": "Service role referral_bonus",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_ledger",
+      "policyname": "Service role full access wallet_ledger",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_ledger",
+      "policyname": "Users read own wallet_ledger",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_notifications",
+      "policyname": "Service role garmon notifications",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_notifications",
+      "policyname": "Users read own garmon notifications",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_balance",
+      "policyname": "Service role full access platform_balance",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "game_config",
+      "policyname": "Service role full access game_config",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_redemptions",
+      "policyname": "Users create redemptions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_redemptions",
+      "policyname": "Users read own redemptions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_pause_votes",
+      "policyname": "Service role full access celo_pause_votes",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profit",
+      "policyname": "Service role full access profit",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stripe_subscriptions",
+      "policyname": "Service role full access stripe_subscriptions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "stripe_subscriptions",
+      "policyname": "Users can read own stripe_subscriptions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallets",
+      "policyname": "Service role full access wallets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallets",
+      "policyname": "Users can read own wallet",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallets",
+      "policyname": "Users read own wallets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ad_streak",
+      "policyname": "Service role garmon streak",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ad_streak",
+      "policyname": "Users read own streak",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "owner_config",
+      "policyname": "Service role owner_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reward_budget_global",
+      "policyname": "Service role reward_budget_global",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reward_spend_log",
+      "policyname": "Service role reward_spend_log",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "spin_wheel_config",
+      "policyname": "Service role spin_wheel_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "spin_wheel_spins",
+      "policyname": "Service role spin_wheel_spins",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "spin_wheel_spins",
+      "policyname": "Users read own spin_wheel_spins",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mystery_box_config",
+      "policyname": "Service role mystery_box_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mystery_box_opens",
+      "policyname": "Service role mystery_box_opens",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mystery_box_opens",
+      "policyname": "Users read own mystery_box_opens",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "streak_config",
+      "policyname": "Service role streak_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_streaks",
+      "policyname": "Service role user_streaks",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_streaks",
+      "policyname": "Users read own user_streaks",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mission_config",
+      "policyname": "Service role mission_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mission_completions",
+      "policyname": "Service role mission_completions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mission_completions",
+      "policyname": "Users read own mission_completions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "rank_config",
+      "policyname": "Anyone read rank_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "rank_config",
+      "policyname": "Service role rank_config",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_settings",
+      "policyname": "Service role escape_room_settings",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "advertisements",
+      "policyname": "Anyone can read active advertisements",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(active = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "advertisements",
+      "policyname": "Service role full access advertisements",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "game_station_scores",
+      "policyname": "Anyone read game_station_scores",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "game_station_scores",
+      "policyname": "Service role game_station_scores",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_puzzles",
+      "policyname": "Service role escape_room_puzzles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_player_status",
+      "policyname": "Service role escape_room_player_status",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_sessions",
+      "policyname": "Service role escape_room_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_flags",
+      "policyname": "Service role escape_room_flags",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_timer_logs",
+      "policyname": "Service role escape_room_timer_logs",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "escape_room_payouts",
+      "policyname": "Service role escape_room_payouts",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "daily_rewards",
+      "policyname": "Service role daily_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "daily_rewards",
+      "policyname": "Users read own daily_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_badges",
+      "policyname": "Service role user_badges",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_badges",
+      "policyname": "Users read own user_badges",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_scores",
+      "policyname": "Anyone read pinball_scores",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_scores",
+      "policyname": "Service role pinball_scores",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_activities",
+      "policyname": "Anyone read platform_activities",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_activities",
+      "policyname": "Service role platform_activities",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_sessions",
+      "policyname": "Service role pinball_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_sessions",
+      "policyname": "Users read own pinball_sessions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_blocked_ips",
+      "policyname": "Service role garmon_blocked_ips",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ads",
+      "policyname": "Advertisers manage own garmon ads",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ads",
+      "policyname": "Anyone can view active garmon ads",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "((status = 'active'::text) AND (is_active = true))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ads",
+      "policyname": "Service role full garmon ads",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "security_events",
+      "policyname": "Service role full access security_events",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ad_banned_users",
+      "policyname": "Service role garmon_ad_banned_users",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "game_waitlist",
+      "policyname": "anyone can join waitlist",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "throttle_log",
+      "policyname": "service_role_all_throttle_log",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_settings",
+      "policyname": "Admins can update platform settings",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users\n  WHERE ((users.id = auth.uid()) AND (users.is_admin = true))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM users\n  WHERE ((users.id = auth.uid()) AND (users.is_admin = true))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_settings",
+      "policyname": "Anyone authenticated can read platform settings",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_settings",
+      "policyname": "Service role full access platform_settings",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscriptions",
+      "policyname": "Service role subscriptions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscriptions",
+      "policyname": "Users read own subscriptions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscription_payments",
+      "policyname": "Service role subscription_payments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_jackpot",
+      "policyname": "Anyone can read jackpot",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_jackpot",
+      "policyname": "Anyone read pinball_jackpot",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_jackpot",
+      "policyname": "Service role pinball_jackpot",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_games",
+      "policyname": "Service role pinball_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_games",
+      "policyname": "Users insert own pinball_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_games",
+      "policyname": "Users read own pinball_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_games",
+      "policyname": "Users update own pinball_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_leaderboard",
+      "policyname": "Anyone can read leaderboard",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_leaderboard",
+      "policyname": "Anyone read pinball_leaderboard",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "pinball_leaderboard",
+      "policyname": "Service role pinball_leaderboard",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawal_requests",
+      "policyname": "users insert own withdrawals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "withdrawal_requests",
+      "policyname": "users read own withdrawals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "membership_bonuses",
+      "policyname": "Users read own bonuses",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "teams",
+      "policyname": "Authenticated can read teams",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "teams",
+      "policyname": "Service role teams",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "team_members",
+      "policyname": "Authenticated can read team_members",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "team_members",
+      "policyname": "Service role team_members",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ad_clicks",
+      "policyname": "Service role full access ad_clicks",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ad_clicks",
+      "policyname": "Users can read own ad_clicks",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_matches",
+      "policyname": "Service role full access boxing_matches",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_matches",
+      "policyname": "Users can read boxing_matches they are in",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "((auth.uid() = player1_id) OR (auth.uid() = player2_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_escrow",
+      "policyname": "Service role full access boxing_escrow",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "balance_audit_log",
+      "policyname": "Service role balance_audit_log",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "transactions",
+      "policyname": "Service role full access transactions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "transactions",
+      "policyname": "Users can read own transactions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "transactions",
+      "policyname": "users see own transactions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "transactions",
+      "policyname": "users_can_read_own_transactions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_bets",
+      "policyname": "Service role full access boxing_bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_bets",
+      "policyname": "Users can read own boxing_bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_tournaments",
+      "policyname": "Anyone can read boxing_tournaments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "boxing_tournaments",
+      "policyname": "Service role full access boxing_tournaments",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "banners",
+      "policyname": "Service role full access banners",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "banners",
+      "policyname": "Users can insert own banners",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = owner_user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "banners",
+      "policyname": "Users can read own banners",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = owner_user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "banners",
+      "policyname": "Users can update own banners (limited fields)",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = owner_user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_revenue",
+      "policyname": "Service role full access platform_revenue",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmondrop_rooms",
+      "policyname": "garmondrop_rooms_delete_deny_all",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "false",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmondrop_rooms",
+      "policyname": "garmondrop_rooms_insert_deny_all",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "false"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmondrop_rooms",
+      "policyname": "garmondrop_rooms_select",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((status = 'waiting'::text) OR (creator_id = auth.uid()) OR (opponent_id = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmondrop_rooms",
+      "policyname": "garmondrop_rooms_update_deny_all",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "false",
+      "with_check": "false"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmondrop_moves",
+      "policyname": "garmondrop_moves_select",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM garmondrop_rooms r\n  WHERE ((r.id = garmondrop_moves.room_id) AND ((r.status = 'waiting'::text) OR (r.creator_id = auth.uid()) OR (r.opponent_id = auth.uid())))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viral_referrals",
+      "policyname": "Service role viral_referrals",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viral_referrals",
+      "policyname": "Users read own viral_referrals as referrer",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = referrer_user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_rewards",
+      "policyname": "Service role referral_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_rewards",
+      "policyname": "Users read own referral_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gamification_rewards",
+      "policyname": "Service role gamification_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gamification_rewards",
+      "policyname": "Users read own gamification_rewards",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bets",
+      "policyname": "Service role full access bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bets",
+      "policyname": "Users insert own bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bets",
+      "policyname": "Users read own bets",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fighters",
+      "policyname": "Anyone can read fighters (leaderboard)",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fighters",
+      "policyname": "Service role full access fighters",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fighters",
+      "policyname": "Users insert own fighters",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fighters",
+      "policyname": "Users read own fighters",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fighters",
+      "policyname": "Users update own fighters",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "cpu_fighters",
+      "policyname": "Anyone can read cpu_fighters",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "cpu_fighters",
+      "policyname": "Service role full access cpu_fighters",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "storage",
+      "tablename": "objects",
+      "policyname": "Public read ads bucket",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'ads'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "storage",
+      "tablename": "objects",
+      "policyname": "Service role full access ads bucket",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((bucket_id = 'ads'::text) AND ((auth.jwt() ->> 'role'::text) = 'service_role'::text))",
+      "with_check": "((bucket_id = 'ads'::text) AND ((auth.jwt() ->> 'role'::text) = 'service_role'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "Service role full access profiles",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "Users can insert own profile",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "Users can update own profile",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "Users can view own profile",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_user_ad_earnings",
+      "policyname": "Service role full garmon ad earnings",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_user_ad_earnings",
+      "policyname": "Users view own garmon ad earnings",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ad_engagements",
+      "policyname": "Service role full garmon engagements",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "garmon_ad_engagements",
+      "policyname": "Users read own garmon engagements",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_chat",
+      "policyname": "Anyone can read chat",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_chat",
+      "policyname": "Users read chat",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_chat.room_id) AND ((r.banker_id = auth.uid()) OR (r.room_type = 'public'::text) OR (r.room_type IS NULL) OR celo_user_in_room(r.id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_chat",
+      "policyname": "Users send chat",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_audit_log",
+      "policyname": "No direct audit read",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "false",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Allow user insert own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Allow user read own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Allow user update own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Authenticated can read users for leaderboard",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Celo lobby read banker profiles",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.banker_id = users.id) AND (r.banker_id IS NOT NULL) AND ((r.room_type = 'public'::text) OR (r.room_type IS NULL)) AND (r.status = ANY (ARRAY['waiting'::text, 'active'::text, 'rolling'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Service role full access",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Users read own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Users update own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "social_task_completions",
+      "policyname": "Users read own completions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "social_task_completions",
+      "policyname": "Users submit completions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "social_tasks",
+      "policyname": "Anyone can read active tasks",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(status = 'active'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "social_fraud_flags",
+      "policyname": "Admin only reads fraud flags",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "false",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "membership_plan_catalog",
+      "policyname": "Anyone can read membership_plan_catalog",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(is_active = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "membership_plan_catalog",
+      "policyname": "Service role full membership_plan_catalog",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_ledger",
+      "policyname": "Service role full access gpay_ledger",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_ledger",
+      "policyname": "Users read own gpay_ledger",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_balances",
+      "policyname": "Service role full access gpay_balances",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_balances",
+      "policyname": "Users read own gpay_balances",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_earnings",
+      "policyname": "Admin only",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "false",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "waitlist",
+      "policyname": "waitlist_insert_public",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "waitlist",
+      "policyname": "waitlist_select_admin",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_referral_flip_welcome_bonus_claims",
+      "policyname": "Service role full access referral flip bonus claims",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_referral_flip_welcome_bonus_claims",
+      "policyname": "Users read own referral flip bonus claim",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_claims",
+      "policyname": "Service role full access gpay_claims",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gpay_claims",
+      "policyname": "Users read own gpay_claims",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gamification_config",
+      "policyname": "Service role full access gamification_config",
+      "roles": [
+        "service_role"
+      ],
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "coin_flip_games",
+      "policyname": "Service role full access coin_flip_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "coin_flip_games",
+      "policyname": "Users read own coin_flip_games",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "((auth.uid() = creator_id) OR (auth.uid() = opponent_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "gc_packages",
+      "policyname": "gp_legacy_catalog_read",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_videos",
+      "policyname": "creator_videos_admin_all",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_videos",
+      "policyname": "creator_videos_insert_own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = creator_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_videos",
+      "policyname": "creator_videos_select_approved",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(status = 'approved'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_videos",
+      "policyname": "creator_videos_select_own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = creator_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_videos",
+      "policyname": "creator_videos_update_own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = creator_id)",
+      "with_check": "(auth.uid() = creator_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "video_watch_sessions",
+      "policyname": "video_watch_sessions_admin",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "video_watch_sessions",
+      "policyname": "video_watch_sessions_own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "video_watch_completions",
+      "policyname": "video_watch_completions_admin",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "video_watch_completions",
+      "policyname": "video_watch_completions_select_own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "launch_checklist",
+      "policyname": "launch_checklist_admin_all",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = auth.uid()) AND (lower(COALESCE(u.role, ''::text)) = ANY (ARRAY['admin'::text, 'game_admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "coin_transactions",
+      "policyname": "Service role full access coin_transactions",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)",
+      "with_check": "((auth.jwt() ->> 'role'::text) = 'service_role'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "coin_transactions",
+      "policyname": "Users read own coin transactions",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rooms",
+      "policyname": "Members read rooms",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((room_type = 'public'::text) OR (room_type IS NULL) OR (creator_id = auth.uid()) OR (banker_id = auth.uid()) OR celo_user_in_room(id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rooms",
+      "policyname": "Users create rooms",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(creator_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rooms",
+      "policyname": "Users update rooms they own",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((creator_id = auth.uid()) OR (banker_id = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "Anyone can read players",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "Players in room can read players",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(celo_user_in_room(room_id) OR (EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_room_players.room_id) AND ((r.banker_id = auth.uid()) OR (r.room_type = 'public'::text) OR (r.room_type IS NULL))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "Users join rooms",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "Users update own player row",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "delete_players",
+      "roles": [
+        "public"
+      ],
+      "cmd": "DELETE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "insert_players",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "select_players",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_room_players",
+      "policyname": "update_players",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rounds",
+      "policyname": "Anon read rounds in public rooms",
+      "roles": [
+        "anon"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_rounds.room_id) AND (r.room_type = 'public'::text))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rounds",
+      "policyname": "Anyone can read rounds",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_rounds",
+      "policyname": "Users read rounds",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(celo_user_in_room(room_id) OR (EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_rounds.room_id) AND ((r.room_type = 'public'::text) OR (r.room_type IS NULL))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_player_rolls",
+      "policyname": "Anon read rolls in public rooms",
+      "roles": [
+        "anon"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_player_rolls.room_id) AND (r.room_type = 'public'::text))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_player_rolls",
+      "policyname": "Anyone can read rolls",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_player_rolls",
+      "policyname": "Users read rolls",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_player_rolls.room_id) AND ((r.banker_id = auth.uid()) OR (r.room_type = 'public'::text) OR (r.room_type IS NULL) OR celo_user_in_room(r.id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_side_bets",
+      "policyname": "Anyone can read side bets",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_side_bets",
+      "policyname": "Users create side bets",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(creator_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_side_bets",
+      "policyname": "Users read side bets",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(celo_user_in_room(room_id) OR (EXISTS ( SELECT 1\n   FROM celo_rooms r\n  WHERE ((r.id = celo_side_bets.room_id) AND ((r.room_type = 'public'::text) OR (r.room_type IS NULL))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "celo_side_bets",
+      "policyname": "Users update own side bets",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((creator_id = auth.uid()) OR (acceptor_id = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "arena_weight_classes",
+      "policyname": "gp_legacy_catalog_read",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "packages",
+      "policyname": "gp_legacy_catalog_read",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    }
+  ],
+  "views": [
+    {
+      "relname": "arena_cpu_fighters",
+      "reloptions": null,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "definition": " SELECT id,\n    user_id,\n    name,\n    style,\n    avatar,\n    strength,\n    speed,\n    stamina,\n    defense,\n    chin,\n    special\n   FROM arena_fighters\n  WHERE user_id = ANY (ARRAY['a0000000-0000-0000-0000-000000000001'::uuid, 'a0000000-0000-0000-0000-000000000002'::uuid, 'a0000000-0000-0000-0000-000000000003'::uuid, 'a0000000-0000-0000-0000-000000000004'::uuid, 'a0000000-0000-0000-0000-000000000005'::uuid, 'a0000000-0000-0000-0000-000000000006'::uuid]);"
+    },
+    {
+      "relname": "admin_stats",
+      "reloptions": null,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "definition": " SELECT ( SELECT count(*) AS count\n           FROM users) AS total_users,\n    ( SELECT COALESCE(sum(deposits.amount), 0::numeric) AS \"coalesce\"\n           FROM deposits) AS total_deposits;"
+    },
+    {
+      "relname": "total_deposits",
+      "reloptions": null,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "definition": " SELECT COALESCE(sum(amount), 0::numeric) AS total\n   FROM deposits;"
+    },
+    {
+      "relname": "admin_finance_overview",
+      "reloptions": null,
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "definition": " SELECT ( SELECT sum(transactions.amount) AS sum\n           FROM transactions\n          WHERE transactions.type = 'deposit'::text) AS total_deposits,\n    ( SELECT sum(withdrawals.amount) AS sum\n           FROM withdrawals\n          WHERE withdrawals.status = 'approved'::text) AS total_withdrawals,\n    ( SELECT sum(wallet.balance) AS sum\n           FROM wallet) AS total_user_balances;"
+    },
+    {
+      "relname": "ad_campaign_submissions",
+      "reloptions": null,
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "definition": " SELECT id,\n    advertiser_id,\n    user_id,\n    title,\n    description,\n    ad_type,\n    media_url,\n    thumbnail_url,\n    destination_url,\n    instagram_url,\n    tiktok_url,\n    youtube_url,\n    twitter_url,\n    facebook_url,\n    twitch_url,\n    total_budget,\n    remaining_budget,\n    cost_per_view,\n    cost_per_click,\n    cost_per_follow,\n    cost_per_share,\n    target_age_min,\n    target_age_max,\n    target_locations,\n    target_interests,\n    status,\n    rejection_reason,\n    views,\n    clicks,\n    follows,\n    shares,\n    total_paid_to_users,\n    total_admin_cut,\n    is_active,\n    starts_at,\n    ends_at,\n    created_at,\n    updated_at,\n    ad_package_id\n   FROM garmon_ads;"
+    }
+  ],
+  "schemas": [
+    {
+      "nspname": "extensions",
+      "nspacl": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres,dashboard_user=UC/postgres}",
+      "anon_create": false,
+      "auth_create": false
+    },
+    {
+      "nspname": "storage",
+      "nspacl": "{supabase_admin=UC/supabase_admin,postgres=U*/supabase_admin,anon=U/supabase_admin,authenticated=U/supabase_admin,service_role=U/supabase_admin,supabase_storage_admin=U*C*/supabase_admin,dashboard_user=UC/supabase_admin}",
+      "anon_create": false,
+      "auth_create": false
+    },
+    {
+      "nspname": "public",
+      "nspacl": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,postgres=U/pg_database_owner,anon=U/pg_database_owner,authenticated=U/pg_database_owner,service_role=U/pg_database_owner}",
+      "anon_create": false,
+      "auth_create": false
+    }
+  ],
+  "functions": [
+    {
+      "signature": "coin_flip_pvp_only_guard()",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.coin_flip_pvp_only_guard()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.mode IS DISTINCT FROM 'vs_player' THEN\n    RAISE EXCEPTION 'Player vs House mode is no longer supported.';\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmon_date_utc(timestamp with time zone)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "date",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmon_date_utc(ts timestamp with time zone)\n RETURNS date\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\nAS $function$ SELECT (ts AT TIME ZONE 'UTC')::date $function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "update_referral_count()",
+      "prosecdef": true,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.update_referral_count()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nBEGIN\n  IF NEW.referred_by_code IS NOT NULL THEN\n    UPDATE users\n    SET total_referrals = total_referrals + 1\n    WHERE referral_code = NEW.referred_by_code;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "create_wallet_for_new_user()",
+      "prosecdef": true,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_wallet_for_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nbegin\n  insert into public.wallet (user_id, balance)\n  values (new.id, 0);\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "handle_stripe_deposit(uuid,numeric)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "void",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_stripe_deposit(uid uuid, deposit_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n\nINSERT INTO public.deposits (user_id, amount)\nVALUES (uid, deposit_amount);\n\nUPDATE public.users\nSET balance = balance + deposit_amount\nWHERE id = uid;\n\nEND;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "escape_room_set_updated_at()",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.escape_room_set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  new.updated_at := now();\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "handle_new_user()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  new_referral_code text;\nBEGIN\n  new_referral_code := upper(substring(\n    replace(gen_random_uuid()::text, '-', ''),\n    1, 8\n  ));\n\n  WHILE EXISTS (\n    SELECT 1 FROM public.users WHERE referral_code = new_referral_code\n  ) LOOP\n    new_referral_code := upper(substring(\n      replace(gen_random_uuid()::text, '-', ''),\n      1, 8\n    ));\n  END LOOP;\n\n  INSERT INTO public.users (\n    id,\n    email,\n    full_name,\n    avatar_url,\n    referral_code,\n    balance,\n    balance_cents,\n    membership,\n    role,\n    is_super_admin,\n    created_at,\n    updated_at\n  ) VALUES (\n    new.id,\n    new.email,\n    COALESCE(new.raw_user_meta_data->>'full_name', ''),\n    COALESCE(new.raw_user_meta_data->>'avatar_url', ''),\n    new_referral_code,\n    0,\n    0,\n    'free',\n    'user',\n    false,\n    now(),\n    now()\n  )\n  ON CONFLICT (id) DO NOTHING;\n\n  INSERT INTO public.wallet_balances (user_id, balance, updated_at)\n  VALUES (new.id, 0, now())\n  ON CONFLICT (user_id) DO NOTHING;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM public.coin_transactions WHERE reference = 'signup_bonus_' || new.id::text\n  ) THEN\n    PERFORM public.credit_coins(new.id, 0, 100);\n\n    INSERT INTO public.coin_transactions (user_id, type, gold_coins, sweeps_coins, description, reference)\n    VALUES (\n      new.id,\n      'signup_bonus',\n      0,\n      100,\n      'Welcome bonus - 100 GPay Coins',\n      'signup_bonus_' || new.id::text\n    )\n    ON CONFLICT (reference) DO NOTHING;\n  END IF;\n\n  RETURN new;\nEXCEPTION\n  WHEN OTHERS THEN\n    RAISE LOG 'handle_new_user error for user %: %', new.id, SQLERRM;\n    RETURN new;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "record_user_joined()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.record_user_joined()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.platform_activities (user_id, activity_type, description)\n  values (new.id, 'joined', 'Joined GarmonPay');\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "update_daily_profit_summary()",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.update_daily_profit_summary()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  INSERT INTO public.daily_profit_summary (date, advertiser_revenue_cents, member_payouts_cents, deferred_payouts_cents)\n  VALUES (CURRENT_DATE, 0, 0, 0)\n  ON CONFLICT (date) DO NOTHING;\n\n  IF NEW.type IN ('deposit', 'advertiser_payment') AND NEW.status = 'completed' THEN\n    UPDATE public.daily_profit_summary\n    SET advertiser_revenue_cents = advertiser_revenue_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n\n  ELSIF NEW.type IN ('ad_view', 'task_complete', 'game_reward', 'referral_upgrade') AND NEW.status = 'completed' THEN\n    UPDATE public.daily_profit_summary\n    SET member_payouts_cents = member_payouts_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n\n  ELSIF NEW.status = 'deferred' THEN\n    UPDATE public.daily_profit_summary\n    SET deferred_payouts_cents = deferred_payouts_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "celo_bump_room_total_rounds()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_bump_room_total_rounds()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF TG_OP = 'UPDATE'\n     AND NEW.status = 'completed'\n     AND (OLD.status IS DISTINCT FROM 'completed') THEN\n    UPDATE public.celo_rooms\n    SET total_rounds = COALESCE(total_rounds, 0) + 1\n    WHERE id = NEW.room_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "handle_new_auth_user()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_new_auth_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  new_referral_code text;\nbegin\n  new_referral_code := 'GP' || upper(substr(md5(random()::text), 1, 6));\n  insert into public.users (id, email, referral_code)\n  values (\n    new.id,\n    new.email,\n    new_referral_code\n  )\n  on conflict (id) do update set\n    email = excluded.email,\n    updated_at = now();\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "sync_users_balance_from_wallet()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.sync_users_balance_from_wallet()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF to_regclass('public.users') IS NOT NULL THEN\n    UPDATE public.users\n    SET\n      balance       = NEW.balance,\n      balance_cents = NEW.balance::integer,\n      updated_at    = now()\n    WHERE id = NEW.user_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "handle_new_profile()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_new_profile()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.profiles (id, email)\n  values (new.id, new.email)\n  on conflict (id) do update set email = excluded.email;\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "on_ad_session_start_record_click()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.on_ad_session_start_record_click()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.ad_clicks (ad_id, user_id) values (new.ad_id, new.user_id);\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "sync_balance_on_transaction()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.sync_balance_on_transaction()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  amt numeric;\nbegin\n  if new.status is distinct from 'completed' then\n    return new;\n  end if;\n  if tg_op = 'UPDATE' and old.status = 'completed' then\n    return new; -- already applied\n  end if;\n\n  amt := coalesce(new.amount, 0);\n  if new.user_id is null then\n    return new;\n  end if;\n\n  if lower(coalesce(new.type, '')) = 'withdrawal' then\n    update public.users set balance = coalesce(balance, 0) - amt where id = new.user_id;\n  else\n    update public.users set balance = coalesce(balance, 0) + amt where id = new.user_id;\n  end if;\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "check_platform_balance_integrity()",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.check_platform_balance_integrity()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.total_rewards_paid_cents > NEW.total_revenue_cents THEN\n    RAISE EXCEPTION 'Platform integrity: total_rewards_paid (%) cannot exceed total_revenue (%)',\n      NEW.total_rewards_paid_cents, NEW.total_revenue_cents;\n  END IF;\n  IF NEW.balance_cents < 0 THEN\n    RAISE EXCEPTION 'Platform balance cannot be negative';\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "sync_wallets_from_wallet_balances()",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "trigger",
+      "definition": "CREATE OR REPLACE FUNCTION public.sync_wallets_from_wallet_balances()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.wallets (user_id, balance, updated_at)\n  values (new.user_id, new.balance, now())\n  on conflict (user_id) do update set\n    balance = excluded.balance,\n    updated_at = excluded.updated_at;\n  return new;\nend;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "celo_user_in_room(uuid)",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "boolean",
+      "definition": "CREATE OR REPLACE FUNCTION public.celo_user_in_room(_room_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.celo_room_players\n    WHERE room_id = _room_id AND user_id = auth.uid()\n  );\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmon_margin_last_24h()",
+      "prosecdef": true,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "TABLE(revenue_cents bigint, payout_cents bigint, margin_pct numeric)",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmon_margin_last_24h()\n RETURNS TABLE(revenue_cents bigint, payout_cents bigint, margin_pct numeric)\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  v_revenue bigint;\n  v_payout bigint;\nBEGIN\n  SELECT COALESCE(SUM(amount_cents), 0)::bigint\n    INTO v_revenue\n  FROM platform_earnings\n  WHERE created_at >= now() - interval '24 hours';\n\n  SELECT COALESCE(SUM(delta_available_minor), 0)::bigint\n    INTO v_payout\n  FROM gpay_ledger\n  WHERE created_at >= now() - interval '24 hours'\n    AND delta_available_minor > 0;\n\n  RETURN QUERY SELECT\n    v_revenue,\n    v_payout,\n    CASE\n      WHEN v_revenue = 0 THEN NULL\n      ELSE ROUND(((v_revenue - v_payout)::numeric / v_revenue::numeric) * 100, 2)\n    END;\nEND;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "check_username_available(text)",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "boolean",
+      "definition": "CREATE OR REPLACE FUNCTION public.check_username_available(candidate text)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_candidate text := lower(trim(COALESCE(candidate, '')));\n  v_reserved text[] := ARRAY[\n    'admin', 'garmonpay', 'support', 'mod', 'moderator', 'system',\n    'official', 'bishop', 'anthropic', 'claude', 'root', 'null'\n  ];\nBEGIN\n  IF v_candidate = '' THEN\n    RETURN false;\n  END IF;\n  IF length(v_candidate) < 3 OR length(v_candidate) > 20 THEN\n    RETURN false;\n  END IF;\n  IF v_candidate !~ '^[a-zA-Z0-9_]+$' THEN\n    RETURN false;\n  END IF;\n  IF v_candidate = ANY(v_reserved) THEN\n    RETURN false;\n  END IF;\n  IF EXISTS (\n    SELECT 1\n    FROM public.users\n    WHERE lower(username) = v_candidate\n  ) THEN\n    RETURN false;\n  END IF;\n  RETURN true;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_empty_board()",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "jsonb",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_empty_board()\n RETURNS jsonb\n LANGUAGE sql\n IMMUTABLE\nAS $function$\n  SELECT '[\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0]\n  ]'::jsonb;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_cell(jsonb,integer,integer)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "integer",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_cell(g jsonb, r integer, c integer)\n RETURNS integer\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nDECLARE\n  v jsonb;\nBEGIN\n  IF r < 0 OR r > 5 OR c < 0 OR c > 6 THEN\n    RETURN -1;\n  END IF;\n  v := g -> r -> c;\n  IF v IS NULL OR jsonb_typeof(v) = 'null' THEN\n    RETURN 0;\n  END IF;\n  RETURN (v #>> '{}')::int;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_count_dir(jsonb,integer,integer,integer,integer,integer)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "integer",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_count_dir(g jsonb, pr integer, pc integer, val integer, dr integer, dc integer)\n RETURNS integer\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nDECLARE\n  cnt int := 0;\n  r int;\n  c int;\n  cell int;\nBEGIN\n  r := pr;\n  c := pc;\n  LOOP\n    cell := public.garmondrop_cell(g, r, c);\n    EXIT WHEN cell <> val;\n    cnt := cnt + 1;\n    r := r + dr;\n    c := c + dc;\n  END LOOP;\n  RETURN cnt;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_has_winner(jsonb,integer,integer,integer)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "boolean",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_has_winner(g jsonb, pr integer, pc integer, val integer)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nBEGIN\n  IF val <> 1 AND val <> 2 THEN\n    RETURN false;\n  END IF;\n  RETURN\n    public.garmondrop_count_dir(g, pr, pc, val, 0, 1) + public.garmondrop_count_dir(g, pr, pc, val, 0, -1) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, 0) + public.garmondrop_count_dir(g, pr, pc, val, -1, 0) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, 1) + public.garmondrop_count_dir(g, pr, pc, val, -1, -1) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, -1) + public.garmondrop_count_dir(g, pr, pc, val, -1, 1) - 1 >= 4;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_board_full(jsonb)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "boolean",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_board_full(g jsonb)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nDECLARE\n  c int;\nBEGIN\n  FOR c IN 0..6 LOOP\n    IF public.garmondrop_cell(g, 0, c) = 0 THEN\n      RETURN false;\n    END IF;\n  END LOOP;\n  RETURN true;\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "garmondrop_cancel_room(uuid)",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "returns": "jsonb",
+      "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_cancel_room(p_room_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_uid uuid := auth.uid();\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_now timestamptz := now();\n  v_amt int;\n  v_ref text;\nBEGIN\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Unauthorized');\n  END IF;\n  IF p_room_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room_id required');\n  END IF;\n\n  SELECT * INTO v_room\n  FROM public.garmondrop_rooms\n  WHERE id = p_room_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  IF v_room.creator_id <> v_uid THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Only the room creator can cancel');\n  END IF;\n\n  IF v_room.status = 'cancelled' THEN\n    RETURN jsonb_build_object('success', true, 'idempotent', true);\n  END IF;\n\n  IF v_room.status <> 'waiting' OR v_room.opponent_id IS NOT NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room cannot be cancelled');\n  END IF;\n\n  v_amt := GREATEST(0, COALESCE(v_room.entry_amount_minor, 0));\n  v_ref := 'garmondrop_cancel_' || p_room_id::text;\n\n  UPDATE public.users\n  SET gpay_coins = gpay_coins + v_amt\n  WHERE id = v_uid;\n\n  INSERT INTO public.coin_transactions (\n    user_id, type, gold_coins, gpay_coins, description, reference\n  ) VALUES (\n    v_uid, 'garmondrop_refund', 0, v_amt,\n    'GarmonDrop cancel waiting room', v_ref\n  );\n\n  UPDATE public.garmondrop_rooms\n  SET status = 'cancelled', updated_at = v_now, completed_at = v_now\n  WHERE id = p_room_id;\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n",
+      "anon_exec": true,
+      "auth_exec": true
+    },
+    {
+      "signature": "add_deposit(uuid,numeric)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "void",
+      "definition": "CREATE OR REPLACE FUNCTION public.add_deposit(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance + p_amount,\n      updated_at = now()\n  where user_id = p_user_id;\n\n  insert into transactions (\n    user_id,\n    amount,\n    type\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'deposit'\n  );\n\nend;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "add_game_reward(uuid,numeric)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "void",
+      "definition": "CREATE OR REPLACE FUNCTION public.add_game_reward(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance + p_amount\n  where user_id = p_user_id;\n\n  insert into transactions (\n    user_id,\n    amount,\n    type\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'game_reward'\n  );\n\nend;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "debit_gpay_coins(uuid,integer)",
+      "prosecdef": true,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "json",
+      "definition": "CREATE OR REPLACE FUNCTION public.debit_gpay_coins(p_user_id uuid, p_amount integer)\n RETURNS json\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  v_current_balance integer;\nBEGIN\n  -- Get current balance\n  SELECT gpay_coins\n  INTO v_current_balance\n  FROM users\n  WHERE id = p_user_id;\n\n  IF NOT FOUND THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'User not found'\n    );\n  END IF;\n\n  -- Check sufficient balance\n  IF v_current_balance < p_amount THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'Insufficient GPay Coins',\n      'balance', v_current_balance,\n      'required', p_amount\n    );\n  END IF;\n\n  -- Deduct coins\n  UPDATE users\n  SET\n    gpay_coins = gpay_coins - p_amount,\n    updated_at = now()\n  WHERE id = p_user_id;\n\n  RETURN json_build_object(\n    'success', true,\n    'debited', p_amount,\n    'new_balance', v_current_balance - p_amount\n  );\n\nEXCEPTION WHEN OTHERS THEN\n  RETURN json_build_object(\n    'success', false,\n    'error', SQLERRM\n  );\nEND;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "increment_wallet(uuid,integer)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "void",
+      "definition": "CREATE OR REPLACE FUNCTION public.increment_wallet(p_user_id uuid, p_amount_cents integer)\n RETURNS void\n LANGUAGE sql\nAS $function$\n  update public.users set balance_cents = balance_cents + p_amount_cents where id = p_user_id;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    },
+    {
+      "signature": "request_withdrawal(uuid,numeric)",
+      "prosecdef": false,
+      "proconfig": null,
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "returns": "void",
+      "definition": "CREATE OR REPLACE FUNCTION public.request_withdrawal(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance - p_amount\n  where user_id = p_user_id;\n\n  insert into withdrawals (\n    user_id,\n    amount,\n    status\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'pending'\n  );\n\nend;\n$function$\n",
+      "anon_exec": false,
+      "auth_exec": false
+    }
+  ]
+}

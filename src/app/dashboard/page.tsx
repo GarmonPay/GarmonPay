@@ -6,6 +6,11 @@ import Link from "next/link";
 import { Cinzel_Decorative, DM_Sans } from "next/font/google";
 import { createBrowserClient } from "@/lib/supabase";
 import { getSessionAsync } from "@/lib/session";
+import { ArrowUpRight, Gamepad2, Play, Wallet, Crown, Users, Megaphone } from "lucide-react";
+import { WalletCard, QuickLink, Surface, StatusBadge } from "@/components/ui/garmon-ui";
+import { GameCard } from "@/components/ui/GameCard";
+import { CinematicHero } from "@/components/ui/CinematicHero";
+import { GAME_LOBBY } from "@/config/game-lobby";
 import { localeInt, safeFiniteInt } from "@/lib/format-number";
 
 const cinzel = Cinzel_Decorative({
@@ -191,216 +196,12 @@ export default function DashboardPage() {
   const referralCode = user.referral_code?.trim() ?? "";
 
   return (
-    <div className={`min-h-full space-y-8 bg-[#0e0118] pb-4 pt-2 tablet:pb-8 ${dmSans.className}`}>
-      <header>
-        <h1
-          className={`${cinzel.className} font-bold tracking-tight`}
-          style={{
-            color: "#F5C842",
-            fontSize: "clamp(20px, 4vw, 32px)",
-            lineHeight: 1.2,
-          }}
-        >
-          Welcome back, {firstName}! 👑
-        </h1>
-      </header>
-
-      {/* Three-tier coin balances */}
-      <div
-        className="grid gap-4"
-        style={{
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-        }}
-      >
-        <div
-          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
-          style={{
-            background: "linear-gradient(135deg, #1a0a00, #3d1a00)",
-            border: "1px solid #F5C842",
-          }}
-        >
-          <span className="text-3xl" aria-hidden>
-            🪙
-          </span>
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200/90">
-            Gold Coins
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {localeInt(goldCoins)} GC
-          </p>
-          <p className="mt-2 text-xs text-amber-100/70">Purchased with real money — convert to GPay Coins to play</p>
-          <Link
-            href="/dashboard/wallet"
-            className="mt-3 inline-block text-sm font-medium text-amber-200/90 underline-offset-2 hover:underline"
-          >
-            Wallet →
-          </Link>
-        </div>
-
-        <div
-          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
-          style={{
-            background: "linear-gradient(135deg, #0e0118, #1a0530)",
-            border: "1px solid #A855F7",
-          }}
-        >
-          <span className="text-3xl" aria-hidden>
-            💜
-          </span>
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-300/90">
-            GPay Coins
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {localeInt(gpayCoins)} GPC
-          </p>
-          <p className="mt-2 text-xs text-violet-200/75">Play games and earn prizes</p>
-          <Link
-            href="/dashboard/games"
-            className="mt-3 inline-block text-sm font-medium text-violet-200/90 underline-offset-2 hover:underline"
-          >
-            Play games →
-          </Link>
-        </div>
-
-        <div
-          className="w-full min-w-0 rounded-2xl p-4 shadow-lg tablet:p-5"
-          style={{
-            background: "linear-gradient(135deg, #0a1f18, #0e2a22)",
-            border: "1px solid #10B981",
-          }}
-        >
-          <span className="text-3xl" aria-hidden>
-            ⬡
-          </span>
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
-            $GPAY Tokens
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold text-white sm:text-3xl">
-            {localeInt(gpayTokens)} $GPAY
-          </p>
-          <p className="mt-2 text-xs text-emerald-200/75">Redeem GPC — trade on Raydium for USDC</p>
-          <Link
-            href="/dashboard/redeem"
-            className="mt-3 inline-block text-sm font-medium text-emerald-200/90 underline-offset-2 hover:underline"
-          >
-            Redeem →
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Link
-          href="/dashboard/wallet"
-          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-bold transition-opacity hover:opacity-95"
-          style={{ background: "#F5C842", color: "#000" }}
-        >
-          Buy GC
-        </Link>
-        <Link
-          href="/dashboard/wallet#convert"
-          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl border border-[#A855F7]/60 bg-[#A855F7]/20 px-4 py-3 text-center text-sm font-bold text-violet-100 hover:bg-[#A855F7]/30"
-        >
-          Convert
-        </Link>
-        <Link
-          href="/dashboard/redeem"
-          className="flex min-h-[48px] flex-1 min-w-[140px] items-center justify-center rounded-2xl border border-[#10B981]/60 bg-[#10B981]/20 px-4 py-3 text-center text-sm font-bold text-emerald-100 hover:bg-[#10B981]/30"
-        >
-          Redeem
-        </Link>
-      </div>
-
-      {/* Membership */}
-      <div
-        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 tablet:p-6"
-        style={{ borderColor: "rgba(124, 58, 237, 0.35)" }}
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-3xl" aria-hidden>
-            {tierIcon(tierRaw || "free")}
-          </span>
-          <div>
-            <p className="text-sm text-violet-200/80">Current Plan</p>
-            <p className="text-lg font-semibold text-white">{tier}</p>
-          </div>
-        </div>
-        <Link
-          href="/dashboard/membership"
-          className="mt-5 inline-flex items-center rounded-xl border border-[#7C3AED]/50 bg-[#7C3AED]/15 px-5 py-2.5 text-sm font-semibold text-violet-200 transition-colors hover:bg-[#7C3AED]/25"
-        >
-          Upgrade Plan →
-        </Link>
-      </div>
-
-      {/* Quick actions */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-violet-400/70">
-          Quick actions
-        </p>
-        <div className="grid grid-cols-2 gap-3 tablet:grid-cols-3">
-          <Link
-            href="/dashboard/games/celo"
-            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
-          >
-            <span className="mb-1 block text-xl">🎲</span>
-            C-Lo
-          </Link>
-          <Link
-            href="/dashboard/games"
-            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
-          >
-            <span className="mb-1 block text-xl">🎮</span>
-            Game center
-          </Link>
-          <Link
-            href="/dashboard/earn"
-            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
-          >
-            <span className="mb-1 block text-xl">📱</span>
-            Watch Ads
-          </Link>
-          <Link
-            href="/dashboard/referral"
-            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
-          >
-            <span className="mb-1 block text-xl">👥</span>
-            Refer Friends
-          </Link>
-          <Link
-            href="/dashboard/merch"
-            className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center text-sm font-medium text-white transition-colors hover:border-[#F5C842]/40 hover:bg-white/[0.07] tablet:px-4 tablet:py-4"
-          >
-            <span className="mb-1 block text-xl">🛍️</span>
-            Merch Store
-            <span className="mt-1 block text-[10px] font-normal text-violet-300/60">coming soon</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Referrals */}
-      <div className="rounded-2xl border border-[#F5C842]/25 bg-black/30 p-4 tablet:p-6">
-        <p className="text-base text-white">
-          You have <span className="font-bold text-[#F5C842]">{localeInt(referrals)}</span>{" "}
-          {referrals === 1 ? "referral" : "referrals"}
-        </p>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-400/70">
-          Your referral code
-        </p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <code className="flex-1 rounded-xl border border-white/15 bg-black/40 px-4 py-3 font-mono text-lg text-[#F5C842]">
-            {referralCode || "—"}
-          </code>
-          <button
-            type="button"
-            disabled={!referralCode}
-            onClick={() => void copyReferralCode()}
-            className="min-h-[48px] rounded-xl px-5 py-3 text-sm font-semibold transition-colors disabled:opacity-40"
-            style={{ background: "#7C3AED", color: "#fff" }}
-          >
-            {copied ? "Copied!" : "Copy code"}
-          </button>
-        </div>
-      </div>
+    <div className="gp-dashboard space-y-6">
+      <div className="gp-dashboard-lead"><CinematicHero/><aside className="gp-account-summary gp-surface"><h2><Crown size={17}/>Your account</h2><dl><div><dt>Welcome</dt><dd>{firstName}</dd></div><div><dt>Membership</dt><dd>{tier}</dd></div><div><dt>Referrals</dt><dd>{localeInt(referrals)}</dd></div></dl><Link href="/dashboard/referrals">View referral activity →</Link></aside></div>
+      <div><div className="gp-section-title"><h2 className="gp-wallet-section-label">Your wallet</h2><Link href="/dashboard/wallet">Wallet details <ArrowUpRight size={15}/></Link></div><div className="gp-wallet-grid"><WalletCard kind="gc" value={goldCoins} action={<Link href="/dashboard/wallet" className="gp-button gp-button-gold">BUY GC</Link>}/><WalletCard kind="gpc" value={gpayCoins} action={<Link href="/dashboard/wallet#convert" className="gp-button gp-button-violet">CONVERT</Link>}/><WalletCard kind="gpay" value={gpayTokens} action={<Link href="/dashboard/redeem" className="gp-button gp-button-ghost">Redeem · Soon</Link>}/></div></div>
+      <div><div className="gp-section-title"><h2 className="gp-action-section-label">Quick actions</h2></div><div className="gp-quick-grid"><QuickLink href="/dashboard/games" title="Play Games" description="Find your next match" icon={<Gamepad2 size={20}/>}/><QuickLink href="/dashboard/earn" title="Watch & Earn" description="Discover creator videos" icon={<Play size={20}/>}/><QuickLink href="/dashboard/membership" title="Membership" description="Explore your plan" icon={<Crown size={20}/>}/><QuickLink href="/dashboard/referrals" title="Refer & Earn" description="Bring your friends" icon={<Users size={20}/>}/><QuickLink href="/dashboard/advertise" title="Advertise" description="Reach your audience" icon={<Megaphone size={20}/>}/><QuickLink href="/dashboard/coins/buy" title="Store" description="Gold Coins" icon={<Wallet size={20}/>}/></div></div>
+      <div><div className="gp-section-title"><h2>Featured Games</h2><Link href="/dashboard/games">All games <ArrowUpRight size={15}/></Link></div><div className="gp-game-grid gp-featured-grid">{GAME_LOBBY.slice(0,6).map(game=><GameCard key={game.id} game={game}/>)}</div></div>
+      <div className="gp-two-column"><Surface><StatusBadge tone="gold">YOUR MEMBERSHIP</StatusBadge><h2 className="mt-5 text-2xl font-bold">{tier} looks good on you.</h2><p className="gp-description">Explore your benefits and find the plan that fits you.</p><Link href="/dashboard/membership" className="gp-button gp-button-ghost mt-6">Explore membership <ArrowUpRight size={16}/></Link></Surface><Surface><StatusBadge>REFER & EARN</StatusBadge><h2 className="mt-5 text-2xl font-bold">Better with friends.</h2><p className="gp-description">You have {localeInt(referrals)} {referrals===1?"referral":"referrals"}.</p><div className="mt-5 flex flex-wrap items-center gap-3"><code className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-violet-200">{referralCode||"No code available"}</code><button type="button" disabled={!referralCode} onClick={()=>void copyReferralCode()} className="gp-button gp-button-violet">{copied?"Copied!":"Copy code"}</button></div><Link href="/dashboard/referrals" className="mt-4 inline-flex text-xs text-violet-200">View referral activity →</Link></Surface></div>
     </div>
   );
 }

@@ -15,7 +15,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 function authHeaders(accessTokenOrUserId: string, isToken: boolean): Record<string, string> {
   return isToken
     ? { Authorization: `Bearer ${accessTokenOrUserId}` }
-    : { "X-User-Id": accessTokenOrUserId };
+    : {};
 }
 
 export default function FinancePage() {

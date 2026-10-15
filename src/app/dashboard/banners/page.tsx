@@ -90,7 +90,7 @@ export default function BannersPage() {
     formData.set("file", file);
     const headers: Record<string, string> = {};
     if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
-    else headers["X-User-Id"] = session.userId;
+
     try {
       const res = await fetch(`${API_BASE}/api/banners`, {
         method: "POST",

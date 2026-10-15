@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/solana/policy", () => ({ walletAuthEnabled: () => true }));
 import { POST } from "@/app/api/solana/auth/event/route";
 import { sanitizeAuthEvent } from "./auth-event";
@@ -14,7 +14,8 @@ function request(body: unknown, ip = "203.0.113.44") {
 }
 
 describe("Client auth events", () => {
-  afterEach(() => { vi.restoreAllMocks(); });
+  beforeEach(()=>vi.stubEnv("NEXT_PUBLIC_SITE_URL","https://garmonpay.com"));
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
   it("strips forbidden fields before anything is logged", async () => {
     const clean = sanitizeAuthEvent({ stage: "provider-check", ok: false, code: "TIMEOUT", uaFamily: "ios", insideWallet: true, hasHint: false, providerFound: false, elapsedMs: 1200, ...leaked });

@@ -35,7 +35,7 @@ export default function SpectateLobbyPage() {
     if (!s) return;
     setSession(s);
     const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(`${getApiRoot()}/arena/fights/live`, { headers, credentials: "include" });
     const data = res.ok ? await res.json() : null;
     if (data?.fights) setFights(data.fights);

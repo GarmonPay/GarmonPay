@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase";
 
-export async function POST(req) {
+async function legacyDeposit(req) {
   const body = await req.json();
 
   const supabase = createAdminClient();
@@ -16,4 +16,9 @@ export async function POST(req) {
     .eq("email", body.email);
 
   return Response.json({ success: true });
+}
+
+/** Disabled: balances may only be credited by the verified payment flow. */
+export async function POST() {
+  return Response.json({ success: false, error: "Direct balance deposits are disabled" }, { status: 410 });
 }

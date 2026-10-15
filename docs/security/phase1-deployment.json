@@ -1,0 +1,75 @@
+{
+  "project": "garmonpays-projects/garmon-pay",
+  "deploymentId": "dpl_HKzZBUTiWzwPWQYkJtot22KUAdei",
+  "url": "https://garmon-po6448gu3-garmonpays-projects.vercel.app",
+  "productionUrl": "https://garmonpay.com",
+  "status": "READY",
+  "databaseMigrationApplied": true,
+  "separateBackendDeployed": false,
+  "cronSecretConfigured": true,
+  "previousDeploymentId": "dpl_GpUoEcGxQAPnExbZxWBKmAynwR7t",
+  "checks": [
+    {
+      "path": "/",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/dashboard",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/deposits/list",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/god-mode",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/advertiser/deposit",
+      "method": "POST",
+      "status": 410
+    },
+    {
+      "path": "/api/arena/test-meshy",
+      "method": "GET",
+      "status": 410
+    },
+    {
+      "path": "/api/auth/admin/ensure-admin",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/seed",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/cron/membership-renewal",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/cron/social-reverify",
+      "method": "POST",
+      "status": 401
+    },
+    {
+      "path": "/api/cron/margin-throttle",
+      "method": "POST",
+      "status": 401
+    }
+  ],
+  "githubCronSecretSynchronized": true,
+  "githubCronWorkflowsEnabled": false
+}

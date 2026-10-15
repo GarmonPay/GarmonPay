@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
+import { PageHeading, StatusBadge, LoadingState, EmptyState } from "@/components/ui/garmon-ui";
+import { Play, ArrowUpRight, CheckCircle2, UserRound } from "lucide-react";
 import { WATCH_SECONDS_REQUIRED } from "@/lib/watch-earn";
 
 type FeedVideo = {
   id: string;
   title: string;
+  creatorName?: string | null;
   videoUrl: string;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -176,167 +179,18 @@ export default function WatchEarnPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  if (loading) {
-    return (
-      <div className="card-lux p-8 text-center text-fintech-muted">Loading watch feed…</div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <div className="card-lux p-4">
-        <h1 className="text-xl font-bold text-white">Watch &amp; Earn</h1>
-        <p className="mt-1 text-sm text-fintech-muted">
-          Watch creator videos for {WATCH_SECONDS_REQUIRED} seconds. Earn GPC — on-platform only.
-        </p>
-        {meta && (
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-fintech-muted">
-            <span>
-              Today:{" "}
-              <span className="text-[#fde047] font-semibold">
-                {meta.earnedTodayGpc} / {meta.dailyCapGpc} GPC
-              </span>
-            </span>
-            <span className="capitalize">Tier: {meta.membershipTier}</span>
-            <span>+{meta.payoutGpc} GPC per watch</span>
-          </div>
-        )}
-        <Link
-          href="/dashboard/create-video"
-          className="mt-3 inline-block text-sm text-fintech-accent hover:underline"
-        >
-          Upload your video →
-        </Link>
-      </div>
-
-      {notice && (
-        <p className="rounded-xl border border-[#eab308]/40 bg-[#eab308]/10 px-4 py-3 text-sm text-[#fde047]">
-          {notice}
-        </p>
-      )}
-
-      {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
-        </p>
-      )}
-
-      {!current ? (
-        <div className="card-lux p-8 text-center text-fintech-muted">
-          <p>No videos available right now.</p>
-          <button
-            type="button"
-            onClick={() => loadFeed()}
-            className="mt-4 rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white"
-          >
-            Refresh
-          </button>
-        </div>
-      ) : (
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card">
-          <div className="aspect-[9/16] max-h-[70vh] w-full bg-black">
-            <video
-              ref={videoRef}
-              key={current.id}
-              src={current.videoUrl}
-              poster={current.thumbnailUrl ?? undefined}
-              className="h-full w-full object-contain"
-              playsInline
-              muted={false}
-              controls={phase === "watching"}
-              onEnded={() => {
-                if (phase === "watching" && elapsed >= WATCH_SECONDS_REQUIRED) {
-                  completeWatch();
-                }
-              }}
-            />
-          </div>
-
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4">
-            <h2 className="text-lg font-semibold text-white line-clamp-2">{current.title}</h2>
-            <p className="text-xs text-violet-200/80 mt-1">
-              {current.viewsCount} views · {current.remainingBudgetGpc} GPC budget left
-            </p>
-
-            {phase === "idle" && (
-              <button
-                type="button"
-                onClick={startWatch}
-                disabled={!!meta && meta.remainingTodayGpc <= 0}
-                className="mt-4 w-full rounded-xl bg-gradient-to-r from-[#eab308] to-[#fde047] py-3.5 text-sm font-bold text-[#0c0618] disabled:opacity-50"
-              >
-                Watch {WATCH_SECONDS_REQUIRED}s to earn {current.payoutGpc} GPC
-              </button>
-            )}
-
-            {phase === "watching" && (
-              <div className="mt-4">
-                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                  <div
-                    className="h-full bg-[#eab308] transition-all duration-200"
-                    style={{
-                      width: `${Math.min(100, (elapsed / WATCH_SECONDS_REQUIRED) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <p className="mt-2 text-center text-sm text-white">
-                  {elapsed < WATCH_SECONDS_REQUIRED
-                    ? `${Math.ceil(WATCH_SECONDS_REQUIRED - elapsed)}s remaining`
-                    : "Crediting…"}
-                </p>
-              </div>
-            )}
-
-            {phase === "crediting" && (
-              <p className="mt-4 text-center text-sm text-[#fde047]">Crediting GPC…</p>
-            )}
-          </div>
-
-          {coinPop != null && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="animate-scale-in rounded-2xl bg-[#eab308]/90 px-8 py-6 text-center shadow-2xl">
-                <p className="text-3xl font-black text-[#0c0618]">+{coinPop} GPC</p>
-                <p className="text-sm text-[#0c0618]/80 mt-1">Nice watch!</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {videos.length > 1 && current && (
-        <div className="flex justify-between gap-2">
-          <button
-            type="button"
-            disabled={index <= 0 || phase === "watching"}
-            onClick={() => {
-              setIndex((i) => Math.max(0, i - 1));
-              setPhase("idle");
-              setSessionId(null);
-            }}
-            className="flex-1 rounded-xl border border-white/10 py-2 text-sm text-white disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={index >= videos.length - 1 || phase === "watching"}
-            onClick={() => {
-              setIndex((i) => Math.min(videos.length - 1, i + 1));
-              setPhase("idle");
-              setSessionId(null);
-            }}
-            className="flex-1 rounded-xl border border-white/10 py-2 text-sm text-white disabled:opacity-40"
-          >
-            Skip
-          </button>
-        </div>
-      )}
-
-      {toast && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-fintech-bg-card px-4 py-2 text-sm text-white shadow-lg border border-white/10">
-          {toast}
-        </div>
-      )}
-    </div>
-  );
+  if (loading) return <LoadingState label="Loading your watch feed…"/>;
+  const progress=Math.min(100,(elapsed/WATCH_SECONDS_REQUIRED)*100);
+  return <div className="gp-watch-page mx-auto space-y-6">
+    <PageHeading eyebrow="DISCOVER · WATCH · EARN" title="Good content. Real rewards." description={`Watch creator videos for ${WATCH_SECONDS_REQUIRED} seconds. Earn GPC for eligible completed watches.`} action={<Link href="/dashboard/create-video" className="gp-button gp-button-ghost">Upload a video <ArrowUpRight size={16}/></Link>}/>
+    {notice&&<div className="gp-notice" role="status">{notice}</div>}{error&&<div className="gp-notice gp-error" role="alert">{error}</div>}
+    {!current ? <EmptyState title="You’re all caught up." description="No eligible videos are available right now. Check back for fresh creator content." action={<button type="button" onClick={()=>void loadFeed()} className="gp-button gp-button-violet">Refresh feed</button>}/> : <div className="gp-watch-feed">
+      <div><article className="gp-watch-player relative"><div className="aspect-video bg-black"><video ref={videoRef} key={current.id} src={current.videoUrl} poster={current.thumbnailUrl??undefined} className="h-full w-full object-contain" playsInline muted={false} controls={phase==="watching"} onEnded={()=>{if(phase==="watching"&&elapsed>=WATCH_SECONDS_REQUIRED)completeWatch();}}/></div><div className="p-5"><div className="flex items-center gap-3"><span className="gp-icon-tile"><UserRound size={20}/></span><div className="min-w-0"><p className="text-xs text-fintech-muted">{current.creatorName||"Creator name unavailable"}</p><h2 className="mt-1 text-lg font-semibold text-white">{current.title}</h2></div></div><p className="mt-4 text-xs text-fintech-muted">{current.viewsCount.toLocaleString()} views · {current.remainingBudgetGpc.toLocaleString()} GPC budget remaining</p></div>{coinPop!=null&&<div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="gp-surface text-center"><p className="text-3xl font-bold text-fintech-success">+{coinPop} GPC</p><p className="mt-2 text-sm text-fintech-muted">Reward confirmed</p></div></div>}</article>
+      {videos.length>1&&<div className="mt-4 flex gap-3"><button type="button" disabled={index<=0||phase==="watching"} onClick={()=>{setIndex(i=>Math.max(0,i-1));setPhase("idle");setSessionId(null);}} className="gp-button gp-button-ghost flex-1">Previous</button><button type="button" disabled={index>=videos.length-1||phase==="watching"} onClick={()=>{setIndex(i=>Math.min(videos.length-1,i+1));setPhase("idle");setSessionId(null);}} className="gp-button gp-button-ghost flex-1">Next video</button></div>}</div>
+      <aside className="space-y-4"><section className="gp-surface"><StatusBadge tone={phase==="done"?"success":"gold"}>{phase==="done"?"COMPLETED":"WATCH REWARD"}</StatusBadge><h2 className="mt-5 text-3xl font-bold text-white">{current.payoutGpc} <span className="text-base text-fintech-muted">GPC</span></h2><p className="gp-description">Watch progress</p><div className="gp-watch-progress mt-3" role="progressbar" aria-label="Watch progress" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><span style={{width:`${phase==="done"?100:progress}%`}}/></div><p className="mt-3 text-xs text-fintech-muted" aria-live="polite">{phase==="idle"?`Ready for your ${WATCH_SECONDS_REQUIRED}-second watch`:phase==="done"?"Reward confirmed":phase==="crediting"?"Confirming your reward…":`${Math.max(0,Math.ceil(WATCH_SECONDS_REQUIRED-elapsed))} seconds remaining`}</p>
+      {phase==="idle"&&<button type="button" onClick={startWatch} disabled={!!meta&&meta.remainingTodayGpc<=0} className="gp-button gp-button-gold mt-6 w-full"><Play size={17}/>Watch & Earn</button>}{phase==="done"&&<div className="gp-notice gp-success mt-5"><CheckCircle2 size={18}/>Watch completed</div>}</section>
+      {meta&&<section className="gp-surface"><p className="gp-eyebrow">YOUR DAY SO FAR</p><p className="mt-4 text-2xl font-bold">{meta.earnedTodayGpc} <span className="text-sm text-fintech-muted">/ {meta.dailyCapGpc} GPC</span></p><p className="gp-description">{meta.remainingTodayGpc} GPC remaining today</p><StatusBadge>{meta.membershipTier} membership</StatusBadge></section>}<p className="px-2 text-xs leading-relaxed text-fintech-muted">Rewards remain subject to eligibility, completed watch verification, and daily limits. GPC is for on-platform use.</p></aside>
+    </div>}
+    {toast&&<div role="status" className="gp-notice gp-success">{toast}</div>}
+  </div>;
 }

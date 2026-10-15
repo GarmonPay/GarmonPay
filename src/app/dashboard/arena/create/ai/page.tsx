@@ -104,7 +104,7 @@ export default function CreateFighterAIPage() {
         return;
       }
       const headers: Record<string, string> =
-        session?.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+        session?.accessToken ? { Authorization: `Bearer ${token}` } : {};
       try {
         const res = await fetch(`${getApiRoot()}/arena/fighter/ai-generate`, {
           method: "POST",

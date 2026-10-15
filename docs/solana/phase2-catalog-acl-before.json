@@ -1,0 +1,31 @@
+{
+  "observedDate": "2026-10-12",
+  "schemaMetadataOnly": true,
+  "productionChanges": false,
+  "tables": [
+    {
+      "relname": "ad_packages",
+      "relrowsecurity": true,
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_select": true,
+      "authenticated_select": true,
+      "service_crud": true
+    },
+    {
+      "relname": "cpu_fighters",
+      "relrowsecurity": true,
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_select": true,
+      "authenticated_select": true,
+      "service_crud": true
+    },
+    {
+      "relname": "gc_packages",
+      "relrowsecurity": true,
+      "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}",
+      "anon_select": true,
+      "authenticated_select": true,
+      "service_crud": true
+    }
+  ]
+}

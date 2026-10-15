@@ -1,4 +1,5 @@
 "use client";
+import { WalletCard, PageHeading } from "@/components/ui/garmon-ui";
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -213,7 +214,7 @@ function WalletDashboardContent() {
   const formatType = (t: string) => t.replace(/_/g, " ");
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-6 pb-12">
+    <div className="gp-wallet-page w-full mx-auto space-y-6 pb-12">
       {(success || purchased) && (
         <div className="rounded-xl bg-fintech-bg-card border border-emerald-500/30 p-6 text-center">
           <div className="text-4xl mb-2">✓</div>
@@ -221,9 +222,8 @@ function WalletDashboardContent() {
         </div>
       )}
 
-      <p className="text-center text-sm text-violet-200/80 px-2">
-        Your game balance: Gold Coins (GC), GPay Coins (GPC), and $GPAY tokens — use GPay tokens for on-chain transfers and trading.
-      </p>
+      <PageHeading eyebrow="YOUR WALLET" title="Every coin. One place." description="Manage your Gold Coins, GPay Coins, and token balance. Your live balances are shown below."/>
+      <div className="gp-wallet-grid"><WalletCard kind="gc" value={goldCoins} loading={coinsLoading}/><WalletCard kind="gpc" value={gpayCoins} loading={coinsLoading}/><WalletCard kind="gpay" value={gpayTokens} loading={coinsLoading}/></div>
 
       {/* SECTION 1 — Gold Coins */}
       <section className="rounded-xl border border-[#F5C842]/50 bg-black/30 p-6 space-y-3">
@@ -276,7 +276,7 @@ function WalletDashboardContent() {
             href="/dashboard/redeem"
             className="rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-200"
           >
-            $GPAY REDEMPTION
+            $GPAY · COMING SOON
           </Link>
         </div>
       </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -25,6 +25,10 @@ import {
 import DiceFace, { type DiceType } from "@/components/celo/DiceFace";
 import RollNameDisplay from "@/components/celo/RollNameDisplay";
 import { CeloRoomChatPanel, type ChatRow } from "@/components/celo/CeloRoomChatPanel";
+import CeloStreetBackdrop from "@/components/celo/street/CeloStreetBackdrop";
+import { CeloSoundControl } from "@/components/celo/street/CeloSoundControl";
+import { CeloFeltDice } from "@/components/celo/street/CeloFeltDice";
+import "@/components/celo/street/celo-street.css";
 import {
   CELO_CHAT_SELECT_WITH_USER,
   CELO_ROOM_PLAYERS_USER_EMBED,
@@ -43,8 +47,9 @@ import {
   type CeloMergeSource,
 } from "@/lib/celo/celoStateMerge";
 import { CELO_PLAYER_ROLL_TIMEOUT_MS } from "@/lib/celo-player-roll-constants";
+import { buildCeloRoomRulesPatch } from "@/lib/celo-room-rules";
 
-const CELO_DEBUG = process.env.NODE_ENV === "development";
+const CELO_DEBUG = process.env.NEXT_PUBLIC_DEBUG_CELO === "true";
 /** Wait after dice settle before roll-name reveal (ms). */
 const CELO_ROLL_RESULT_REVEAL_DELAY_MS = 500;
 /** Wait before settlement card reveal (ms). */
@@ -83,6 +88,7 @@ type Room = {
 type Player = CeloEntryPlayerFields;
 
 type Round = {
+  banker_id?: string;
   id: string;
   room_id: string;
   round_number: number;
@@ -166,16 +172,16 @@ function CeloDiceEmptyState({ diceSize }: { diceSize: number }) {
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="flex-shrink-0"
+            className="celo-empty-die flex-shrink-0"
             style={{
               width: diceSize,
               height: diceSize,
               borderRadius: r,
               background:
-                "linear-gradient(145deg, rgba(139,92,246,0.5) 0%, rgba(88,28,135,0.45) 42%, rgba(245,200,66,0.22) 100%)",
-              border: "1px solid rgba(253,224,71,0.22)",
+                "linear-gradient(145deg, #3a3a42 0%, #16161c 48%, #0a0a0e 100%)",
+              border: "1px solid rgba(245,200,66,0.35)",
               boxShadow:
-                "0 0 16px rgba(167,139,250,0.4), inset 0 1px 0 rgba(253,224,71,0.18)",
+                "0 10px 8px rgba(0,0,0,0.45), 0 0 12px rgba(124,58,237,0.28), inset 0 1px 0 rgba(245,200,66,0.28)",
               animation: "celo-felt-empty-shimmer 1.5s ease-in-out infinite",
               animationDelay: `${i * 140}ms`,
             }}
@@ -234,7 +240,8 @@ function buildCeloResultBannerContent(
   players: Player[],
   roomBankerId: string | null
 ): CeloResultBannerModel {
-  const bankerUid = roomBankerId?.trim() ? String(roomBankerId) : null;
+  const terminal=round as Round & {banker_id?:string|null;settlement_snapshot?:{winners?:{user_id:string;payout_sc:number}[]}};
+  const bankerUid = terminal.banker_id ?? (roomBankerId?.trim() ? String(roomBankerId) : null);
   const bankerTag = bankerUid ? celoBannerSeatLabel(players, bankerUid) : "BANKER";
 
   const bRes = String(round.banker_dice_result ?? "");
@@ -320,7 +327,7 @@ function buildCeloResultBannerContent(
   }
   if (bRes === "instant_loss" && bankerUid) {
     const rep =
-      firstSeatedPlayerUserId(players) ?? rollerUid ?? decisive?.user_id ?? null;
+      terminal.settlement_snapshot?.winners?.[0]?.user_id ?? firstSeatedPlayerUserId(players) ?? rollerUid ?? decisive?.user_id ?? null;
     const winTag = rep ? celoBannerSeatLabel(players, rep) : "PLAYERS";
     const winUid = rep;
     return {
@@ -581,7 +588,6 @@ export default function CeloRoomPage() {
   const [myDiceType, setMyDiceType] = useState<DiceType>("standard");
   const [diceModal, setDiceModal] = useState(false);
   const [showLower, setShowLower] = useState(false);
-  const [showBanker, setShowBanker] = useState(false);
   /** One-shot message when the table bank is stopped and a new banker is seated. */
   const [bankStopBannerText, setBankStopBannerText] = useState<string | null>(null);
   const shownBankStopMessagesRef = useRef<Set<string>>(new Set());
@@ -631,6 +637,7 @@ export default function CeloRoomPage() {
   const [entryAmount, setEntryAmount] = useState(1000);
   const [panelOpen, setPanelOpen] = useState(false);
   const [chat, setChat] = useState("");
+  const [postedPrize, setPostedPrize] = useState(0);
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [myProfile, setMyProfile] = useState<UserDisplayProfile | null>(null);
   const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
@@ -645,6 +652,8 @@ export default function CeloRoomPage() {
   const postEntryInFlightRef = useRef(false);
   const [rollError, setRollError] = useState<string | null>(null);
   const [latestRollDebug, setLatestRollDebug] = useState<unknown>(null);
+  const visualThrowLockRef = useRef(false);
+  const [visualThrowLock, setVisualThrowLock] = useState(false);
   /** Newest-first rows for `round.id` from `/api/celo/room/state` or Supabase (server-authoritative dice). */
   const [roundPlayerRolls, setRoundPlayerRolls] = useState<Record<string, unknown>[]>(
     []
@@ -655,11 +664,13 @@ export default function CeloRoomPage() {
     rollName: string;
   } | null>(null);
   /** Current seat has a final win/loss row this round (server); drives player-phase tumble for all clients. */
-  const [currentPlayerResolvedRoll, setCurrentPlayerResolvedRoll] = useState(false);
+  const currentPlayerResolvedRoll = roundPlayerRolls.some(p => p.user_id === round?.roller_user_id && ['win','loss','push'].includes(String(p.outcome)));
   const [lowerBankError, setLowerBankError] = useState<string | null>(null);
-  const [bankerAcceptError, setBankerAcceptError] = useState<string | null>(null);
   const [newBankerSetupBusy, setNewBankerSetupBusy] = useState(false);
   const [newBankerSetupError, setNewBankerSetupError] = useState<string | null>(null);
+  const [editingRoomRules, setEditingRoomRules] = useState(false);
+  const [roomRulesBusy, setRoomRulesBusy] = useState(false);
+  const [roomRulesNotice, setRoomRulesNotice] = useState<string | null>(null);
   const [newBankerSetupName, setNewBankerSetupName] = useState("");
   const [newBankerSetupMinEntry, setNewBankerSetupMinEntry] = useState(500);
   const [newBankerSetupFunding, setNewBankerSetupFunding] = useState(500);
@@ -700,6 +711,7 @@ export default function CeloRoomPage() {
     oldBankerId: string | null;
     newBankerId: string | null;
   } | null>(null);
+  const zeroBankRefetchKeyRef = useRef<string | null>(null);
   const ROLL_ANIM_MIN_MS = 1800;
   /** Roll API: 30s product clock + bank animation / network slack. */
   const ROLL_HARD_TIMEOUT_MS = CELO_PLAYER_ROLL_TIMEOUT_MS + 25_000;
@@ -747,7 +759,8 @@ export default function CeloRoomPage() {
       if (rollResultRevealTimerRef.current) {
         clearTimeout(rollResultRevealTimerRef.current);
       }
-      rollResultRevealTimerRef.current = setTimeout(() => {
+      rollResultRevealTimerRef.current = setTimeout(function reveal() {
+        if(visualThrowLockRef.current || rollingRef.current){rollResultRevealTimerRef.current=setTimeout(reveal,50);return;}
         rollResultRevealTimerRef.current = null;
         pendingRollRevealIdRef.current = null;
         if (shownRollResultIdsRef.current.has(resultId)) return;
@@ -779,7 +792,8 @@ export default function CeloRoomPage() {
       if (settlementBannerTimerRef.current) {
         clearTimeout(settlementBannerTimerRef.current);
       }
-      settlementBannerTimerRef.current = setTimeout(() => {
+      settlementBannerTimerRef.current = setTimeout(function reveal() {
+        if(visualThrowLockRef.current || rollingRef.current){settlementBannerTimerRef.current=setTimeout(reveal,50);return;}
         settlementBannerTimerRef.current = null;
         pendingSettlementIdRef.current = null;
         if (shownSettlementResultIdsRef.current.has(settlementId)) return;
@@ -837,484 +851,39 @@ export default function CeloRoomPage() {
       /** When set (e.g. RT player handler), use this list as merge "prev" instead of playersRef. */
       playersForMerge?: Player[]
     ) => {
-      let merged:
-        | ReturnType<
-            typeof applyCeloStateUpdate<
-              Record<string, unknown>,
-              Player,
-              Record<string, unknown>
-            >
-          >
-        | undefined;
-      const playersBase = playersForMerge ?? playersRef.current;
-      flushSync(() => {
-        setRoom((prevRoom) => {
-          merged = applyCeloStateUpdate(
-            {
-              room: (prevRoom as unknown as Record<string, unknown> | null) ?? null,
-              players: playersBase,
-              currentRound: roundRef.current as unknown as Record<
-                string,
-                unknown
-              > | null,
-            },
-            incoming,
-            source,
-            opts
-          );
-          return (merged!.room ?? null) as Room | null;
-        });
-      });
-      if (!merged) return;
-      setPlayers(merged.players as Player[]);
-      setRound(merged.currentRound as Round | null);
+      const merged=applyCeloStateUpdate({room:roomRef.current as unknown as Record<string,unknown>|null,players:playersForMerge??playersRef.current,currentRound:roundRef.current as unknown as Record<string,unknown>|null},incoming,source,opts);
+      roomRef.current=merged.room as Room|null;playersRef.current=merged.players as Player[];roundRef.current=merged.currentRound as Round|null;
+      flushSync(()=>{setRoom(merged.room as Room|null);setPlayers(merged.players as Player[]);setRound(merged.currentRound as Round|null);});
+
     },
     []
   );
 
   const fetchAll = useCallback(async () => {
     if (!supabase || !roomId) return;
-    const myToken = ++fetchTokenRef.current;
-    const fetchStartedAt = Date.now();
-    fetchStartedAtRef.current = fetchStartedAt;
-    setRoomFetchError(null);
-
-    const isStaleFetch = (): boolean => {
-      if (myToken !== fetchTokenRef.current) return true;
-      if (fetchStartedAt < lastRealtimeUpdateRef.current) return true;
-      return false;
-    };
-
-    const skipMergeDueToLocalMutation =
-      fetchStartedAt < lastLocalMutationRef.current;
-
-    const [stateRes, chatRes] = await Promise.all([
-      fetchCeloApi(
-        supabase,
-        `/api/celo/room/state?room_id=${encodeURIComponent(roomId)}`,
-        { method: "GET" }
-      ),
-      supabase
-        .from("celo_chat")
-        .select(CELO_CHAT_SELECT_WITH_USER)
-        .eq("room_id", roomId)
-        .order("created_at", { ascending: true })
-        .limit(50),
-    ]);
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    let incomingRoom: Record<string, unknown> | null | undefined = undefined;
-    let playerRows: Player[] = [];
-    let activeRound: Round | null = null;
-    let roomForLog: Room | null = null;
-    type RoomStateApiBody = {
-      room?: Record<string, unknown>;
-      players?: unknown[];
-      activeRound?: Record<string, unknown> | null;
-      pauseVotes?: {
-        requestCount?: number;
-        approveCount?: number;
-        requested?: boolean;
-      };
-      playerRolls?: unknown[];
-    };
-    let roomStateJson: RoomStateApiBody | null = null;
-
-    if (!stateRes.ok) {
-      const errText = await stateRes.text();
-      if (stateRes.status === 401) {
-        setRoomFetchError("Session expired. Please log in again.");
-      } else {
-        setRoomFetchError(errText.slice(0, 200) || "Could not load room state");
-      }
-      const [roomRes, playersRes, roundsRes] = await Promise.all([
-        supabase.from("celo_rooms").select("*").eq("id", roomId).maybeSingle(),
-        supabase
-          .from("celo_room_players")
-          .select(CELO_PLAYER_FETCH_SELECT)
-          .eq("room_id", roomId)
-          .order("seat_number", { ascending: true }),
-        supabase
-          .from("celo_rounds")
-          .select("*")
-          .eq("room_id", roomId)
-          .in("status", ["banker_rolling", "player_rolling", "betting"])
-          .order("round_number", { ascending: false })
-          .limit(1),
-      ]);
-      if (isStaleFetch()) return;
-      if (roomRes.data) {
-        incomingRoom = roomRes.data as unknown as Record<string, unknown>;
-        roomForLog = roomRes.data as Room;
-      } else if (roomRes.error) incomingRoom = null;
-      playerRows = ((playersRes.data ?? []) as unknown[]).map(
-        (row) => normalizeCeloPlayerRow(row) as Player
-      );
-      const ar = (roundsRes.data as Round[] | null) ?? [];
-      activeRound = ar[0] ?? null;
-      setPauseRequested(false);
-      setPauseVoteCount(0);
-      const rs = String((incomingRoom as { status?: string })?.status ?? "");
-      if (
-        !activeRound &&
-        (rs === "rolling" || rs === "active") &&
-        roomRes.data &&
-        roundsRes.error == null
-      ) {
-        const { data: lastDone } = await supabase
-          .from("celo_rounds")
-          .select("*")
-          .eq("room_id", roomId)
-          .eq("status", "completed")
-          .order("round_number", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (isStaleFetch()) return;
-        if (lastDone) activeRound = lastDone as unknown as Round;
-      }
-    } else {
-      roomStateJson = (await stateRes.json()) as RoomStateApiBody;
-      if (roomStateJson.room) {
-        incomingRoom = roomStateJson.room;
-        roomForLog = roomStateJson.room as unknown as Room;
-      }
-      playerRows = ((roomStateJson.players ?? []) as unknown[]).map(
-        (row) => normalizeCeloPlayerRow(row) as Player
-      );
-      activeRound =
-        roomStateJson.activeRound == null
-          ? null
-          : (roomStateJson.activeRound as unknown as Round);
-      const requestVotes = Math.max(
-        0,
-        Math.floor(Number(roomStateJson.pauseVotes?.requestCount ?? 0))
-      );
-      const approveVotes = Math.max(
-        0,
-        Math.floor(Number(roomStateJson.pauseVotes?.approveCount ?? 0))
-      );
-      setPauseRequested(
-        roomStateJson.pauseVotes?.requested === true ||
-          requestVotes > 0 ||
-          approveVotes > 0
-      );
-      setPauseVoteCount(approveVotes);
-    }
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
-      console.log("[C-Lo] skipping stale fetch (realtime newer than fetch start)");
-      return;
-    }
-
-    const roomStatusStr =
-      incomingRoom != null
-        ? String((incomingRoom as { status?: string }).status ?? "")
-        : "";
-    if (
-      (roomStatusStr === "rolling" || roomStatusStr === "active") &&
-      !activeRound
-    ) {
-      const { data: r2 } = await supabase
-        .from("celo_rounds")
-        .select("*")
-        .eq("room_id", roomId)
-        .neq("status", "completed")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (isStaleFetch()) return;
-      const st = String((r2 as { status?: string } | null)?.status ?? "");
-      if (
-        r2 &&
-        (st === "banker_rolling" || st === "player_rolling" || st === "betting")
-      ) {
-        activeRound = r2 as unknown as Round;
-      }
-    }
-
-    if (
-      (roomStatusStr === "rolling" || roomStatusStr === "active") &&
-      !activeRound &&
-      supabase
-    ) {
-      const { data: lastCompleted } = await supabase
-        .from("celo_rounds")
-        .select("*")
-        .eq("room_id", roomId)
-        .eq("status", "completed")
-        .order("round_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (isStaleFetch()) return;
-      if (lastCompleted) activeRound = lastCompleted as unknown as Round;
-    }
-
-    if (isStaleFetch()) return;
-
-    if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
-      console.log("[C-Lo] skipping stale fetch (realtime after repair)");
-      return;
-    }
-
-    const bankerForCount =
-      roomForLog?.banker_id ??
-      (incomingRoom as { banker_id?: string } | null | undefined)?.banker_id ??
-      null;
-    const stakedN = countStakedEntryPlayers(playerRows, bankerForCount);
-    const roomStatForStart = String(
-      (incomingRoom as { status?: string } | null | undefined)?.status ?? ""
-    );
-    const canStartComputed =
-      incomingRoom != null &&
-      me != null &&
-      normalizeCeloUserId(
-        (incomingRoom as { banker_id?: string }).banker_id
-      ) === normalizeCeloUserId(me) &&
-      activeRound == null &&
-      ["waiting", "active", "entry_phase"].includes(roomStatForStart) &&
-      stakedN >= 1;
-
-    console.log("[C-Lo] room status", roomStatusStr);
-    console.log("[C-Lo] players count", playerRows.length);
-    console.log("[C-Lo] banker id", bankerForCount);
-    console.log("[C-Lo] current user id", me);
-    console.log("[C-Lo] current round", activeRound?.id ?? null, activeRound?.status ?? null);
-    console.log("[C-Lo] canStartRound", canStartComputed);
-
-    let hasCurrentPlayerFinal = false;
-    if (
-      activeRound?.status === "player_rolling" &&
-      activeRound.current_player_seat != null &&
-      playerRows.length
-    ) {
-      const seat = activeRound.current_player_seat;
-      const uid = playerRows.find(
-        (p) =>
-          p.role === "player" && Number(p.seat_number) === Number(seat)
-      )?.user_id;
-      if (uid && activeRound.id) {
-        const { data: prRow } = await supabase
-          .from("celo_player_rolls")
-          .select("id")
-          .eq("round_id", activeRound.id)
-          .eq("user_id", uid)
-          .in("outcome", ["win", "loss", "push"])
-          .limit(1)
-          .maybeSingle();
-        if (isStaleFetch()) {
-          console.log("[C-Lo] skipping stale fetch");
-          return;
-        }
-        hasCurrentPlayerFinal = !!prRow;
-      }
-    }
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    if (lastRealtimeUpdateRef.current > fetchStartedAtRef.current) {
-      console.log("[C-Lo] skipping stale fetch (realtime after async work)");
-      return;
-    }
-
-    let playerRollsSnapshot: Record<string, unknown>[] = Array.isArray(
-      roomStateJson?.playerRolls
-    )
-      ? ((roomStateJson?.playerRolls ?? []) as Record<string, unknown>[])
-      : [];
-    if (!stateRes.ok && activeRound?.id) {
-      const { data: prData } = await supabase
-        .from("celo_player_rolls")
-        .select("id, round_id, room_id, user_id, dice, outcome, created_at")
-        .eq("round_id", activeRound.id)
-        .order("created_at", { ascending: false })
-        .limit(30);
-      if (isStaleFetch()) {
-        console.log("[C-Lo] skipping stale fetch");
-        return;
-      }
-      playerRollsSnapshot = (prData ?? []) as Record<string, unknown>[];
-    }
-
-    if (skipMergeDueToLocalMutation) {
-      console.log("[C-Lo] skipping fetch merge (fetch older than local mutation)");
-    } else {
-      setRoundPlayerRolls(playerRollsSnapshot);
-
-      commitCeloAggregateMerge(
-        {
-          room: incomingRoom !== undefined ? incomingRoom : undefined,
-          players: playerRows,
-          currentRound:
-            activeRound === null
-              ? null
-              : (activeRound as unknown as Record<string, unknown>),
-        },
-        "fetch",
-        { playersSnapshot: true }
-      );
-
-      if (isStaleFetch()) {
-        console.log("[C-Lo] skipping stale fetch");
-        return;
-      }
-
-      setCurrentPlayerResolvedRoll(hasCurrentPlayerFinal);
-    }
-
-    setMessages(
-      ((chatRes.data as unknown[]) ?? []).map((row) => normalizeChatRow(row))
-    );
-    if (chatRes.error && CELO_DEBUG) console.warn("[C-Lo room] chat", chatRes.error);
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    if (!skipMergeDueToLocalMutation && activeRound?.id && !rollingRef.current) {
-      if (isStaleFetch()) {
-        console.log("[C-Lo] skipping stale fetch");
-        return;
-      }
-      const rRow = activeRound as Round;
-      const rollerUidForFetch =
-        rRow.roller_user_id?.trim() != null && String(rRow.roller_user_id).trim() !== ""
-          ? String(rRow.roller_user_id)
-          : rRow.current_player_seat != null
-            ? playerRows.find(
-                (p) =>
-                  p.role === "player" &&
-                  Number(p.seat_number) === Number(rRow.current_player_seat)
-              )?.user_id ?? null
-            : null;
-      const serverDiceMeta = getVisibleDiceFromServer(
-        activeRound as unknown as Record<string, unknown>,
-        playerRollsSnapshot,
-        { rollerUserId: rollerUidForFetch }
-      );
-      const t = serverDiceMeta.triplet;
-      const applyTriplet = t;
-      const serverHasBankerTriplet = !!realDiceTripletFromUnknown(
-        (activeRound as Round).banker_dice
-      );
-      if (applyTriplet) {
-        rememberRealFeltDice(applyTriplet);
-        feltTiedToRoundIdRef.current = null;
-      } else {
-        const clobber = shouldClobberFeltTripletOnFetch({
-          rollingActionInProgress: rollingActionRef.current,
-          activeStatus: activeRound.status,
-          serverHasBankerTriplet,
-          hasPlayerFinalWinLoss: hasCurrentPlayerFinal,
-          hasLocalFeltTriplet: realDiceTripletFromUnknown(diceRef.current) != null,
-          localFeltTiedToThisRound: feltTiedToRoundIdRef.current === activeRound.id,
-        });
-        if (clobber) {
-          const keep = lastRealTripletRef.current;
-          if (keep) {
-            setDice([keep[0], keep[1], keep[2]]);
-          } else {
-            setDice(null);
-          }
-          feltTiedToRoundIdRef.current = null;
-        } else if (CELO_DEBUG) {
-          console.log(
-            "[C-Lo] fetch: preserved felt (see shouldClobberFeltTripletOnFetch comment)",
-            {
-              status: activeRound.status,
-              serverHasBankerTriplet,
-              tiedRound: feltTiedToRoundIdRef.current,
-              roundId: activeRound.id,
-            }
-          );
-        }
-      }
-    } else if (
-      !skipMergeDueToLocalMutation &&
-      !activeRound &&
-      !rollingActionRef.current &&
-      !resultBannerDataRef.current
-    ) {
-      if (isStaleFetch()) {
-        console.log("[C-Lo] skipping stale fetch");
-        return;
-      }
-      const keep = lastRealTripletRef.current;
-      if (keep) {
-        setDice([keep[0], keep[1], keep[2]]);
-      } else {
-        const { data: lastDone } = await supabase
-          .from("celo_rounds")
-          .select("id, banker_dice")
-          .eq("room_id", roomId)
-          .eq("status", "completed")
-          .order("round_number", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (isStaleFetch()) {
-          console.log("[C-Lo] skipping stale fetch");
-          return;
-        }
-        let hydrated: [number, number, number] | null = null;
-        if (lastDone && (lastDone as { id?: string }).id) {
-          const rid = String((lastDone as { id: string }).id);
-          const { data: lastPr } = await supabase
-            .from("celo_player_rolls")
-            .select("dice")
-            .eq("round_id", rid)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (isStaleFetch()) {
-            console.log("[C-Lo] skipping stale fetch");
-            return;
-          }
-          const t = resolveCeloFeltDice(
-            lastPr?.dice,
-            (lastDone as { banker_dice?: unknown }).banker_dice
-          );
-          if (t) hydrated = t;
-        }
-        if (hydrated) {
-          rememberRealFeltDice(hydrated);
-        } else {
-          setDice(null);
-        }
-      }
-      feltTiedToRoundIdRef.current = null;
-    }
-
-    if (isStaleFetch()) {
-      console.log("[C-Lo] skipping stale fetch");
-      return;
-    }
-
-    setPlayersSnapshotReady(true);
-
-    if (CELO_DEBUG && !isStaleFetch()) {
-      console.log("[C-Lo room] sync", {
-        roomId,
-        room: roomForLog ?? incomingRoom,
-        activeRound: activeRound?.id,
-        players: playerRows.length,
-        staked: countStakedEntryPlayers(playerRows, bankerForCount),
-        diceComponent: "mounted",
-        chatMounted: true,
-        fetchToken: myToken,
-      });
-    }
-  }, [supabase, roomId, commitCeloAggregateMerge, me, rememberRealFeltDice]);
+    const token=++fetchTokenRef.current, started=Date.now();
+    try {
+      const response=await fetchCeloApi(supabase,`/api/celo/room/state?room_id=${encodeURIComponent(roomId)}`,{method:"GET",cache:"no-store"});
+      if(token!==fetchTokenRef.current || started<lastLocalMutationRef.current)return;
+      if(!response.ok){setRoomFetchError(response.status===401?"Session expired. Please log in again.":"Table could not synchronize. Retrying…");return;}
+      const snapshot=await response.json();
+      if(token!==fetchTokenRef.current || started<lastLocalMutationRef.current)return;
+      const playerRows=(snapshot.players??[]).map((row:unknown)=>normalizeCeloPlayerRow(row) as Player);
+      const activeRound=(snapshot.activeRound??null) as Round|null;
+      commitCeloAggregateMerge({room:snapshot.room,players:playerRows,currentRound:activeRound as unknown as Record<string,unknown>|null},"fetch",{playersSnapshot:true});
+      setRoomFetchError(null);setPlayersSnapshotReady(true);
+      setRoundPlayerRolls(snapshot.playerRolls??[]);
+      setPostedPrize(Number(snapshot.postedPrize??0));
+      if(Number.isFinite(snapshot.viewerBalance))setMyBalance(Math.max(0,Math.floor(snapshot.viewerBalance)));
+      setPauseRequested(Number(snapshot.pauseVotes?.requestCount??0)>0);setPauseVoteCount(Number(snapshot.pauseVotes?.approveCount??0));
+      const roller=activeRound?.roller_user_id??playerRows.find((p:Player)=>p.seat_number===activeRound?.current_player_seat)?.user_id??null;
+      const visible=getVisibleDiceFromServer(activeRound as unknown as Record<string,unknown>|null,snapshot.playerRolls??[],{rollerUserId:roller});
+      if(visible.triplet)rememberRealFeltDice(visible.triplet);
+      if(activeRound?.banker_roll_in_flight!==true && activeRound?.roll_processing!==true && visible.triplet)setRolling(false);
+      const chatRows=await supabase.from("celo_chat").select(CELO_CHAT_SELECT_WITH_USER).eq("room_id",roomId).order("created_at",{ascending:true}).limit(50);
+      if(token===fetchTokenRef.current)setMessages(((chatRows.data??[]) as unknown[]).map(row=>normalizeChatRow(row)));
+    } catch {if(token===fetchTokenRef.current)setRoomFetchError("Connection interrupted. Retrying table synchronization…");}
+  },[supabase,roomId,commitCeloAggregateMerge,rememberRealFeltDice]);
 
   /** Server applies the same banker-win + platform-fee settlement as a normal loss. */
   useEffect(() => {
@@ -1445,32 +1014,7 @@ export default function CeloRoomPage() {
     lastRealtimeUpdateRef.current = Date.now();
   }, [supabase, me, room, myProfile]);
 
-  const refreshRoomPlayers = useCallback(async (force = false) => {
-    if (!supabase || !roomId) return;
-    const fetchStartedAt = Date.now();
-    const { data, error } = await supabase
-      .from("celo_room_players")
-      .select(CELO_PLAYER_FETCH_SELECT)
-      .eq("room_id", roomId)
-      .order("seat_number", { ascending: true });
-    if (error || !data) return;
-    if (!force && lastRealtimeUpdateRef.current > fetchStartedAt + 500) {
-      if (CELO_DEBUG) {
-        console.log("[C-Lo] skipping refreshRoomPlayers (realtime while fetching players)");
-      }
-      return;
-    }
-    const rows = ((data as unknown[]) ?? []).map((row) => normalizeCeloPlayerRow(row) as Player);
-    commitCeloAggregateMerge(
-      {
-        players: rows as unknown as Player[],
-        updated_at: new Date().toISOString(),
-      },
-      "fetch",
-      { playersSnapshot: true }
-    );
-    setPlayersSnapshotReady(true);
-  }, [supabase, roomId, commitCeloAggregateMerge]);
+  const refreshRoomPlayers = useCallback(async (_force=false) => { await fetchAll(); },[fetchAll]);
 
   useEffect(() => {
     void (async () => {
@@ -1546,299 +1090,15 @@ export default function CeloRoomPage() {
   }, [players.length]);
 
   useEffect(() => {
-    if (!supabase || !roomId) return;
-    const ch = supabase
-      .channel(`celo_room:${roomId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "celo_rooms", filter: `id=eq.${roomId}` },
-        (payload) => {
-          lastRealtimeUpdateRef.current = Date.now();
-          const rowNew = (payload as { new?: Record<string, unknown> }).new;
-          if (CELO_DEBUG) {
-            console.log("[RT] room update", rowNew);
-          }
-          if (rowNew && String(rowNew.id ?? "") === roomId) {
-            const prevSt = String(roomRef.current?.status ?? "").toLowerCase();
-            const nextSt = String(rowNew.status ?? "").toLowerCase();
-            const clearStaleResultBanner =
-              ((prevSt === "waiting" || prevSt === "entry_phase") &&
-                (nextSt === "active" || nextSt === "rolling")) ||
-              (prevSt === "active" && nextSt === "rolling");
-            if (clearStaleResultBanner) {
-              setResultBannerData(null);
-            }
-            commitCeloAggregateMerge(
-              {
-                room: rowNew,
-                updated_at: new Date().toISOString(),
-              },
-              "realtime"
-            );
-          }
-          void fetchAll();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          lastRealtimeUpdateRef.current = Date.now();
-          if (CELO_DEBUG) {
-            console.log(
-              "[RT] celo_room_players",
-              (payload as { eventType?: string }).eventType,
-              payload
-            );
-          }
-          setPlayersSnapshotReady(true);
-          void refreshRoomPlayers(true);
-          void fetchAll();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "celo_rounds",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          lastRealtimeUpdateRef.current = Date.now();
-          const p = payload as {
-            eventType?: string;
-            new?: Record<string, unknown> | null;
-            old?: Record<string, unknown> | null;
-          };
-          const n = p.new as Partial<Round> | null | undefined;
-          const rowOld = p.old;
-          if (CELO_DEBUG) {
-            console.log("[RT] round update", n ?? rowOld);
-          }
+    if(!supabase||!roomId)return;
+    let channel=supabase.channel(`celo_room:${roomId}`);
+    for(const table of ['celo_rooms','celo_room_players','celo_rounds','celo_player_rolls','celo_chat']){
+      channel=channel.on('postgres_changes',{event:'*',schema:'public',table,filter:`${table==='celo_rooms'?'id':'room_id'}=eq.${roomId}`},()=>{void fetchAll();});
+    }
+    try {channel.subscribe(status=>{if(status==='SUBSCRIBED'){setConnection('live');void fetchAll();}if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')setConnection('offline');});} catch {setConnection('offline');void fetchAll();}
+    return()=>{void supabase.removeChannel(channel);};
+  },[supabase,roomId,fetchAll]);
 
-          if (p.eventType === "DELETE" && rowOld?.id) {
-            const oid = String(rowOld.id);
-            const prevR = roundRef.current;
-            if (prevR?.id === oid) {
-              commitCeloAggregateMerge(
-                {
-                  currentRound: null,
-                  updated_at: new Date().toISOString(),
-                },
-                "realtime"
-              );
-            }
-            void fetchAll();
-            return;
-          }
-
-          if (n?.id && typeof n.id === "string" && String(n.room_id ?? "") === roomId) {
-            const active = new Set(["banker_rolling", "player_rolling", "betting"]);
-            const prevR = roundRef.current;
-            let incomingRound: Round | undefined;
-            if (!prevR || prevR.id === n.id) {
-              incomingRound = { ...(prevR ?? {}), ...n } as Round;
-            } else if (
-              p.eventType === "INSERT" &&
-              active.has(String(n.status ?? ""))
-            ) {
-              incomingRound = { ...n } as Round;
-            }
-
-            if (incomingRound !== undefined) {
-              commitCeloAggregateMerge(
-                {
-                  currentRound: incomingRound as unknown as Record<string, unknown>,
-                  updated_at: new Date().toISOString(),
-                },
-                "realtime"
-              );
-            }
-
-            if (n.status === "player_rolling") {
-              setCurrentPlayerResolvedRoll(false);
-            }
-            if (n.status === "banker_rolling") {
-              if (n.banker_roll_in_flight === true) {
-                setDice(null);
-                if (CELO_DEBUG) {
-                  console.log(
-                    "[C-Lo room] realtime: banker_roll_in_flight=true → tumble until resolve"
-                  );
-                }
-              } else if (n.banker_dice == null) {
-                if (realDiceTripletFromUnknown(n.idle_preview_dice)) {
-                  setDice(null);
-                } else {
-                  const k = lastRealTripletRef.current;
-                  if (k) setDice([k[0], k[1], k[2]]);
-                  else setDice(null);
-                }
-              }
-              if (
-                n.banker_dice != null &&
-                (p.eventType === "UPDATE" || p.eventType === "INSERT") &&
-                n.banker_roll_in_flight !== true
-              ) {
-                const trip = realDiceTripletFromUnknown(n.banker_dice);
-                if (trip) rememberRealFeltDice(trip);
-                if (rollingRef.current) {
-                  setRolling(false);
-                }
-              }
-            }
-          }
-          void fetchAll();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "celo_player_rolls", filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          lastRealtimeUpdateRef.current = Date.now();
-          const et = (payload as { eventType: string }).eventType;
-          const n = (payload as {
-            new: {
-              dice?: unknown;
-              outcome?: string;
-              roll_name?: string;
-              user_id?: string;
-            } | null;
-          }).new;
-          if (CELO_DEBUG) {
-            console.log("[C-Lo room] realtime celo_player_rolls", et, n ?? (payload as { old?: unknown }).old);
-            console.log("[C-Lo room] dice sync: player_rolls event → merge triplet if present");
-          }
-          const rowNew = (payload as { new?: Record<string, unknown> | null }).new;
-          const activeRid = roundRef.current?.id;
-          if (
-            (et === "INSERT" || et === "UPDATE") &&
-            rowNew &&
-            activeRid &&
-            String(rowNew.round_id ?? "") === activeRid
-          ) {
-            setRoundPlayerRolls((prev) => {
-              const id = String(rowNew.id ?? "");
-              const rest = id
-                ? prev.filter((r) => String((r as { id?: string }).id) !== id)
-                : prev;
-              return [rowNew, ...rest];
-            });
-          }
-          if ((et === "INSERT" || et === "UPDATE") && n?.dice) {
-            const t = realDiceTripletFromUnknown(n.dice);
-            if (t) {
-              rememberRealFeltDice(t);
-              if (
-                n.outcome === "win" ||
-                n.outcome === "loss" ||
-                n.outcome === "push"
-              ) {
-                setCurrentPlayerResolvedRoll(true);
-              }
-              if (rollingRef.current) {
-                setRolling(false);
-              }
-              const rName = String(n.roll_name ?? "").trim();
-              const uid = n.user_id != null ? String(n.user_id).trim() : "";
-              if (
-                rName &&
-                uid &&
-                (n.outcome === "win" ||
-                  n.outcome === "loss" ||
-                  n.outcome === "push")
-              ) {
-                const rid = roundRef.current?.id;
-                if (rid) {
-                  const resultId = `${rid}:player:${uid}:${t[0]}-${t[1]}-${t[2]}`;
-                  const pointRaw = (n as { point?: unknown }).point;
-                  const rollPt =
-                    typeof pointRaw === "number" && Number.isFinite(pointRaw)
-                      ? pointRaw
-                      : null;
-                  scheduleRollResultReveal(resultId, () => {
-                    setRollPoint(rollPt);
-                    setRollName(rName);
-                  });
-                }
-              }
-            }
-          }
-          void fetchAll();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "celo_chat", filter: `room_id=eq.${roomId}` },
-        () => {
-          lastRealtimeUpdateRef.current = Date.now();
-          void fetchAll();
-        }
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") setConnection("live");
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
-          setConnection("offline");
-      });
-    return () => {
-      void supabase.removeChannel(ch);
-    };
-  }, [
-    supabase,
-    roomId,
-    fetchAll,
-    refreshRoomPlayers,
-    commitCeloAggregateMerge,
-    rememberRealFeltDice,
-    scheduleRollResultReveal,
-  ]);
-
-  /** If the roll fetch path misses the JSON body, still clear local rolling when this round row updates. */
-  useEffect(() => {
-    if (!supabase || !round?.id) return;
-    const rid = round.id;
-    const ch = supabase
-      .channel(`celo_round_active:${rid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "celo_rounds",
-          filter: `id=eq.${rid}`,
-        },
-        (payload) => {
-          const n = (payload as { new?: Record<string, unknown> | null }).new;
-          if (!n) return;
-          lastRealtimeUpdateRef.current = Date.now();
-          if (n.banker_dice != null && n.banker_roll_in_flight !== true) {
-            const trip = realDiceTripletFromUnknown(n.banker_dice);
-            if (trip) rememberRealFeltDice(trip);
-            if (rollingRef.current) {
-              if (CELO_DEBUG) {
-                console.log(
-                  "[C-Lo] round-scoped RT: cleared rolling from celo_rounds update"
-                );
-              }
-              setRolling(false);
-            }
-            if (rollingActionRef.current) {
-              setRollingAction(false);
-            }
-          }
-        }
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(ch);
-    };
-  }, [supabase, round?.id, rememberRealFeltDice]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !roomId) return;
@@ -1850,7 +1110,7 @@ export default function CeloRoomPage() {
     };
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", onFocus);
-    const t = window.setInterval(refresh, 10_000);
+    const t = window.setInterval(refresh, 1_500);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", onFocus);
@@ -1944,32 +1204,51 @@ export default function CeloRoomPage() {
   }, [room]);
 
   useEffect(() => {
-    if (!room || !isCurrentBanker) return;
+    if (!room || !isCurrentBanker || editingRoomRules) return;
     const min = Math.max(500, minVal(room));
     const maxPlayers = [2, 4, 6, 10].includes(Number(room.max_players))
       ? Number(room.max_players)
       : 10;
     setNewBankerSetupName(String(room.name ?? ""));
     setNewBankerSetupMinEntry(min);
-    setNewBankerSetupFunding(min);
+    setNewBankerSetupFunding((prev) => {
+      const n = Math.floor(Number(prev));
+      if (!Number.isFinite(n) || n < min) return min;
+      return n;
+    });
     setNewBankerSetupMaxPlayers(maxPlayers);
-  }, [room?.id, room?.name, room?.minimum_entry_sc, room?.max_players, isCurrentBanker]);
+  }, [
+    room?.id,
+    room?.name,
+    room?.minimum_entry_sc,
+    room?.max_players,
+    isCurrentBanker,
+    editingRoomRules,
+  ]);
 
-  const prize = round?.prize_pool_sc ?? 0;
+  const prize = round && ['banker_rolling','player_rolling','betting'].includes(round.status) ? (round.prize_pool_sc ?? 0) : postedPrize;
   const inProgress = !!(
     round &&
     ["banker_rolling", "player_rolling", "betting"].includes(round.status)
   );
   const roomStatusLc = String(room?.status ?? "").toLowerCase();
+  /**
+   * Settled empty bank with a banker. Do not require bank_busted / bank_takeover
+   * to already be on the client — those flags can lag behind ownership.
+   */
+  const settledZeroBankWithBanker =
+    !!room &&
+    !inProgress &&
+    bankVal(room) <= 0 &&
+    room.banker_id != null &&
+    String(room.banker_id).trim() !== "" &&
+    roomStatusLc !== "cancelled" &&
+    roomStatusLc !== "closed";
   /** Full bank won / bust: successor banker assigned, bank at 0 — not generic “waiting”. */
   const isBankTakeoverUi =
     !!room &&
     !inProgress &&
-    (roomStatusLc === "bank_takeover" ||
-      (room.bank_busted === true &&
-        bankVal(room) <= 0 &&
-        room.banker_id != null &&
-        String(room.banker_id).trim() !== ""));
+    (roomStatusLc === "bank_takeover" || settledZeroBankWithBanker);
   const roomPausedBlocking = isRoomPauseBlockingActions(room);
   const roomPauseActive = isRoomPauseActive(room);
   const hasActiveRound = !!(
@@ -1981,11 +1260,22 @@ export default function CeloRoomPage() {
   const needsBankSetup = Boolean(
     room &&
       isCurrentBanker &&
-      Number(room.current_bank_sc ?? room.current_bank_cents ?? 0) <= 0 &&
-      (room.bank_busted === true || roomStatusLc === "bank_takeover") &&
-      roomStatusLc !== "cancelled" &&
-      roomStatusLc !== "closed"
+      settledZeroBankWithBanker
   );
+
+  useEffect(() => {
+    if (!settledZeroBankWithBanker || !room) return;
+    if (
+      roomStatusLc === "bank_takeover" &&
+      room.bank_busted === true
+    ) {
+      return;
+    }
+    const key = `${room.id}:${room.banker_id}:${roomStatusLc}:${room.bank_busted === true}`;
+    if (zeroBankRefetchKeyRef.current === key) return;
+    zeroBankRefetchKeyRef.current = key;
+    void fetchAll();
+  }, [settledZeroBankWithBanker, room, roomStatusLc, fetchAll]);
 
   useEffect(() => {
     if (!room) return;
@@ -2034,7 +1324,17 @@ export default function CeloRoomPage() {
     if (needsBankSetup) return;
     if (newBankerSetupBusy) setNewBankerSetupBusy(false);
     if (newBankerSetupError) setNewBankerSetupError(null);
-  }, [needsBankSetup, newBankerSetupBusy, newBankerSetupError]);
+    if (editingRoomRules) setEditingRoomRules(false);
+    if (roomRulesBusy) setRoomRulesBusy(false);
+    if (roomRulesNotice) setRoomRulesNotice(null);
+  }, [
+    needsBankSetup,
+    newBankerSetupBusy,
+    newBankerSetupError,
+    editingRoomRules,
+    roomRulesBusy,
+    roomRulesNotice,
+  ]);
 
   useEffect(() => {
     if (!room?.paused_at) return;
@@ -2186,30 +1486,11 @@ export default function CeloRoomPage() {
       setResultBannerModel(null);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const { data: rolls } = await supabase
-        .from("celo_player_rolls")
-        .select("outcome, roll_name, roll_result, point, user_id, dice, payout_sc")
-        .eq("round_id", resultBannerData.roundId)
-        .order("created_at", { ascending: false })
-        .limit(8);
-      if (cancelled) return;
-      setResultBannerModel(
-        buildCeloResultBannerContent(
-          round,
-          rolls ?? [],
-          players,
-          room?.banker_id ?? null
-        )
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setResultBannerModel(buildCeloResultBannerContent(round, roundPlayerRolls as unknown as RollRowForBanner[], players, round.banker_id ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- round snapshot fields listed
   }, [
     resultBannerData,
+    roundPlayerRolls,
     supabase,
     round?.id,
     round?.status,
@@ -2223,7 +1504,7 @@ export default function CeloRoomPage() {
 
   useEffect(() => {
     if (!supabase || !round || !me) return;
-    if (!round.player_celo_offer || !round.id) return;
+    if (!round.player_celo_offer || !round.id || round.status !== 'completed' || room?.banker_id === me || visualThrowLock || rolling) return;
     if (bannerOverlayVisible) return;
     const exp = round.player_celo_expires_at
       ? new Date(String(round.player_celo_expires_at))
@@ -2234,34 +1515,14 @@ export default function CeloRoomPage() {
     const offerExpiresAt = round.player_celo_expires_at
       ? String(round.player_celo_expires_at)
       : null;
-    let cancel = false;
-    void (async () => {
-      const { data: myWin } = await supabase
-        .from("celo_player_rolls")
-        .select("dice")
-        .eq("round_id", offerRoundId)
-        .eq("user_id", me)
-        .eq("outcome", "win")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (cancel || !myWin) return;
-      const t = realDiceTripletFromUnknown(myWin.dice);
-      if (!t) return;
-      const s = [...t].sort((a, b) => a - b);
-      if (s[0] !== 4 || s[1] !== 5 || s[2] !== 6) return;
-      setCeloTakeoverError(null);
-      setShowCeloTakeover(true);
-      setCeloTakeoverRoundId(offerRoundId);
-      celoTimeoutPassSentRef.current = false;
-      if (offerExpiresAt) {
-        setCeloTakeoverExpiresAt(offerExpiresAt);
-      }
-    })();
-    return () => {
-      cancel = true;
-    };
-  }, [supabase, me, showCeloTakeover, round, bannerOverlayVisible]);
+    const myWin = roundPlayerRolls.find(p => p.user_id === me && p.outcome === 'win' && realDiceTripletFromUnknown(p.dice)?.slice().sort().join(',') === '4,5,6');
+    if (!myWin) return;
+    setCeloTakeoverError(null);
+    setShowCeloTakeover(true);
+    setCeloTakeoverRoundId(offerRoundId);
+    celoTimeoutPassSentRef.current = false;
+    if (offerExpiresAt) setCeloTakeoverExpiresAt(offerExpiresAt);
+  }, [me, showCeloTakeover, round, roundPlayerRolls, room?.banker_id, bannerOverlayVisible, visualThrowLock, rolling]);
 
   const displayRound = round;
   const effectiveRoundStatus = round?.status ?? displayRound?.status;
@@ -2293,8 +1554,7 @@ export default function CeloRoomPage() {
 
   const authoritativeTriplet = useMemo((): [number, number, number] | null => {
     const local = realDiceTripletFromUnknown(dice);
-    if (local) return local;
-    return serverDiceFromRound.triplet;
+    return serverDiceFromRound.triplet ?? local;
   }, [dice, serverDiceFromRound.triplet]);
 
   useEffect(() => {
@@ -2320,6 +1580,12 @@ export default function CeloRoomPage() {
     serverDiceFromRound.source,
     currentRollerUserIdForDice,
   ]);
+
+  useEffect(()=>{
+    const event=round as Round & {roll_seq?:number;last_roll_name?:string;last_roll_point?:number|null;last_roll_outcome?:string}|null;
+    if(!event?.roll_seq || !event.last_roll_name || event.last_roll_outcome==='loss'&&event.last_roll_name.includes('TIMEOUT'))return;
+    scheduleRollResultReveal(`${event.id}:${event.roll_seq}`,()=>{setRollName(event.last_roll_name??null);setRollPoint(event.last_roll_point??null);});
+  },[round,scheduleRollResultReveal]);
 
   const inProgressForVisual = inProgress || bannerOverlayVisible;
   const roundHasBankerTriplet = !!realDiceTripletFromUnknown(
@@ -2382,41 +1648,6 @@ export default function CeloRoomPage() {
     }
     return null;
   })();
-
-  /** Static felt preview from round row — visible during banker tumble before banker_dice commits. */
-  const idlePreviewTriplet = useMemo((): [number, number, number] | null => {
-    const t = realDiceTripletFromUnknown(displayRound?.idle_preview_dice);
-    if (!t || !isRealDiceValues(t)) return null;
-    return [clampDie(t[0]), clampDie(t[1]), clampDie(t[2])];
-  }, [displayRound?.idle_preview_dice]);
-
-  /** Fast random faces while tumbling if server has not published pips yet (never blank purple cubes). */
-  const [spinTriplet, setSpinTriplet] = useState<[number, number, number] | null>(null);
-
-  useLayoutEffect(() => {
-    const needSpin =
-      isRollingFaces && facePips == null && idlePreviewTriplet == null;
-    if (!needSpin) {
-      setSpinTriplet(null);
-      return;
-    }
-    const tick = () =>
-      setSpinTriplet([
-        clampDie(Math.floor(Math.random() * 6) + 1),
-        clampDie(Math.floor(Math.random() * 6) + 1),
-        clampDie(Math.floor(Math.random() * 6) + 1),
-      ]);
-    tick();
-    const id = window.setInterval(tick, 110);
-    return () => window.clearInterval(id);
-  }, [isRollingFaces, facePips, idlePreviewTriplet]);
-
-  const tumbleFaceTriplet: [number, number, number] | null = isRollingFaces
-    ? (facePips ??
-      idlePreviewTriplet ??
-      spinTriplet ??
-      ([3, 4, 5] as [number, number, number]))
-    : null;
 
   const displayDice = authoritativeTriplet ?? facePips;
 
@@ -2584,7 +1815,9 @@ export default function CeloRoomPage() {
       bankVal(room) <= 0 &&
       !inProgress
     ) {
-      return "Syncing bank…";
+      return isCurrentBanker
+        ? "Bank stopped — fund the bank to continue."
+        : "Bank stopped — waiting for new banker to fund.";
     }
     if (roomStatusLc === "rolling" && !round) {
       return "Syncing round…";
@@ -2628,7 +1861,7 @@ export default function CeloRoomPage() {
       return "Entry in — waiting for banker to start.";
     }
     if (roomStatusLc === "waiting" && !isBanker) {
-      return "Waiting for banker to start…";
+      return isPlayer && myEntrySc === 0 ? "Post your GPC entry below — then the banker can start." : "Waiting for banker to start…";
     }
     if (isBanker) return "Start round once a player has entered.";
     return "Waiting for banker";
@@ -2961,7 +2194,6 @@ export default function CeloRoomPage() {
     const rid = round?.id ?? null;
     const prev = prevRoundIdForDiceRef.current;
     prevRoundIdForDiceRef.current = rid;
-    setCurrentPlayerResolvedRoll(false);
     feltTiedToRoundIdRef.current = null;
     if (prev != null && rid != null && prev !== rid) {
       setDice(null);
@@ -3011,7 +2243,6 @@ export default function CeloRoomPage() {
     setRollPoint(null);
     setDice(null);
     setMessages([]);
-    setCurrentPlayerResolvedRoll(false);
     lastBankerTripletRef.current = null;
     lastRealTripletRef.current = null;
     setLastRealTriplet(null);
@@ -3033,7 +2264,6 @@ export default function CeloRoomPage() {
       Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0))
     );
     if (sc <= 0) {
-      setShowBanker(false);
     }
   }, [room?.current_bank_sc, room?.current_bank_cents]);
 
@@ -3074,7 +2304,7 @@ export default function CeloRoomPage() {
           currentUserId: me,
           currentBankSc,
           bankStopped: true,
-          modalOpen: showBanker,
+          modalOpen: showCeloTakeover,
         });
         setBankStopBannerText(text);
         window.setTimeout(() => setBankStopBannerText(null), 7000);
@@ -3092,7 +2322,7 @@ export default function CeloRoomPage() {
     players,
     me,
     round?.id,
-    showBanker,
+    showCeloTakeover,
   ]);
 
   useEffect(() => {
@@ -3126,9 +2356,37 @@ export default function CeloRoomPage() {
     });
   }, [isBanker, round?.status, rollingAction, canRollBanker]);
 
+
+  const lockVisualThrow = useCallback((locked: boolean) => {
+    visualThrowLockRef.current = locked;
+    setVisualThrowLock(locked);
+  }, []);
+
+  useEffect(() => {
+    if (!noCountReveal || visualThrowLock) return;
+    if (noCountRevealTimeoutRef.current) {
+      clearTimeout(noCountRevealTimeoutRef.current);
+    }
+    noCountRevealTimeoutRef.current = setTimeout(() => {
+      noCountRevealTimeoutRef.current = null;
+      setNoCountReveal(null);
+      setDice(null);
+      setRollName(null);
+      setRollPoint(null);
+      void fetchAll();
+    }, 1500);
+    return () => {
+      if (noCountRevealTimeoutRef.current) {
+        clearTimeout(noCountRevealTimeoutRef.current);
+        noCountRevealTimeoutRef.current = null;
+      }
+    };
+  }, [noCountReveal, visualThrowLock, fetchAll]);
+
   const rollDiceDisabled =
     roomPausedBlocking ||
     bannerOverlayVisible ||
+    visualThrowLock ||
     (isBanker && round?.status === "banker_rolling" && !canRollBanker) ||
     (isPlayer && round?.status === "player_rolling" && !canRollPlayer);
 
@@ -3299,6 +2557,76 @@ export default function CeloRoomPage() {
       await fetchAll();
     } finally {
       setNewBankerSetupBusy(false);
+    }
+  }
+
+  function openRoomRulesEditor() {
+    if (!needsBankSetup || roomRulesBusy || newBankerSetupBusy) return;
+    setNewBankerSetupError(null);
+    setRoomRulesNotice(null);
+    setEditingRoomRules(true);
+  }
+
+  useEffect(() => {
+    if (!editingRoomRules) return;
+    document.getElementById("celo-room-name-input")?.focus();
+  }, [editingRoomRules]);
+
+  async function handleSaveRoomRules() {
+    if (!room || !supabase || !needsBankSetup || !editingRoomRules || roomRulesBusy || newBankerSetupBusy) {
+      return;
+    }
+    const rules = buildCeloRoomRulesPatch({
+      name: newBankerSetupName,
+      minimumEntrySc: newBankerSetupMinEntry,
+      maxPlayers: newBankerSetupMaxPlayers,
+    });
+    if (!rules.ok) {
+      setRoomRulesNotice(null);
+      setNewBankerSetupError(rules.error);
+      return;
+    }
+    setNewBankerSetupError(null);
+    setRoomRulesNotice(null);
+    setRoomRulesBusy(true);
+    try {
+      const res = await fetchCeloApi(supabase, "/api/celo/room/update-rules", {
+        method: "POST",
+        body: JSON.stringify({
+          room_id: room.id,
+          name: rules.patch.name,
+          minimum_entry_sc: rules.patch.minimum_entry_sc,
+          max_players: rules.patch.max_players,
+        }),
+      });
+      const txt = await res.text();
+      let j: { error?: string; room?: Record<string, unknown> } = {};
+      try {
+        j = txt ? (JSON.parse(txt) as typeof j) : {};
+      } catch {
+        setNewBankerSetupError("Invalid response from room rules API.");
+        return;
+      }
+      if (!res.ok) {
+        if (res.status === 401) {
+          alertCeloUnauthorized();
+          return;
+        }
+        setNewBankerSetupError(j.error ?? "Could not save room rules.");
+        return;
+      }
+      if (j.room) {
+        bumpOptimisticAsRealtime();
+        commitCeloAggregateMerge(
+          { room: j.room, updated_at: new Date().toISOString() },
+          "join"
+        );
+      }
+      setEditingRoomRules(false);
+      setRoomRulesNotice("Room rules saved. The bank was not funded.");
+      await fetchAll();
+    } finally {
+      setRoomRulesBusy(false);
     }
   }
 
@@ -3557,6 +2885,10 @@ export default function CeloRoomPage() {
       setRollFetchInfo({ url: "(blocked)", status: !room ? "missing_room" : "missing_round", body: "", error: "" });
       return;
     }
+    if (visualThrowLockRef.current) {
+      setRollFetchInfo({ url: "(blocked)", status: "visual_throw_in_progress", body: "", error: "" });
+      return;
+    }
     if (rollingAction) {
       setRollFetchInfo({ url: "(blocked)", status: "rolling_action_in_progress", body: "", error: "" });
       return;
@@ -3631,7 +2963,7 @@ export default function CeloRoomPage() {
       const [fetchRes] = await Promise.all([
         fetchCeloApi(supabase, rollUrl, {
           method: "POST",
-          body: JSON.stringify({ room_id: room.id, round_id: round.id }),
+          body: JSON.stringify({ room_id: room.id, round_id: round.id, roll_seq: (round as Round & {roll_seq?:number}).roll_seq ?? 0 }),
           signal: ac.signal,
         }).catch((e: unknown) => {
           if (e instanceof Error && e.name === "AbortError") {
@@ -3757,17 +3089,6 @@ export default function CeloRoomPage() {
         );
         lastRealtimeUpdateRef.current = Date.now();
         lastLocalMutationRef.current = Date.now();
-        if (noCountRevealTimeoutRef.current) {
-          clearTimeout(noCountRevealTimeoutRef.current);
-        }
-        noCountRevealTimeoutRef.current = setTimeout(() => {
-          noCountRevealTimeoutRef.current = null;
-          setNoCountReveal(null);
-          setDice(null);
-          setRollName(null);
-          setRollPoint(null);
-          void fetchAll();
-        }, 1500);
         return;
       }
 
@@ -3819,17 +3140,6 @@ export default function CeloRoomPage() {
         )
       );
       const roomBusted = apiRoomForBank?.bank_busted === true;
-      if (
-        rj.player_can_become_banker === true &&
-        bankAfterRoll > 0 &&
-        !roomBusted &&
-        !isBanker
-      ) {
-        setBankerAcceptError(null);
-        setShowBanker(true);
-      } else {
-        setShowBanker(false);
-      }
       const rollRoomFromApi =
         rj.room && String((rj.room as { id?: string }).id ?? "") === room.id
           ? rj.room
@@ -3893,7 +3203,7 @@ export default function CeloRoomPage() {
             currentUserId: me,
             currentBankSc: bankAfterRoll,
             bankStopped: true,
-            modalOpen: showBanker,
+            modalOpen: showCeloTakeover,
           });
           setBankStopBannerText(bannerText);
           window.setTimeout(() => setBankStopBannerText(null), 7000);
@@ -4078,6 +3388,7 @@ export default function CeloRoomPage() {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "x-celo-request-id": crypto.randomUUID(),
       },
       body: JSON.stringify({ roomId }),
     });
@@ -4314,8 +3625,10 @@ export default function CeloRoomPage() {
           ? `${cinzel.className} celo-banner-winner-pop text-lg font-extrabold tracking-wide text-transparent bg-gradient-to-br from-amber-50 via-amber-300 to-amber-600 bg-clip-text sm:text-xl drop-shadow-[0_0_20px_rgba(245,200,66,0.38)]`
           : "font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500";
 
-  const viewerSeesYouWin =
-    Boolean(
+  const settledWinners=(round as Round & {settlement_snapshot?:{winners?:{user_id:string;payout_sc:number}[]}}|null)?.settlement_snapshot?.winners;
+  const viewerSeesYouWin = settledWinners && resultBanner?.kind==='win'
+    ? settledWinners.some(w=>normalizeCeloUserId(w.user_id)===normalizeCeloUserId(me))
+    : Boolean(
       resultBanner &&
         me &&
         resultBanner.kind === "win" &&
@@ -4332,36 +3645,17 @@ export default function CeloRoomPage() {
     resultBanner.winAmountSc > 0 &&
     !resultBanner.multiPlayerWin;
 
-  const stopBankCoverSc = Math.max(
-    0,
-    Math.floor(Number(room?.current_bank_sc ?? room?.current_bank_cents ?? 0))
-  );
-  const stopBankModalEligible =
-    stopBankCoverSc > 0 &&
-    room?.bank_busted !== true &&
-    !isBanker;
-  const stopBankButtonEnabled =
-    stopBankModalEligible &&
-    myBalance >= stopBankCoverSc &&
-    round?.id != null &&
-    !roomPausedBlocking;
-  const stopBankModalOpen =
-    showBanker &&
-    room != null &&
-    stopBankModalEligible;
-
-  const feltW = "min(100%, 28rem)";
-
   const gamePanelClass =
-    "relative flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col self-center overflow-x-hidden max-md:overflow-y-visible md:overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-b from-[#0f0a1c] via-[#0a0514] to-[#040208] p-3 shadow-[0_0_0_1px_rgba(245,200,66,0.12),0_4px_40px_rgba(120,50,200,0.12),0_24px_80px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5 md:p-6 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:opacity-40 before:shadow-[inset_0_0_60px_rgba(245,200,66,0.06),inset_0_-40px_80px_rgba(0,0,0,0.45)]";
+    "celo-game-stage relative flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col self-center overflow-x-hidden max-md:overflow-y-visible md:overflow-visible px-1 sm:px-2";
   const rightRailClass =
     "hidden min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden md:flex md:max-w-[20rem] md:shrink-0 md:self-stretch lg:max-w-[22rem]";
 
   return (
     <div
-      className={`relative flex w-full min-w-0 max-w-full flex-col overflow-x-hidden text-white ${dm.className}`}
-      style={{ background: "radial-gradient(120% 80% at 50% 0%, #1a0a2e 0%, #05010F 45%, #020108 100%)" }}
+      className={`gp-celo-room celo-street-root relative flex w-full min-w-0 max-w-full flex-col overflow-x-hidden text-white ${dm.className}`}
+      data-celo-event={isRollingFaces ? "dice-throw" : isBankTakeoverUi ? "bank-takeover" : "table"}
     >
+      <CeloStreetBackdrop />
       {process.env.NEXT_PUBLIC_DEBUG_CELO === "true" && (
         <div
           style={{
@@ -4391,15 +3685,20 @@ export default function CeloRoomPage() {
           status: {round?.status ?? "—"} | rolling: {String(rollingAction)}
         </div>
       )}
-      <div className="mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-1 pt-2 sm:pt-3 md:px-6 md:pt-4">
+      <div className="celo-layer mx-auto w-full max-w-[1500px] shrink-0 px-4 pb-1 pt-2 sm:pt-3 md:px-6 md:pt-4">
         <header className="rounded-2xl border border-amber-400/10 bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-4">
-          <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-2">
+          <div className="gp-celo-toolbar flex min-h-10 min-w-0 flex-wrap items-center gap-2">
             <Link
               href="/dashboard/games/celo"
               className="shrink-0 min-h-touch rounded-lg px-2 text-sm text-amber-300/90 transition hover:text-amber-200 sm:text-base"
             >
               Back
             </Link>
+            {!isBanker && myRow && !inProgress && <button type="button" className="min-h-touch rounded-lg border border-purple-500/40 px-2 text-xs text-purple-100" onClick={async()=>{
+              if(!supabase)return;
+              const response=await fetchCeloApi(supabase,'/api/celo/room/leave',{method:'POST',body:JSON.stringify({room_id:roomId})});
+              const data=await response.json();if(!response.ok){setRoomFetchError(data.error??'Could not leave table');return;}router.push('/dashboard/games/celo');
+            }}>Leave</button>}
             {isBanker && room && (
               <button
                 type="button"
@@ -4409,8 +3708,15 @@ export default function CeloRoomPage() {
                 Delete Room
               </button>
             )}
+            <button type="button" className="celo-chat-launch md:hidden" aria-expanded={panelOpen} onClick={()=>setPanelOpen(v=>!v)}>Chat</button>
+            <span
+              className={`gp-celo-title min-w-[90px] flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
+            >
+              {room?.name?.slice(0, 40) ?? "C-Lo"}
+            </span>
+            <CeloSoundControl turnKey={`${round?.id ?? ""}:${round?.status ?? ""}:${round?.current_player_seat ?? ""}`} resultKey={bannerOverlayVisible ? resultBannerData?.roundId : undefined} outcome={resultBanner?.kind === "win" ? (viewerSeesYouWin ? "win" : (isPlayer || isBanker ? "loss" : undefined)) : undefined}/>
             {!pauseControlsHidden && room && (
-              <span className="shrink-0 rounded-md border border-zinc-700/60 bg-zinc-900/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+              <span className="hidden tablet:inline shrink-0 rounded-md border border-zinc-700/60 bg-zinc-900/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
                 Pause controls
               </span>
             )}
@@ -4468,11 +3774,7 @@ export default function CeloRoomPage() {
                 )}
               </>
             )}
-            <span
-              className={`min-w-0 flex-1 truncate text-sm font-bold text-white sm:text-base ${cinzel.className}`}
-            >
-              {room?.name?.slice(0, 40) ?? "C-Lo"}
-            </span>
+
             {round && (
               <span className="shrink-0 font-mono text-xs text-amber-200/80">R{round.round_number}</span>
             )}
@@ -4523,7 +3825,7 @@ export default function CeloRoomPage() {
             </div>
           )}
           {room && playersAtTable.length > 0 ? (
-            <div className="mt-2 border-t border-white/5 pt-2">
+            <div className="gp-celo-roster mt-2 border-t border-white/5 pt-2">
               <div className="flex items-center justify-between gap-2">
               <p className="font-mono text-[9px] uppercase tracking-widest text-zinc-500">
                 At the table
@@ -4598,6 +3900,7 @@ export default function CeloRoomPage() {
             Pause window ended — finalizing table…
           </div>
         )}
+        {room?.status==='cancelled' && <div role="status" className="rounded-lg border border-purple-500/50 bg-purple-950/80 p-3 text-center text-sm">This table is closed. Available table funds were returned. <Link href="/dashboard/games/celo" className="text-amber-300 underline">Return to C-Lo tables</Link></div>}
         {roomFetchError && (
           <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/50 px-3 py-2 text-center text-xs text-red-200">
             {roomFetchError}
@@ -4605,14 +3908,15 @@ export default function CeloRoomPage() {
         )}
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-3 px-4 pb-3 max-md:pb-14 md:gap-5 md:px-6 md:pb-6">
+      <div className="celo-layer mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-3 px-3 pb-3 max-md:pb-4 md:gap-5 md:px-6 md:pb-6">
         <div
-          className="grid min-h-0 w-full min-w-0 flex-1 grid-cols-1 place-items-stretch content-stretch gap-4 sm:gap-5 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:items-start md:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-6"
+          className="celo-layout grid min-h-0 w-full min-w-0 flex-1 grid-cols-1 place-items-stretch content-stretch gap-4 sm:gap-5 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:items-start md:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-6"
         >
           <main className="relative z-0 order-1 flex min-h-0 min-w-0 flex-col md:order-none">
             <div className={gamePanelClass}>
-              <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-1 sm:px-2">
-              <div className="mb-3 grid w-full max-w-2xl grid-cols-2 gap-3 self-stretch border-b border-white/5 px-1 pb-4 sm:max-w-lg md:grid-cols-2 md:gap-6">
+              <div className="mx-auto flex w-full max-w-none flex-col items-center px-1 sm:px-2">
+              <div className="celo-hud mb-3 w-full self-stretch px-1">
+                <div className="grid grid-cols-2 gap-3 md:gap-6">
                 <div className="text-left">
                   <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200/60">
                     Prize pool
@@ -4651,18 +3955,24 @@ export default function CeloRoomPage() {
                     </button>
                   )}
                 </div>
+                </div>
+                {room?.banker_id ? (
+                  <div className="celo-banker-badge">
+                    <b>BANKER</b>
+                    <span>{celoBannerSeatLabel(players, room.banker_id)}</span>
+                  </div>
+                ) : null}
               </div>
 
               {isBankTakeoverUi ? (
-                <div className="relative z-10 mx-auto mb-3 max-w-md text-center md:mb-4">
-                  <p
-                    className={`text-base font-bold uppercase tracking-[0.14em] text-amber-200 sm:text-lg ${cinzel.className}`}
-                  >
-                    BANK TAKEN OVER
+                <div className="celo-takeover-callout relative z-10 text-center" data-celo-event="bank-takeover">
+                  <p className={`celo-takeover-line ${cinzel.className}`}>
+                    <span aria-hidden>👑 </span>
+                    NEW BANKER — {takeoverBankerDisplayName}
                   </p>
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-300/95 md:text-sm">
+                  <p className="celo-takeover-sub">
                     {isCurrentBanker
-                      ? "You are now the banker. Fund the bank and set room rules below."
+                      ? "You control the bank. Fund the table to continue."
                       : `Waiting for ${takeoverBankerDisplayName} to fund the bank.`}
                   </p>
                 </div>
@@ -4672,7 +3982,7 @@ export default function CeloRoomPage() {
                 </p>
               )}
 
-              {showBankerPointCallout && round && (
+              {showBankerPointCallout && round && !visualThrowLock && !isRollingFaces && (
                 <div
                   className="relative z-10 mb-4 w-full max-w-lg rounded-xl border border-amber-500/35 bg-gradient-to-b from-amber-950/45 to-[#0f0a1c] px-4 py-3 text-center shadow-[0_8px_28px_rgba(0,0,0,0.45)] sm:px-5 sm:py-3.5"
                   role="status"
@@ -4691,116 +4001,56 @@ export default function CeloRoomPage() {
                 </div>
               )}
 
-              <div className="relative z-10 flex flex-col items-center justify-center py-1 md:flex-1 md:min-h-[12rem] md:py-4">
-                <div
-                  className="pointer-events-none absolute left-1/2 top-[42%] -z-10 h-[min(38vh,20rem)] w-[min(94vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[36px] blur-[44px] opacity-[0.38] md:top-[45%] md:w-[min(30rem,92vw)]"
-                  style={{
-                    background:
-                      "radial-gradient(ellipse at 50% 42%, rgba(245,200,66,0.2) 0%, rgba(180,120,40,0.08) 38%, transparent 72%)",
-                  }}
-                  aria-hidden
+              <div className="celo-table-stage relative z-10 flex flex-col items-center justify-center py-1 md:flex-1 md:py-4">
+                <img
+                  src="/images/garmon-master/celo-table.webp"
+                  alt=""
+                  className="celo-scene-art"
+                  draggable={false}
                 />
-                <div
-                  className="relative z-0 flex w-full max-w-[260px] min-h-[7.5rem] max-h-[min(32vh,12.5rem)] h-[min(100%,max(8.5rem,min(34vw,28vh))] flex-col items-stretch justify-center overflow-visible md:max-h-none md:max-w-[480px] md:min-h-[12rem] md:h-[min(100%,max(13.5rem,75vw))]"
-                  style={{
-                    width: feltW,
-                    borderRadius: 28,
-                    padding: 7,
-                    background:
-                      "linear-gradient(155deg, #e4c06a 0%, #c9a061 26%, #9a6636 68%, #7a4a28 100%)",
-                    boxShadow:
-                      "0 18px 52px rgba(0,0,0,0.58), 0 0 72px rgba(245,200,66,0.12), inset 0 1px 0 rgba(255,248,220,0.35)",
-                  }}
-                >
-                  <div
-                    className="relative isolate flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden rounded-[22px] px-4 py-5 md:rounded-[24px] md:px-6 md:py-7"
-                    style={{
-                      boxShadow: "inset 0 8px 32px rgba(0,0,0,0.4), inset 0 -4px 18px rgba(0,0,0,0.28)",
-                      background:
-                        "radial-gradient(ellipse 92% 78% at 50% 40%, #2d7a3e 0%, #267035 22%, #1a5c2e 48%, #0f4a24 72%, #0a3d1a 92%, #082a14 100%)",
-                    }}
-                  >
-                    <div
-                      className="pointer-events-none absolute inset-0 z-[1] opacity-[0.12]"
-                      style={{
-                        mixBlendMode: "overlay",
-                        backgroundImage:
-                          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-                        backgroundSize: "180px 180px",
-                      }}
-                      aria-hidden
+                <div className={`celo-table ${isRollingFaces ? "is-throwing" : ""}`}>
+                  <div className="celo-table-rail">
+                    <div className="celo-table-felt">
+                    <p className="celo-felt-mark">GARMONPAY</p>
+                    <p className="celo-felt-word" aria-hidden>CEELO</p>
+                    <CeloFeltDice
+                      settled={facePips}
+                      rolling={isRollingFaces}
+                      rollKey={`${round?.id ?? "r"}:${(round as Round & {roll_seq?:number}|null)?.roll_seq ?? 0}`}
+                      shooterId={
+                        round?.status === "banker_rolling"
+                          ? (room?.banker_id ?? currentRollerUserIdForDice ?? "")
+                          : (currentRollerUserIdForDice ?? (isMyTurn ? me : "") ?? "")
+                      }
+                      onVisualLock={lockVisualThrow}
                     />
-                    <div
-                      className="pointer-events-none absolute inset-0 z-[1]"
-                      style={{
-                        background:
-                          "radial-gradient(ellipse 72% 58% at 50% 36%, rgba(255,255,255,0.07) 0%, transparent 58%)",
-                      }}
-                      aria-hidden
-                    />
-                    <div
-                      className="relative z-10 flex items-center justify-center gap-2 md:gap-3"
-                      style={{
-                        opacity: showIdleDice && !isRollingFaces ? 0.55 : 1,
-                      }}
-                    >
-                    {isRollingFaces && tumbleFaceTriplet
-                      ? [0, 1, 2].map((i) => (
-                          <DiceFace
-                            key={`${round?.id ?? "r"}-${visualDiceMode}-tumble-${i}-${tumbleFaceTriplet[i]}-${round?.status ?? ""}`}
-                            value={tumbleFaceTriplet[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                            diceType={myDiceType}
-                            size={diceSize}
-                            rolling
-                            delay={[0, 80, 160][i]}
-                            variant={CELO_TUMBLE[i]!.variant}
-                            durationSec={CELO_TUMBLE[i]!.durationSec}
-                          />
-                        ))
-                      : facePips
-                        ? [0, 1, 2].map((i) => (
-                            <DiceFace
-                              key={`${round?.id ?? "r"}-${visualDiceMode}-d${i}-${facePips[i]}-${isRollingFaces ? "t" : "s"}`}
-                              value={facePips[i] as 1 | 2 | 3 | 4 | 5 | 6}
-                              diceType={myDiceType}
-                              size={diceSize}
-                              rolling={isRollingFaces}
-                              delay={[0, 80, 160][i]}
-                              variant={CELO_TUMBLE[i]!.variant}
-                              durationSec={CELO_TUMBLE[i]!.durationSec}
-                            />
-                          ))
-                        : (
-                              <CeloDiceEmptyState diceSize={diceSize} />
-                            )}
-                    </div>
                     <RollNameDisplay
-                      rollName={noCountReveal ? null : rollName}
-                      point={noCountReveal ? null : rollPoint}
+                      rollName={visualThrowLock || noCountReveal ? null : rollName}
+                      point={visualThrowLock || noCountReveal ? null : rollPoint}
                       onComplete={() => {
                         setRollName(null);
                         setRollPoint(null);
                       }}
                     />
-                    {noCountReveal ? (
-                      <div className="relative z-[22] mt-3 flex flex-col items-center gap-1 px-2">
+                    {noCountReveal && !visualThrowLock ? (
+                      <div className="celo-scene-result relative z-[22] mt-3 flex flex-col items-center gap-1 px-2">
                         <p
                           className={`text-center text-base font-bold tracking-[0.08em] text-amber-200 sm:text-lg ${cinzel.className}`}
                         >
                           NO POINT — Roll Again
                         </p>
-                        {noCountReveal.rollName ? (
-                          <p className="text-center font-mono text-xs text-amber-100/75">
-                            {noCountReveal.rollName}
-                          </p>
-                        ) : null}
                       </div>
                     ) : null}
+                    </div>
                   </div>
                 </div>
+                <div className="celo-table-front" aria-hidden>
+                  <span className="celo-table-front-face" />
+                </div>
+                <div className="celo-table-underglow" aria-hidden />
                 {showIdleDice && !isRollingFaces && (
                   <p
-                    className={`mt-4 text-center text-sm tracking-widest text-[#f5c842]/60 my-4 ${cinzel.className}`}
+                    className={`celo-idle-status text-center text-xs text-amber-200/70 ${cinzel.className}`}
                   >
                     {feltIdleLabel}
                   </p>
@@ -4812,11 +4062,12 @@ export default function CeloRoomPage() {
                 )}
               </div>
 
-              <div className="mt-auto w-full max-w-3xl border-t border-white/5 pt-3 md:pt-4">
+              <div className="celo-controls mt-auto w-full max-w-3xl pt-3 md:pt-4">
                 <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 sm:flex-row sm:items-start sm:justify-end sm:gap-4">
                   <div className="min-w-0 w-full flex-1 space-y-1.5 md:space-y-2">
-                    {needsBankSetup && room && (
-                      <div className="mx-auto w-full max-w-md rounded-xl border border-amber-500/40 bg-amber-950/35 p-3">
+                    {needsBankSetup && room && !visualThrowLock && !isRollingFaces && (
+                      <div className="celo-fund-card mx-auto w-full max-w-md rounded-xl border border-amber-500/40 bg-amber-950/35 p-3" data-celo-event="fund-new-bank">
+                        <p className="celo-fund-kicker">YOU CONTROL THE BANK</p>
                         <p className={`text-sm font-bold text-amber-100 ${cinzel.className}`}>
                           {roomStatusLc === "bank_takeover"
                             ? "You are now the banker"
@@ -4834,10 +4085,12 @@ export default function CeloRoomPage() {
                           <label className="block text-left text-xs text-zinc-300">
                             Room name
                             <input
+                              id="celo-room-name-input"
                               type="text"
                               value={newBankerSetupName}
                               onChange={(e) => setNewBankerSetupName(e.target.value)}
-                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                              readOnly={!editingRoomRules}
+                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white read-only:opacity-80"
                               maxLength={40}
                             />
                           </label>
@@ -4849,10 +4102,11 @@ export default function CeloRoomPage() {
                                 min={500}
                                 step={1}
                                 value={newBankerSetupMinEntry}
+                                readOnly={!editingRoomRules}
                                 onChange={(e) =>
                                   setNewBankerSetupMinEntry(Math.max(500, Math.floor(Number(e.target.value) || 0)))
                                 }
-                                className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                                className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white read-only:opacity-80"
                               />
                             </label>
                             <label className="block text-left text-xs text-zinc-300">
@@ -4873,8 +4127,9 @@ export default function CeloRoomPage() {
                             Max players
                             <select
                               value={newBankerSetupMaxPlayers}
+                              disabled={!editingRoomRules}
                               onChange={(e) => setNewBankerSetupMaxPlayers(Number(e.target.value))}
-                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white"
+                              className="mt-1 w-full rounded border border-amber-400/30 bg-black/35 px-2 py-2 text-sm text-white disabled:opacity-80"
                             >
                               {[2, 4, 6, 10].map((n) => (
                                 <option key={n} value={n}>
@@ -4884,26 +4139,33 @@ export default function CeloRoomPage() {
                             </select>
                           </label>
                         </div>
-                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        {roomRulesNotice && (
+                          <p className="mt-2 text-xs text-emerald-300">{roomRulesNotice}</p>
+                        )}
+                        <div className="relative z-20 mt-3 flex flex-col gap-2 sm:flex-row">
                           <button
                             type="button"
                             onClick={() => void handleNewBankerSetup()}
-                            disabled={newBankerSetupBusy || roomPausedBlocking}
-                            className="min-h-[46px] flex-1 rounded-xl px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
+                            disabled={newBankerSetupBusy || roomRulesBusy || roomPausedBlocking}
+                            className="min-h-[46px] flex-1 touch-manipulation rounded-xl px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
                             style={{ background: "linear-gradient(135deg, #F5C842, #B8860B)" }}
                           >
-                            {newBankerSetupBusy ? "Setting up…" : "Fund Bank"}
+                            {newBankerSetupBusy ? "Setting up…" : "Fund New Bank"}
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              document
-                                .getElementById("celo-edit-room-rules")
-                                ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                            }
-                            className="min-h-[46px] flex-1 rounded-xl border border-amber-400/50 bg-transparent px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-950/40"
+                            onClick={() => {
+                              if (editingRoomRules) void handleSaveRoomRules();
+                              else openRoomRulesEditor();
+                            }}
+                            disabled={roomRulesBusy || newBankerSetupBusy || roomPausedBlocking}
+                            className="min-h-[46px] flex-1 touch-manipulation rounded-xl border border-amber-400/50 bg-transparent px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-950/40 disabled:opacity-60"
                           >
-                            Edit Room Rules
+                            {roomRulesBusy
+                              ? "Saving rules…"
+                              : editingRoomRules
+                                ? "Save Room Rules"
+                                : "Edit Room Rules"}
                           </button>
                         </div>
                       </div>
@@ -5025,7 +4287,7 @@ export default function CeloRoomPage() {
                               {joinHint}
                             </p>
                           )}
-                          <div className="rounded-xl border border-amber-400/20 bg-black/40 p-2 md:border-0 md:bg-transparent md:p-0">
+                          <div className="celo-bet-card rounded-xl border border-amber-400/20 bg-black/40 p-2 md:border-0 md:bg-transparent md:p-0">
                             <p className="text-center text-[11px] leading-snug text-amber-200/90 md:mb-1 md:text-sm">
                               Min {minE.toLocaleString()} · Max {maxStakeSc.toLocaleString()} GPC
                             </p>
@@ -5163,7 +4425,7 @@ export default function CeloRoomPage() {
           </main>
 
           <aside className={`${rightRailClass} min-h-0`}>
-            <div className="flex h-full min-h-0 max-h-[min(100dvh,52rem)] flex-col overflow-hidden rounded-2xl border border-amber-400/12 bg-[#08050f] p-0 shadow-lg md:max-h-none">
+            <div className="celo-chat-rail flex h-full min-h-0 max-h-[min(100dvh,52rem)] flex-col overflow-hidden rounded-2xl border p-0 shadow-lg md:max-h-none">
               <CeloRoomChatPanel
                 className="min-h-0 flex-1"
                 messages={messages}
@@ -5178,55 +4440,11 @@ export default function CeloRoomPage() {
           </aside>
         </div>
       </div>
-      {/* Mobile chat: fixed above bottom nav so it does not reflow/push the game panel */}
-      <div
-        className="pointer-events-none fixed inset-x-0 z-[101] md:hidden"
-        style={{
-          bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))",
-        }}
-      >
-        <div className="pointer-events-auto mx-auto w-full max-w-[1500px] px-4">
-          <div
-            className="grid h-11 w-full min-w-0 shrink-0 rounded-t-xl border border-b-0 border-amber-400/10 text-xs shadow-[0_-4px_24px_rgba(0,0,0,0.35)]"
-            style={{
-              background: "rgba(5,1,15,0.96)",
-              gridTemplateColumns: "1fr",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setPanelOpen((o) => !o)}
-              className="min-h-touch font-mono"
-              style={{
-                borderBottom: panelOpen ? "2px solid #F5C842" : "2px solid transparent",
-                color: panelOpen ? "#F5C842" : "#6B7280",
-              }}
-            >
-              💬 Table chat
-            </button>
-          </div>
-          <div
-            className="overflow-hidden rounded-b-xl border border-t-0 border-amber-400/10 transition-[height] duration-200 ease-out"
-            style={{
-              background: "rgba(8,5,15,0.98)",
-              height: panelOpen ? "min(36vh, 260px)" : 0,
-            }}
-          >
-            <CeloRoomChatPanel
-              className="h-full min-h-0"
-              minHeightStyle={{ minHeight: "min(34vh, 240px)" }}
-              messages={messages}
-              value={chat}
-              onChange={setChat}
-              onSend={() => void sendRoomChat()}
-              selfProfile={myProfile}
-              selfUserId={me}
-              canSend={!!(supabase && me && room && chat.trim().length > 0)}
-            />
-          </div>
-        </div>
-      </div>
-      {bankStopBannerText != null && (
+      {panelOpen && <div className="celo-mobile-chat-drawer md:hidden" role="dialog" aria-modal="true" aria-label="Table chat">
+        <button type="button" className="celo-chat-close" onClick={()=>setPanelOpen(false)}>Close chat ×</button>
+        <CeloRoomChatPanel className="h-full min-h-0" messages={messages} value={chat} onChange={setChat} onSend={()=>void sendRoomChat()} selfProfile={myProfile} selfUserId={me} canSend={!!(supabase&&me&&room&&chat.trim())}/>
+      </div>}
+      {bankStopBannerText != null && !visualThrowLock && !isRollingFaces && (
         <div
           className="pointer-events-none fixed inset-x-4 bottom-28 z-[22000] flex justify-center sm:bottom-32"
           role="status"
@@ -5254,7 +4472,7 @@ export default function CeloRoomPage() {
           </div>
         </div>
       )}
-      {resultBannerData != null && resultBanner != null && room && (
+      {resultBannerData != null && resultBanner != null && room && !visualThrowLock && (
         <div
           className="fixed inset-0 z-[22500] flex cursor-pointer items-center justify-center p-2 sm:p-3"
           style={{ background: "rgba(0,0,0,0.78)" }}
@@ -5272,7 +4490,14 @@ export default function CeloRoomPage() {
           }}
         >
           <div
-            className={`pointer-events-auto mx-auto max-h-[70vh] max-w-lg cursor-default overflow-x-hidden overflow-y-auto rounded-2xl border border-amber-500/45 px-3 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-5 sm:py-5 ${dm.className}`}
+            className={`pointer-events-auto mx-auto max-h-[70vh] max-w-lg cursor-default overflow-x-hidden overflow-y-auto rounded-2xl border border-amber-500/45 px-3 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.88)] sm:max-w-xl sm:px-5 sm:py-5 ${dm.className} ${
+              viewerSeesYouWin
+                ? "celo-result-win"
+                : resultBanner.kind === "push"
+                  ? ""
+                  : "celo-result-loss"
+            }`}
+            data-celo-event={viewerSeesYouWin ? "win" : resultBanner.kind === "push" ? "push" : "loss"}
             style={{ background: "rgba(13,5,32,0.97)" }}
             role="status"
             aria-live="polite"
@@ -5456,7 +4681,7 @@ export default function CeloRoomPage() {
           </div>
         </div>
       )}
-      {showCeloTakeover && room && celoTakeoverRoundId && (
+      {showCeloTakeover && !visualThrowLock && !isRollingFaces && room && celoTakeoverRoundId && (
         <div
           className="fixed inset-0 z-[20105] flex items-end justify-center"
           style={{ background: "rgba(0,0,0,0.6)" }}
@@ -5569,96 +4794,6 @@ export default function CeloRoomPage() {
                 className="min-h-[44px] text-[#6B7280]"
               >
                 Pass
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {stopBankModalOpen && room && (
-        <div
-          className="fixed inset-0 z-[20100] flex items-end justify-center"
-          style={{ background: "rgba(0,0,0,0.6)" }}
-        >
-          <div
-            className="m-2 w-full max-w-lg rounded-t-2xl p-4"
-            style={{ background: "#0D0520", borderTop: "2px solid #F5C842" }}
-          >
-            <p className="text-3xl">🎲</p>
-            <p className={`mt-2 text-xl text-[#F5C842] ${cinzel.className}`}>
-              Stop the Bank
-            </p>
-            {bankerAcceptError && (
-              <p className="mt-2 text-sm text-red-300/95">{bankerAcceptError}</p>
-            )}
-            <p className="mt-1 text-sm text-[#9CA3AF]">
-              Cover {stopBankCoverSc.toLocaleString()} GPC to take full-bank action.
-            </p>
-            <p className="mt-1 text-xs font-mono text-amber-200/80">
-              {myBalance >= stopBankCoverSc
-                ? "Eligible to stop the bank."
-                : `Need ${(stopBankCoverSc - myBalance).toLocaleString()} more GPC to cover.`}
-            </p>
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                disabled={!stopBankButtonEnabled}
-                onClick={async () => {
-                  setBankerAcceptError(null);
-                  if (!supabase) {
-                    setBankerAcceptError("Connect to the app to take the bank.");
-                    return;
-                  }
-                  if (!round?.id) {
-                    setBankerAcceptError("Round not eligible for stop-the-bank yet.");
-                    return;
-                  }
-                  if (stopBankCoverSc <= 0) {
-                    setBankerAcceptError("The table bank is empty.");
-                    setShowBanker(false);
-                    return;
-                  }
-                  if (myBalance < stopBankCoverSc) {
-                    setBankerAcceptError("Insufficient balance to cover full bank.");
-                    return;
-                  }
-                  const res = await fetchCeloApi(supabase, "/api/celo/banker-takeover", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      room_id: room.id,
-                      round_id: round?.id,
-                      accept: true,
-                    }),
-                  });
-                  if (res.ok) {
-                    setShowBanker(false);
-                    void fetchAll();
-                  } else {
-                    if (res.status === 401) {
-                      alertCeloUnauthorized();
-                      return;
-                    }
-                    const j = (await res.json()) as { error?: string };
-                    setBankerAcceptError(j.error ?? "Could not take the bank");
-                  }
-                }}
-                className="min-h-[44px] flex-1 rounded font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #F5C842, #D4A017)",
-                  color: "#0A0A0A",
-                  opacity: !stopBankButtonEnabled ? 0.5 : 1,
-                }}
-              >
-                Stop the Bank — {stopBankCoverSc.toLocaleString()} GPC
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBankerAcceptError(null);
-                  setShowBanker(false);
-                }}
-                className="text-[#6B7280]"
-              >
-                No
               </button>
             </div>
           </div>

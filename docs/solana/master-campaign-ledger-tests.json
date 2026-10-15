@@ -1,0 +1,48 @@
+{
+  "runtime": "native PostgreSQL",
+  "syntheticOnly": true,
+  "productionAccess": false,
+  "checks": [
+    "12 independent deposit requests produce exactly one journal",
+    "Concurrent cross-intent receipt replay rejected; loser retries safely with distinct evidence",
+    "12 independent nonce consumptions return exactly one challenge",
+    "Independent IP requests obey the shared five-challenge wallet limit",
+    "Native posting failure rolls back receipt and authorization status; retry succeeds",
+    "Native session rotation preserves old session on failure and revokes it on successful replacement",
+    "Reconciliation remains exact after concurrent posting and retries",
+    "Receipt-backed campaign funding and atomic reward/referral journal integration passed"
+  ],
+  "version": "18.4",
+  "reconciliation": {
+    "receipt_count": "4",
+    "journal_count": "4",
+    "posted_intent_count": "4",
+    "orphan_journal_count": "0",
+    "mismatch_count": "0"
+  },
+  "campaignLedger": {
+    "campaignFunding": "12 concurrent submissions, one receipt-backed allocation",
+    "rewardLedger": "12 concurrent claims, one viewer journal and one separately funded referral journal",
+    "crashRecovery": "all awards, journals, liabilities and counters rolled back before safe retry",
+    "balances": [
+      {
+        "owner_wallet": "66666666666666666666666666666666",
+        "balance": "100"
+      },
+      {
+        "owner_wallet": "77777777777777777777777777777777",
+        "balance": "50"
+      }
+    ],
+    "remainingReserves": {
+      "viewer": "99900",
+      "referral": "49950",
+      "viewer_spent": "100",
+      "referral_spent": "50"
+    },
+    "learning": "No reward without versioned verified completion; twelve claims post one funded journal; duplicate lesson completion denied",
+    "withdrawals": "$2 threshold, twelve idempotent reservations, competing spend rejection and exact replay binding; no transaction signed or sent"
+  },
+  "passed": true,
+  "checkedAt": "2026-10-12T16:54:02.860Z"
+}

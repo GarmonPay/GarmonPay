@@ -26,7 +26,7 @@ export default function ArenaSeasonPassPage() {
       if (!s) return;
       setSession(s);
       const token = s.accessToken ?? s.userId;
-      const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+      const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${getApiRoot()}/arena/season-pass`, { headers, credentials: "include" });
       const data = res.ok ? await res.json() : null;
       if (data) setState(data);
@@ -38,7 +38,7 @@ export default function ArenaSeasonPassPage() {
     if (!session) return;
     setCheckoutLoading(true);
     const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : {}) };
     const res = await fetch(`${getApiRoot()}/arena/season-pass/checkout`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (data?.url) window.location.href = data.url;
@@ -49,7 +49,7 @@ export default function ArenaSeasonPassPage() {
     if (!session) return;
     setPortalLoading(true);
     const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : {}) };
     const res = await fetch(`${getApiRoot()}/arena/season-pass/portal`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (data?.url) window.location.href = data.url;

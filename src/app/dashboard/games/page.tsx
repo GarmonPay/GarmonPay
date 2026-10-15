@@ -1,4 +1,5 @@
 "use client";
+import { GameCatalog } from "@/components/ui/GameCatalog";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,6 +7,9 @@ import Link from "next/link";
 import { getSessionAsync } from "@/lib/session";
 import { getGamesBudget, gamesDailyBonus } from "@/lib/api";
 import { scToUsdDisplay } from "@/lib/coins";
+import { GameCard } from "@/components/ui/GameCard";
+import { GAME_LOBBY } from "@/config/game-lobby";
+import { PageHeading } from "@/components/ui/garmon-ui";
 import { localeInt } from "@/lib/format-number";
 
 export default function DashboardGamesPage() {
@@ -64,124 +68,12 @@ export default function DashboardGamesPage() {
   }
 
   const noRewards = budget?.noRewardsRemaining ?? false;
-  const cardBase = "rounded-xl bg-fintech-bg-card border border-white/10 p-6 transition-all duration-300 hover:border-fintech-accent/40 hover:shadow-lg hover:shadow-fintech-accent/5";
-
-  return (
-    <div className="space-y-8 pb-8">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Games</h1>
-        <p className="text-sm text-fintech-muted mt-1">
-          Rewards are drawn from the platform budget. Play fair — all calculations are server-side.
-          <Link href="/games" className="ml-2 text-fintech-accent hover:underline">Neon Game Station →</Link>
-        </p>
-      </div>
-
-      {noRewards && (
-        <div className="rounded-xl bg-amber-500/15 border border-amber-500/40 p-4 flex items-center gap-3">
-          <span className="text-2xl">⚠️</span>
-          <p className="text-amber-200 font-medium">No rewards remaining today.</p>
-          <p className="text-amber-200/80 text-sm">Daily budget has been reached. Try again tomorrow.</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-xl bg-red-500/15 border border-red-500/40 p-4 flex items-center justify-between gap-4">
-          <p className="text-red-200">{error}</p>
-          <button type="button" onClick={() => setError(null)} className="text-red-300 hover:text-white text-sm underline">Dismiss</button>
-        </div>
-      )}
-
-      {result && (
-        <div className="rounded-xl bg-green-500/15 border border-green-500/40 p-4 animate-in fade-in duration-300">
-          <p className="text-green-200 font-medium">
-            {result.game}: You won {localeInt(result.amountSc)} GPay Coins ({scToUsdDisplay(result.amountSc)})!
-          </p>
-        </div>
-      )}
-
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Link href="/dashboard/games/spin" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(212,175,55,0.3))" }}>🎡</span>
-            <h2 className="text-lg font-semibold text-white">Spin Wheel</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">Spin for a chance to win rewards — opening soon.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
-        </Link>
-
-        <Link href="/dashboard/games/scratch" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl">🎫</span>
-            <h2 className="text-lg font-semibold text-white">Scratch Card</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">Reveal instant rewards — opening soon.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
-        </Link>
-
-        <Link href="/dashboard/games/mystery-box" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl">📦</span>
-            <h2 className="text-lg font-semibold text-white">Mystery Box</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">Random rewards — opening soon.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View →</span>
-        </Link>
-
-        <div className={cardBase}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl">🎁</span>
-            <h2 className="text-lg font-semibold text-white">Daily Bonus</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">Claim once every 24 hours. Small guaranteed reward.</p>
-          <button
-            type="button"
-            onClick={handleDailyBonus}
-            disabled={noRewards || claimingDaily}
-            className="w-full py-3 rounded-lg bg-gradient-to-r from-fintech-accent to-fintech-highlight text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {claimingDaily ? "Claiming…" : "Claim Daily Bonus"}
-          </button>
-        </div>
-
-        <Link href="/dashboard/leaderboard" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl">🏆</span>
-            <h2 className="text-lg font-semibold text-white">Leaderboard</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">See how you rank by referrals and activity.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-white/5 text-fintech-accent font-medium">View Leaderboard →</span>
-        </Link>
-
-        <Link href="/dashboard/games/pinball" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(0,240,255,0.5))" }}>🎮</span>
-            <h2 className="text-lg font-semibold text-white">GarmonPay Pinball</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">Neon pinball and leaderboards — opening soon.</p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-[#00f0ff]/10 text-[#00f0ff] font-medium border border-[#00f0ff]/30">View →</span>
-        </Link>
-
-        <Link href="/dashboard/games/garmondrop" className={`${cardBase} block no-underline text-inherit`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl" aria-hidden>🔴🟡</span>
-            <h2 className="text-lg font-semibold text-white">GarmonDrop</h2>
-          </div>
-          <p className="text-sm text-fintech-muted mb-4">
-            Drop discs and connect four. Beat your opponent and take the pot.
-          </p>
-          <span className="inline-block py-3 px-4 rounded-lg bg-[#7c3aed]/15 text-[#c4b5fd] font-medium border border-[#7c3aed]/35">
-            Play live →
-          </span>
-        </Link>
-      </div>
-
-      <div className="rounded-xl bg-black/20 border border-white/10 p-6">
-        <h3 className="text-sm font-semibold text-fintech-muted uppercase tracking-wider mb-2">How it works</h3>
-        <p className="text-sm text-fintech-muted">
-          All rewards are deducted from the platform reward budget — not from unlimited balance. This keeps the system sustainable.
-          Duplicate claims and refresh abuse are prevented server-side.
-        </p>
-      </div>
-    </div>
-  );
+  return <div className="gp-lobby-page space-y-4 pb-8"><PageHeading title="Games" description="Choose your next game."/>
+    {noRewards && <div className="gp-notice" role="status">No rewards remaining today. The daily budget has been reached. Try again tomorrow.</div>}
+    {error && <div className="gp-notice gp-error" role="alert"><p className="flex-1">{error}</p><button onClick={()=>setError(null)} type="button" className="gp-button gp-button-ghost">Dismiss</button></div>}
+    {result && <div className="gp-notice gp-success" role="status">{result.game}: You won {localeInt(result.amountSc)} GPay Coins ({scToUsdDisplay(result.amountSc)})!</div>}
+    <GameCatalog/>
+    <div className="gp-two-column"><section className="gp-surface"><p className="gp-eyebrow">A LITTLE EVERY DAY</p><h2 className="text-xl font-bold">Daily Bonus</h2><p className="gp-description">Claim once every 24 hours, subject to the existing reward budget.</p><button type="button" onClick={handleDailyBonus} disabled={noRewards||claimingDaily} className="gp-button gp-button-gold mt-5">{claimingDaily?"Claiming…":"Claim Daily Bonus"}</button></section><section className="gp-surface"><p className="gp-eyebrow">YOUR COMMUNITY</p><h2 className="text-xl font-bold">The leaderboard</h2><p className="gp-description">See how you rank by referrals and activity.</p><Link href="/dashboard/leaderboard" className="gp-button gp-button-ghost mt-5">View leaderboard →</Link></section></div>
+    <p className="text-xs leading-relaxed text-fintech-muted">Rewards remain subject to the platform’s existing daily budget. Games marked Coming Soon are not available for play.</p>
+  </div>;
 }

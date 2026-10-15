@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/solana/policy",()=>({walletAuthEnabled:()=>false}));
 import { POST } from "@/app/api/solana/auth/event/route";
 
 describe("Auth event route while wallet authentication is disabled", () => {

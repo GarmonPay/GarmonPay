@@ -1,0 +1,225 @@
+{
+  "origin": "https://garmonpay.com",
+  "results": [
+    {
+      "path": "/api/games/budget",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/api/admin/gamification",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/api/admin/gamification-config",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/games",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/launchpad",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/watch",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/learn",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/solana/withdraw",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/solana/discovery",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/solana/auth/session",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/solana/auth/challenge",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/solana/auth/verify",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/wallet/deposit",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/wallet/fund",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/coins/checkout",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/coins/redeem",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/create-checkout-session",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/create-membership-session",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/stripe/add-funds",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/stripe/webhook",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/webhooks/stripe/pay",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/webhooks/stripe/subscribe",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/stripe-connect/transfer",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/ads/deposit",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/advertiser/deposit",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/gpay/claims",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/gpay/earn",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/cron/membership-renewal",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/api/cron/arena-jackpot",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/api/cron/process-referral-commissions",
+      "method": "GET",
+      "status": 503
+    },
+    {
+      "path": "/api/admin/users/credit-usd",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/admin/recover-stripe-payments",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/arena/fights/fixture",
+      "method": "PATCH",
+      "status": 503
+    },
+    {
+      "path": "/api/celo/rooms",
+      "method": "GET",
+      "status": 410
+    },
+    {
+      "path": "/api/celo/room/join",
+      "method": "POST",
+      "status": 410
+    },
+    {
+      "path": "/api/wallet",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/admin/users",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/solana/launches/validate",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/leaderboard",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/referrals/leaderboard",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/coins/packages",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/arena/cpu-fighters",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/ad-packages",
+      "method": "GET",
+      "status": 200
+    }
+  ]
+}

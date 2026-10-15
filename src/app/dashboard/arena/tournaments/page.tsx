@@ -43,7 +43,7 @@ export default function ArenaTournamentsPage() {
     if (!s) return;
     setSession(s);
     const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : {};
     const [tournamentsRes, meRes] = await Promise.all([
       fetch(`${getApiRoot()}/arena/tournaments`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/me`, { headers, credentials: "include" }),
@@ -67,7 +67,7 @@ export default function ArenaTournamentsPage() {
     const token = session.accessToken ?? session.userId;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }),
+      ...(session.accessToken ? { Authorization: `Bearer ${token}` } : {}),
     };
     try {
       const res = await fetch(`${getApiRoot()}/arena/tournaments/${id}/join`, { method: "POST", headers, credentials: "include", body: "{}" });

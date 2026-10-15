@@ -1,0 +1,39 @@
+{
+  "url": "https://garmonpay.com",
+  "deploymentUrl": "https://garmon-axhrfuq6g-garmonpays-projects.vercel.app",
+  "deploymentId": "dpl_6jzv2VaxFD7wc9JVRdUkkan2Sjas",
+  "status": "READY",
+  "previousDeploymentId": "dpl_3czLNj4UW5uBFPcVZCGHbwnwypz7",
+  "source": "/private/tmp/garmonpay-solana-release",
+  "workingTests": 308,
+  "releaseTests": 216,
+  "typeScript": "passed",
+  "productionBuild": "passed",
+  "responsiveChecks": 27,
+  "productionSmokeChecks": 50,
+  "financialActivation": false,
+  "databaseChanges": false,
+  "standaloneWorkerDeploymentVerified": false,
+  "screenshots": "docs/design/phase2-preview/",
+  "pendingPermissionProposal": {
+    "tables": [
+      "ad_packages",
+      "cpu_fighters"
+    ],
+    "privileges": [
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "applied": false
+  },
+  "remainingBlockers": [
+    "Authoritative standalone worker deployment verification",
+    "Real Auth/PostgREST and concurrent settlement staging",
+    "Standardized/mobile wallet integration",
+    "Trusted edge rate limits and admin MFA acceptance",
+    "Atomic legacy financial replacement and reconciliation",
+    "Approved Raydium and advertising commercial configuration",
+    "Explicit financial activation authorization"
+  ]
+}

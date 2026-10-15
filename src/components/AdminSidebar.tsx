@@ -55,6 +55,7 @@ const sections: NavSection[] = [
   {
     title: "Settings",
     links: [
+      { href: "/admin/launchpad", label: "Devnet Launchpad" },
       { href: "/admin/config", label: "Platform Config" },
       { href: "/admin/launch-checklist", label: "Pre-Launch Checklist" },
     ],

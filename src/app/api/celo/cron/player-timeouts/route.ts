@@ -41,14 +41,13 @@ async function runPlayerRollTimeouts(request: Request) {
   }
 
   const nowIso = new Date().toISOString();
+  const staleClaimIso = new Date(Date.now()-30_000).toISOString();
 
   const { data: overdue, error: qErr } = await admin
     .from("celo_rounds")
     .select("id, room_id, player_roll_deadline_at")
-    .eq("status", "player_rolling")
-    .not("player_roll_deadline_at", "is", null)
-    .lt("player_roll_deadline_at", nowIso)
-    .or("roll_processing.is.null,roll_processing.eq.false")
+    .in("status", ["banker_rolling","player_rolling"])
+    .or(`and(status.eq.player_rolling,player_roll_deadline_at.lt.${nowIso}),and(pending_roll_id.not.is.null,roll_animation_start_at.lt.${staleClaimIso})`)
     .limit(BATCH_LIMIT);
 
   if (qErr) {

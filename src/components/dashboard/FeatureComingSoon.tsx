@@ -1,29 +1,6 @@
 import Link from "next/link";
-
-type Props = {
-  emoji: string;
-  title: string;
-  description: string;
-};
-
-/** Matches dashboard/arena Coming Soon card (gold headline, back to dashboard). */
-export function FeatureComingSoon({ emoji, title, description }: Props) {
-  return (
-    <div className="space-y-6">
-      <div className="mx-auto max-w-lg rounded-xl bg-fintech-bg-card border border-white/10 p-6 tablet:p-8 text-center">
-        <div className="mb-4 text-4xl" aria-hidden>
-          {emoji}
-        </div>
-        <h1 className="text-xl font-bold text-white mb-2">{title}</h1>
-        <p className="text-2xl font-bold text-fintech-highlight mb-4">Coming Soon</p>
-        <p className="text-sm text-fintech-muted mb-8 leading-relaxed">{description}</p>
-        <Link
-          href="/dashboard"
-          className="inline-block rounded-xl bg-fintech-accent px-4 py-2 text-sm font-medium text-white hover:bg-fintech-accent/90"
-        >
-          Back to dashboard
-        </Link>
-      </div>
-    </div>
-  );
-}
+import { LockKeyhole } from "lucide-react";
+import { GameArtwork } from "@/components/ui/GameCard";
+import { StatusBadge } from "@/components/ui/garmon-ui";
+type Props={emoji:string;title:string;description:string};
+export function FeatureComingSoon({emoji,title,description}:Props){const kind=title.toLowerCase().includes("pinball")?"pinball":title.toLowerCase().includes("spin")?"spin":title.toLowerCase().includes("arena")?"boxing":"mystery";return <section className="gp-surface gp-coming-soon"><GameArtwork kind={kind}/><StatusBadge tone="gold"><LockKeyhole size={12}/>COMING SOON</StatusBadge><h1>{title}</h1><p>{description}</p><div className="flex flex-wrap justify-center gap-3"><Link href="/dashboard/games" className="gp-button gp-button-violet">Explore available games</Link><Link href="/dashboard" className="gp-button gp-button-ghost">Back to dashboard</Link></div><span className="sr-only">{emoji}</span></section>;}

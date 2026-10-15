@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
     const leaderboard = await getLeaderboard(limit);
-    return NextResponse.json({ leaderboard });
+    return NextResponse.json({ leaderboard: leaderboard.map(({ email: _privateEmail, ...entry }) => entry) });
   } catch {
     return NextResponse.json({ leaderboard: [] });
   }

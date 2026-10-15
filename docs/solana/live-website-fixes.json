@@ -1,0 +1,361 @@
+{
+  "deploymentDiagnosis": {
+    "repository": "GarmonPay/GarmonPay",
+    "configuredProductionBranch": "main",
+    "beforeDeploymentId": "dpl_4nFRi9gztMqYH1Xc3NQabzSWsz9U",
+    "liveDeploymentSource": "cli",
+    "cause": "Recent local financial/auth SQL and services were excluded from the selected nonfinancial CLI release; saving files locally does not update production."
+  },
+  "audit": {
+    "homepage": "Live purple-and-gold homepage and navigation; Spotlight awaits verified records.",
+    "learn": "Before fix: one ephemeral question; no course progression or saved learning progress.",
+    "advertise": "Live package cards and temporary draft review; no saved drafts; minimum $5 checkout not shown. Funding disabled.",
+    "referrals": "Advertiser rates visible, but viewer match absent and SOL history/link unavailable while authentication is paused.",
+    "wallet": "Sign-in intentionally disabled, not an operational connection.",
+    "launchpad": "Live metadata review verified through the production form. Token launch, artwork upload and trading remain unavailable.",
+    "games": "Public catalog uses legacy dashboard navigation and links into account/financial-paused game pages.",
+    "watch": "Financially funded SOL participation remains unavailable."
+  },
+  "fixes": [
+    {
+      "feature": "free learning library",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/learn",
+      "productionVerified": true,
+      "localBrowserChecks": [
+        "wrong answer does not complete course",
+        "all three courses complete",
+        "explicit saved progress restores after reload",
+        "390px page fits without horizontal overflow"
+      ],
+      "remaining": "Funded Learn & Earn rewards and account sync remain disabled.",
+      "productionChecks": [
+        "all three courses completed through UI",
+        "saved 3/3 restored after reload",
+        "390px content width equals viewport"
+      ],
+      "screenshots": [
+        "docs/design/live-fixes/learn-production-mobile.png"
+      ]
+    },
+    {
+      "feature": "public games navigation and free Connect Four practice",
+      "status": "live",
+      "url": "https://garmonpay.com/games/connect-four",
+      "productionVerified": true,
+      "wasBroken": "Public games catalog used legacy account navigation and had no immediate no-account game.",
+      "changed": "Restored public main navigation and added same-device free Connect Four with win detection and reset.",
+      "productionChecks": [
+        "entered from /games link",
+        "every turn alternates",
+        "Gold wins after four vertical discs",
+        "reset restores empty board",
+        "390px viewport has no overflow"
+      ],
+      "screenshots": [
+        "docs/design/live-fixes/connect-four-production-mobile.png"
+      ],
+      "remaining": "Online multiplayer and financial account games are unchanged; paid operations and boxing remain unavailable."
+    },
+    {
+      "feature": "advertising planner",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/advertise",
+      "productionVerified": true,
+      "wasBroken": "No $5 minimum displayed; draft review disappeared on refresh and had no package estimate.",
+      "changed": "Approved package costs, valid minimum view selection, $5 validation, explicit browser draft saving/restoring/editing.",
+      "productionChecks": [
+        "5-second package starts at 2,000 views/$6",
+        "1,000-view/$3 plan rejected",
+        "valid draft saved and restored after reload",
+        "saved plan editing opens populated form",
+        "390px no horizontal overflow"
+      ],
+      "remaining": "Funding, submission, moderation and delivery remain unavailable; saved plans stay on this device.",
+      "screenshots": [
+        "docs/design/live-fixes/advertising-production-mobile.png"
+      ]
+    },
+    {
+      "feature": "homepage actions",
+      "status": "live",
+      "url": "https://garmonpay.com",
+      "productionVerified": true,
+      "wasBroken": "Primary actions focused on paused launch/discovery; working free features were not prominent.",
+      "changed": "Hero links to campaign planning and free learning; learning tile and games showcase link to the actual new features.",
+      "productionChecks": [
+        "Plan a campaign opens live planner",
+        "Start free learning opens live course library",
+        "Play free Connect Four opens live board",
+        "390px page has no horizontal overflow"
+      ],
+      "remaining": "Spotlight has no verified launches/rankings; financial features remain paused.",
+      "screenshots": [
+        "docs/design/live-fixes/home-production-mobile.png"
+      ]
+    },
+    {
+      "feature": "referral program information",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/referrals",
+      "productionVerified": true,
+      "wasBroken": "Only advertiser rates were shown; viewer match was missing; empty commission filters suggested connected history.",
+      "changed": "Both lifetime programs displayed correctly and empty commission filters removed. Existing account link retained.",
+      "productionChecks": [
+        "50% viewer match visible",
+        "10%/5% advertiser rates visible",
+        "empty commission controls absent",
+        "390px no overflow"
+      ],
+      "remaining": "New SOL links, earned commissions and payouts are not active. Personal legacy dashboard data was not audited.",
+      "screenshots": [
+        "docs/design/live-fixes/referrals-production-mobile.png"
+      ]
+    },
+    {
+      "feature": "launchpad project preparation and discovery status",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/launchpad",
+      "productionVerified": true,
+      "wasBroken": "Reviewed project details disappeared on refresh; Create your token label overstated ability; ranking controls had no live backing data.",
+      "changed": "Prepare project label, server-reviewed browser draft save/reload, unsupported ranking controls removed, read-only API reports paused directory status.",
+      "productionChecks": [
+        "live server metadata review",
+        "reviewed project saved and restored after reload",
+        "unsupported ranking controls absent",
+        "paused directory status from API displayed"
+      ],
+      "remaining": "Artwork uploads, mint creation, bonding-curve transactions, trading and market indexer remain unavailable."
+    },
+    {
+      "feature": "wallet and trading availability",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/wallet",
+      "relatedUrl": "https://garmonpay.com/solana/trade",
+      "productionVerified": true,
+      "wasBroken": "Connect wording and disabled sign-in button looked actionable; trading chart/order/filter controls only changed an empty preview.",
+      "changed": "Wallet information link and noninteractive pause notice; wallet safety course link; inactive trading demos removed.",
+      "productionChecks": [
+        "no paused wallet button",
+        "wallet guide opens live courses",
+        "no order-side or chart-range controls",
+        "clear trading unavailable status"
+      ],
+      "remaining": "Wallet connection/authentication, market data and transaction execution are NOT operational."
+    },
+    {
+      "feature": "starting dashboard",
+      "status": "live",
+      "url": "https://garmonpay.com/solana/dashboard",
+      "productionVerified": true,
+      "wasBroken": "Disconnected SOL metrics and empty activity filters dominated the dashboard.",
+      "changed": "Real device-saved learning/draft summaries, working saved-plan/project deep links, free game and existing account links.",
+      "productionChecks": [
+        "device-saved progress and draft names displayed",
+        "saved campaign deep link restores plan",
+        "project deep link opens restored form",
+        "free game opens and wins through seven turns",
+        "390px no overflow; longest permitted saved draft name tested locally"
+      ],
+      "remaining": "Device records do not sync to accounts or represent financial balances; financial history remains inactive.",
+      "screenshots": [
+        "docs/design/live-fixes/dashboard-production-desktop.png",
+        "docs/design/live-fixes/dashboard-production-mobile.png"
+      ]
+    }
+  ],
+  "releases": [
+    {
+      "feature": "learning",
+      "id": "dpl_Dm3gkD29HGGKstnqpZSN6sDoyNCh",
+      "url": "https://garmon-1i9otigji-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/Dm3gkD29HGGKstnqpZSN6sDoyNCh",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_Dm3gkD29HGGKstnqpZSN6sDoyNCh"
+    },
+    {
+      "feature": "games",
+      "id": "dpl_4QJ1EMv2w3ssdfpdLZ1r4Vwxk16b",
+      "url": "https://garmon-7ro8dcmxu-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/4QJ1EMv2w3ssdfpdLZ1r4Vwxk16b",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_4QJ1EMv2w3ssdfpdLZ1r4Vwxk16b"
+    },
+    {
+      "feature": "advertising",
+      "id": "dpl_AuCBTPo4qVoNcKVwiPs1Wxr7XjNp",
+      "url": "https://garmon-hgewyvm7n-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/AuCBTPo4qVoNcKVwiPs1Wxr7XjNp",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_AuCBTPo4qVoNcKVwiPs1Wxr7XjNp"
+    },
+    {
+      "feature": "home",
+      "id": "dpl_EcRjJWkqVpSjqQFu6Djx5TfvXMeH",
+      "url": "https://garmon-o9e06dazh-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/EcRjJWkqVpSjqQFu6Djx5TfvXMeH",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_EcRjJWkqVpSjqQFu6Djx5TfvXMeH"
+    },
+    {
+      "feature": "referrals",
+      "id": "dpl_Hm7uEty4zFwTovN63pxNEDwJVJTw",
+      "url": "https://garmon-q0swjfhkd-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/Hm7uEty4zFwTovN63pxNEDwJVJTw",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_Hm7uEty4zFwTovN63pxNEDwJVJTw"
+    },
+    {
+      "feature": "launchpad",
+      "id": "dpl_Et3FD81fiycVGcgdtTfSadRQDsFv",
+      "url": "https://garmon-a196o1qfx-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/Et3FD81fiycVGcgdtTfSadRQDsFv",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_Et3FD81fiycVGcgdtTfSadRQDsFv"
+    },
+    {
+      "feature": "availability",
+      "id": "dpl_5SSAQySeKcoJRjCKHQQA1VwGXiUK",
+      "url": "https://garmon-did3xp800-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/5SSAQySeKcoJRjCKHQQA1VwGXiUK",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_5SSAQySeKcoJRjCKHQQA1VwGXiUK"
+    },
+    {
+      "feature": "dashboard",
+      "id": "dpl_5gfV9jvyfnceSnAzaq4JSGxZ7h3r",
+      "url": "https://garmon-as18bvgls-garmonpays-projects.vercel.app",
+      "inspectorUrl": "https://vercel.com/garmonpays-projects/garmon-pay/5gfV9jvyfnceSnAzaq4JSGxZ7h3r",
+      "readyState": "READY",
+      "target": "production",
+      "deploymentApiUrl": "https://api.vercel.com/v13/deployments/dpl_5gfV9jvyfnceSnAzaq4JSGxZ7h3r"
+    }
+  ],
+  "finalDeployment": {
+    "id": "dpl_5gfV9jvyfnceSnAzaq4JSGxZ7h3r",
+    "url": "garmon-as18bvgls-garmonpays-projects.vercel.app",
+    "status": "READY",
+    "productionUrl": "https://garmonpay.com"
+  },
+  "financialOperationsActivated": false,
+  "productionDatabaseChanges": false,
+  "privateRenderAccess": false,
+  "validation": {
+    "browserFeatureFlows": "passed_in_production",
+    "mobileWidth": 390,
+    "productionBuild": "passed",
+    "typeScript": "passed",
+    "regressionTests": "passed",
+    "safeProductionPauseChecks": "passed"
+  },
+  "publishedFiles": [
+    {
+      "path": "src/components/solana/LearningLibrary.tsx",
+      "releaseSha256": "d6eb45f18ca6f50fe9a9b9a3d4fea04cbe25e7ec45443e5b5570d923722563d1",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/AdvertisingPlanner.tsx",
+      "releaseSha256": "62e45df3578aef5b316e066016b28c3b4525db17ff409e853d70483c7542f598",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/DashboardStarter.tsx",
+      "releaseSha256": "1373bff1143a372f6d7f0761350e12022330ff9fd1cea1b97300b67d06971a00",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/PlatformWorkspace.tsx",
+      "releaseSha256": "395c24c5d3623c81621ef1928a57dde93beaebca43d509a8faaa91602fd904eb",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/SolanaHome.tsx",
+      "releaseSha256": "78370600e0517b6784300a6b99c52f0f0faf11ae388a24fab1ad7ecc90f3ba45",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/Spotlight.tsx",
+      "releaseSha256": "4e7ae4096db82ae6568b9a83983babba6ddbf573ee53e14a2a1d1f8f322a8eed",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/TokenWizard.tsx",
+      "releaseSha256": "8939e7b4153da15da253228e8f80dc1ca14f1135026edabb669c6d3866c3e2e2",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/solana/WalletSignIn.tsx",
+      "releaseSha256": "1dbdd49c63b2386539bc32d830d1a63defc0363d9db026e0c6ab9a80cac5e2f8",
+      "matchesRepository": false
+    },
+    {
+      "path": "src/components/Navbar.tsx",
+      "releaseSha256": "727c98e5f6624d4a2f67c6b7d6ff5f242817edc9f2702dbefb593a9265da29d6",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/PublicNavbarWrapper.tsx",
+      "releaseSha256": "a80b08a0b9f2d45de5999b8bc9971a0f396ff108594c77aeea5e989b72a89300",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/PublicFooterWrapper.tsx",
+      "releaseSha256": "be7a39e9ff1ef1883fcf298f702bd167cd4c04151d1512fa33c7ce184773dd2a",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/games/GamesRouteShell.tsx",
+      "releaseSha256": "ec85a201630577831d4b65e04d8975f8fc9b4392410f86df7dc2c64b52a5a6f8",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/components/games/ConnectFourPractice.tsx",
+      "releaseSha256": "e36dfa18e741ab3b4f09316cb8be6ece12b676ca27411713925eb5a6326ffb56",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/config/public-game-routes.ts",
+      "releaseSha256": "590148787c4802c7d19c38726fe91f2ab06c552c0f9f5ac405235462df49b0e1",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/lib/games/connect-four-practice.ts",
+      "releaseSha256": "d7050831a89c6949ef38d0e59d152be627127a976ecb732bc023f4302bfc96e3",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/app/games/page.tsx",
+      "releaseSha256": "68b831d22f4a8f163fe9ef1e8682b94d6d3536d7e05962d4c0f637dbbbacad2e",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/app/games/layout.tsx",
+      "releaseSha256": "04268a337039e7396dccf54d6b14a6d2a2136482d50021c3870385a667ae8b6c",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/app/games/connect-four/page.tsx",
+      "releaseSha256": "fab46b5d4e7b8f35ec628809c77466d2eef52e364bd3b63425f58e549fc2d9e9",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/app/solana/[section]/page.tsx",
+      "releaseSha256": "507c07b8b733694897e92f2530429f23990cace2e916a825b4fd6abbc91afd5c",
+      "matchesRepository": true
+    },
+    {
+      "path": "src/app/api/solana/discovery/route.ts",
+      "releaseSha256": "f9eace5cc17cbb82e5ea40b9728f9c27c7499b8539b5cafd0ae116b58b29846c",
+      "matchesRepository": true
+    }
+  ],
+  "scopeNote": "WalletSignIn publishes only the changed paused-display markup on the prior safe authentication implementation. Local authentication/security staging changes remain excluded."
+}

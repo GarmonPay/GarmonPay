@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useCallback, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import MobileNav from "@/components/mobile-nav";
@@ -18,28 +19,25 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const immersiveCelo = /^\/dashboard\/games\/celo\/[^/]+$/.test(usePathname() || "");
   const [referralNotice, setReferralNotice] = useState<string | null>(null);
-  const topStackRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const el = topStackRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-
-    const apply = () => {
-      const h = Math.ceil(el.getBoundingClientRect().height);
-      document.documentElement.style.setProperty(
-        "--dashboard-top-stack-height",
-        `${h}px`,
-      );
-    };
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
+  const topStackObserver = useRef<ResizeObserver | null>(null);
+  // Callback ref runs when the Suspense content actually mounts, not before it exists.
+  const topStackRef = useCallback((element: HTMLDivElement | null) => {
+    topStackObserver.current?.disconnect();
+    if (!element) {
       document.documentElement.style.removeProperty("--dashboard-top-stack-height");
-    };
-  }, [referralNotice]);
+      return;
+    }
+    const apply = () => document.documentElement.style.setProperty(
+      "--dashboard-top-stack-height", `${Math.ceil(element.getBoundingClientRect().height)}px`
+    );
+    apply();
+    if (typeof ResizeObserver !== "undefined") {
+      topStackObserver.current = new ResizeObserver(apply);
+      topStackObserver.current.observe(element);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -110,7 +108,7 @@ export default function DashboardLayout({
         </div>
 
         <div
-          className="flex max-h-none min-h-[100dvh] min-w-0 w-full max-w-full overflow-x-hidden bg-[#0e0118] pt-[var(--dashboard-top-stack-height,4rem)]"
+          className="gp-shell flex max-h-none min-h-[100dvh] min-w-0 w-full max-w-full overflow-x-hidden bg-[#0e0118] pt-[var(--dashboard-top-stack-height,4rem)]"
           style={{ minHeight: "100vh" }}
         >
           <aside
@@ -121,12 +119,12 @@ export default function DashboardLayout({
           </aside>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden pb-[calc(5rem+env(safe-area-inset-bottom,0px))] tablet:pb-0">
-            <main className="min-w-0 flex-1 px-4 py-4 text-[14px] max-w-full leading-normal tablet:px-6 tablet:py-6 tablet:text-base">
+            <main className={`gp-shell-main ${immersiveCelo ? "gp-shell-main--celo" : ""} min-w-0 flex-1 px-4 py-4 text-[14px] max-w-full leading-normal tablet:px-6 tablet:py-6 tablet:text-base`}>
               <div className="mx-auto mb-4 max-w-2xl tablet:mb-6">
-                <BannerRotator placement="dashboard-top" />
+                {!immersiveCelo && <BannerRotator placement="dashboard-top" />}
               </div>
               <div className="mx-auto w-full max-w-2xl">
-                <MembershipWelcomeBanner />
+                {!immersiveCelo && <MembershipWelcomeBanner />}
               </div>
               <div className="dashboard-main animate-fade-in flex min-w-0 flex-col gap-4">
                 {children}

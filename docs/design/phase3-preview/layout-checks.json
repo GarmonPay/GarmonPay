@@ -1,0 +1,230 @@
+{
+  "phase2Live320": [
+    {
+      "path": "/",
+      "h1": "Discover Crypto.Build What’sNext.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/launchpad",
+      "h1": "Your idea. Ready for its next chapter.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/trade",
+      "h1": "Discover markets. Understand the trade.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/earn",
+      "h1": "Curiosity has a place here.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/advertise",
+      "h1": "Meet the people behind the wallets.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/referrals",
+      "h1": "A real introduction. A clear record.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/dashboard",
+      "h1": "Your GarmonPay, in one place.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/learn",
+      "h1": "Understand the project. Test what you know.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    }
+  ],
+  "phase3Local": [
+    {
+      "path": "/",
+      "h1": "Discover Crypto.Build What’sNext.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/launchpad",
+      "h1": "Your idea. Ready for its next chapter.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/trade",
+      "h1": "Discover markets. Understand the trade.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/earn",
+      "h1": "Curiosity has a place here.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/advertise",
+      "h1": "Meet the people behind the wallets.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/referrals",
+      "h1": "A real introduction. A clear record.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/dashboard",
+      "h1": "Your GarmonPay, in one place.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/solana/learn",
+      "h1": "Understand the project. Test what you know.",
+      "missingImages": [],
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "path": "/",
+      "h1": "Discover Crypto.Build What’sNext.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/launchpad",
+      "h1": "Your idea. Ready for its next chapter.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/trade",
+      "h1": "Discover markets. Understand the trade.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/earn",
+      "h1": "Curiosity has a place here.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/advertise",
+      "h1": "Meet the people behind the wallets.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/referrals",
+      "h1": "A real introduction. A clear record.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/dashboard",
+      "h1": "Your GarmonPay, in one place.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/solana/learn",
+      "h1": "Understand the project. Test what you know.",
+      "missingImages": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "path": "/",
+      "h1": "Discover Crypto.Build What’sNext.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/launchpad",
+      "h1": "Your idea. Ready for its next chapter.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/trade",
+      "h1": "Discover markets. Understand the trade.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/earn",
+      "h1": "Curiosity has a place here.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/advertise",
+      "h1": "Meet the people behind the wallets.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/referrals",
+      "h1": "A real introduction. A clear record.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/dashboard",
+      "h1": "Your GarmonPay, in one place.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    },
+    {
+      "path": "/solana/learn",
+      "h1": "Understand the project. Test what you know.",
+      "missingImages": [],
+      "scrollWidth": 1440,
+      "width": 1440
+    }
+  ]
+}

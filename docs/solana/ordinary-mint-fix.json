@@ -1,0 +1,41 @@
+{
+  "rootCause": "The deployed hosted prepare action called SealedMintKeypair.seal with no suffix argument; the helper defaulted to gpay and rejected an ordinary mint after transaction preparation.",
+  "previousProductionDeployment": "dpl_63xyy51sSwGuUgfG3sLyWxePZuWF",
+  "firstCorrectedDeployment": "dpl_HagRByeJdtaWuCKXiMAfCQ2BbgYh",
+  "finalDeployment": "dpl_Ho1omLJUGoVdGrbkwLcV83UhSZpv",
+  "finalStatus": "building",
+  "productionUrl": "https://garmonpay.com/solana/create",
+  "productionPreparation": {
+    "mint": "7ZSnJvTnM1pcjAACMrnSu3PqqSob5AGjBb7KRCsb99dM",
+    "simulationPassed": true,
+    "costReviewVisible": true,
+    "estimatedTotalLamports": 10982800,
+    "cancelPreservedForm": true,
+    "memberSignature": false,
+    "submitted": false
+  },
+  "localDevnetEvidence": {
+    "mint": "BPtFLVPVLusjLFVqaE3K3k8WeVNPMuCRj3LvyyXaJss3",
+    "cluster": "devnet",
+    "simulationPassed": true,
+    "estimatedTotalLamports": 10982800,
+    "memberSigned": false,
+    "submitted": false
+  },
+  "productionDatabase": "Existing gp_sol_mint_inventory_mint_format already accepts ordinary base58 addresses. No production migration needed or applied. Public readback confirms the test mint is reserved and has no submission.",
+  "security": "Public-key/keypair match and signature verification replace vanity matching. Exact LaunchLab instructions, account metas, payer, fees, genesis, blockhash, simulation, member session and signing checks retained.",
+  "mainnetEnabled": false,
+  "tests": {
+    "focused": 60,
+    "chainTimestamp": 2,
+    "realDevnetPreparationAndBuilder": 5,
+    "typecheck": "passed",
+    "localBuild": "passed"
+  },
+  "remaining": [
+    "Final release readiness and source hash verification",
+    "Final live production preparation and Phantom handoff",
+    "Member-approved transaction and finalized on-chain verification before declaring a launch complete",
+    "Post-signature real coin visibility in Launchpad and My Coins"
+  ]
+}

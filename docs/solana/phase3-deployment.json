@@ -1,0 +1,32 @@
+{
+  "url": "https://garmonpay.com",
+  "deploymentUrl": "https://garmon-ocd1fguve-garmonpays-projects.vercel.app",
+  "deploymentId": "dpl_4nFRi9gztMqYH1Xc3NQabzSWsz9U",
+  "status": "READY",
+  "previousDeploymentId": "dpl_6jzv2VaxFD7wc9JVRdUkkan2Sjas",
+  "workingTests": 347,
+  "releaseTests": 228,
+  "walletSqlIntegrationTests": 13,
+  "independentDdlBatchesTested": 67,
+  "ddlPrivilegeAssertions": 244818,
+  "localResponsiveChecks": 24,
+  "preReleaseLiveNarrowChecks": 8,
+  "productionSmokeChecks": 51,
+  "typeScript": "passed",
+  "productionBuild": "passed",
+  "financialActivation": false,
+  "productionDatabaseChanges": false,
+  "workerDeploymentChanged": false,
+  "workerPublicHealthStatus": 200,
+  "workerConfiguredOrigin": "https://garmonpay-fight-server.onrender.com",
+  "workerDeployedRevisionVerified": false,
+  "workerSettlementPauseVerified": false,
+  "productionCatalogVerification": {
+    "tables": 174,
+    "rlsDisabled": 0,
+    "activeDatabaseSchedules": 0,
+    "serviceCrudTables": 174
+  },
+  "authPostgrestVerified": false,
+  "independentPostgresConcurrencyVerified": false
+}

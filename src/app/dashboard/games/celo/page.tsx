@@ -1,9 +1,11 @@
 "use client";
+import { PageHeading } from "@/components/ui/garmon-ui";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Cinzel_Decorative, DM_Sans } from "next/font/google";
+import { Cinzel_Decorative } from "next/font/google";
+import localFont from "next/font/local";
 import { getSessionAsync } from "@/lib/session";
 import { createBrowserClient } from "@/lib/supabase";
 import { gpcToUsdDisplay } from "@/lib/coins";
@@ -18,7 +20,7 @@ import { fetchCeloApi } from "@/lib/celo-api-fetch";
 import { CELO_USER_PROFILE_FIELDS } from "@/lib/celo-player-state";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
-const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
+const dm = localFont({ src: "../../../../assets/fonts/dm-sans-latin.woff2", weight: "100 1000", style: "normal", display: "swap" });
 
 const ENTRY_PILLS = [500, 1000, 2000, 5000, 10_000] as const;
 const DOLLAR = [5, 10, 20, 50, 100] as const;
@@ -219,54 +221,7 @@ export default function CeloLobbyPage() {
       style={{ background: "#05010F" }}
     >
       <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6">
-        <section
-          className="relative mt-4 overflow-hidden px-4 pb-5 pt-9 sm:px-6 sm:pb-6 sm:pt-10 md:px-8 md:pb-6 md:pt-12"
-          style={{
-            background: "linear-gradient(160deg, #0D0520 0%, #05010F 60%)",
-            borderRadius: 16,
-            border: "1px solid rgba(245, 200, 66, 0.1)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          <div
-            className="pointer-events-none absolute left-2 top-0 h-full w-0.5"
-            style={{
-              background: "#7C3AED",
-              boxShadow: "0 0 15px #7C3AED",
-            }}
-          />
-          <div
-            className="pointer-events-none absolute right-2 top-0 h-full w-0.5"
-            style={{
-              background: "#F5C842",
-              boxShadow: "0 0 15px #F5C842",
-            }}
-          />
-          <p
-            className="text-center font-mono text-[10px] leading-normal text-[#A855F7] sm:text-[11px]"
-            style={{ letterSpacing: "0.15em" }}
-          >
-            🎲 MIAMI STREET DICE
-          </p>
-          <h1
-            className={`text-center text-5xl font-black leading-[0.92] sm:text-7xl md:text-8xl ${cinzel.className}`}
-            style={{
-              background: "linear-gradient(135deg, #F5C842, #D4A017)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              margin: "2px 0 6px",
-            }}
-          >
-            C-LO
-          </h1>
-          <p
-            className="text-center font-mono text-[11px] text-[#6B7280]"
-            style={{ letterSpacing: "0.1em" }}
-          >
-            THE FIRST LEGITIMATE DIGITAL STREET DICE
-          </p>
-        </section>
-
+        <PageHeading eyebrow="GARMONPAY LIVE TABLES" title="C-Lo. Take your seat." description="Classic street dice with live tables. Choose a room, meet the banker, and play by the existing table rules."/>
         {loading ? (
           <div
             className="mx-auto mb-4 h-5 w-full max-w-md rounded bg-white/[0.06] pt-2"

@@ -1,0 +1,1023 @@
+[
+  {
+    "signature": "coin_flip_pvp_only_guard()",
+    "security_definer": false,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.coin_flip_pvp_only_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n  IF NEW.mode IS DISTINCT FROM 'vs_player' THEN\n    RAISE EXCEPTION 'Player vs House mode is no longer supported.';\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmon_date_utc(timestamp with time zone)",
+    "security_definer": false,
+    "returns": "date",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmon_date_utc(ts timestamp with time zone)\n RETURNS date\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$ SELECT (ts AT TIME ZONE 'UTC')::date $function$\n"
+  },
+  {
+    "signature": "handle_stripe_deposit(uuid,numeric)",
+    "security_definer": false,
+    "returns": "void",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.handle_stripe_deposit(uid uuid, deposit_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n\nINSERT INTO public.deposits (user_id, amount)\nVALUES (uid, deposit_amount);\n\nUPDATE public.users\nSET balance = balance + deposit_amount\nWHERE id = uid;\n\nEND;\n$function$\n"
+  },
+  {
+    "signature": "escape_room_set_updated_at()",
+    "security_definer": false,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.escape_room_set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nbegin\n  new.updated_at := now();\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "handle_new_user()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  new_referral_code text;\nBEGIN\n  new_referral_code := upper(substring(\n    replace(gen_random_uuid()::text, '-', ''),\n    1, 8\n  ));\n\n  WHILE EXISTS (\n    SELECT 1 FROM public.users WHERE referral_code = new_referral_code\n  ) LOOP\n    new_referral_code := upper(substring(\n      replace(gen_random_uuid()::text, '-', ''),\n      1, 8\n    ));\n  END LOOP;\n\n  INSERT INTO public.users (\n    id,\n    email,\n    full_name,\n    avatar_url,\n    referral_code,\n    balance,\n    balance_cents,\n    membership,\n    role,\n    is_super_admin,\n    created_at,\n    updated_at\n  ) VALUES (\n    new.id,\n    new.email,\n    COALESCE(new.raw_user_meta_data->>'full_name', ''),\n    COALESCE(new.raw_user_meta_data->>'avatar_url', ''),\n    new_referral_code,\n    0,\n    0,\n    'free',\n    'user',\n    false,\n    now(),\n    now()\n  )\n  ON CONFLICT (id) DO NOTHING;\n\n  INSERT INTO public.wallet_balances (user_id, balance, updated_at)\n  VALUES (new.id, 0, now())\n  ON CONFLICT (user_id) DO NOTHING;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM public.coin_transactions WHERE reference = 'signup_bonus_' || new.id::text\n  ) THEN\n    PERFORM public.credit_coins(new.id, 0, 100);\n\n    INSERT INTO public.coin_transactions (user_id, type, gold_coins, sweeps_coins, description, reference)\n    VALUES (\n      new.id,\n      'signup_bonus',\n      0,\n      100,\n      'Welcome bonus - 100 GPay Coins',\n      'signup_bonus_' || new.id::text\n    )\n    ON CONFLICT (reference) DO NOTHING;\n  END IF;\n\n  RETURN new;\nEXCEPTION\n  WHEN OTHERS THEN\n    RAISE LOG 'handle_new_user error for user %: %', new.id, SQLERRM;\n    RETURN new;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "record_user_joined()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.record_user_joined()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.platform_activities (user_id, activity_type, description)\n  values (new.id, 'joined', 'Joined GarmonPay');\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "credit_coins(uuid,integer,integer)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.credit_coins(p_user_id uuid, p_gold_coins integer, p_gpay_coins integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.users SET\n    gold_coins = COALESCE(gold_coins, 0) + COALESCE(p_gold_coins, 0),\n    gpay_coins = COALESCE(gpay_coins, 0) + COALESCE(p_gpay_coins, 0),\n    lifetime_gc_purchased = COALESCE(lifetime_gc_purchased, 0) + GREATEST(0, COALESCE(p_gold_coins, 0)),\n    lifetime_sc_earned = COALESCE(lifetime_sc_earned, 0) + GREATEST(0, COALESCE(p_gpay_coins, 0))\n  WHERE id = p_user_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_bump_room_total_rounds()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_bump_room_total_rounds()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF TG_OP = 'UPDATE'\n     AND NEW.status = 'completed'\n     AND (OLD.status IS DISTINCT FROM 'completed') THEN\n    UPDATE public.celo_rooms\n    SET total_rounds = COALESCE(total_rounds, 0) + 1\n    WHERE id = NEW.room_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "handle_new_auth_user()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.handle_new_auth_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  new_referral_code text;\nbegin\n  new_referral_code := 'GP' || upper(substr(md5(random()::text), 1, 6));\n  insert into public.users (id, email, referral_code)\n  values (\n    new.id,\n    new.email,\n    new_referral_code\n  )\n  on conflict (id) do update set\n    email = excluded.email,\n    updated_at = now();\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "celo_increment_round_banker_accounting(uuid,integer,integer)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_increment_round_banker_accounting(p_round_id uuid, p_delta_pnl integer, p_delta_fee integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.celo_rounds\n  SET\n    banker_winnings_sc = COALESCE(banker_winnings_sc, 0) + p_delta_pnl,\n    platform_fee_sc = COALESCE(platform_fee_sc, 0) + p_delta_fee\n  WHERE id = p_round_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "sync_users_balance_from_wallet()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.sync_users_balance_from_wallet()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF to_regclass('public.users') IS NOT NULL THEN\n    UPDATE public.users\n    SET\n      balance       = NEW.balance,\n      balance_cents = NEW.balance::integer,\n      updated_at    = now()\n    WHERE id = NEW.user_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "stop_commissions_on_subscription_canceled()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.stop_commissions_on_subscription_canceled()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  if new.status = 'canceled' and (old.status is null or old.status != 'canceled') then\n    update public.referral_commissions set status = 'stopped', updated_at = now() where subscription_id = new.id;\n  end if;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "process_all_due_referral_commissions()",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.process_all_due_referral_commissions()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_sub record;\n  v_result jsonb;\n  v_processed int := 0;\n  v_paid int := 0;\nbegin\n  for v_sub in\n    select id from public.subscriptions where status = 'active' and next_billing_date <= current_date order by next_billing_date\n  loop\n    v_result := public.process_subscription_billing(v_sub.id);\n    v_processed := v_processed + 1;\n    if (v_result->>'commissionPaid')::boolean then\n      v_paid := v_paid + 1;\n    end if;\n  end loop;\n  return jsonb_build_object('success', true, 'processed', v_processed, 'commissionsPaid', v_paid);\nend;\n$function$\n"
+  },
+  {
+    "signature": "gpay_ledger_entry(uuid,text,bigint,text,jsonb)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.gpay_ledger_entry(p_user_id uuid, p_event_type text, p_amount_minor bigint, p_reference text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_valid_types text[] := ARRAY[\n    'reward_earn', 'referral_reward', 'game_reward', 'ad_reward',\n    'manual_credit', 'manual_debit', 'admin_adjustment',\n    'claim_reserve', 'claim_release', 'claim_settle',\n    'game_play', 'game_win'\n  ];\n  d_avail bigint := 0;\n  d_pend bigint := 0;\n  d_claimed bigint := 0;\n  d_life bigint := 0;\n  v_avail bigint;\n  v_pend bigint;\n  v_claimed bigint;\n  v_life bigint;\n  av_new bigint;\n  pend_new bigint;\n  claimed_new bigint;\n  life_new bigint;\n  v_ledger_id uuid;\n  v_ref text := nullif(trim(COALESCE(p_reference, '')), '');\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'user_id required');\n  END IF;\n  IF p_event_type IS NULL OR NOT (p_event_type = ANY (v_valid_types)) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Invalid event_type');\n  END IF;\n\n  IF v_ref IS NOT NULL THEN\n    IF EXISTS (SELECT 1 FROM public.gpay_ledger WHERE reference = v_ref) THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n    END IF;\n  END IF;\n\n  IF p_event_type IN ('reward_earn', 'referral_reward', 'game_reward', 'ad_reward', 'manual_credit', 'game_win') THEN\n    IF p_amount_minor IS NULL OR p_amount_minor <= 0 THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Amount must be positive');\n    END IF;\n    d_avail := p_amount_minor;\n    d_life := p_amount_minor;\n  ELSIF p_event_type IN ('manual_debit', 'game_play') THEN\n    IF p_amount_minor IS NULL OR p_amount_minor >= 0 THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Debit requires negative amount_minor');\n    END IF;\n    d_avail := p_amount_minor;\n  ELSIF p_event_type = 'admin_adjustment' THEN\n    IF p_amount_minor IS NULL OR p_amount_minor = 0 THEN\n      RETURN jsonb_build_object('success', false, 'message', 'admin_adjustment amount must be non-zero');\n    END IF;\n    d_avail := p_amount_minor;\n    IF p_amount_minor > 0 THEN\n      d_life := p_amount_minor;\n    END IF;\n  ELSIF p_event_type IN ('claim_reserve', 'claim_release', 'claim_settle') THEN\n    IF p_amount_minor IS NULL OR p_amount_minor <= 0 THEN\n      RETURN jsonb_build_object('success', false, 'message', 'claim amount must be positive');\n    END IF;\n    IF p_event_type = 'claim_reserve' THEN\n      d_avail := -p_amount_minor;\n      d_pend := p_amount_minor;\n    ELSIF p_event_type = 'claim_release' THEN\n      d_avail := p_amount_minor;\n      d_pend := -p_amount_minor;\n    ELSE\n      d_pend := -p_amount_minor;\n      d_claimed := p_amount_minor;\n    END IF;\n  END IF;\n\n  INSERT INTO public.gpay_balances (user_id, updated_at)\n  VALUES (p_user_id, now())\n  ON CONFLICT (user_id) DO NOTHING;\n\n  SELECT available_minor, pending_claim_minor, claimed_lifetime_minor, lifetime_earned_minor\n  INTO v_avail, v_pend, v_claimed, v_life\n  FROM public.gpay_balances\n  WHERE user_id = p_user_id\n  FOR UPDATE;\n\n  IF v_avail IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'GPay balance row not found');\n  END IF;\n\n  av_new := v_avail + d_avail;\n  pend_new := v_pend + d_pend;\n  claimed_new := v_claimed + d_claimed;\n  life_new := v_life + d_life;\n\n  IF av_new < 0 OR pend_new < 0 OR claimed_new < 0 OR life_new < 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient balance or invalid state');\n  END IF;\n\n  INSERT INTO public.gpay_ledger (\n    user_id,\n    event_type,\n    amount_minor,\n    delta_available_minor,\n    delta_pending_claim_minor,\n    delta_claimed_lifetime_minor,\n    delta_lifetime_earned_minor,\n    available_after_minor,\n    pending_claim_after_minor,\n    claimed_lifetime_after_minor,\n    lifetime_earned_after_minor,\n    reference,\n    metadata\n  ) VALUES (\n    p_user_id,\n    p_event_type,\n    p_amount_minor,\n    d_avail,\n    d_pend,\n    d_claimed,\n    d_life,\n    av_new,\n    pend_new,\n    claimed_new,\n    life_new,\n    v_ref,\n    COALESCE(p_metadata, '{}'::jsonb)\n  )\n  RETURNING id INTO v_ledger_id;\n\n  UPDATE public.gpay_balances\n  SET\n    available_minor = av_new,\n    pending_claim_minor = pend_new,\n    claimed_lifetime_minor = claimed_new,\n    lifetime_earned_minor = life_new,\n    updated_at = now()\n  WHERE user_id = p_user_id;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'ledger_id', v_ledger_id,\n    'available_minor', av_new,\n    'pending_claim_minor', pend_new,\n    'claimed_lifetime_minor', claimed_new,\n    'lifetime_earned_minor', life_new\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "handle_new_profile()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.handle_new_profile()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.profiles (id, email)\n  values (new.id, new.email)\n  on conflict (id) do update set email = excluded.email;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "on_ad_session_start_record_click()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.on_ad_session_start_record_click()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.ad_clicks (ad_id, user_id) values (new.ad_id, new.user_id);\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "increment_wallet_balance(text,numeric)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_wallet_balance(p_email text, p_amount_cents numeric)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  if p_email is null or p_email = '' or p_amount_cents is null or p_amount_cents <= 0 then\n    return;\n  end if;\n  insert into public.wallet (email, balance, updated_at)\n  values (p_email, p_amount_cents, now())\n  on conflict (email) do update set\n    balance = public.wallet.balance + p_amount_cents,\n    updated_at = now();\nend;\n$function$\n"
+  },
+  {
+    "signature": "add_funds(text,numeric)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.add_funds(user_email text, amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  if user_email is null or user_email = '' or amount is null or amount <= 0 then\n    return;\n  end if;\n  insert into public.wallet (email, balance, updated_at)\n  values (user_email, amount, now())\n  on conflict (email) do update set\n    balance = public.wallet.balance + amount,\n    updated_at = now();\nend;\n$function$\n"
+  },
+  {
+    "signature": "complete_ad_session_with_platform_protection(uuid,uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.complete_ad_session_with_platform_protection(p_user_id uuid, p_session_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_session record;\n  v_ad record;\n  v_pct numeric;\n  v_reward bigint;\n  v_revenue bigint;\nBEGIN\n  SELECT * INTO v_session FROM public.ad_sessions WHERE id = p_session_id FOR UPDATE;\n  IF v_session IS NULL THEN RETURN jsonb_build_object('success', false, 'message', 'Invalid session'); END IF;\n  IF v_session.user_id != p_user_id THEN RETURN jsonb_build_object('success', false, 'message', 'Unauthorized'); END IF;\n  IF v_session.reward_given THEN RETURN jsonb_build_object('success', false, 'message', 'Reward already issued'); END IF;\n  IF (v_session.start_time + (SELECT duration_seconds FROM public.ads WHERE id = v_session.ad_id) * interval '1 second') > now() THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Timer not complete');\n  END IF;\n\n  SELECT * INTO v_ad FROM public.ads WHERE id = v_session.ad_id;\n  IF v_ad IS NULL THEN RETURN jsonb_build_object('success', false, 'message', 'Ad not found'); END IF;\n\n  SELECT COALESCE((SELECT ad_reward_percent FROM public.platform_settings WHERE id = 'default' LIMIT 1), 40) INTO v_pct;\n  v_reward := round(v_ad.advertiser_price * v_pct / 100)::bigint;\n  v_revenue := v_ad.advertiser_price;\n\n  PERFORM public.platform_record_revenue(v_revenue, 'ad');\n  PERFORM public.platform_record_payout(v_reward, 'ad');\n\n  UPDATE public.ad_sessions SET completed = true, reward_given = true WHERE id = p_session_id;\n  UPDATE public.users SET balance = balance + v_reward, updated_at = now() WHERE id = p_user_id;\n  INSERT INTO public.earnings (user_id, amount, source, reference_id) VALUES (p_user_id, v_reward, 'ad', p_session_id);\n  INSERT INTO public.transactions (user_id, type, amount, status, description, reference_id)\n  VALUES (p_user_id, 'earning', v_reward, 'completed', 'Ad reward', p_session_id);\n\n  RETURN jsonb_build_object('success', true, 'rewardCents', v_reward);\nEXCEPTION WHEN OTHERS THEN\n  RETURN jsonb_build_object('success', false, 'message', SQLERRM);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "platform_record_revenue(bigint,text)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.platform_record_revenue(p_amount_cents bigint, p_source text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nBEGIN\n  UPDATE public.platform_balance\n  SET\n    balance_cents = balance_cents + p_amount_cents,\n    total_revenue_cents = total_revenue_cents + p_amount_cents,\n    updated_at = now()\n  WHERE id = 'default';\nEND;\n$function$\n"
+  },
+  {
+    "signature": "sync_balance_on_transaction()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.sync_balance_on_transaction()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  amt numeric;\nbegin\n  if new.status is distinct from 'completed' then\n    return new;\n  end if;\n  if tg_op = 'UPDATE' and old.status = 'completed' then\n    return new; -- already applied\n  end if;\n\n  amt := coalesce(new.amount, 0);\n  if new.user_id is null then\n    return new;\n  end if;\n\n  if lower(coalesce(new.type, '')) = 'withdrawal' then\n    update public.users set balance = coalesce(balance, 0) - amt where id = new.user_id;\n  else\n    update public.users set balance = coalesce(balance, 0) + amt where id = new.user_id;\n  end if;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "check_platform_balance_integrity()",
+    "security_definer": false,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.check_platform_balance_integrity()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n  IF NEW.total_rewards_paid_cents > NEW.total_revenue_cents THEN\n    RAISE EXCEPTION 'Platform integrity: total_rewards_paid (%) cannot exceed total_revenue (%)',\n      NEW.total_rewards_paid_cents, NEW.total_revenue_cents;\n  END IF;\n  IF NEW.balance_cents < 0 THEN\n    RAISE EXCEPTION 'Platform balance cannot be negative';\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_post_entry_atomic(uuid,uuid,integer,text,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_post_entry_atomic(p_room_id uuid, p_user_id uuid, p_amount integer, p_reference text, p_description text DEFAULT 'C-Lo table entry'::text, p_ledger_type text DEFAULT 'celo_entry'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.celo_rooms%ROWTYPE;\n  v_player public.celo_room_players%ROWTYPE;\n  v_now timestamptz := now();\n  v_status text;\n  v_desc text := COALESCE(NULLIF(trim(p_description), ''), 'C-Lo table entry');\n  v_type text := COALESCE(NULLIF(trim(p_ledger_type), ''), 'celo_entry');\n  v_min_entry integer;\n  v_max_bank integer;\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room_id and user_id required');\n  END IF;\n  IF p_amount IS NULL OR p_amount <= 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'amount must be positive');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  SELECT *\n  INTO v_room\n  FROM public.celo_rooms\n  WHERE id = p_room_id\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  v_min_entry := GREATEST(\n    500,\n    COALESCE(v_room.minimum_entry_sc, v_room.min_bet_cents, 100)\n  );\n  v_max_bank := GREATEST(\n    0,\n    COALESCE(v_room.current_bank_sc, v_room.current_bank_cents, 0)::integer\n  );\n\n  IF p_amount < v_min_entry THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Bet must be at least the room minimum.');\n  END IF;\n  IF v_max_bank <= 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Table bank is empty.');\n  END IF;\n  IF p_amount > v_max_bank THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Bet cannot exceed the current bank.');\n  END IF;\n\n  v_status := trim(COALESCE(v_room.status, ''));\n  IF v_status = 'rolling' OR v_status = 'completed' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Cannot post entry for this room state');\n  END IF;\n  IF v_status <> ALL (ARRAY['waiting', 'active', 'entry_phase']) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Entries cannot be posted in this room state');\n  END IF;\n\n  IF v_room.banker_id IS NOT NULL AND v_room.banker_id = p_user_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'The banker cannot post a player entry');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1\n    FROM public.celo_rounds r\n    WHERE r.room_id = p_room_id\n      AND r.status IN ('banker_rolling', 'player_rolling', 'betting')\n    LIMIT 1\n  ) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'A round is already in progress');\n  END IF;\n\n  SELECT *\n  INTO v_player\n  FROM public.celo_room_players\n  WHERE room_id = p_room_id\n    AND user_id = p_user_id\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'You are not seated at this table');\n  END IF;\n\n  IF lower(trim(COALESCE(v_player.role, ''))) <> 'player' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Only players in a player seat can post an entry');\n  END IF;\n\n  IF v_player.entry_posted IS TRUE\n     OR COALESCE(v_player.stake_amount_sc, 0) > 0\n     OR COALESCE(v_player.entry_sc, 0) > 0\n     OR COALESCE(v_player.bet_cents, 0) > 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'You already posted an entry for this round');\n  END IF;\n\n  UPDATE public.users u\n  SET gpay_coins = u.gpay_coins - p_amount\n  WHERE u.id = p_user_id\n    AND u.gpay_coins >= p_amount;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient GPay Coins for this entry');\n  END IF;\n\n  INSERT INTO public.coin_transactions (\n    user_id,\n    type,\n    gold_coins,\n    gpay_coins,\n    description,\n    reference\n  )\n  VALUES (\n    p_user_id,\n    v_type,\n    0,\n    -p_amount,\n    v_desc,\n    p_reference\n  );\n\n  UPDATE public.celo_room_players\n  SET\n    entry_sc = p_amount,\n    bet_cents = p_amount,\n    entry_posted = true,\n    stake_amount_sc = p_amount,\n    status = 'active',\n    player_seat_status = 'active'\n  WHERE room_id = p_room_id\n    AND user_id = p_user_id;\n\n  IF v_status IN ('waiting', 'entry_phase') THEN\n    UPDATE public.celo_rooms\n    SET\n      status = CASE WHEN v_status = 'waiting' THEN 'active' ELSE 'entry_phase' END,\n      last_activity = v_now\n    WHERE id = p_room_id;\n  ELSE\n    UPDATE public.celo_rooms\n    SET last_activity = v_now\n    WHERE id = p_room_id;\n  END IF;\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_next_free_player_seat(uuid,integer)",
+    "security_definer": false,
+    "returns": "integer",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_next_free_player_seat(p_room_id uuid, p_cap integer)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  cap integer := GREATEST(2, LEAST(99, COALESCE(NULLIF(p_cap, 0), 10)));\n  s integer;\nBEGIN\n  FOR s IN 1..(cap - 1) LOOP\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.celo_room_players crp\n      WHERE crp.room_id = p_room_id\n        AND crp.seat_number IS NOT NULL\n        AND crp.seat_number = s\n    ) THEN\n      RETURN s;\n    END IF;\n  END LOOP;\n  RETURN 1;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "reject_withdrawal(uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.reject_withdrawal(p_withdrawal_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_row public.withdrawals%rowtype;\n  v_ref text;\n  v_result jsonb;\nbegin\n  select * into v_row from public.withdrawals where id = p_withdrawal_id for update;\n  if v_row is null then\n    return jsonb_build_object('success', false, 'message', 'Withdrawal not found');\n  end if;\n  if v_row.status != 'pending' then\n    return jsonb_build_object('success', false, 'message', 'Only pending withdrawals can be rejected');\n  end if;\n\n  v_ref := 'withdrawal_reject_' || p_withdrawal_id;\n  v_result := public.wallet_ledger_entry(v_row.user_id, 'admin_adjustment', v_row.amount, v_ref);\n  if not (v_result->>'success')::boolean then\n    return jsonb_build_object('success', false, 'message', coalesce(v_result->>'message', 'Ledger credit failed'));\n  end if;\n\n  update public.users\n  set withdrawable_balance = withdrawable_balance + v_row.amount,\n      pending_balance = pending_balance - v_row.amount,\n      updated_at = now()\n  where id = v_row.user_id;\n\n  update public.withdrawals set status = 'rejected' where id = p_withdrawal_id;\n\n  update public.transactions\n  set status = 'rejected', description = 'Withdrawal rejected - balance refunded'\n  where reference_id = p_withdrawal_id and type = 'withdrawal';\n\n  return jsonb_build_object('success', true);\nend;\n$function$\n"
+  },
+  {
+    "signature": "sync_wallets_from_wallet_balances()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.sync_wallets_from_wallet_balances()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  insert into public.wallets (user_id, balance, updated_at)\n  values (new.user_id, new.balance, now())\n  on conflict (user_id) do update set\n    balance = excluded.balance,\n    updated_at = excluded.updated_at;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "celo_user_in_room(uuid)",
+    "security_definer": true,
+    "returns": "boolean",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_user_in_room(_room_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.celo_room_players\n    WHERE room_id = _room_id AND user_id = auth.uid()\n  );\n$function$\n"
+  },
+  {
+    "signature": "process_game_loss(uuid,integer,text,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.process_game_loss(p_user_id uuid, p_amount_cents integer, p_reference text, p_description text DEFAULT NULL::text, p_ledger_type text DEFAULT 'game_loss'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_desc text;\n  v_type text;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'user_id required');\n  END IF;\n  IF p_amount_cents IS NULL OR p_amount_cents <= 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Invalid amount');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  v_desc := COALESCE(NULLIF(trim(p_description), ''), 'Game loss');\n  v_type := COALESCE(NULLIF(trim(p_ledger_type), ''), 'game_loss');\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_user_id) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'User not found');\n  END IF;\n\n  UPDATE public.users u\n  SET gpay_coins = u.gpay_coins - p_amount_cents\n  WHERE u.id = p_user_id\n    AND u.gpay_coins >= p_amount_cents;\n\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient gpay coins');\n  END IF;\n\n  INSERT INTO public.coin_transactions (user_id, type, gold_coins, gpay_coins, description, reference)\n  VALUES (\n    p_user_id,\n    v_type,\n    0,\n    -p_amount_cents,\n    v_desc,\n    p_reference\n  );\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmon_margin_last_24h()",
+    "security_definer": true,
+    "returns": "TABLE(revenue_cents bigint, payout_cents bigint, margin_pct numeric)",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmon_margin_last_24h()\n RETURNS TABLE(revenue_cents bigint, payout_cents bigint, margin_pct numeric)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_revenue bigint;\n  v_payout bigint;\nBEGIN\n  SELECT COALESCE(SUM(amount_cents), 0)::bigint\n    INTO v_revenue\n  FROM platform_earnings\n  WHERE created_at >= now() - interval '24 hours';\n\n  SELECT COALESCE(SUM(delta_available_minor), 0)::bigint\n    INTO v_payout\n  FROM gpay_ledger\n  WHERE created_at >= now() - interval '24 hours'\n    AND delta_available_minor > 0;\n\n  RETURN QUERY SELECT\n    v_revenue,\n    v_payout,\n    CASE\n      WHEN v_revenue = 0 THEN NULL\n      ELSE ROUND(((v_revenue - v_payout)::numeric / v_revenue::numeric) * 100, 2)\n    END;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmon_ad_engage(uuid,uuid,text,integer,numeric,numeric,numeric,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmon_ad_engage(p_user_id uuid, p_ad_id uuid, p_engagement_type text, p_duration_seconds integer DEFAULT 0, p_user_earned_dollars numeric DEFAULT 0, p_admin_earned_dollars numeric DEFAULT 0, p_advertiser_charged_dollars numeric DEFAULT 0, p_ip_address text DEFAULT NULL::text, p_device_type text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_ad record;\n  v_same_ad_24h int;\n  v_same_advertiser_today int;\n  v_user_earned_today decimal;\n  v_engagement_id uuid;\n  v_earning_id uuid;\n  v_cents bigint;\n  v_ledger_result jsonb;\nBEGIN\n  -- 1) Load ad\n  SELECT * INTO v_ad FROM public.garmon_ads WHERE id = p_ad_id FOR UPDATE;\n  IF v_ad IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Ad not found');\n  END IF;\n  IF v_ad.status != 'active' OR v_ad.is_active IS NOT TRUE THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Ad is not active');\n  END IF;\n  IF v_ad.remaining_budget < p_advertiser_charged_dollars THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient ad budget');\n  END IF;\n\n  -- 2) Same ad: max 1 per 24h\n  SELECT count(*) INTO v_same_ad_24h\n  FROM public.garmon_ad_engagements\n  WHERE ad_id = p_ad_id AND user_id = p_user_id\n    AND created_at >= now() - interval '24 hours';\n  IF v_same_ad_24h > 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Already engaged with this ad in the last 24 hours');\n  END IF;\n\n  -- 3) Same advertiser: max 3 per day\n  SELECT count(*) INTO v_same_advertiser_today\n  FROM public.garmon_ad_engagements e\n  JOIN public.garmon_ads a ON a.id = e.ad_id\n  WHERE e.user_id = p_user_id AND a.advertiser_id = v_ad.advertiser_id\n    AND e.created_at >= date_trunc('day', now());\n  IF v_same_advertiser_today >= 3 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Max 3 engagements per advertiser per day');\n  END IF;\n\n  -- 4) User daily cap $2\n  SELECT coalesce(sum(amount), 0) INTO v_user_earned_today\n  FROM public.garmon_user_ad_earnings\n  WHERE user_id = p_user_id AND status = 'credited'\n    AND credited_at >= date_trunc('day', now());\n  IF v_user_earned_today + p_user_earned_dollars > 2.0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Daily earnings limit reached');\n  END IF;\n\n  -- 5) Fraud flag check\n  IF EXISTS (SELECT 1 FROM public.garmon_ad_fraud_flags WHERE user_id = p_user_id) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Account flagged');\n  END IF;\n\n  -- 6) Insert engagement\n  INSERT INTO public.garmon_ad_engagements (\n    ad_id, user_id, engagement_type, duration_seconds,\n    user_earned, admin_earned, advertiser_charged, ip_address, device_type\n  ) VALUES (\n    p_ad_id, p_user_id, p_engagement_type, p_duration_seconds,\n    p_user_earned_dollars, p_admin_earned_dollars, p_advertiser_charged_dollars,\n    p_ip_address, p_device_type\n  )\n  RETURNING id INTO v_engagement_id;\n\n  -- 7) Insert user_ad_earning (credited)\n  INSERT INTO public.garmon_user_ad_earnings (\n    user_id, ad_id, engagement_id, amount, engagement_type, status, credited_at\n  ) VALUES (\n    p_user_id, p_ad_id, v_engagement_id, p_user_earned_dollars, p_engagement_type,\n    'credited', now()\n  )\n  RETURNING id INTO v_earning_id;\n\n  -- 8) Update ad: budget, stats, total_paid, total_admin_cut\n  UPDATE public.garmon_ads SET\n    remaining_budget = remaining_budget - p_advertiser_charged_dollars,\n    total_paid_to_users = total_paid_to_users + p_user_earned_dollars,\n    total_admin_cut = total_admin_cut + p_admin_earned_dollars,\n    views = views + CASE WHEN p_engagement_type IN ('view','banner_view') THEN 1 ELSE 0 END,\n    clicks = clicks + CASE WHEN p_engagement_type = 'click' THEN 1 ELSE 0 END,\n    follows = follows + CASE WHEN p_engagement_type = 'follow' THEN 1 ELSE 0 END,\n    shares = shares + CASE WHEN p_engagement_type = 'share' THEN 1 ELSE 0 END,\n    status = CASE WHEN remaining_budget - p_advertiser_charged_dollars <= 0 THEN 'paused' ELSE status END,\n    is_active = CASE WHEN remaining_budget - p_advertiser_charged_dollars <= 0 THEN false ELSE is_active END,\n    updated_at = now()\n  WHERE id = p_ad_id;\n\n  -- 9) Credit user wallet (cents)\n  v_cents := round(p_user_earned_dollars * 100)::bigint;\n  IF v_cents > 0 THEN\n    v_ledger_result := public.wallet_ledger_entry(\n      p_user_id,\n      'ad_earning',\n      v_cents,\n      'garmon_engage_' || v_engagement_id::text\n    );\n    IF (v_ledger_result->>'success')::boolean IS NOT TRUE THEN\n      -- Rollback by raising; in production you might want to compensate\n      RAISE EXCEPTION 'Wallet credit failed: %', v_ledger_result->>'message';\n    END IF;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'engagementId', v_engagement_id,\n    'earningId', v_earning_id,\n    'userEarnedDollars', p_user_earned_dollars,\n    'userEarnedCents', v_cents\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_finalize_banker_terminal_round(uuid,uuid,integer[],text,text,integer,integer,integer)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_finalize_banker_terminal_round(p_round_id uuid, p_room_id uuid, p_banker_dice integer[], p_banker_dice_name text, p_banker_dice_result text, p_banker_winnings_sc integer, p_platform_fee_sc integer, p_bank_delta_sc integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_rows integer;\n  v_new_bank integer;\nBEGIN\n  IF p_round_id IS NULL OR p_room_id IS NULL THEN\n    RETURN jsonb_build_object(\n      'finalized', false,\n      'reason', 'missing_ids',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = p_room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rounds AS r\n  SET\n    banker_dice = p_banker_dice,\n    banker_dice_name = p_banker_dice_name,\n    banker_dice_result = p_banker_dice_result,\n    banker_roll_in_flight = false,\n    status = 'completed',\n    completed_at = now(),\n    platform_fee_sc = p_platform_fee_sc,\n    banker_winnings_sc = p_banker_winnings_sc,\n    terminal_bank_delta_sc = p_bank_delta_sc,\n    terminal_room_bank_applied = true\n  WHERE r.id = p_round_id\n    AND r.status = 'banker_rolling';\n\n  GET DIAGNOSTICS v_rows = ROW_COUNT;\n\n  IF v_rows = 0 THEN\n    RETURN jsonb_build_object(\n      'finalized', false,\n      'reason', 'round_not_banker_rolling',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = p_room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rooms AS c\n  SET\n    current_bank_sc = GREATEST(\n      0,\n      COALESCE(c.current_bank_sc, 0) + COALESCE(p_bank_delta_sc, 0)\n    ),\n    current_bank_cents = GREATEST(\n      0,\n      COALESCE(c.current_bank_sc, 0) + COALESCE(p_bank_delta_sc, 0)\n    )\n  WHERE c.id = p_room_id\n  RETURNING c.current_bank_sc INTO v_new_bank;\n\n  RETURN jsonb_build_object(\n    'finalized', true,\n    'reason', 'ok',\n    'new_bank_sc', COALESCE(v_new_bank, 0)\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "check_username_available(text)",
+    "security_definer": true,
+    "returns": "boolean",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.check_username_available(candidate text)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_candidate text := lower(trim(COALESCE(candidate, '')));\n  v_reserved text[] := ARRAY[\n    'admin', 'garmonpay', 'support', 'mod', 'moderator', 'system',\n    'official', 'bishop', 'anthropic', 'claude', 'root', 'null'\n  ];\nBEGIN\n  IF v_candidate = '' THEN\n    RETURN false;\n  END IF;\n  IF length(v_candidate) < 3 OR length(v_candidate) > 20 THEN\n    RETURN false;\n  END IF;\n  IF v_candidate !~ '^[a-zA-Z0-9_]+$' THEN\n    RETURN false;\n  END IF;\n  IF v_candidate = ANY(v_reserved) THEN\n    RETURN false;\n  END IF;\n  IF EXISTS (\n    SELECT 1\n    FROM public.users\n    WHERE lower(username) = v_candidate\n  ) THEN\n    RETURN false;\n  END IF;\n  RETURN true;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_empty_board()",
+    "security_definer": false,
+    "returns": "jsonb",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_empty_board()\n RETURNS jsonb\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\n  SELECT '[\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0],\n    [0,0,0,0,0,0,0]\n  ]'::jsonb;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_cell(jsonb,integer,integer)",
+    "security_definer": false,
+    "returns": "integer",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_cell(g jsonb, r integer, c integer)\n RETURNS integer\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v jsonb;\nBEGIN\n  IF r < 0 OR r > 5 OR c < 0 OR c > 6 THEN\n    RETURN -1;\n  END IF;\n  v := g -> r -> c;\n  IF v IS NULL OR jsonb_typeof(v) = 'null' THEN\n    RETURN 0;\n  END IF;\n  RETURN (v #>> '{}')::int;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_count_dir(jsonb,integer,integer,integer,integer,integer)",
+    "security_definer": false,
+    "returns": "integer",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_count_dir(g jsonb, pr integer, pc integer, val integer, dr integer, dc integer)\n RETURNS integer\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE\n  cnt int := 0;\n  r int;\n  c int;\n  cell int;\nBEGIN\n  r := pr;\n  c := pc;\n  LOOP\n    cell := public.garmondrop_cell(g, r, c);\n    EXIT WHEN cell <> val;\n    cnt := cnt + 1;\n    r := r + dr;\n    c := c + dc;\n  END LOOP;\n  RETURN cnt;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_has_winner(jsonb,integer,integer,integer)",
+    "security_definer": false,
+    "returns": "boolean",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_has_winner(g jsonb, pr integer, pc integer, val integer)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n  IF val <> 1 AND val <> 2 THEN\n    RETURN false;\n  END IF;\n  RETURN\n    public.garmondrop_count_dir(g, pr, pc, val, 0, 1) + public.garmondrop_count_dir(g, pr, pc, val, 0, -1) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, 0) + public.garmondrop_count_dir(g, pr, pc, val, -1, 0) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, 1) + public.garmondrop_count_dir(g, pr, pc, val, -1, -1) - 1 >= 4\n    OR public.garmondrop_count_dir(g, pr, pc, val, 1, -1) + public.garmondrop_count_dir(g, pr, pc, val, -1, 1) - 1 >= 4;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_board_full(jsonb)",
+    "security_definer": false,
+    "returns": "boolean",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_board_full(g jsonb)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE\n  c int;\nBEGIN\n  FOR c IN 0..6 LOOP\n    IF public.garmondrop_cell(g, 0, c) = 0 THEN\n      RETURN false;\n    END IF;\n  END LOOP;\n  RETURN true;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_forfeit_atomic(uuid,uuid,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_forfeit_atomic(p_room_id uuid, p_user_id uuid, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_now timestamptz := now();\n  v_winner uuid;\n  v_pot bigint;\n  v_fee int;\n  v_winner_payout bigint;\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room and user required');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n    IF FOUND AND v_room.status = 'completed' THEN\n      RETURN jsonb_build_object('success', true, 'idempotent', true, 'room', row_to_json(v_room)::jsonb);\n    END IF;\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate reference');\n  END IF;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  IF v_room.status <> 'active' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Game is not active');\n  END IF;\n\n  IF p_user_id <> v_room.creator_id AND p_user_id <> v_room.opponent_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Not a player in this room');\n  END IF;\n\n  v_winner := CASE WHEN p_user_id = v_room.creator_id THEN v_room.opponent_id ELSE v_room.creator_id END;\n  v_pot := v_room.pot_total_minor;\n  v_fee := floor(v_pot * 0.1);\n  v_winner_payout := v_pot - v_fee;\n\n  UPDATE public.users\n  SET gpay_coins = gpay_coins + v_winner_payout\n  WHERE id = v_winner;\n\n  INSERT INTO public.coin_transactions (\n    user_id, type, gold_coins, gpay_coins, description, reference\n  ) VALUES (\n    v_winner, 'garmondrop_win', 0, v_winner_payout,\n    'GarmonDrop win (forfeit)', p_reference\n  );\n\n  PERFORM public.garmondrop_record_platform_fee(\n    p_room_id,\n    v_fee,\n    v_winner,\n    'garmondrop_fee_' || p_room_id::text\n  );\n\n  UPDATE public.garmondrop_rooms\n  SET\n    status = 'completed',\n    winner_id = v_winner,\n    platform_fee_minor = v_fee,\n    winner_payout_minor = v_winner_payout,\n    current_turn = NULL,\n    completed_at = v_now,\n    updated_at = v_now\n  WHERE id = p_room_id;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n  RETURN jsonb_build_object(\n    'success', true,\n    'outcome', 'forfeit',\n    'winner_id', v_winner,\n    'room', row_to_json(v_room)::jsonb\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_cancel_waiting_atomic(uuid,uuid,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_cancel_waiting_atomic(p_room_id uuid, p_user_id uuid, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_amt int;\n  v_now timestamptz := now();\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL OR p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Invalid arguments');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', true, 'idempotent', true);\n  END IF;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  IF v_room.status <> 'waiting' OR v_room.opponent_id IS NOT NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room cannot be cancelled');\n  END IF;\n\n  IF v_room.creator_id <> p_user_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Only the host can cancel');\n  END IF;\n\n  v_amt := v_room.entry_amount_minor;\n\n  UPDATE public.users SET gpay_coins = gpay_coins + v_amt WHERE id = p_user_id;\n\n  INSERT INTO public.coin_transactions (\n    user_id, type, gold_coins, gpay_coins, description, reference\n  ) VALUES (\n    p_user_id, 'garmondrop_refund', 0, v_amt,\n    'GarmonDrop cancel waiting room', p_reference\n  );\n\n  UPDATE public.garmondrop_rooms\n  SET status = 'cancelled', updated_at = v_now, completed_at = v_now\n  WHERE id = p_room_id;\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_cancel_room(uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_cancel_room(p_room_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_uid uuid := auth.uid();\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_now timestamptz := now();\n  v_amt int;\n  v_ref text;\nBEGIN\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Unauthorized');\n  END IF;\n  IF p_room_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room_id required');\n  END IF;\n\n  SELECT * INTO v_room\n  FROM public.garmondrop_rooms\n  WHERE id = p_room_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  IF v_room.creator_id <> v_uid THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Only the room creator can cancel');\n  END IF;\n\n  IF v_room.status = 'cancelled' THEN\n    RETURN jsonb_build_object('success', true, 'idempotent', true);\n  END IF;\n\n  IF v_room.status <> 'waiting' OR v_room.opponent_id IS NOT NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room cannot be cancelled');\n  END IF;\n\n  v_amt := GREATEST(0, COALESCE(v_room.entry_amount_minor, 0));\n  v_ref := 'garmondrop_cancel_' || p_room_id::text;\n\n  UPDATE public.users\n  SET gpay_coins = gpay_coins + v_amt\n  WHERE id = v_uid;\n\n  INSERT INTO public.coin_transactions (\n    user_id, type, gold_coins, gpay_coins, description, reference\n  ) VALUES (\n    v_uid, 'garmondrop_refund', 0, v_amt,\n    'GarmonDrop cancel waiting room', v_ref\n  );\n\n  UPDATE public.garmondrop_rooms\n  SET status = 'cancelled', updated_at = v_now, completed_at = v_now\n  WHERE id = p_room_id;\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_fix_null_current_turn(uuid,timestamp with time zone)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_fix_null_current_turn(p_room_id uuid, p_now timestamp with time zone)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.garmondrop_rooms\n  SET\n    current_turn = CASE\n      WHEN mod(move_seq, 2) = 0 THEN creator_id\n      ELSE opponent_id\n    END,\n    updated_at = p_now\n  WHERE id = p_room_id\n    AND status = 'active'\n    AND opponent_id IS NOT NULL\n    AND current_turn IS NULL;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "coin_flip_record_platform_fee(uuid,integer,uuid,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.coin_flip_record_platform_fee(p_game_id uuid, p_amount_gpc integer, p_winner_user_id uuid, p_idempotency_key text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_amount integer := GREATEST(0, COALESCE(p_amount_gpc, 0));\n  v_key text := NULLIF(trim(COALESCE(p_idempotency_key, '')), '');\n  v_inserted_id uuid;\nBEGIN\n  IF v_amount <= 0 THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'non_positive_amount');\n  END IF;\n  IF p_game_id IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'game_id_required');\n  END IF;\n  IF v_key IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'idempotency_key_required');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1 FROM public.platform_earnings pe WHERE pe.idempotency_key = v_key\n  ) THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'duplicate_or_conflict');\n  END IF;\n\n  BEGIN\n    INSERT INTO public.platform_earnings (\n      source,\n      source_id,\n      amount_cents,\n      description,\n      user_id,\n      idempotency_key\n    )\n    VALUES (\n      'coinflip_platform_fee',\n      p_game_id::text,\n      v_amount,\n      'Coin Flip PvP platform fee (10% of pot)',\n      p_winner_user_id,\n      v_key\n    )\n    RETURNING id INTO v_inserted_id;\n  EXCEPTION\n    WHEN unique_violation THEN\n      RETURN jsonb_build_object('inserted', false, 'reason', 'duplicate_or_conflict');\n  END;\n\n  PERFORM public.platform_record_revenue(v_amount::bigint, 'coinflip_fee');\n\n  RETURN jsonb_build_object('inserted', true, 'id', v_inserted_id, 'idempotency_key', v_key);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "admin_balance_monitor_drift()",
+    "security_definer": true,
+    "returns": "TABLE(email text, wallet_balances_cents bigint, ledger_latest_cents bigint, drift_cents bigint)",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.admin_balance_monitor_drift()\n RETURNS TABLE(email text, wallet_balances_cents bigint, ledger_latest_cents bigint, drift_cents bigint)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT u.email,\n         wb.balance AS wallet_balances_cents,\n         wl_latest.balance_after AS ledger_latest_cents,\n         wb.balance - COALESCE(wl_latest.balance_after, 0) AS drift_cents\n  FROM public.wallet_balances wb\n  JOIN public.users u ON u.id = wb.user_id\n  LEFT JOIN LATERAL (\n    SELECT wl.balance_after\n    FROM public.wallet_ledger wl\n    WHERE wl.user_id = wb.user_id\n    ORDER BY wl.created_at DESC\n    LIMIT 1\n  ) wl_latest ON true\n  WHERE wb.balance != COALESCE(wl_latest.balance_after, 0)\n  ORDER BY abs(wb.balance - COALESCE(wl_latest.balance_after, 0)) DESC;\n$function$\n"
+  },
+  {
+    "signature": "approve_withdrawal(uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.approve_withdrawal(p_withdrawal_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_row public.withdrawals%rowtype;\nbegin\n  select * into v_row from public.withdrawals where id = p_withdrawal_id for update;\n  if v_row is null then\n    return jsonb_build_object('success', false, 'message', 'Withdrawal not found');\n  end if;\n  if v_row.status != 'pending' then\n    return jsonb_build_object('success', false, 'message', 'Only pending withdrawals can be approved');\n  end if;\n\n  update public.withdrawals\n  set status = 'approved', processed_at = now()\n  where id = p_withdrawal_id;\n\n  update public.users\n  set pending_balance = pending_balance - v_row.amount,\n      updated_at = now()\n  where id = v_row.user_id;\n\n  if coalesce(v_row.platform_fee, 0) > 0 then\n    insert into public.platform_revenue (amount, source)\n    values (v_row.platform_fee, 'withdrawal_fee');\n  end if;\n\n  return jsonb_build_object('success', true, 'withdrawal', to_jsonb(v_row));\nend;\n$function$\n"
+  },
+  {
+    "signature": "celo_handle_bank_bust_and_transfer(uuid,uuid,integer,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_handle_bank_bust_and_transfer(p_room_id uuid, p_winner_user_id uuid, p_max_players integer, p_action text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_prev uuid;\n  v_room_max integer;\n  v_cap integer;\n  v_effective_winner uuid;\n  v_out_banker uuid;\n  r RECORD;\n  v_seat integer;\nBEGIN\n  IF p_room_id IS NULL THEN\n    RAISE EXCEPTION 'celo_handle_bank_bust_and_transfer: p_room_id required';\n  END IF;\n\n  SELECT c.banker_id, c.max_players\n  INTO v_prev, v_room_max\n  FROM public.celo_rooms AS c\n  WHERE c.id = p_room_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'celo_handle_bank_bust_and_transfer: room not found %', p_room_id;\n  END IF;\n\n  v_cap := GREATEST(2, LEAST(99, COALESCE(NULLIF(p_max_players, 0), v_room_max, 10)));\n\n  -- No room-level banker: zero bank + bust flag only (matches legacy TS branch).\n  IF v_prev IS NULL THEN\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    UPDATE public.celo_rooms AS c\n    SET\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    RETURN jsonb_build_object(\n      'success', true,\n      'banker_id', 'null'::jsonb,\n      'action', to_jsonb(COALESCE(p_action, ''))\n    );\n  END IF;\n\n  -- Winner already owns the bank (refresh / duplicate settlement). Keep them.\n  IF p_winner_user_id IS NOT NULL AND p_winner_user_id = v_prev THEN\n    UPDATE public.celo_rooms AS c\n    SET\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      status = 'bank_takeover',\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    RETURN jsonb_build_object(\n      'success', true,\n      'idempotent', true,\n      'banker_id', to_jsonb(v_prev::text),\n      'action', to_jsonb(COALESCE(p_action, ''))\n    );\n  END IF;\n\n  v_effective_winner := NULL;\n  IF p_winner_user_id IS NOT NULL\n     AND p_winner_user_id IS DISTINCT FROM v_prev THEN\n    v_effective_winner := p_winner_user_id;\n  END IF;\n\n  v_out_banker := NULL;\n\n  IF v_effective_winner IS NOT NULL THEN\n    -- Demote every banker row except the successor.\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n        AND crp.user_id IS DISTINCT FROM v_effective_winner\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    INSERT INTO public.celo_room_players (\n      room_id,\n      user_id,\n      role,\n      seat_number,\n      bet_cents,\n      entry_sc,\n      stake_amount_sc,\n      entry_posted,\n      status,\n      player_seat_status,\n      joined_at\n    )\n    VALUES (\n      p_room_id,\n      v_effective_winner,\n      'banker',\n      0,\n      0,\n      0,\n      0,\n      false,\n      'seated',\n      'seated',\n      now()\n    )\n    ON CONFLICT (room_id, user_id) DO UPDATE SET\n      role = EXCLUDED.role,\n      seat_number = 0,\n      bet_cents = 0,\n      entry_sc = 0,\n      stake_amount_sc = 0,\n      entry_posted = false,\n      status = 'seated',\n      player_seat_status = 'seated';\n\n    UPDATE public.celo_rooms AS c\n    SET\n      banker_id = v_effective_winner,\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      status = 'bank_takeover',\n      last_activity = now()\n    WHERE c.id = p_room_id;\n\n    v_out_banker := v_effective_winner;\n  ELSE\n    -- Had a banker but no valid successor: clear room banker and demote all banker rows.\n    FOR r IN\n      SELECT crp.user_id\n      FROM public.celo_room_players AS crp\n      WHERE crp.room_id = p_room_id\n        AND crp.role = 'banker'\n      ORDER BY crp.user_id\n    LOOP\n      v_seat := public.celo_next_free_player_seat(p_room_id, v_cap);\n      UPDATE public.celo_room_players AS u\n      SET\n        role = 'player',\n        seat_number = v_seat\n      WHERE u.room_id = p_room_id\n        AND u.user_id = r.user_id;\n    END LOOP;\n\n    UPDATE public.celo_rooms AS c\n    SET\n      banker_id = NULL,\n      current_bank_sc = 0,\n      current_bank_cents = 0,\n      banker_reserve_sc = 0,\n      bank_busted = true,\n      last_activity = now()\n    WHERE c.id = p_room_id;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'banker_id', CASE\n      WHEN v_out_banker IS NULL THEN 'null'::jsonb\n      ELSE to_jsonb(v_out_banker::text)\n    END,\n    'action', to_jsonb(COALESCE(p_action, ''))\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "claim_daily_reward(uuid,bigint)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.claim_daily_reward(p_user_id uuid, p_reward_cents bigint DEFAULT 25)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_today date := current_date;\n  v_last date;\nbegin\n  if p_reward_cents is null or p_reward_cents <= 0 then\n    return jsonb_build_object('success', false, 'message', 'Invalid reward');\n  end if;\n  select last_claim_date into v_last from public.daily_rewards where user_id = p_user_id;\n  if v_last is not null and v_last >= v_today then\n    return jsonb_build_object('success', false, 'message', 'Already claimed today');\n  end if;\n  insert into public.daily_rewards (user_id, last_claim_date, reward_amount, updated_at)\n  values (p_user_id, v_today, p_reward_cents, now())\n  on conflict (user_id) do update set\n    last_claim_date = v_today,\n    reward_amount = p_reward_cents,\n    updated_at = now();\n  update public.users set balance = balance + p_reward_cents, updated_at = now() where id = p_user_id;\n  insert into public.transactions (user_id, type, amount, status, description)\n  values (p_user_id, 'earning', p_reward_cents, 'completed', 'Daily check-in reward');\n  insert into public.earnings (user_id, amount, source) values (p_user_id, p_reward_cents, 'ad');\n  insert into public.platform_activities (user_id, activity_type, description, amount_cents)\n  values (p_user_id, 'daily_checkin', 'Daily check-in', p_reward_cents);\n  return jsonb_build_object('success', true, 'amountCents', p_reward_cents);\nend;\n$function$\n"
+  },
+  {
+    "signature": "complete_ad_session_and_issue_reward(uuid,uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.complete_ad_session_and_issue_reward(p_user_id uuid, p_session_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_session record;\n  v_ad record;\n  v_reward bigint;\nbegin\n  select * into v_session from public.ad_sessions where id = p_session_id;\n  if v_session is null then\n    return jsonb_build_object('success', false, 'message', 'Invalid session');\n  end if;\n  if v_session.user_id != p_user_id then\n    return jsonb_build_object('success', false, 'message', 'Unauthorized');\n  end if;\n  if v_session.reward_given then\n    return jsonb_build_object('success', false, 'message', 'Reward already issued');\n  end if;\n\n  if (v_session.start_time + (select duration_seconds from public.ads where id = v_session.ad_id) * interval '1 second') > now() then\n    return jsonb_build_object('success', false, 'message', 'Timer not complete');\n  end if;\n\n  select * into v_ad from public.ads where id = v_session.ad_id;\n  if v_ad is null then\n    return jsonb_build_object('success', false, 'message', 'Ad not found');\n  end if;\n\n  v_reward := v_ad.user_reward;\n\n  update public.ad_sessions set completed = true, reward_given = true where id = p_session_id;\n\n  update public.users set balance = balance + v_reward, updated_at = now() where id = p_user_id;\n\n  insert into public.earnings (user_id, amount, source, reference_id)\n  values (p_user_id, v_reward, 'ad', p_session_id);\n\n  insert into public.transactions (user_id, type, amount, status, description, reference_id)\n  values (p_user_id, 'earning', v_reward, 'completed', 'Ad reward', p_session_id);\n\n  return jsonb_build_object('success', true, 'rewardCents', v_reward);\nend;\n$function$\n"
+  },
+  {
+    "signature": "increment_user_balance(uuid,bigint)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_user_balance(p_user_id uuid, p_amount_cents bigint)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF p_user_id IS NULL OR p_amount_cents IS NULL OR p_amount_cents <= 0 THEN RETURN; END IF;\n  UPDATE public.users\n  SET balance = COALESCE(balance, 0) + p_amount_cents,\n      updated_at = now()\n  WHERE id = p_user_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "convert_balance_to_ad_credit(uuid,bigint)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.convert_balance_to_ad_credit(p_user_id uuid, p_amount_cents bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_balance bigint;\nbegin\n  if p_amount_cents is null or p_amount_cents <= 0 then\n    return jsonb_build_object('success', false, 'message', 'Invalid amount');\n  end if;\n\n  select balance into v_balance from public.users where id = p_user_id for update;\n  if v_balance is null then\n    return jsonb_build_object('success', false, 'message', 'User not found');\n  end if;\n  if v_balance < p_amount_cents then\n    return jsonb_build_object('success', false, 'message', 'Insufficient balance');\n  end if;\n\n  update public.users\n  set balance = balance - p_amount_cents,\n      ad_credit_balance = ad_credit_balance + p_amount_cents,\n      updated_at = now()\n  where id = p_user_id;\n\n  insert into public.transactions (user_id, type, amount, status, description)\n  values (p_user_id, 'ad_credit', p_amount_cents, 'completed', 'Converted balance to ad credit');\n\n  return jsonb_build_object('success', true, 'amountCents', p_amount_cents);\nend;\n$function$\n"
+  },
+  {
+    "signature": "credit_coins_with_ledger(uuid,integer,integer,text,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.credit_coins_with_ledger(p_user_id uuid, p_gold_coins integer, p_gpay_coins integer, p_type text, p_description text, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_g integer := COALESCE(p_gold_coins, 0);\n  v_s integer := COALESCE(p_gpay_coins, 0);\n  v_type text;\n  v_desc text;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'user_id required');\n  END IF;\n  IF v_g = 0 AND v_s = 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Amount cannot be zero');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_user_id) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'User not found');\n  END IF;\n\n  v_type := COALESCE(NULLIF(trim(p_type), ''), 'credit');\n  v_desc := COALESCE(NULLIF(trim(p_description), ''), 'Credit');\n\n  PERFORM public.credit_coins(p_user_id, v_g, v_s);\n\n  INSERT INTO public.coin_transactions (user_id, type, gold_coins, gpay_coins, description, reference)\n  VALUES (p_user_id, v_type, v_g, v_s, v_desc, p_reference);\n\n  RETURN jsonb_build_object('success', true);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "debit_gpay_coins(uuid,integer)",
+    "security_definer": true,
+    "returns": "json",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.debit_gpay_coins(p_user_id uuid, p_amount integer)\n RETURNS json\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_current_balance integer;\nBEGIN\n  -- Get current balance\n  SELECT gpay_coins\n  INTO v_current_balance\n  FROM users\n  WHERE id = p_user_id;\n\n  IF NOT FOUND THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'User not found'\n    );\n  END IF;\n\n  -- Check sufficient balance\n  IF v_current_balance < p_amount THEN\n    RETURN json_build_object(\n      'success', false,\n      'error', 'Insufficient GPay Coins',\n      'balance', v_current_balance,\n      'required', p_amount\n    );\n  END IF;\n\n  -- Deduct coins\n  UPDATE users\n  SET\n    gpay_coins = gpay_coins - p_amount,\n    updated_at = now()\n  WHERE id = p_user_id;\n\n  RETURN json_build_object(\n    'success', true,\n    'debited', p_amount,\n    'new_balance', v_current_balance - p_amount\n  );\n\nEXCEPTION WHEN OTHERS THEN\n  RETURN json_build_object(\n    'success', false,\n    'error', SQLERRM\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "debit_gpay_coins_with_ledger(uuid,integer,text,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.debit_gpay_coins_with_ledger(p_user_id uuid, p_amount integer, p_type text, p_description text, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  RETURN public.process_game_loss(\n    p_user_id,\n    p_amount,\n    p_reference,\n    p_description,\n    COALESCE(NULLIF(trim(p_type), ''), 'debit')\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "debit_sweeps_coins(uuid,integer)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.debit_sweeps_coins(p_user_id uuid, p_amount integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF (\n    SELECT sweeps_coins\n    FROM public.users\n    WHERE id = p_user_id\n  ) < p_amount THEN\n    RAISE EXCEPTION 'Insufficient sweeps coins';\n  END IF;\n\n  UPDATE public.users\n  SET sweeps_coins = sweeps_coins - p_amount\n  WHERE id = p_user_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_make_move_atomic(uuid,uuid,integer,integer,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_make_move_atomic(p_room_id uuid, p_user_id uuid, p_column integer, p_expected_seq integer, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_now timestamptz := now();\n  v_board jsonb;\n  vr int;\n  vc int := p_column;\n  v_piece int;\n  v_won boolean;\n  v_full boolean;\n  v_pot bigint;\n  v_fee int;\n  v_winner_payout bigint;\n  v_winner uuid;\n  v_refund_a bigint;\n  v_refund_b bigint;\n  v_other uuid;\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room and user required');\n  END IF;\n  IF p_column < 0 OR p_column > 6 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Invalid column');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.garmondrop_moves WHERE reference = p_reference) THEN\n    SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n    IF FOUND THEN\n      RETURN jsonb_build_object(\n        'success', true,\n        'idempotent', true,\n        'room', row_to_json(v_room)::jsonb\n      );\n    END IF;\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate reference');\n  END IF;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  PERFORM public.garmondrop_fix_null_current_turn(p_room_id, v_now);\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n\n  IF v_room.status <> 'active' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Game is not active');\n  END IF;\n\n  IF v_room.current_turn IS DISTINCT FROM p_user_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Not your turn');\n  END IF;\n\n  IF v_room.move_seq IS DISTINCT FROM p_expected_seq THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Stale move sequence; refresh state');\n  END IF;\n\n  IF p_user_id <> v_room.creator_id AND p_user_id <> v_room.opponent_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Not a player in this room');\n  END IF;\n\n  v_piece := CASE WHEN p_user_id = v_room.creator_id THEN 1 ELSE 2 END;\n  v_board := v_room.board_state;\n\n  vr := -1;\n  FOR rloop IN REVERSE 5..0 LOOP\n    IF public.garmondrop_cell(v_board, rloop, vc) = 0 THEN\n      vr := rloop;\n      EXIT;\n    END IF;\n  END LOOP;\n\n  IF vr < 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Column is full');\n  END IF;\n\n  v_board := jsonb_set(v_board, ARRAY[vr::text, vc::text], to_jsonb(v_piece), true);\n  v_won := public.garmondrop_has_winner(v_board, vr, vc, v_piece);\n  v_full := public.garmondrop_board_full(v_board);\n\n  INSERT INTO public.garmondrop_moves (room_id, move_seq, user_id, col, row, reference)\n  VALUES (p_room_id, p_expected_seq, p_user_id, vc, vr, p_reference);\n\n  v_pot := v_room.pot_total_minor;\n  v_fee := floor(v_pot * 0.1);\n\n  IF v_won THEN\n    v_winner := p_user_id;\n    v_winner_payout := v_pot - v_fee;\n\n    UPDATE public.users\n    SET gpay_coins = gpay_coins + v_winner_payout\n    WHERE id = v_winner;\n\n    INSERT INTO public.coin_transactions (\n      user_id, type, gold_coins, gpay_coins, description, reference\n    ) VALUES (\n      v_winner, 'garmondrop_win', 0, v_winner_payout,\n      'GarmonDrop win payout', 'garmondrop_win_' || p_room_id::text\n    );\n\n    PERFORM public.garmondrop_record_platform_fee(\n      p_room_id,\n      v_fee,\n      v_winner,\n      'garmondrop_fee_' || p_room_id::text\n    );\n\n    UPDATE public.garmondrop_rooms\n    SET\n      board_state = v_board,\n      status = 'completed',\n      winner_id = v_winner,\n      platform_fee_minor = v_fee,\n      winner_payout_minor = v_winner_payout,\n      current_turn = NULL,\n      move_seq = p_expected_seq + 1,\n      completed_at = v_now,\n      updated_at = v_now\n    WHERE id = p_room_id;\n\n    SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n    RETURN jsonb_build_object(\n      'success', true,\n      'outcome', 'win',\n      'winner_id', v_winner,\n      'room', row_to_json(v_room)::jsonb\n    );\n  END IF;\n\n  IF v_full THEN\n    v_refund_a := (v_pot - v_fee) / 2;\n    v_refund_b := (v_pot - v_fee) - v_refund_a;\n\n    UPDATE public.users SET gpay_coins = gpay_coins + v_refund_a WHERE id = v_room.creator_id;\n    UPDATE public.users SET gpay_coins = gpay_coins + v_refund_b WHERE id = v_room.opponent_id;\n\n    INSERT INTO public.coin_transactions (\n      user_id, type, gold_coins, gpay_coins, description, reference\n    ) VALUES\n      (v_room.creator_id, 'garmondrop_draw_refund', 0, v_refund_a,\n       'GarmonDrop draw refund', 'garmondrop_draw_' || p_room_id::text || '_a'),\n      (v_room.opponent_id, 'garmondrop_draw_refund', 0, v_refund_b,\n       'GarmonDrop draw refund', 'garmondrop_draw_' || p_room_id::text || '_b');\n\n    PERFORM public.garmondrop_record_platform_fee(\n      p_room_id,\n      v_fee,\n      v_room.creator_id,\n      'garmondrop_fee_' || p_room_id::text\n    );\n\n    UPDATE public.garmondrop_rooms\n    SET\n      board_state = v_board,\n      status = 'completed',\n      winner_id = NULL,\n      platform_fee_minor = v_fee,\n      winner_payout_minor = 0,\n      current_turn = NULL,\n      move_seq = p_expected_seq + 1,\n      completed_at = v_now,\n      updated_at = v_now\n    WHERE id = p_room_id;\n\n    SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n    RETURN jsonb_build_object(\n      'success', true,\n      'outcome', 'draw',\n      'room', row_to_json(v_room)::jsonb\n    );\n  END IF;\n\n  v_other := CASE WHEN p_user_id = v_room.creator_id THEN v_room.opponent_id ELSE v_room.creator_id END;\n\n  UPDATE public.garmondrop_rooms\n  SET\n    board_state = v_board,\n    current_turn = v_other,\n    move_seq = p_expected_seq + 1,\n    updated_at = v_now\n  WHERE id = p_room_id;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n  RETURN jsonb_build_object(\n    'success', true,\n    'outcome', 'continue',\n    'room', row_to_json(v_room)::jsonb\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "increment_wallet(uuid,integer)",
+    "security_definer": false,
+    "returns": "void",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_wallet(p_user_id uuid, p_amount_cents integer)\n RETURNS void\n LANGUAGE sql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\n  update public.users set balance_cents = balance_cents + p_amount_cents where id = p_user_id;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_post_entry_atomic(text,uuid,uuid,integer,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_post_entry_atomic(p_op text, p_room_id uuid, p_user_id uuid, p_entry_amount integer, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_op text := lower(trim(COALESCE(p_op, '')));\n  v_now timestamptz := now();\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_amt int;\n  v_new_id uuid;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'user_id required');\n  END IF;\n  IF p_reference IS NULL OR trim(p_reference) = '' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'reference required');\n  END IF;\n  IF EXISTS (SELECT 1 FROM public.coin_transactions WHERE reference = p_reference) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n  END IF;\n\n  v_amt := floor(COALESCE(p_entry_amount, 0));\n  IF v_amt < 100 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Entry must be at least 100 GPC');\n  END IF;\n\n  IF v_op = 'create' THEN\n    IF p_room_id IS NOT NULL THEN\n      RETURN jsonb_build_object('success', false, 'message', 'room_id must be null for create');\n    END IF;\n\n    UPDATE public.users u\n    SET gpay_coins = u.gpay_coins - v_amt\n    WHERE u.id = p_user_id AND u.gpay_coins >= v_amt;\n    IF NOT FOUND THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Insufficient GPay Coins');\n    END IF;\n\n    INSERT INTO public.coin_transactions (\n      user_id, type, gold_coins, gpay_coins, description, reference\n    ) VALUES (\n      p_user_id, 'garmondrop_stake', 0, -v_amt,\n      'GarmonDrop stake (create room)', p_reference\n    );\n\n    INSERT INTO public.garmondrop_rooms (\n      creator_id, entry_amount_minor, status, board_state, move_seq, updated_at\n    ) VALUES (\n      p_user_id, v_amt, 'waiting', public.garmondrop_empty_board(), 0, v_now\n    )\n    RETURNING id INTO v_new_id;\n\n    RETURN jsonb_build_object('success', true, 'room_id', v_new_id);\n  END IF;\n\n  IF v_op = 'join' THEN\n    IF p_room_id IS NULL THEN\n      RETURN jsonb_build_object('success', false, 'message', 'room_id required to join');\n    END IF;\n\n    SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id FOR UPDATE;\n    IF NOT FOUND THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n    END IF;\n\n    IF v_room.status <> 'waiting' OR v_room.opponent_id IS NOT NULL THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Room is not open');\n    END IF;\n\n    IF v_room.creator_id = p_user_id THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Cannot join your own room');\n    END IF;\n\n    IF v_room.entry_amount_minor <> v_amt THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Entry amount must match room stake');\n    END IF;\n\n    UPDATE public.users u\n    SET gpay_coins = u.gpay_coins - v_amt\n    WHERE u.id = p_user_id AND u.gpay_coins >= v_amt;\n    IF NOT FOUND THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Insufficient GPay Coins');\n    END IF;\n\n    INSERT INTO public.coin_transactions (\n      user_id, type, gold_coins, gpay_coins, description, reference\n    ) VALUES (\n      p_user_id, 'garmondrop_stake', 0, -v_amt,\n      'GarmonDrop stake (join room)', p_reference\n    );\n\n    UPDATE public.garmondrop_rooms\n    SET\n      opponent_id = p_user_id,\n      status = 'active',\n      current_turn = creator_id,\n      pot_total_minor = (entry_amount_minor::bigint * 2),\n      board_state = public.garmondrop_empty_board(),\n      move_seq = 0,\n      updated_at = v_now\n    WHERE id = p_room_id;\n\n    RETURN jsonb_build_object('success', true, 'room_id', p_room_id);\n  END IF;\n\n  RETURN jsonb_build_object('success', false, 'message', 'Invalid op; use create or join');\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_record_platform_fee(uuid,integer,uuid,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_record_platform_fee(p_room_id uuid, p_amount_gpc integer, p_context_user_id uuid, p_idempotency_key text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_amount integer := GREATEST(0, COALESCE(p_amount_gpc, 0));\n  v_key text := NULLIF(trim(COALESCE(p_idempotency_key, '')), '');\n  v_inserted_id uuid;\nBEGIN\n  IF v_amount <= 0 THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'non_positive_amount');\n  END IF;\n  IF p_room_id IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'room_id_required');\n  END IF;\n  IF v_key IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'idempotency_key_required');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1 FROM public.platform_earnings pe WHERE pe.idempotency_key = v_key\n  ) THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'duplicate_or_conflict');\n  END IF;\n\n  BEGIN\n    INSERT INTO public.platform_earnings (\n      source,\n      source_id,\n      amount_cents,\n      description,\n      user_id,\n      idempotency_key\n    )\n    VALUES (\n      'garmondrop_platform_fee',\n      p_room_id::text,\n      v_amount,\n      'GarmonDrop PvP platform fee (10% of pot)',\n      p_context_user_id,\n      v_key\n    )\n    RETURNING id INTO v_inserted_id;\n  EXCEPTION\n    WHEN unique_violation THEN\n      RETURN jsonb_build_object('inserted', false, 'reason', 'duplicate_or_conflict');\n  END;\n\n  PERFORM public.platform_record_revenue(v_amount::bigint, 'garmondrop_fee');\n\n  RETURN jsonb_build_object('inserted', true, 'id', v_inserted_id, 'idempotency_key', v_key);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "garmondrop_repair_turn_atomic(uuid,uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.garmondrop_repair_turn_atomic(p_room_id uuid, p_user_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_room public.garmondrop_rooms%ROWTYPE;\n  v_now timestamptz := now();\nBEGIN\n  IF p_room_id IS NULL OR p_user_id IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'room and user required');\n  END IF;\n\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Room not found');\n  END IF;\n\n  IF p_user_id <> v_room.creator_id AND p_user_id <> v_room.opponent_id THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Not a player in this room');\n  END IF;\n\n  PERFORM public.garmondrop_fix_null_current_turn(p_room_id, v_now);\n  SELECT * INTO v_room FROM public.garmondrop_rooms WHERE id = p_room_id;\n\n  RETURN jsonb_build_object('success', true, 'room', row_to_json(v_room)::jsonb);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "grant_referral_bonus_for_user(uuid,bigint)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.grant_referral_bonus_for_user(p_referred_user_id uuid, p_bonus_cents bigint DEFAULT 50)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_referred record;\n  v_referrer_id uuid;\nbegin\n  if p_bonus_cents is null or p_bonus_cents <= 0 then\n    return jsonb_build_object('success', false, 'message', 'Invalid bonus amount');\n  end if;\n  select id, referred_by_code into v_referred from public.users where id = p_referred_user_id;\n  if v_referred is null or v_referred.referred_by_code is null or trim(v_referred.referred_by_code) = '' then\n    return jsonb_build_object('success', false, 'message', 'No referrer');\n  end if;\n  select id into v_referrer_id from public.users where referral_code = v_referred.referred_by_code;\n  if v_referrer_id is null then\n    return jsonb_build_object('success', false, 'message', 'Referrer not found');\n  end if;\n  if v_referrer_id = p_referred_user_id then\n    return jsonb_build_object('success', false, 'message', 'Cannot self-refer');\n  end if;\n  -- Prevent duplicate: unique on referred_user_id\n  insert into public.referral_bonus (referrer_id, referred_user_id, amount, status)\n  values (v_referrer_id, p_referred_user_id, p_bonus_cents, 'paid')\n  on conflict (referred_user_id) do nothing;\n  if not found then\n    return jsonb_build_object('success', false, 'message', 'Bonus already granted');\n  end if;\n  update public.users set balance = balance + p_bonus_cents, updated_at = now() where id = v_referrer_id;\n  insert into public.transactions (user_id, type, amount, status, description, reference_id)\n  values (v_referrer_id, 'referral', p_bonus_cents, 'completed', 'Referral bonus', (select id from public.referral_bonus where referred_user_id = p_referred_user_id limit 1));\n  insert into public.earnings (user_id, amount, source, reference_id)\n  values (v_referrer_id, p_bonus_cents, 'referral', (select id from public.referral_bonus where referred_user_id = p_referred_user_id limit 1));\n  insert into public.platform_activities (user_id, activity_type, description, amount_cents)\n  values (v_referrer_id, 'referral_bonus', 'Referral bonus earned', p_bonus_cents);\n  return jsonb_build_object('success', true, 'referrer_id', v_referrer_id);\nend;\n$function$\n"
+  },
+  {
+    "signature": "increment_balance(uuid,numeric)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_balance(user_id uuid, amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF user_id IS NULL OR amount IS NULL OR amount <= 0 THEN RETURN; END IF;\n  UPDATE public.users\n  SET balance = COALESCE(balance, 0) + (amount * 100)::bigint,\n      updated_at = now()\n  WHERE id = user_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "increment_profile_reportable_earnings(uuid,bigint)",
+    "security_definer": true,
+    "returns": "bigint",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_profile_reportable_earnings(p_user_id uuid, p_delta_cents bigint)\n RETURNS bigint\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_new bigint;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RETURN 0;\n  END IF;\n  IF p_delta_cents IS NULL OR p_delta_cents <= 0 THEN\n    SELECT COALESCE(reportable_earnings_cents, 0) INTO v_new FROM public.profiles WHERE id = p_user_id;\n    RETURN COALESCE(v_new, 0);\n  END IF;\n\n  INSERT INTO public.profiles (id, reportable_earnings_cents)\n  VALUES (p_user_id, p_delta_cents)\n  ON CONFLICT (id) DO UPDATE\n    SET reportable_earnings_cents = COALESCE(public.profiles.reportable_earnings_cents, 0) + EXCLUDED.reportable_earnings_cents;\n\n  SELECT reportable_earnings_cents INTO v_new FROM public.profiles WHERE id = p_user_id;\n  RETURN COALESCE(v_new, 0);\nEND;\n$function$\n"
+  },
+  {
+    "signature": "increment_social_strikes(uuid)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.increment_social_strikes(p_user_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.users\n  SET social_strike_count = social_strike_count + 1\n  WHERE id = p_user_id;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "platform_record_payout(bigint,text)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.platform_record_payout(p_amount_cents bigint, p_source text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_balance bigint;\n  v_rewards bigint;\n  v_revenue bigint;\nBEGIN\n  SELECT balance_cents, total_rewards_paid_cents, total_revenue_cents\n  INTO v_balance, v_rewards, v_revenue\n  FROM public.platform_balance WHERE id = 'default';\n  IF v_balance IS NULL THEN\n    RAISE EXCEPTION 'platform_balance row not found';\n  END IF;\n  IF v_balance < p_amount_cents THEN\n    RAISE EXCEPTION 'Insufficient platform balance';\n  END IF;\n  IF v_rewards + p_amount_cents > v_revenue THEN\n    RAISE EXCEPTION 'Payout would exceed total revenue';\n  END IF;\n  UPDATE public.platform_balance\n  SET\n    balance_cents = balance_cents - p_amount_cents,\n    total_rewards_paid_cents = total_rewards_paid_cents + p_amount_cents,\n    updated_at = now()\n  WHERE id = 'default';\nEND;\n$function$\n"
+  },
+  {
+    "signature": "process_subscription_billing(uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.process_subscription_billing(p_subscription_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_sub record;\n  v_period_end date;\n  v_referrer_id uuid;\n  v_referrer_code text;\n  v_pct numeric;\n  v_commission_cents bigint;\n  v_gpc integer;\n  v_rc_id uuid;\n  v_coin_ref text;\nBEGIN\n  SELECT * INTO v_sub FROM public.subscriptions WHERE id = p_subscription_id FOR UPDATE;\n  IF v_sub IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Subscription not found');\n  END IF;\n  IF v_sub.status != 'active' THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Subscription not active');\n  END IF;\n\n  v_period_end := v_sub.next_billing_date;\n  IF v_period_end > CURRENT_DATE THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Billing date not yet due');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1 FROM public.subscription_payments\n    WHERE subscription_id = p_subscription_id AND period_end_date = v_period_end\n  ) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Already paid for this period');\n  END IF;\n  INSERT INTO public.subscription_payments (subscription_id, period_end_date)\n  VALUES (p_subscription_id, v_period_end);\n\n  SELECT u.referred_by_code INTO v_referrer_code FROM public.users u WHERE u.id = v_sub.user_id;\n  IF v_referrer_code IS NULL OR trim(v_referrer_code) = '' THEN\n    UPDATE public.subscriptions SET next_billing_date = v_period_end + interval '1 month', updated_at = now() WHERE id = p_subscription_id;\n    RETURN jsonb_build_object('success', true, 'commissionPaid', false, 'reason', 'no_referrer');\n  END IF;\n  SELECT id INTO v_referrer_id FROM public.users WHERE referral_code = v_referrer_code;\n  IF v_referrer_id IS NULL OR v_referrer_id = v_sub.user_id THEN\n    UPDATE public.subscriptions SET next_billing_date = v_period_end + interval '1 month', updated_at = now() WHERE id = p_subscription_id;\n    RETURN jsonb_build_object('success', true, 'commissionPaid', false, 'reason', 'no_referrer');\n  END IF;\n\n  SELECT commission_percentage INTO v_pct FROM public.referral_commission_config WHERE membership_tier = v_sub.membership_tier;\n  IF v_pct IS NULL THEN\n    v_pct := 10;\n  END IF;\n  v_commission_cents := round(v_sub.monthly_price * v_pct / 100)::bigint;\n  IF v_commission_cents <= 0 THEN\n    UPDATE public.subscriptions SET next_billing_date = v_period_end + interval '1 month', updated_at = now() WHERE id = p_subscription_id;\n    RETURN jsonb_build_object('success', true, 'commissionPaid', false, 'reason', 'zero_commission');\n  END IF;\n\n  INSERT INTO public.referral_commissions (referrer_user_id, referred_user_id, subscription_id, commission_amount, last_paid_date, status)\n  VALUES (v_referrer_id, v_sub.user_id, p_subscription_id, v_commission_cents, v_period_end, 'active')\n  ON CONFLICT (referrer_user_id, referred_user_id, subscription_id) DO UPDATE SET\n    commission_amount = excluded.commission_amount,\n    last_paid_date = v_period_end,\n    updated_at = now()\n  WHERE public.referral_commissions.status = 'active';\n  SELECT id INTO v_rc_id FROM public.referral_commissions WHERE subscription_id = p_subscription_id AND referrer_user_id = v_referrer_id;\n\n  IF NOT (SELECT (status = 'active') FROM public.referral_commissions WHERE id = v_rc_id) THEN\n    UPDATE public.subscriptions SET next_billing_date = v_period_end + interval '1 month', updated_at = now() WHERE id = p_subscription_id;\n    RETURN jsonb_build_object('success', true, 'commissionPaid', false, 'reason', 'commission_stopped');\n  END IF;\n\n  UPDATE public.referral_commissions SET last_paid_date = v_period_end, updated_at = now() WHERE id = v_rc_id;\n\n  v_gpc := LEAST(v_commission_cents, 2147483647)::integer;\n  v_coin_ref := 'referral_comm_rc_' || v_rc_id::text || '_' || v_period_end::text;\n\n  PERFORM public.credit_coins(v_referrer_id, 0, v_gpc);\n\n  INSERT INTO public.coin_transactions (user_id, type, gold_coins, gpay_coins, description, reference)\n  VALUES (\n    v_referrer_id,\n    'referral_commission',\n    0,\n    v_gpc,\n    'Referral commission (recurring)',\n    v_coin_ref\n  );\n\n  INSERT INTO public.transactions (user_id, type, amount, status, description, reference_id)\n  VALUES (v_referrer_id, 'referral_commission', v_gpc, 'completed', 'Referral commission (recurring)', v_rc_id);\n\n  UPDATE public.subscriptions SET next_billing_date = v_period_end + interval '1 month', updated_at = now() WHERE id = p_subscription_id;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'commissionPaid', true,\n    'commissionGpc', v_gpc,\n    'commissionCents', v_gpc,\n    'referrerId', v_referrer_id\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "purchase_membership_with_balance_v2(uuid,text,integer,timestamp with time zone)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.purchase_membership_with_balance_v2(p_user_id uuid, p_tier text, p_price_gc integer, p_extend_from timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_current_gold integer;\n  v_period_end timestamptz;\nBEGIN\n  IF p_tier NOT IN ('starter', 'growth', 'pro', 'elite') THEN\n    RAISE EXCEPTION 'Invalid tier: %', p_tier;\n  END IF;\n  IF p_price_gc <= 0 THEN\n    RAISE EXCEPTION 'Price must be positive';\n  END IF;\n\n  IF p_extend_from IS NULL THEN\n    v_period_end := now() + interval '1 month';\n  ELSE\n    v_period_end := greatest(now(), p_extend_from) + interval '1 month';\n  END IF;\n\n  SELECT gold_coins INTO v_current_gold\n  FROM public.users WHERE id = p_user_id FOR UPDATE;\n\n  IF v_current_gold IS NULL THEN\n    RAISE EXCEPTION 'User not found';\n  END IF;\n\n  IF v_current_gold < p_price_gc THEN\n    RAISE EXCEPTION 'Insufficient gold coins (have %, need %)', v_current_gold, p_price_gc;\n  END IF;\n\n  UPDATE public.users\n  SET gold_coins = gold_coins - p_price_gc,\n      membership = p_tier,\n      membership_tier = p_tier,\n      membership_started_at = COALESCE(membership_started_at, now()),\n      membership_period_end = v_period_end,\n      membership_expires_at = v_period_end,\n      membership_payment_source = 'balance',\n      stripe_subscription_id = null,\n      subscription_status = 'active',\n      updated_at = now()\n  WHERE id = p_user_id\n  RETURNING membership_period_end INTO v_period_end;\n\n  INSERT INTO public.membership_purchases (user_id, tier, price_gc, payment_method, period_end, created_at)\n  VALUES (p_user_id, p_tier, p_price_gc, 'balance', v_period_end, now());\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'tier', p_tier,\n    'price_gc', p_price_gc,\n    'remaining_gold', v_current_gold - p_price_gc,\n    'period_end', v_period_end\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "request_withdrawal(uuid,numeric)",
+    "security_definer": false,
+    "returns": "void",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.request_withdrawal(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance - p_amount\n  where user_id = p_user_id;\n\n  insert into withdrawals (\n    user_id,\n    amount,\n    status\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'pending'\n  );\n\nend;\n$function$\n"
+  },
+  {
+    "signature": "request_withdrawal(uuid,bigint,text,text,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.request_withdrawal(p_user_id uuid, p_amount_cents bigint, p_method text, p_wallet_address text, p_ip_address text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_withdrawable numeric;\n  v_platform_fee numeric;\n  v_net_amount numeric;\n  v_row public.withdrawals%rowtype;\n  v_today_count int;\n  v_last_created timestamptz;\n  min_cents bigint := 1000;\n  max_per_day int := 3;\n  cooldown_min interval := interval '5 minutes';\nbegin\n  if p_amount_cents is null or p_amount_cents < min_cents then\n    return jsonb_build_object('success', false, 'message', 'Minimum withdrawal is $10.00');\n  end if;\n  if p_method is null or p_method not in ('crypto', 'paypal', 'bank') then\n    return jsonb_build_object('success', false, 'message', 'Invalid method');\n  end if;\n  if p_wallet_address is null or trim(p_wallet_address) = '' then\n    return jsonb_build_object('success', false, 'message', 'Wallet address required');\n  end if;\n\n  select withdrawable_balance into v_withdrawable from public.users where id = p_user_id for update;\n  if v_withdrawable is null then\n    return jsonb_build_object('success', false, 'message', 'User not found');\n  end if;\n  if v_withdrawable < p_amount_cents then\n    return jsonb_build_object('success', false, 'message', 'Insufficient withdrawable balance');\n  end if;\n\n  select count(*) into v_today_count\n  from public.withdrawals\n  where user_id = p_user_id\n    and created_at >= date_trunc('day', now())\n    and status in ('pending', 'approved', 'paid');\n  if v_today_count >= max_per_day then\n    return jsonb_build_object('success', false, 'message', 'Maximum 3 withdrawals per day. Try again tomorrow.');\n  end if;\n\n  select max(created_at) into v_last_created\n  from public.withdrawals\n  where user_id = p_user_id and status in ('pending', 'approved', 'paid');\n  if v_last_created is not null and (now() - v_last_created) < cooldown_min then\n    return jsonb_build_object('success', false, 'message', 'Please wait 5 minutes between withdrawal requests.');\n  end if;\n\n  v_platform_fee := round(p_amount_cents * 0.10);\n  v_net_amount := p_amount_cents - v_platform_fee;\n\n  update public.users\n  set withdrawable_balance = withdrawable_balance - p_amount_cents,\n      pending_balance = pending_balance + p_amount_cents,\n      updated_at = now()\n  where id = p_user_id;\n\n  insert into public.withdrawals (\n    user_id, amount, platform_fee, net_amount, status, method, wallet_address, ip_address\n  )\n  values (\n    p_user_id, p_amount_cents, v_platform_fee, v_net_amount, 'pending', p_method,\n    trim(p_wallet_address), nullif(trim(coalesce(p_ip_address, '')), '')\n  )\n  returning * into v_row;\n\n  return jsonb_build_object(\n    'success', true,\n    'withdrawal', jsonb_build_object(\n      'id', v_row.id,\n      'amount', v_row.amount,\n      'platform_fee', v_row.platform_fee,\n      'net_amount', v_row.net_amount,\n      'status', v_row.status,\n      'method', v_row.method,\n      'wallet_address', v_row.wallet_address,\n      'created_at', v_row.created_at\n    )\n  );\nend;\n$function$\n"
+  },
+  {
+    "signature": "submit_withdrawal(uuid,bigint,text,text,bigint)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.submit_withdrawal(p_user_id uuid, p_amount bigint, p_method text, p_wallet_address text, p_min_amount bigint DEFAULT 100)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_balance bigint;\n  v_row public.withdrawals%rowtype;\nbegin\n  if p_amount is null or p_amount < p_min_amount then\n    return jsonb_build_object('success', false, 'message', 'Amount below minimum');\n  end if;\n  if p_method is null or p_method not in ('crypto', 'paypal', 'bank') then\n    return jsonb_build_object('success', false, 'message', 'Invalid method');\n  end if;\n  if p_wallet_address is null or trim(p_wallet_address) = '' then\n    return jsonb_build_object('success', false, 'message', 'Wallet address required');\n  end if;\n\n  select balance into v_balance from public.users where id = p_user_id for update;\n  if v_balance is null then\n    return jsonb_build_object('success', false, 'message', 'User not found');\n  end if;\n  if v_balance < p_amount then\n    return jsonb_build_object('success', false, 'message', 'Insufficient balance');\n  end if;\n\n  update public.users set balance = balance - p_amount, updated_at = now() where id = p_user_id;\n\n  insert into public.withdrawals (user_id, amount, status, method, wallet_address)\n  values (p_user_id, p_amount, 'pending', p_method, trim(p_wallet_address))\n  returning * into v_row;\n\n  insert into public.transactions (user_id, type, amount, status, description, reference_id)\n  values (p_user_id, 'withdrawal', p_amount, 'pending', 'Withdrawal request', v_row.id);\n\n  return jsonb_build_object(\n    'success', true,\n    'withdrawal', jsonb_build_object(\n      'id', v_row.id,\n      'amount', v_row.amount,\n      'status', v_row.status,\n      'method', v_row.method,\n      'wallet_address', v_row.wallet_address,\n      'created_at', v_row.created_at\n    )\n  );\nend;\n$function$\n"
+  },
+  {
+    "signature": "wallet_ledger_entry(uuid,text,bigint,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=\"\""
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.wallet_ledger_entry(p_user_id uuid, p_type text, p_amount_cents bigint, p_reference text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_current bigint;\n  v_balance_after bigint;\n  v_ledger_id uuid;\n  v_valid_types text[] := array[\n    'deposit','withdrawal','game_play','game_win','referral_bonus',\n    'subscription_payment','commission_payout','admin_adjustment','ad_earning'\n  ];\nBEGIN\n  IF p_type IS NULL OR NOT (p_type = ANY(v_valid_types)) THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Invalid type');\n  END IF;\n  IF p_amount_cents = 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Amount cannot be zero');\n  END IF;\n  IF p_reference IS NOT NULL AND trim(p_reference) != '' THEN\n    IF EXISTS (SELECT 1 FROM public.wallet_ledger WHERE reference = p_reference) THEN\n      RETURN jsonb_build_object('success', false, 'message', 'Duplicate transaction');\n    END IF;\n  END IF;\n\n  INSERT INTO public.wallet_balances (user_id, balance, updated_at)\n  VALUES (p_user_id, 0, now())\n  ON CONFLICT (user_id) DO NOTHING;\n\n  SELECT balance INTO v_current\n  FROM public.wallet_balances\n  WHERE user_id = p_user_id\n  FOR UPDATE;\n\n  IF v_current IS NULL THEN\n    RETURN jsonb_build_object('success', false, 'message', 'User balance row not found');\n  END IF;\n\n  v_balance_after := v_current + p_amount_cents;\n\n  IF v_balance_after < 0 THEN\n    RETURN jsonb_build_object('success', false, 'message', 'Insufficient balance');\n  END IF;\n\n  INSERT INTO public.wallet_ledger (user_id, type, amount, balance_after, reference)\n  VALUES (p_user_id, p_type, p_amount_cents, v_balance_after, nullif(trim(p_reference), ''))\n  RETURNING id INTO v_ledger_id;\n\n  UPDATE public.wallet_balances\n  SET balance = v_balance_after, updated_at = now()\n  WHERE user_id = p_user_id;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'balance_cents', v_balance_after,\n    'ledger_id', v_ledger_id\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_wallet_move(uuid,integer,text,text)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_wallet_move(p_user uuid, p_amount integer, p_reference text, p_type text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_result jsonb;\nBEGIN\n IF p_amount=0 THEN RETURN; END IF;\n IF EXISTS(SELECT 1 FROM coin_transactions WHERE reference=p_reference) THEN RAISE EXCEPTION 'Duplicate C-Lo ledger reference'; END IF;\n IF p_amount<0 THEN\n  UPDATE users SET gpay_coins=gpay_coins+p_amount WHERE id=p_user AND gpay_coins>=-p_amount;\n  IF NOT FOUND THEN RAISE EXCEPTION 'Insufficient GPC balance'; END IF;\n  INSERT INTO coin_transactions(user_id,type,gold_coins,gpay_coins,description,reference) VALUES(p_user,p_type,0,p_amount,'C-Lo escrow transfer',p_reference);\n ELSE\n  v_result:=credit_coins_with_ledger(p_user,0,p_amount,p_type,'C-Lo escrow transfer',p_reference);\n  IF (v_result->>'success') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION '%',COALESCE(v_result->>'message','C-Lo credit failed'); END IF;\n END IF;\nEND $function$\n"
+  },
+  {
+    "signature": "celo_room_action_atomic(uuid,uuid,text,uuid,jsonb)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_room_action_atomic(p_user uuid, p_room uuid, p_action text, p_request uuid, p_input jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE; a celo_rounds%ROWTYPE; p celo_room_players%ROWTYPE;\n v_receipt celo_action_receipts%ROWTYPE; v_hash text; v_response jsonb; v_amount integer; v_min integer; v_seat integer; v_count integer; v_prize integer; v_round integer; v_name text; v_role text;\nBEGIN\n IF p_user IS NULL OR p_request IS NULL THEN RAISE EXCEPTION 'Authenticated user and request id required'; END IF;\n -- Serialize request retries. Game actions use table -> round -> wallet lock order.\n PERFORM pg_advisory_xact_lock(hashtextextended(p_request::text,0));\n PERFORM 1 FROM users WHERE id=p_user;\n IF NOT FOUND THEN RAISE EXCEPTION 'User not found'; END IF;\n v_hash:=md5(COALESCE(p_room::text,'')||p_action||p_input::text);\n SELECT * INTO v_receipt FROM celo_action_receipts WHERE request_id=p_request;\n IF FOUND THEN\n  IF v_receipt.user_id<>p_user OR v_receipt.action<>p_action OR v_receipt.input_hash<>v_hash THEN RAISE EXCEPTION 'Request id belongs to a different action'; END IF;\n  RETURN v_receipt.response || jsonb_build_object('idempotent',true);\n END IF;\n IF p_action='create' THEN\n  v_min:=(p_input->>'minimum_entry_sc')::integer;v_amount:=(p_input->>'starting_bank_sc')::integer;v_name:=trim(p_input->>'name');v_count:=(p_input->>'max_players')::integer;\n  IF v_min IS NULL OR v_min<500 OR v_amount IS NULL OR v_amount<v_min OR v_amount%v_min<>0 OR v_count IS NULL OR v_count NOT IN(2,4,6,10) OR COALESCE(v_name,'')='' THEN RAISE EXCEPTION 'Invalid room settings'; END IF;\n  PERFORM celo_wallet_move(p_user,-v_amount,'celo:create:'||p_request,'celo_entry');\n  INSERT INTO celo_rooms(name,creator_id,banker_id,status,room_type,max_players,min_bet_cents,max_bet_cents,minimum_entry_sc,current_bank_sc,current_bank_cents,platform_fee_pct,last_activity)\n  VALUES(v_name,p_user,p_user,'waiting','public',v_count,v_min,GREATEST(10000,v_amount*4),v_min,v_amount,v_amount,10,now()) RETURNING * INTO r;\n  INSERT INTO celo_room_players(room_id,user_id,role,seat_number,entry_sc,bet_cents,dice_type) VALUES(r.id,p_user,'banker',0,0,0,'standard') RETURNING * INTO p;\n ELSE\n  SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n  IF NOT FOUND THEN RAISE EXCEPTION 'Room not found'; END IF;\n  SELECT * INTO a FROM celo_rounds WHERE room_id=r.id AND status IN('banker_rolling','player_rolling','betting') ORDER BY round_number DESC LIMIT 1 FOR UPDATE;\n  SELECT * INTO p FROM celo_room_players WHERE room_id=r.id AND user_id=p_user;\n  IF p_action='join' AND p.id IS NOT NULL THEN\n   v_response:=jsonb_build_object('ok',true,'room',to_jsonb(r),'player',to_jsonb(p),'already_seated',true);\n  ELSE\n   IF r.status IN('cancelled','closed','completed') THEN RAISE EXCEPTION 'Room is closed'; END IF;\n   IF p_action NOT IN('resume','leave','delete') AND r.paused_at IS NOT NULL THEN RAISE EXCEPTION 'Room is paused'; END IF;\n   IF a.id IS NOT NULL THEN\n    IF p_action='start' AND r.banker_id=p_user THEN v_response:=jsonb_build_object('ok',true,'room',to_jsonb(r),'round',to_jsonb(a),'idempotent',true);\n    ELSE RAISE EXCEPTION 'A round is already in progress'; END IF;\n   ELSIF p_action='join' THEN\n    v_role:=COALESCE(p_input->>'role','player');IF v_role NOT IN('player','spectator') THEN RAISE EXCEPTION 'Invalid role'; END IF;\n    SELECT count(*) INTO v_count FROM celo_room_players WHERE room_id=r.id;\n    IF v_count>=r.max_players THEN RAISE EXCEPTION 'Table is full'; END IF;\n    SELECT s INTO v_seat FROM generate_series(1,r.max_players-1) s WHERE NOT EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND seat_number=s) ORDER BY s LIMIT 1;\n    IF v_seat IS NULL THEN RAISE EXCEPTION 'Table is full'; END IF;\n    INSERT INTO celo_room_players(room_id,user_id,role,seat_number,entry_sc,bet_cents,dice_type) VALUES(r.id,p_user,v_role,v_seat,0,0,'standard') RETURNING * INTO p;\n   ELSIF p_action='entry' THEN\n    v_amount:=(p_input->>'amount')::integer;v_min:=GREATEST(500,COALESCE(r.minimum_entry_sc,r.min_bet_cents,500));\n    IF p.id IS NULL OR p.role<>'player' OR r.banker_id=p_user THEN RAISE EXCEPTION 'Only a seated player may post entry'; END IF;\n    IF v_amount IS NULL OR v_amount<v_min OR v_amount>r.current_bank_sc THEN RAISE EXCEPTION 'Entry must be between the minimum and current bank'; END IF;\n    IF p.entry_posted OR GREATEST(p.entry_sc,p.stake_amount_sc,p.bet_cents)>0 THEN RAISE EXCEPTION 'Entry already posted'; END IF;\n    SELECT COALESCE(sum(GREATEST(entry_sc,stake_amount_sc,bet_cents)),0) INTO v_prize FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted;\n    IF v_prize+v_amount>r.current_bank_sc THEN RAISE EXCEPTION 'Remaining bank coverage is insufficient for this entry'; END IF;\n    PERFORM celo_wallet_move(p_user,-v_amount,'celo:entry:'||p_request,'celo_entry');\n    UPDATE celo_room_players SET entry_sc=v_amount,stake_amount_sc=v_amount,bet_cents=v_amount,entry_posted=true,status='active',player_seat_status='active' WHERE id=p.id RETURNING * INTO p;\n    UPDATE celo_rooms SET status='active',last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='start' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker can start a round'; END IF;\n    IF r.current_bank_sc<=0 OR r.bank_busted THEN RAISE EXCEPTION 'Fund the bank before starting'; END IF;\n    SELECT COALESCE(sum(GREATEST(entry_sc,stake_amount_sc,bet_cents)),0),count(*) INTO v_prize,v_count FROM celo_room_players WHERE room_id=r.id AND role='player' AND user_id<>r.banker_id AND entry_posted AND GREATEST(entry_sc,stake_amount_sc,bet_cents)>0;\n    IF v_count<1 THEN RAISE EXCEPTION 'At least one posted entry is required'; END IF;\n    IF v_prize>r.current_bank_sc THEN RAISE EXCEPTION 'Entries exceed bank coverage'; END IF;\n    SELECT COALESCE(max(round_number),0)+1 INTO v_round FROM celo_rounds WHERE room_id=r.id;\n    INSERT INTO celo_rounds(room_id,round_number,banker_id,status,prize_pool_sc,platform_fee_sc,bank_covered,bank_at_round_start_sc,settlement_version)\n    VALUES(r.id,v_round,p_user,'banker_rolling',v_prize,0,false,r.current_bank_sc,2) RETURNING * INTO a;\n    UPDATE celo_rounds SET entry_snapshot=(SELECT jsonb_agg(jsonb_build_object('user_id',user_id,'stake_sc',stake_amount_sc,'seat',seat_number) ORDER BY seat_number) FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted) WHERE id=a.id RETURNING * INTO a;\n    UPDATE celo_rooms SET status='rolling',last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='fund' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker can fund the bank'; END IF;\n    v_amount:=(p_input->>'amount')::integer;v_min:=GREATEST(500,COALESCE(r.minimum_entry_sc,r.min_bet_cents,500));\n    IF v_amount IS NULL OR v_amount<v_min OR v_amount%v_min<>0 THEN RAISE EXCEPTION 'Invalid bank funding amount'; END IF;\n    PERFORM celo_wallet_move(p_user,-v_amount,'celo:fund:'||p_request,'celo_entry');\n    UPDATE celo_rooms SET current_bank_sc=current_bank_sc+v_amount,current_bank_cents=current_bank_sc+v_amount,bank_busted=false,status='waiting',last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='vote' THEN\n    IF p.id IS NULL OR p.role<>'player' OR r.banker_id=p_user THEN RAISE EXCEPTION 'Only a seated player may vote'; END IF;\n    v_role:=p_input->>'vote';IF v_role NOT IN('request','approve') THEN RAISE EXCEPTION 'Invalid pause vote'; END IF;\n    INSERT INTO celo_pause_votes(room_id,user_id,vote) VALUES(r.id,p_user,v_role) ON CONFLICT(room_id,user_id,vote) DO NOTHING;\n    SELECT count(*) INTO v_count FROM celo_room_players WHERE room_id=r.id AND role='player' AND user_id<>r.banker_id AND seat_number IS NOT NULL;\n    SELECT count(*) INTO v_prize FROM celo_pause_votes v JOIN celo_room_players p ON p.room_id=v.room_id AND p.user_id=v.user_id WHERE v.room_id=r.id AND v.vote='approve' AND p.role='player';\n    IF v_role='approve' AND v_count>0 AND v_prize>=floor(v_count/2.0)+1 THEN UPDATE celo_rooms SET paused_at=now(),paused_by=p_user,pause_reason='majority_player_vote',pause_expires_at=now()+interval '5 minutes',last_activity=now() WHERE id=r.id RETURNING * INTO r; END IF;\n   ELSIF p_action='reset-votes' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker may reject pause requests';END IF;\n    DELETE FROM celo_pause_votes WHERE room_id=r.id;\n   ELSIF p_action='rules' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker may edit room settings'; END IF;\n    IF r.current_bank_sc>0 OR EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND entry_posted) THEN RAISE EXCEPTION 'Room settings require an unfunded bank without entries'; END IF;\n    v_min:=(p_input->>'minimum_entry_sc')::integer;v_name:=trim(p_input->>'name');v_count:=(p_input->>'max_players')::integer;\n    IF v_min IS NULL OR v_min<500 OR v_count IS NULL OR v_count NOT IN(2,4,6,10) OR COALESCE(v_name,'')='' OR length(v_name)>40 OR v_count<(SELECT count(*) FROM celo_room_players WHERE room_id=r.id) THEN RAISE EXCEPTION 'Invalid room settings'; END IF;\n    UPDATE celo_rooms SET name=v_name,minimum_entry_sc=v_min,min_bet_cents=v_min,max_players=v_count,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='takeover' THEN\n    SELECT * INTO a FROM celo_rounds WHERE id=(p_input->>'round_id')::uuid AND room_id=r.id FOR UPDATE;\n    IF a.id IS NULL OR NOT a.player_celo_offer OR a.player_celo_expires_at<now() THEN RAISE EXCEPTION 'No current C-Lo banker offer'; END IF;\n    IF p.id IS NULL OR NOT EXISTS(SELECT 1 FROM celo_player_rolls WHERE round_id=a.id AND user_id=p_user AND outcome='win' AND (SELECT array_agg(d ORDER BY d) FROM unnest(dice) d)=ARRAY[4,5,6]) THEN RAISE EXCEPTION 'Only the winning C-Lo roller may accept'; END IF;\n    IF COALESCE((p_input->>'accept')::boolean,false) THEN\n     IF a.status<>'completed' OR EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND entry_posted) THEN RAISE EXCEPTION 'Finish current entries before takeover'; END IF;\n     IF r.banker_id=p_user THEN RAISE EXCEPTION 'Already the banker'; END IF;\n     -- Swap occupied seats through NULL so the unique room/seat index remains valid.\n     UPDATE celo_room_players SET seat_number=NULL WHERE room_id=r.id AND user_id IN(r.banker_id,p_user);\n     UPDATE celo_room_players SET seat_number=p.seat_number,role='player' WHERE room_id=r.id AND user_id=r.banker_id;\n     UPDATE celo_room_players SET seat_number=0,role='banker' WHERE id=p.id RETURNING * INTO p;\n     UPDATE celo_rooms SET banker_id=p_user,bank_busted=(current_bank_sc<=0),last_activity=now() WHERE id=r.id RETURNING * INTO r;\n    END IF;\n    UPDATE celo_rounds SET player_celo_offer=false,player_celo_expires_at=NULL WHERE id=a.id RETURNING * INTO a;\n   ELSIF p_action='setup' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker can set up the bank'; END IF;\n    IF r.current_bank_sc>0 THEN RAISE EXCEPTION 'Bank is already funded'; END IF;\n    v_min:=(p_input->>'minimum_entry_sc')::integer;v_amount:=(p_input->>'funding_amount_sc')::integer;v_name:=trim(p_input->>'name');v_count:=(p_input->>'max_players')::integer;\n    IF v_min IS NULL OR v_min<500 OR v_amount IS NULL OR v_amount<v_min OR v_amount%v_min<>0 OR v_count IS NULL OR v_count NOT IN(2,4,6,10) OR COALESCE(v_name,'')='' THEN RAISE EXCEPTION 'Invalid room settings'; END IF;\n    IF EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND entry_posted) THEN RAISE EXCEPTION 'Posted entries must finish before setup'; END IF;\n    PERFORM celo_wallet_move(p_user,-v_amount,'celo:setup:'||p_request,'celo_entry');\n    UPDATE celo_rooms SET name=v_name,minimum_entry_sc=v_min,min_bet_cents=v_min,max_players=v_count,current_bank_sc=v_amount,current_bank_cents=v_amount,bank_busted=false,status='waiting',last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='lower' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker can lower the bank'; END IF;\n    IF NOT r.last_round_was_celo OR r.banker_celo_at IS NULL OR r.banker_celo_at<now()-interval '60 seconds' THEN RAISE EXCEPTION 'Lower bank is only available within one minute of C-Lo'; END IF;\n    v_amount:=(p_input->>'new_bank_sc')::integer;v_min:=GREATEST(500,COALESCE(r.minimum_entry_sc,r.min_bet_cents,500));\n    IF v_amount IS NULL OR v_amount<v_min OR v_amount>=r.current_bank_sc OR v_amount%v_min<>0 THEN RAISE EXCEPTION 'Invalid lower bank amount'; END IF;\n    SELECT COALESCE(sum(stake_amount_sc),0) INTO v_prize FROM celo_room_players WHERE room_id=r.id AND entry_posted;\n    IF v_amount<v_prize THEN RAISE EXCEPTION 'Posted entries exceed new bank coverage'; END IF;\n    PERFORM celo_wallet_move(p_user,r.current_bank_sc-v_amount,'celo:lower:'||p_request,'celo_bank_refund');\n    UPDATE celo_rooms SET current_bank_sc=v_amount,current_bank_cents=v_amount,last_round_was_celo=false,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n   ELSIF p_action='pause' OR p_action='resume' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker may pause or resume'; END IF;\n    UPDATE celo_rooms SET paused_at=CASE WHEN p_action='pause' THEN now() ELSE NULL END,paused_by=CASE WHEN p_action='pause' THEN p_user ELSE NULL END,pause_expires_at=CASE WHEN p_action='pause' THEN now()+interval '5 minutes' ELSE NULL END,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n    DELETE FROM celo_pause_votes WHERE room_id=r.id;\n   ELSIF p_action='leave' THEN\n    IF p.id IS NULL THEN RAISE EXCEPTION 'Not seated'; END IF;\n    IF r.banker_id=p_user THEN RAISE EXCEPTION 'Banker must close the table before leaving'; END IF;\n    IF p.entry_posted AND p.stake_amount_sc>0 THEN PERFORM celo_wallet_move(p_user,p.stake_amount_sc,'celo:leave:'||p_request,'celo_bank_refund'); END IF;\n    DELETE FROM celo_room_players WHERE id=p.id;p:=NULL;\n   ELSIF p_action='delete' THEN\n    IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker can close the table'; END IF;\n    IF EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND entry_posted AND stake_amount_sc>0) THEN RAISE EXCEPTION 'Posted entries must finish before closing'; END IF;\n    IF EXISTS(SELECT 1 FROM celo_side_bets WHERE room_id=r.id AND status IN('open','matched')) THEN RAISE EXCEPTION 'Side bets must finish before closing'; END IF;\n    PERFORM celo_wallet_move(p_user,r.current_bank_sc,'celo:close:'||p_request,'celo_bank_refund');\n    UPDATE celo_rooms SET status='cancelled',current_bank_sc=0,current_bank_cents=0,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n    DELETE FROM celo_room_players WHERE room_id=r.id;\n   ELSE RAISE EXCEPTION 'Unknown C-Lo action'; END IF;\n  END IF;\n END IF;\n v_response:=COALESCE(v_response,jsonb_build_object('ok',true,'room',to_jsonb(r),'player',to_jsonb(p),'round',to_jsonb(a)));\n INSERT INTO celo_action_receipts(request_id,user_id,room_id,action,input_hash,response) VALUES(p_request,p_user,r.id,p_action,v_hash,v_response);\n RETURN v_response;\nEND $function$\n"
+  },
+  {
+    "signature": "celo_claim_roll_atomic(uuid,uuid,uuid,uuid,integer,boolean,jsonb)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_claim_roll_atomic(p_user uuid, p_room uuid, p_round uuid, p_request uuid, p_seq integer, p_timeout boolean DEFAULT false, p_payload jsonb DEFAULT NULL::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE;a celo_rounds%ROWTYPE;p celo_room_players%ROWTYPE; v_saved jsonb;\nBEGIN\n SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n IF NOT FOUND THEN RAISE EXCEPTION 'Room not found'; END IF;\n SELECT * INTO a FROM celo_rounds WHERE id=p_round AND room_id=p_room FOR UPDATE;\n IF NOT FOUND THEN RAISE EXCEPTION 'Round not found'; END IF;\n IF r.status='cancelled' THEN RAISE EXCEPTION 'Room is closed'; END IF;\n IF r.paused_at IS NOT NULL THEN RAISE EXCEPTION 'Room is paused'; END IF;\n SELECT response INTO v_saved FROM celo_action_receipts WHERE request_id=p_request AND user_id=p_user AND action='roll';\n IF FOUND THEN RETURN jsonb_build_object('replay',v_saved); END IF;\n IF a.status NOT IN('banker_rolling','player_rolling') THEN RAISE EXCEPTION 'No active round'; END IF;\n SELECT * INTO p FROM celo_room_players WHERE room_id=p_room AND user_id=p_user;\n IF p.id IS NULL THEN RAISE EXCEPTION 'Not seated'; END IF;\n IF p_timeout THEN\n  IF a.pending_roll_payload->'dice' IS NOT NULL AND a.pending_roll_payload->'dice'<>'null'::jsonb THEN RAISE EXCEPTION 'Accepted player roll must settle before timeout'; END IF;\n  IF a.status<>'player_rolling' OR a.player_roll_deadline_at IS NULL OR a.player_roll_deadline_at>now() THEN RAISE EXCEPTION 'Player deadline has not expired'; END IF;\n ELSE\n  IF p_seq IS NULL OR p_seq<>a.roll_seq THEN RAISE EXCEPTION 'Stale roll version; synchronize table'; END IF;\n  IF a.status='banker_rolling' THEN\n   IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Only the banker may roll now'; END IF;\n  ELSIF p.user_id IS DISTINCT FROM a.roller_user_id OR p.role<>'player' OR NOT p.entry_posted OR p.stake_amount_sc<=0 THEN RAISE EXCEPTION 'Not your turn'; END IF;\n END IF;\n IF a.pending_roll_id=p_request THEN RETURN jsonb_build_object('round',to_jsonb(a),'room',to_jsonb(r),'payload',a.pending_roll_payload); END IF;\n IF a.pending_roll_id IS NOT NULL AND a.roll_animation_start_at>now()-interval '30 seconds' THEN RAISE EXCEPTION 'Roll already in progress'; END IF;\n UPDATE celo_rooms SET last_activity=now() WHERE id=r.id;\n UPDATE celo_rounds SET pending_roll_id=p_request,pending_roll_user_id=p_user,pending_roll_payload=COALESCE(pending_roll_payload,p_payload),banker_roll_in_flight=(status='banker_rolling'),roll_processing=(status='player_rolling'),roll_animation_start_at=now(),roll_animation_duration_ms=1500 WHERE id=a.id RETURNING * INTO a;\n RETURN jsonb_build_object('round',to_jsonb(a),'room',to_jsonb(r),'payload',a.pending_roll_payload);\nEND $function$\n"
+  },
+  {
+    "signature": "celo_settle_roll_atomic(uuid,uuid,uuid,uuid,integer[],text,text,integer,boolean,boolean)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_settle_roll_atomic(p_user uuid, p_room uuid, p_round uuid, p_request uuid, p_dice integer[], p_result text, p_name text, p_point integer, p_is_celo boolean, p_timeout boolean DEFAULT false)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE;a celo_rounds%ROWTYPE;p celo_room_players%ROWTYPE;s celo_room_players%ROWTYPE;\n v_outcome text;v_entry integer;v_fee integer;v_net integer;v_payout integer:=0;v_total_fee integer:=0;v_delta integer:=0;v_winner uuid;v_best integer:=-1;v_next celo_room_players%ROWTYPE;v_receipt jsonb;v_complete boolean:=false;v_roll celo_player_rolls%ROWTYPE;v_old_banker uuid;v_response jsonb;v_target uuid;v_winners jsonb:='[]'::jsonb;\nBEGIN\n SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n SELECT * INTO a FROM celo_rounds WHERE id=p_round AND room_id=p_room FOR UPDATE;\n SELECT response INTO v_receipt FROM celo_action_receipts WHERE request_id=p_request AND user_id=p_user AND action='roll';\n IF FOUND THEN RETURN v_receipt||jsonb_build_object('idempotent',true); END IF;\n IF a.id IS NULL OR a.pending_roll_id IS DISTINCT FROM p_request OR a.status NOT IN('banker_rolling','player_rolling') THEN RAISE EXCEPTION 'Roll claim is no longer valid'; END IF;\n IF p_result NOT IN('instant_win','instant_loss','point','no_count') OR (NOT p_timeout AND (array_length(p_dice,1)<>3 OR EXISTS(SELECT 1 FROM unnest(p_dice) d WHERE d NOT BETWEEN 1 AND 6))) THEN RAISE EXCEPTION 'Invalid trusted roll'; END IF;\n IF a.pending_roll_payload IS NOT NULL AND (a.pending_roll_payload->'dice' IS DISTINCT FROM COALESCE(to_jsonb(p_dice),'null'::jsonb) OR a.pending_roll_payload->>'result' IS DISTINCT FROM p_result OR a.pending_roll_payload->>'rollName' IS DISTINCT FROM p_name OR (a.pending_roll_payload->>'point')::integer IS DISTINCT FROM p_point OR (a.pending_roll_payload->>'isCelo')::boolean IS DISTINCT FROM p_is_celo) THEN RAISE EXCEPTION 'Settlement differs from accepted server roll'; END IF;\n -- Lock affected wallets in UUID order across tables to avoid opposite-player deadlocks.\n PERFORM 1 FROM users WHERE id IN(SELECT user_id FROM celo_room_players WHERE room_id=r.id UNION SELECT creator_id FROM celo_side_bets WHERE room_id=r.id AND status IN('open','matched') UNION SELECT acceptor_id FROM celo_side_bets WHERE room_id=r.id AND status='matched') ORDER BY id FOR UPDATE;\n v_old_banker:=r.banker_id;v_target:=CASE WHEN p_timeout THEN a.roller_user_id ELSE p_user END;\n SELECT * INTO p FROM celo_room_players WHERE room_id=r.id AND user_id=v_target;\n IF a.status='banker_rolling' THEN\n  IF r.banker_id IS DISTINCT FROM p_user THEN RAISE EXCEPTION 'Banker identity changed'; END IF;\n  UPDATE celo_rounds SET banker_dice=p_dice,banker_dice_name=p_name,banker_dice_result=p_result,banker_point=p_point,banker_rerolls=banker_rerolls+CASE WHEN p_result='no_count' THEN 1 ELSE 0 END WHERE id=a.id;\n  IF p_result IN('instant_win','instant_loss') THEN\n   FOR s IN SELECT * FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0 ORDER BY seat_number,user_id FOR UPDATE LOOP\n    v_entry:=s.stake_amount_sc;v_fee:=floor(v_entry*.1);v_net:=v_entry-v_fee;v_total_fee:=v_total_fee+v_fee;\n    IF p_result='instant_win' THEN v_delta:=v_delta+v_net;\n    ELSE\n     PERFORM celo_wallet_move(s.user_id,v_entry+v_net,'celo:roll:'||p_request||':'||s.user_id,'celo_payout');\n     v_winners:=v_winners||jsonb_build_array(jsonb_build_object('user_id',s.user_id,'payout_sc',v_entry+v_net));\n     v_delta:=v_delta-CASE WHEN a.settlement_version>=2 THEN v_entry ELSE v_net END;\n     IF v_entry>v_best THEN v_best:=v_entry;v_winner:=s.user_id; END IF;\n    END IF;\n   END LOOP;\n   v_outcome:=CASE WHEN p_result='instant_win' THEN 'banker_win' ELSE 'players_win' END;v_complete:=true;\n   UPDATE celo_rounds SET banker_winnings_sc=CASE WHEN p_result='instant_win' THEN v_delta ELSE v_delta+v_total_fee END,platform_fee_sc=v_total_fee WHERE id=a.id;\n  ELSIF p_result='point' THEN\n   SELECT * INTO v_next FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0 ORDER BY seat_number,user_id LIMIT 1;\n   IF v_next.id IS NULL THEN RAISE EXCEPTION 'No funded player for banker point'; END IF;\n   UPDATE celo_rounds SET status='player_rolling',current_player_seat=v_next.seat_number,roller_user_id=v_next.user_id,player_roll_deadline_at=now()+interval '30 seconds' WHERE id=a.id;\n   v_outcome:='point';\n  ELSE v_outcome:='reroll'; END IF;\n ELSE\n  IF p.id IS NULL OR p.user_id IS DISTINCT FROM a.roller_user_id OR p.stake_amount_sc<=0 OR NOT p.entry_posted THEN RAISE EXCEPTION 'Player state changed'; END IF;\n  v_entry:=p.stake_amount_sc;v_fee:=floor(v_entry*.1);v_net:=v_entry-v_fee;\n  v_outcome:=CASE WHEN p_timeout THEN 'loss' WHEN p_result='no_count' THEN 'reroll' WHEN p_result='instant_win' THEN 'win' WHEN p_result='instant_loss' THEN 'loss' WHEN p_point=a.banker_point THEN 'push' WHEN p_point>a.banker_point THEN 'win' ELSE 'loss' END;\n  IF v_outcome='push' THEN\n   FOR s IN SELECT * FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0 ORDER BY seat_number,user_id FOR UPDATE LOOP\n    PERFORM celo_wallet_move(s.user_id,s.stake_amount_sc,'celo:push:'||p_request||':'||s.user_id,'celo_payout');\n   END LOOP;\n   v_payout:=v_entry;v_fee:=0;v_complete:=true;\n   UPDATE celo_rounds SET push=true WHERE id=a.id;\n  ELSIF v_outcome='win' THEN\n   v_payout:=v_entry+v_net;PERFORM celo_wallet_move(p.user_id,v_payout,'celo:roll:'||p_request||':'||p.user_id,'celo_payout');\n   v_delta:=-CASE WHEN a.settlement_version>=2 THEN v_entry ELSE v_net END;v_winner:=p.user_id;\n   UPDATE celo_rounds SET banker_winnings_sc=banker_winnings_sc-v_net,platform_fee_sc=platform_fee_sc+v_fee,player_celo_offer=player_celo_offer OR p_is_celo,player_celo_expires_at=CASE WHEN p_is_celo THEN now()+interval '30 seconds' ELSE player_celo_expires_at END WHERE id=a.id;\n  ELSIF v_outcome='loss' THEN\n   v_delta:=v_net;UPDATE celo_rounds SET banker_winnings_sc=banker_winnings_sc+v_net,platform_fee_sc=platform_fee_sc+v_fee WHERE id=a.id;\n  END IF;\n  INSERT INTO celo_player_rolls(round_id,room_id,user_id,dice,roll_name,roll_result,point,entry_sc,outcome,payout_sc,platform_fee_sc)\n  VALUES(a.id,r.id,p.user_id,COALESCE(p_dice,ARRAY[]::integer[]),p_name,p_result,p_point,v_entry,v_outcome,v_payout,CASE WHEN v_outcome IN('win','loss') THEN v_fee ELSE 0 END) RETURNING * INTO v_roll;\n  IF v_outcome<>'reroll' THEN\n   UPDATE celo_room_players SET entry_sc=0,bet_cents=0,stake_amount_sc=0,entry_posted=false,status='seated',player_seat_status='seated' WHERE id=p.id;\n   SELECT * INTO v_next FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0 ORDER BY seat_number,user_id LIMIT 1;\n   IF v_next.id IS NULL THEN v_complete:=true;\n   ELSIF NOT v_complete THEN UPDATE celo_rounds SET current_player_seat=v_next.seat_number,roller_user_id=v_next.user_id,player_roll_deadline_at=now()+interval '30 seconds' WHERE id=a.id; END IF;\n  END IF;\n END IF;\n IF r.current_bank_sc+v_delta<0 THEN RAISE EXCEPTION 'Insufficient table escrow for settlement'; END IF;\n UPDATE celo_rooms SET current_bank_sc=current_bank_sc+v_delta,current_bank_cents=current_bank_sc+v_delta,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n IF r.current_bank_sc=0 AND v_winner IS NOT NULL THEN\n  PERFORM celo_handle_bank_bust_and_transfer(r.id,v_winner,0,'atomic_roll');\n  SELECT * INTO r FROM celo_rooms WHERE id=r.id;\n END IF;\n IF v_complete THEN\n  UPDATE celo_rounds SET status='completed',completed_at=now(),player_celo_offer=player_celo_offer AND r.current_bank_sc>0,player_celo_expires_at=CASE WHEN player_celo_offer AND r.current_bank_sc>0 THEN now()+interval '30 seconds' ELSE NULL END,player_roll_deadline_at=NULL,terminal_room_bank_applied=true,terminal_bank_delta_sc=v_delta WHERE id=a.id;\n  UPDATE celo_room_players SET entry_sc=0,bet_cents=0,stake_amount_sc=0,entry_posted=false,status='seated',player_seat_status='seated' WHERE room_id=r.id;\n  UPDATE celo_rooms SET status=CASE WHEN current_bank_sc<=0 AND banker_id IS NOT NULL THEN 'bank_takeover' ELSE 'waiting' END,bank_busted=(current_bank_sc<=0),last_round_was_celo=(p_is_celo AND a.status='banker_rolling'),banker_celo_at=CASE WHEN p_is_celo AND a.status='banker_rolling' THEN now() ELSE NULL END,last_activity=now() WHERE id=r.id RETURNING * INTO r;\n  SELECT * INTO a FROM celo_rounds WHERE id=a.id;\n  IF a.banker_dice_result='instant_win' THEN v_winners:=jsonb_build_array(jsonb_build_object('user_id',a.banker_id,'payout_sc',a.banker_winnings_sc,'in_table_escrow',true));\n  ELSIF a.banker_dice_result='point' THEN\n   SELECT COALESCE(jsonb_agg(jsonb_build_object('user_id',user_id,'payout_sc',payout_sc)),'[]'::jsonb) INTO v_winners FROM celo_player_rolls WHERE round_id=a.id AND outcome='win';\n   IF a.banker_winnings_sc>0 THEN v_winners:=v_winners||jsonb_build_array(jsonb_build_object('user_id',a.banker_id,'payout_sc',a.banker_winnings_sc,'in_table_escrow',true));END IF;\n  END IF;\n  UPDATE celo_rounds SET settlement_snapshot=jsonb_build_object('banker_id',a.banker_id,'entries',a.entry_snapshot,'winners',v_winners,'fee_sc',a.platform_fee_sc,'bank_sc',r.current_bank_sc) WHERE id=a.id RETURNING * INTO a;\n  PERFORM celo_record_platform_fee(a.id,'celo_main_fee',a.platform_fee_sc,'C-Lo main table fee',NULL,'celo:atomic:fee:'||a.id);\n  PERFORM celo_settle_sidebets_atomic(r.id,a.id);\n END IF;\n UPDATE celo_rounds SET roll_seq=roll_seq+1,last_roll_dice=p_dice,last_roll_user_id=v_target,last_roll_name=p_name,last_roll_point=p_point,last_roll_outcome=v_outcome,pending_roll_id=NULL,pending_roll_user_id=NULL,pending_roll_payload=NULL,banker_roll_in_flight=false,roll_processing=false,updated_at=now() WHERE id=a.id RETURNING * INTO a;\n v_response:=jsonb_build_object('ok',true,'room',to_jsonb(r),'round',to_jsonb(a),'currentRound',to_jsonb(a),'roll',to_jsonb(v_roll),'dice',p_dice,'rollName',p_name,'result',p_result,'point',p_point,'outcome',v_outcome,'isCelo',p_is_celo,'payoutSc',v_payout,'roundComplete',v_complete,'player_can_become_banker',p_is_celo AND a.player_celo_offer,'bank_stopped',r.current_bank_sc=0,'oldBankerId',v_old_banker,'newBankerId',r.banker_id,'player_user_id',v_target,'newBalance',(SELECT gpay_coins FROM users WHERE id=p_user));\n INSERT INTO celo_action_receipts(request_id,user_id,room_id,action,input_hash,response) VALUES(p_request,p_user,r.id,'roll',md5(p_request::text),v_response);\n RETURN v_response;\nEND $function$\n"
+  },
+  {
+    "signature": "update_referral_count()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.update_referral_count()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n  IF NEW.referred_by_code IS NOT NULL THEN\n    UPDATE users\n    SET total_referrals = total_referrals + 1\n    WHERE referral_code = NEW.referred_by_code;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "create_wallet_for_new_user()",
+    "security_definer": true,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.create_wallet_for_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nbegin\n  insert into public.wallet (user_id, balance)\n  values (new.id, 0);\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "signature": "update_daily_profit_summary()",
+    "security_definer": false,
+    "returns": "trigger",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.update_daily_profit_summary()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n  INSERT INTO public.daily_profit_summary (date, advertiser_revenue_cents, member_payouts_cents, deferred_payouts_cents)\n  VALUES (CURRENT_DATE, 0, 0, 0)\n  ON CONFLICT (date) DO NOTHING;\n\n  IF NEW.type IN ('deposit', 'advertiser_payment') AND NEW.status = 'completed' THEN\n    UPDATE public.daily_profit_summary\n    SET advertiser_revenue_cents = advertiser_revenue_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n\n  ELSIF NEW.type IN ('ad_view', 'task_complete', 'game_reward', 'referral_upgrade') AND NEW.status = 'completed' THEN\n    UPDATE public.daily_profit_summary\n    SET member_payouts_cents = member_payouts_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n\n  ELSIF NEW.status = 'deferred' THEN\n    UPDATE public.daily_profit_summary\n    SET deferred_payouts_cents = deferred_payouts_cents + NEW.amount_cents,\n        updated_at = NOW()\n    WHERE date = CURRENT_DATE;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "signature": "add_deposit(uuid,numeric)",
+    "security_definer": false,
+    "returns": "void",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.add_deposit(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance + p_amount,\n      updated_at = now()\n  where user_id = p_user_id;\n\n  insert into transactions (\n    user_id,\n    amount,\n    type\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'deposit'\n  );\n\nend;\n$function$\n"
+  },
+  {
+    "signature": "add_game_reward(uuid,numeric)",
+    "security_definer": false,
+    "returns": "void",
+    "config": [
+      "search_path=pg_catalog, public, pg_temp"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.add_game_reward(p_user_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nbegin\n\n  update wallet\n  set balance = balance + p_amount\n  where user_id = p_user_id;\n\n  insert into transactions (\n    user_id,\n    amount,\n    type\n  )\n  values (\n    p_user_id,\n    p_amount,\n    'game_reward'\n  );\n\nend;\n$function$\n"
+  },
+  {
+    "signature": "celo_sidebet_action_atomic(uuid,uuid,text,uuid,jsonb)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_sidebet_action_atomic(p_user uuid, p_room uuid, p_action text, p_request uuid, p_input jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE;b celo_side_bets%ROWTYPE;a celo_rounds%ROWTYPE;v_amount integer;v_type text;v_mult numeric;v_saved celo_action_receipts%ROWTYPE;v_response jsonb;v_hash text;\nBEGIN\n PERFORM pg_advisory_xact_lock(hashtextextended(p_request::text,0));\n v_hash:=md5(COALESCE(p_room::text,'')||p_action||p_input::text);\n SELECT * INTO v_saved FROM celo_action_receipts WHERE request_id=p_request;\n IF FOUND THEN IF v_saved.user_id<>p_user OR v_saved.input_hash<>v_hash THEN RAISE EXCEPTION 'Request id belongs to another action'; END IF;RETURN v_saved.response;END IF;\n IF p_action='accept' THEN SELECT room_id INTO p_room FROM celo_side_bets WHERE id=(p_input->>'bet_id')::uuid; END IF;\n SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n IF NOT FOUND OR r.status IN('cancelled','completed') OR r.paused_at IS NOT NULL THEN RAISE EXCEPTION 'Table is unavailable'; END IF;\n IF NOT EXISTS(SELECT 1 FROM celo_room_players WHERE room_id=r.id AND user_id=p_user) THEN RAISE EXCEPTION 'Not seated'; END IF;\n IF p_action='create' THEN\n  v_amount:=(p_input->>'amount_sc')::integer;v_type:=p_input->>'bet_type';v_mult:=CASE v_type WHEN 'celo' THEN 8 WHEN 'shit' THEN 8 WHEN 'trips' THEN 8 WHEN 'hand_crack' THEN 4.5 WHEN 'banker_wins' THEN 1.8 WHEN 'player_wins' THEN 1.8 ELSE NULL END;\n  IF v_amount IS NULL OR v_amount<100 OR v_amount%100<>0 OR v_mult IS NULL THEN RAISE EXCEPTION 'Invalid side entry'; END IF;\n  SELECT * INTO a FROM celo_rounds WHERE id=NULLIF(p_input->>'round_id','')::uuid AND room_id=r.id FOR UPDATE;\n  IF a.id IS NULL OR a.status NOT IN('banker_rolling','betting') OR a.roll_seq>0 OR a.pending_roll_id IS NOT NULL THEN RAISE EXCEPTION 'Side entries require an unrolled current round'; END IF;\n  PERFORM celo_wallet_move(p_user,-v_amount,'celo:side:create:'||p_request,'celo_sidebet');\n  INSERT INTO celo_side_bets(room_id,round_id,creator_id,bet_type,amount_sc,odds_multiplier,status,expires_at,creator_debit_ref) VALUES(r.id,a.id,p_user,v_type,v_amount,v_mult,'open',now()+interval '60 seconds','celo:side:create:'||p_request) RETURNING * INTO b;\n ELSIF p_action='accept' THEN\n  SELECT * INTO b FROM celo_side_bets WHERE id=(p_input->>'bet_id')::uuid FOR UPDATE;\n  SELECT * INTO a FROM celo_rounds WHERE id=b.round_id FOR UPDATE;\n  IF b.status='matched' AND b.acceptor_id=p_user THEN RETURN jsonb_build_object('ok',true,'sideBet',to_jsonb(b),'idempotent',true); END IF;\n  IF b.status<>'open' OR b.expires_at<now() OR b.creator_id=p_user OR a.status NOT IN('banker_rolling','betting') OR a.roll_seq>0 OR a.pending_roll_id IS NOT NULL THEN RAISE EXCEPTION 'Side entry is no longer available'; END IF;\n  PERFORM celo_wallet_move(p_user,-b.amount_sc,'celo:side:accept:'||p_request,'celo_sidebet');\n  UPDATE celo_side_bets SET acceptor_id=p_user,status='matched',acceptor_debit_ref='celo:side:accept:'||p_request WHERE id=b.id RETURNING * INTO b;\n ELSE RAISE EXCEPTION 'Invalid side action';END IF;\n v_response:=jsonb_build_object('ok',true,'sideBet',to_jsonb(b),'side_bet',to_jsonb(b));\n INSERT INTO celo_action_receipts(request_id,user_id,room_id,action,input_hash,response) VALUES(p_request,p_user,r.id,'side_'||p_action,v_hash,v_response);RETURN v_response;\nEND $function$\n"
+  },
+  {
+    "signature": "celo_settle_sidebets_atomic(uuid,uuid)",
+    "security_definer": true,
+    "returns": "void",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_settle_sidebets_atomic(p_room uuid, p_round uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE;a celo_rounds%ROWTYPE;b celo_side_bets%ROWTYPE;v_banker boolean;v_creator boolean;v_push boolean;v_winner uuid;v_fee integer;v_name text;\nBEGIN\n SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n SELECT * INTO a FROM celo_rounds WHERE id=p_round AND room_id=p_room FOR UPDATE;\n IF a.status<>'completed' THEN RETURN;END IF;\n SELECT EXISTS(SELECT 1 FROM celo_player_rolls WHERE round_id=a.id AND outcome='push') INTO v_push;\n v_banker:=CASE WHEN v_push THEN NULL WHEN a.banker_dice_result='instant_win' THEN true WHEN a.banker_dice_result='instant_loss' THEN false WHEN a.banker_dice_result='point' THEN NOT EXISTS(SELECT 1 FROM celo_player_rolls WHERE round_id=a.id AND outcome='win') ELSE NULL END;\n v_name:=upper(COALESCE(a.banker_dice_name,''));\n FOR b IN SELECT * FROM celo_side_bets WHERE room_id=r.id AND round_id=a.id AND status IN('open','matched') ORDER BY id FOR UPDATE LOOP\n  v_creator:=CASE WHEN v_push OR b.status='open' THEN NULL WHEN b.bet_type='banker_wins' THEN v_banker WHEN b.bet_type='player_wins' THEN NOT v_banker WHEN b.bet_type='celo' THEN a.banker_dice_result='instant_win' AND v_name LIKE '%C-LO%' WHEN b.bet_type='trips' THEN a.banker_dice_result='instant_win' AND (v_name LIKE '%TRIP%' OR v_name LIKE '%ACE OUT%') WHEN b.bet_type='hand_crack' THEN a.banker_dice_result='instant_win' AND v_name LIKE '%HAND CRACK%' WHEN b.bet_type='shit' THEN a.banker_dice_result='instant_loss' AND (v_name LIKE '%SHIT%' OR v_name LIKE '%DICK%' OR v_name LIKE '%DICE%' OR v_name LIKE '%ACE-DEUCE-TREY%') ELSE NULL END;\n  IF v_creator IS NULL THEN\n   PERFORM celo_wallet_move(b.creator_id,b.amount_sc,'celo:side:void:'||b.id||':creator','celo_bank_refund');\n   IF b.acceptor_id IS NOT NULL THEN PERFORM celo_wallet_move(b.acceptor_id,b.amount_sc,'celo:side:void:'||b.id||':acceptor','celo_bank_refund'); END IF;\n   UPDATE celo_side_bets SET status='cancelled',winner_id=NULL,payout_sc=0,platform_fee_sc=0,settled_at=now() WHERE id=b.id;\n  ELSE\n   v_winner:=CASE WHEN v_creator THEN b.creator_id ELSE b.acceptor_id END;v_fee:=floor((b.amount_sc*2)*LEAST(100,GREATEST(0,r.platform_fee_pct))/100.0);\n   PERFORM celo_wallet_move(v_winner,b.amount_sc*2-v_fee,'celo:side:payout:'||b.id,'celo_payout');\n   PERFORM celo_record_platform_fee(a.id,'celo_side_fee',v_fee,'C-Lo side entry fee',v_winner,'celo:atomic:sidefee:'||b.id);\n   UPDATE celo_side_bets SET status=CASE WHEN v_creator THEN 'won' ELSE 'lost' END,winner_id=v_winner,payout_sc=b.amount_sc*2-v_fee,platform_fee_sc=v_fee,settled_at=now() WHERE id=b.id;\n  END IF;\n END LOOP;\nEND $function$\n"
+  },
+  {
+    "signature": "celo_cleanup_room_atomic(uuid,boolean)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_cleanup_room_atomic(p_room uuid, p_pause boolean)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE r celo_rooms%ROWTYPE;p celo_room_players%ROWTYPE;b celo_side_bets%ROWTYPE;v_count integer;v_fee integer:=0;\nBEGIN\n SELECT * INTO r FROM celo_rooms WHERE id=p_room FOR UPDATE;\n IF NOT FOUND OR r.status='cancelled' THEN RETURN jsonb_build_object('ok',true,'idempotent',true);END IF;\n IF p_pause THEN\n  IF r.paused_at IS NULL OR r.pause_expires_at IS NULL OR r.pause_expires_at>now() THEN RAISE EXCEPTION 'Pause has not expired';END IF;\n ELSE\n  IF r.paused_at IS NOT NULL OR r.last_activity>now()-interval '10 minutes' THEN RAISE EXCEPTION 'Table is not abandoned';END IF;\n END IF;\n SELECT count(*) INTO v_count FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0;\n IF NOT p_pause AND v_count=0 THEN RETURN jsonb_build_object('ok',false,'reason','no_posted_players');END IF;\n -- Same room -> round -> wallet order as rolls; cancellation cannot interleave settlement.\n PERFORM 1 FROM celo_rounds WHERE room_id=r.id AND status IN('banker_rolling','player_rolling','betting') ORDER BY round_number FOR UPDATE;\n FOR p IN SELECT * FROM celo_room_players WHERE room_id=r.id AND role='player' AND entry_posted AND stake_amount_sc>0 ORDER BY user_id FOR UPDATE LOOP\n  PERFORM celo_wallet_move(p.user_id,p.stake_amount_sc,'celo:cleanup:entry:'||r.id||':'||p.user_id,'celo_bank_refund');\n END LOOP;\n FOR b IN SELECT * FROM celo_side_bets WHERE room_id=r.id AND status IN('open','matched') ORDER BY id FOR UPDATE LOOP\n  PERFORM celo_wallet_move(b.creator_id,b.amount_sc,'celo:cleanup:side:'||b.id||':creator','celo_bank_refund');\n  IF b.acceptor_id IS NOT NULL THEN PERFORM celo_wallet_move(b.acceptor_id,b.amount_sc,'celo:cleanup:side:'||b.id||':acceptor','celo_bank_refund');END IF;\n  UPDATE celo_side_bets SET status='cancelled',settled_at=now() WHERE id=b.id;\n END LOOP;\n IF v_count>0 AND (NOT p_pause OR r.paused_by=r.banker_id) THEN\n  SELECT LEAST(500,GREATEST(0,gpay_coins)) INTO v_fee FROM users WHERE id=r.banker_id FOR UPDATE;\n  PERFORM celo_wallet_move(r.banker_id,-v_fee,'celo:cleanup:fee:'||r.id,'celo_abandon_fee');\n  IF v_fee>0 THEN PERFORM celo_record_platform_fee(NULL,'celo_abandon_fee',v_fee,'C-Lo abandonment fee',r.banker_id,'celo:atomic:cleanupfee:'||r.id);END IF;\n END IF;\n PERFORM celo_wallet_move(r.banker_id,r.current_bank_sc,'celo:cleanup:bank:'||r.id,'celo_bank_refund');\n UPDATE celo_rounds SET status='cancelled',completed_at=now(),pending_roll_id=NULL,pending_roll_user_id=NULL,pending_roll_payload=NULL,roll_processing=false,banker_roll_in_flight=false WHERE room_id=r.id AND status IN('banker_rolling','player_rolling','betting');\n UPDATE celo_room_players SET entry_sc=0,bet_cents=0,stake_amount_sc=0,entry_posted=false,status='seated',player_seat_status='seated' WHERE room_id=r.id;\n DELETE FROM celo_pause_votes WHERE room_id=r.id;\n UPDATE celo_rooms SET status='cancelled',current_bank_sc=0,current_bank_cents=0,abandoned_at=now(),abandonment_fee_charged=(v_fee>0),paused_at=NULL,paused_by=NULL,pause_reason=NULL,pause_expires_at=NULL,last_activity=now() WHERE id=r.id;\n RETURN jsonb_build_object('ok',true,'feeCharged',v_fee);\nEND $function$\n"
+  },
+  {
+    "signature": "celo_recover_due_actions()",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public",
+      "lock_timeout=2s"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_recover_due_actions()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\n SET lock_timeout TO '2s'\nAS $function$\nDECLARE a celo_rounds%ROWTYPE;r celo_rooms%ROWTYPE;v_payload jsonb;v_actor uuid;v_request uuid;v_dice integer[];v_count integer:=0;v_errors integer:=0;\nBEGIN\n FOR a IN SELECT * FROM celo_rounds WHERE status IN('banker_rolling','player_rolling') AND ((pending_roll_id IS NOT NULL AND roll_animation_start_at<now()-interval '30 seconds') OR (status='player_rolling' AND player_roll_deadline_at<now() AND pending_roll_id IS NULL)) ORDER BY room_id LIMIT 25 LOOP\n  BEGIN\n   SELECT * INTO r FROM celo_rooms WHERE id=a.room_id;\n   IF r.status='cancelled' OR r.paused_at IS NOT NULL THEN CONTINUE;END IF;\n   IF a.pending_roll_id IS NOT NULL THEN\n    v_payload:=a.pending_roll_payload;v_request:=a.pending_roll_id;v_actor:=COALESCE(a.pending_roll_user_id,CASE WHEN a.status='banker_rolling' THEN r.banker_id ELSE a.roller_user_id END);\n    IF v_payload IS NULL THEN RAISE EXCEPTION 'Accepted roll has no trusted payload';END IF;\n    SELECT array_agg(d::integer) INTO v_dice FROM jsonb_array_elements_text(CASE WHEN v_payload->'dice'='null'::jsonb THEN '[]'::jsonb ELSE v_payload->'dice' END) d;\n    PERFORM celo_settle_roll_atomic(v_actor,r.id,a.id,v_request,v_dice,v_payload->>'result',v_payload->>'rollName',(v_payload->>'point')::integer,(v_payload->>'isCelo')::boolean,v_payload->'dice'='null'::jsonb);\n   ELSE\n    v_request:=gen_random_uuid();v_payload:=jsonb_build_object('dice',NULL,'result','instant_loss','rollName','TIMEOUT — FORFEIT','point',NULL,'isCelo',false);\n    PERFORM celo_claim_roll_atomic(r.banker_id,r.id,a.id,v_request,NULL,true,v_payload);\n    PERFORM celo_settle_roll_atomic(r.banker_id,r.id,a.id,v_request,NULL,'instant_loss','TIMEOUT — FORFEIT',NULL,false,true);\n   END IF;\n   v_count:=v_count+1;\n  EXCEPTION WHEN OTHERS THEN v_errors:=v_errors+1;RAISE WARNING 'C-Lo recovery skipped round %: %',a.id,SQLERRM;\n  END;\n END LOOP;\n FOR r IN SELECT * FROM celo_rooms WHERE status<>'cancelled' AND ((paused_at IS NOT NULL AND pause_expires_at<now()) OR (paused_at IS NULL AND last_activity<now()-interval '10 minutes' AND EXISTS(SELECT 1 FROM celo_room_players p WHERE p.room_id=celo_rooms.id AND p.role='player' AND p.entry_posted AND p.stake_amount_sc>0))) ORDER BY id LIMIT 25 LOOP\n  BEGIN\n   PERFORM celo_cleanup_room_atomic(r.id,r.paused_at IS NOT NULL);v_count:=v_count+1;\n  EXCEPTION WHEN OTHERS THEN v_errors:=v_errors+1;RAISE WARNING 'C-Lo cleanup skipped room %: %',r.id,SQLERRM;\n  END;\n END LOOP;\n RETURN jsonb_build_object('processed',v_count,'errors',v_errors);\nEND $function$\n"
+  },
+  {
+    "signature": "celo_room_snapshot(uuid,uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_room_snapshot(p_user uuid, p_room uuid)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n SELECT jsonb_build_object('room',to_jsonb(r),'viewerBalance',(SELECT gpay_coins FROM users WHERE id=p_user),'players',COALESCE((SELECT jsonb_agg(to_jsonb(p)||jsonb_build_object('users',jsonb_build_object('id',u.id,'full_name',u.full_name,'username',u.username,'avatar_url',u.avatar_url)) ORDER BY p.seat_number) FROM celo_room_players p JOIN users u ON u.id=p.user_id WHERE p.room_id=r.id),'[]'::jsonb),\n 'activeRound',(SELECT to_jsonb(a) FROM celo_rounds a WHERE a.room_id=r.id AND (a.status IN('banker_rolling','player_rolling','betting') OR (a.status='completed' AND a.completed_at>now()-interval '12 seconds')) ORDER BY a.round_number DESC LIMIT 1),\n 'playerRolls',COALESCE((SELECT jsonb_agg(to_jsonb(pr) ORDER BY pr.created_at DESC) FROM celo_player_rolls pr WHERE pr.round_id=(SELECT a.id FROM celo_rounds a WHERE a.room_id=r.id ORDER BY a.round_number DESC LIMIT 1)),'[]'::jsonb),\n 'postedPrize',(SELECT COALESCE(sum(p.stake_amount_sc),0) FROM celo_room_players p WHERE p.room_id=r.id AND p.entry_posted AND p.role='player'),\n 'pauseVotes',jsonb_build_object('requestCount',(SELECT count(*) FROM celo_pause_votes WHERE room_id=r.id AND vote='request'),'approveCount',(SELECT count(*) FROM celo_pause_votes WHERE room_id=r.id AND vote='approve')))\n FROM celo_rooms r WHERE r.id=p_room AND (r.room_type='public' OR r.room_type IS NULL OR r.banker_id=p_user OR EXISTS(SELECT 1 FROM celo_room_players p WHERE p.room_id=r.id AND p.user_id=p_user));\n$function$\n"
+  },
+  {
+    "signature": "celo_reconcile_terminal_room_bank(uuid)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_reconcile_terminal_room_bank(p_round_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  r RECORD;\n  v_delta integer;\n  v_new_bank integer;\nBEGIN\n  IF p_round_id IS NULL THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'missing_round_id');\n  END IF;\n\n  SELECT\n    id,\n    room_id,\n    status,\n    banker_dice_result,\n    banker_winnings_sc,\n    terminal_bank_delta_sc,\n    terminal_room_bank_applied\n  INTO r\n  FROM public.celo_rounds\n  WHERE id = p_round_id;\n\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'round_not_found');\n  END IF;\n\n  IF r.status <> 'completed' THEN\n    RETURN jsonb_build_object('reconciled', false, 'reason', 'round_not_completed');\n  END IF;\n\n  IF r.terminal_room_bank_applied IS TRUE THEN\n    RETURN jsonb_build_object(\n      'reconciled', false,\n      'reason', 'already_applied',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = r.room_id\n      )\n    );\n  END IF;\n\n  v_delta := r.terminal_bank_delta_sc;\n  IF v_delta IS NULL THEN\n    RETURN jsonb_build_object(\n      'reconciled', false,\n      'reason', 'no_stored_delta_set_terminal_bank_delta_sc_manually'\n    );\n  END IF;\n\n  IF v_delta = 0 THEN\n    UPDATE public.celo_rounds SET terminal_room_bank_applied = true WHERE id = p_round_id;\n    RETURN jsonb_build_object(\n      'reconciled', true,\n      'reason', 'zero_delta_marked',\n      'new_bank_sc', (\n        SELECT COALESCE(current_bank_sc, 0)::integer FROM public.celo_rooms WHERE id = r.room_id\n      )\n    );\n  END IF;\n\n  UPDATE public.celo_rooms AS c\n  SET\n    current_bank_sc = GREATEST(0, COALESCE(c.current_bank_sc, 0) + v_delta),\n    current_bank_cents = GREATEST(0, COALESCE(c.current_bank_sc, 0) + v_delta)\n  WHERE c.id = r.room_id\n  RETURNING c.current_bank_sc INTO v_new_bank;\n\n  UPDATE public.celo_rounds\n  SET terminal_room_bank_applied = true,\n      terminal_bank_delta_sc = COALESCE(terminal_bank_delta_sc, v_delta)\n  WHERE id = p_round_id;\n\n  RETURN jsonb_build_object(\n    'reconciled', true,\n    'reason', 'applied',\n    'new_bank_sc', COALESCE(v_new_bank, 0)\n  );\nEND;\n$function$\n"
+  },
+  {
+    "signature": "celo_record_platform_fee(uuid,text,integer,text,uuid,text)",
+    "security_definer": true,
+    "returns": "jsonb",
+    "config": [
+      "search_path=public"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION public.celo_record_platform_fee(p_round_id uuid, p_fee_type text, p_amount_cents integer, p_description text, p_user_id uuid DEFAULT NULL::uuid, p_idempotency_key text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_amount integer := GREATEST(0, COALESCE(p_amount_cents, 0));\n  v_fee_type text := COALESCE(NULLIF(trim(p_fee_type), ''), 'celo_main_fee');\n  v_desc text := COALESCE(NULLIF(trim(p_description), ''), 'C-Lo platform fee');\n  v_key text := COALESCE(\n    NULLIF(trim(p_idempotency_key), ''),\n    CASE\n      WHEN p_round_id IS NULL THEN NULL\n      ELSE 'celo_fee:' || p_round_id::text || ':' || v_fee_type\n    END\n  );\n  v_inserted_id uuid;\nBEGIN\n  IF v_amount <= 0 THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'non_positive_amount');\n  END IF;\n  IF v_key IS NULL THEN\n    RETURN jsonb_build_object('inserted', false, 'reason', 'idempotency_key_required');\n  END IF;\n\n  IF EXISTS (\n    SELECT 1 FROM public.platform_earnings pe WHERE pe.idempotency_key = v_key\n  ) THEN\n    RETURN jsonb_build_object('inserted', false, 'idempotency_key', v_key);\n  END IF;\n\n  BEGIN\n    INSERT INTO public.platform_earnings (\n      source,\n      source_id,\n      amount_cents,\n      description,\n      user_id,\n      round_id,\n      fee_type,\n      idempotency_key\n    )\n    VALUES (\n      'celo_game',\n      CASE WHEN p_round_id IS NULL THEN NULL ELSE p_round_id::text END,\n      v_amount,\n      v_desc,\n      p_user_id,\n      p_round_id,\n      v_fee_type,\n      v_key\n    )\n    RETURNING id INTO v_inserted_id;\n  EXCEPTION\n    WHEN unique_violation THEN\n      RETURN jsonb_build_object('inserted', false, 'idempotency_key', v_key);\n  END;\n\n  PERFORM public.platform_record_revenue(v_amount, 'celo_fee');\n\n  RETURN jsonb_build_object('inserted', true, 'id', v_inserted_id, 'idempotency_key', v_key);\nEND;\n$function$\n"
+  }
+]

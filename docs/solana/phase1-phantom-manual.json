@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-13T02:12:00Z",
+  "origin": "https://handed-teens-shortcuts-kent.trycloudflare.com",
+  "wallet": "Phantom",
+  "browser": "Google Chrome",
+  "extensionVersion": "26.32.0",
+  "accountReset": false,
+  "productionChanged": false,
+  "observed": {
+    "approvedSignInCreatedPermanentAccount": true,
+    "username": "m_2f87a07eef904ebe89ad",
+    "createdAt": "2026-10-13T02:05:44.374056+00:00",
+    "challengeNamedStagingHost": true,
+    "challengeSaidNoTransactionOrTransfer": true,
+    "challengeShowedSelectedAddress": true,
+    "challengeHadNonce": true,
+    "challengeExpiryMs": 300000,
+    "challengeConsumed": true,
+    "sessionStillActive": true
+  },
+  "notObserved": [
+    "Rejected sign-in left no account",
+    "Profile username, biography, and photo save",
+    "Reload persistence of that profile",
+    "Disconnect revoked the session",
+    "Reconnect restored the same member and referral link",
+    "Second-account duplicate username rejection",
+    "Account switching rejected a stale save",
+    "Hidden wallet on the public profile",
+    "Search, follow, and unfollow",
+    "Third-wallet referral counted once"
+  ],
+  "preserved": {
+    "members": 9,
+    "photos": 1,
+    "referrals": 4,
+    "note": "One new member was added. Stored photo count and referral count stayed the same."
+  }
+}

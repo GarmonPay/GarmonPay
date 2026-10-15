@@ -53,6 +53,8 @@ describe("official mobile sign-in links", () => {
 
   it("keeps only a same-site referral on the return address", () => {
     expect(memberRedirect("https://handed-teens-shortcuts-kent.trycloudflare.com", "/solana/members", "a".repeat(32))).toContain("ref=" + "a".repeat(32));
+    expect(memberRedirect("https://garmonpay.com", "/solana/members", "ab23cdef")).toContain("ref=ab23cdef");
+    expect(memberRedirect("https://garmonpay.com", "/solana/members", "HolyGhost")).not.toContain("ref=");
     expect(memberRedirect("https://handed-teens-shortcuts-kent.trycloudflare.com", "/solana/members", "javascript:alert(1)")).not.toContain("javascript");
     expect(() => memberRedirect("http://evil.example", "/solana/members", null)).toThrow();
   });

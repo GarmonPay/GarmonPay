@@ -1,0 +1,28 @@
+-- Emergency rollback only; restores verified unsafe pre-migration grants.
+BEGIN;
+ALTER TABLE public.arena_daily_spin DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.arena_daily_spin TO anon,authenticated;
+ALTER TABLE public.arena_referral_bonus DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.arena_referral_bonus TO anon,authenticated;
+ALTER TABLE public.arena_activity_log DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.arena_activity_log TO anon,authenticated;
+ALTER TABLE public.daily_profit_summary DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.daily_profit_summary TO anon,authenticated;
+ALTER TABLE public.games_rewards DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.games_rewards TO anon,authenticated;
+ALTER TABLE public.arena_model_queue DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.arena_model_queue TO anon,authenticated;
+ALTER TABLE public.advertiser_campaigns DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.advertiser_campaigns TO anon,authenticated;
+ALTER TABLE public.classified_campaigns DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.classified_campaigns TO anon,authenticated;
+ALTER TABLE public.arena_weight_classes DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.arena_weight_classes TO anon,authenticated;
+ALTER TABLE public.packages DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.packages TO anon,authenticated;
+ALTER TABLE public.gc_packages DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.gc_packages TO anon,authenticated;
+DROP POLICY gp_legacy_catalog_read ON public.arena_weight_classes;
+DROP POLICY gp_legacy_catalog_read ON public.packages;
+DROP POLICY gp_legacy_catalog_read ON public.gc_packages;
+COMMIT;

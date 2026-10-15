@@ -1,0 +1,8305 @@
+{
+  "columns": [
+    {
+      "relname": "ad_clicks",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_clicks",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_clicks",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_clicks",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "price_monthly",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "ad_views",
+      "type": "integer"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "features",
+      "type": "jsonb"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "price",
+      "type": "numeric"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "impressions",
+      "type": "integer"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "ad_type",
+      "type": "text"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "duration_days",
+      "type": "integer"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "active",
+      "type": "boolean"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "sort_order",
+      "type": "integer"
+    },
+    {
+      "relname": "ad_packages",
+      "attname": "included_clicks",
+      "type": "integer"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "start_time",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "completed",
+      "type": "boolean"
+    },
+    {
+      "relname": "ad_sessions",
+      "attname": "reward_given",
+      "type": "boolean"
+    },
+    {
+      "relname": "admin_logs",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "admin_logs",
+      "attname": "action",
+      "type": "text"
+    },
+    {
+      "relname": "admin_logs",
+      "attname": "admin_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "admin_logs",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "ads",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ads",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "ads",
+      "attname": "budget",
+      "type": "numeric"
+    },
+    {
+      "relname": "ads",
+      "attname": "spent",
+      "type": "numeric"
+    },
+    {
+      "relname": "ads",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "ads",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "ads",
+      "attname": "video_url",
+      "type": "text"
+    },
+    {
+      "relname": "ads",
+      "attname": "image_url",
+      "type": "text"
+    },
+    {
+      "relname": "ads",
+      "attname": "advertiser_price",
+      "type": "numeric"
+    },
+    {
+      "relname": "ads",
+      "attname": "user_reward",
+      "type": "bigint"
+    },
+    {
+      "relname": "ads",
+      "attname": "profit_amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "ads",
+      "attname": "duration_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "ads",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "ads",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "ads",
+      "attname": "media_url",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "ad_type",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "file_url",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "target_url",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "placement",
+      "type": "text"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "active",
+      "type": "boolean"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "impressions",
+      "type": "integer"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "clicks",
+      "type": "integer"
+    },
+    {
+      "relname": "advertisements",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "package_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "budget",
+      "type": "numeric"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "spent",
+      "type": "numeric"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "starts_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "ends_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "advertiser_campaigns",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "advertisers",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "analytics_events",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "analytics_events",
+      "attname": "event_type",
+      "type": "text"
+    },
+    {
+      "relname": "analytics_events",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "analytics_events",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "analytics_events",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_achievements",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_achievements",
+      "attname": "fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_achievements",
+      "attname": "achievement_key",
+      "type": "text"
+    },
+    {
+      "relname": "arena_achievements",
+      "attname": "unlocked_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "ip",
+      "type": "text"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "action_type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "fingerprint_hash",
+      "type": "text"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "reference_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_activity_log",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "attname": "source_type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "attname": "source_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_admin_earnings",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "fighter_bet_on",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "odds",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "result",
+      "type": "text"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "payout",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "challenger_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "challenged_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_challenges",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "amount",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "arena_coin_transactions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_coins",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_coins",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_coins",
+      "attname": "balance",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_coins",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "login_date",
+      "type": "date"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "day_streak",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "coins_earned",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_daily_login",
+      "attname": "claimed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "spin_date",
+      "type": "date"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "spins_used",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_daily_spin",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fighter_inventory",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fighter_inventory",
+      "attname": "fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fighter_inventory",
+      "attname": "store_item_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fighter_inventory",
+      "attname": "purchased_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "style",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "avatar",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "strength",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "speed",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "stamina",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "defense",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "chin",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "special",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "wins",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "losses",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "training_sessions",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "equipped_gloves",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "equipped_shoes",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "equipped_shorts",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "equipped_headgear",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "condition",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "win_streak",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "body_type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "skin_tone",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "face_style",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "hair_style",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "nickname",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "origin",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "backstory",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "personality",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "trash_talk_style",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "signature_move_name",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "signature_move_desc",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "recommended_training",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "fighter_color",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "portrait_svg",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "generation_method",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "free_generation_used",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_3d_url",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_3d_status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_3d_task_id",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_thumbnail_url",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_3d_generated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "ai_generated",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "model_3d_preview_task_id",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fighters",
+      "attname": "avatar_url",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "fighter_a_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "fighter_b_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "bet_a",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "bet_b",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "total_pot",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "admin_cut",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "jackpot_contrib",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "winner_payout",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "fight_log",
+      "type": "jsonb"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "fight_type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "betting_open",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "tournament_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "round",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "cpu_fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_fights",
+      "attname": "winner_cpu_fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "round",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "exchange_num",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "finishing_move",
+      "type": "text"
+    },
+    {
+      "relname": "arena_highlights",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "week_start",
+      "type": "date"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "week_end",
+      "type": "date"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "total_amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "winner_fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "paid_out",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_jackpot",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "task_id",
+      "type": "text"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "attempts",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_model_queue",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "attname": "referred_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "attname": "coins_granted",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_referral_bonus",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "stripe_subscription_id",
+      "type": "text"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "current_period_end",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_season_pass",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "bet_on",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "odds",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "result",
+      "type": "text"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "payout",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_spectator_bets",
+      "attname": "payout_processed",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_spectators",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectators",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectators",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_spectators",
+      "attname": "joined_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "category",
+      "type": "text"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "price",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "coin_price",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "stat_bonuses",
+      "type": "jsonb"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "effect_class",
+      "type": "text"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "emoji",
+      "type": "text"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "arena_store_items",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "attname": "tournament_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "attname": "fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "attname": "seed",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_tournament_entries",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "entry_fee",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "prize_pool",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "admin_cut",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "bracket",
+      "type": "jsonb"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "max_fighters",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "tournament_type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_tournaments",
+      "attname": "entry_coin_fee",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "arena_transactions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_trash_talk",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_trash_talk",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_trash_talk",
+      "attname": "fighter_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_trash_talk",
+      "attname": "message",
+      "type": "text"
+    },
+    {
+      "relname": "arena_trash_talk",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "arena_weight_classes",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "arena_weight_classes",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "arena_weight_classes",
+      "attname": "min_total_stats",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_weight_classes",
+      "attname": "max_total_stats",
+      "type": "integer"
+    },
+    {
+      "relname": "arena_weight_classes",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "ad_credits",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "total_earned",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "total_withdrawn",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "balance_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "referral_code",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "referred_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "full_name",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "username",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "sweeps_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_profiles_balance_fix",
+      "attname": "gold_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "reference_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "ad_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "reference_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "ad_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "reference_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "ad_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_clean_v2",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "reference_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "ad_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "backup_transactions_full",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "is_admin",
+      "type": "boolean"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "is_super_admin",
+      "type": "boolean"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "earnings",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "total_deposits",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "ad_credit_balance",
+      "type": "bigint"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "referral_code",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "referred_by",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "referral_count",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "stripe_account_id",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "banned",
+      "type": "boolean"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "banned_reason",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "failed_login_attempts",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "locked_until",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "last_login_ip",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "last_login_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "registration_ip",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "arena_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "arena_free_generation_used",
+      "type": "boolean"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "withdrawable_balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "pending_balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "lifetime_earnings",
+      "type": "numeric"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "rank_code",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "referred_by_code",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "total_earnings",
+      "type": "bigint"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "total_referrals",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "membership",
+      "type": "text"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "balance_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "backup_users",
+      "attname": "kyc_verified",
+      "type": "boolean"
+    },
+    {
+      "relname": "badges",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "badges",
+      "attname": "code",
+      "type": "text"
+    },
+    {
+      "relname": "badges",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "badges",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "badges",
+      "attname": "icon",
+      "type": "text"
+    },
+    {
+      "relname": "badges",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "stripe_payment_id",
+      "type": "text"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "reference",
+      "type": "text"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "ledger_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "balance_audit_log",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "balances",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "balances",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "balances",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "balances",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "banners",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "banners",
+      "attname": "image",
+      "type": "text"
+    },
+    {
+      "relname": "banners",
+      "attname": "link",
+      "type": "text"
+    },
+    {
+      "relname": "banners",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "banners",
+      "attname": "owner_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "banners",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "banners",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "bets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "bets",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "bets",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "bets",
+      "attname": "pick",
+      "type": "text"
+    },
+    {
+      "relname": "bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "bets",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "match_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "bet_on_player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "payout",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "match_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "player1_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "player2_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_escrow",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "player1_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "player2_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "entry_fee",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "player1_health",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "player2_health",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "fight_seconds_elapsed",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "fight_log",
+      "type": "jsonb"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_matches",
+      "attname": "next_tick_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "level",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "wins",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "losses",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "knockouts",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "earnings",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "power",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "speed",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "stamina",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "defense",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_profiles",
+      "attname": "chin",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "entry_fee",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "max_players",
+      "type": "integer"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "prize_pool",
+      "type": "bigint"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "boxing_tournaments",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "request_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "action",
+      "type": "text"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "input_hash",
+      "type": "text"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "response",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_action_receipts",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "round_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "action",
+      "type": "text"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "details",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_audit_log",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "message",
+      "type": "text"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "is_system",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_chat",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_pause_votes",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_pause_votes",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_pause_votes",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_pause_votes",
+      "attname": "vote",
+      "type": "text"
+    },
+    {
+      "relname": "celo_pause_votes",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "round_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "dice",
+      "type": "integer[]"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "roll_name",
+      "type": "text"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "roll_result",
+      "type": "text"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "point",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "entry_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "outcome",
+      "type": "text"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "payout_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "platform_fee_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "reroll_count",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "player_celo_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "roll_animation_start_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "roll_animation_duration_ms",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "voided_by_short_stop",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_player_rolls",
+      "attname": "short_stop_called_by",
+      "type": "text"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "seat_number",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "entry_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "joined_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "dice_type",
+      "type": "text"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "dice_quantity",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "dice_expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "bet_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "entry_posted",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "stake_amount_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "player_seat_status",
+      "type": "text"
+    },
+    {
+      "relname": "celo_room_players",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "creator_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "banker_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "room_type",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "join_code",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "minimum_entry_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "current_bank_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "total_rounds",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "last_activity",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "max_players",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "last_round_was_celo",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "banker_celo_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "platform_fee_pct",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "max_bet_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "current_bank_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "banker_reserve_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "no_short_stop",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "room_tier",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "min_bet_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "abandonment_checked_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "abandoned_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "abandonment_fee_charged",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "paused_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "paused_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "pause_reason",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "pause_expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rooms",
+      "attname": "bank_busted",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "round_number",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_dice",
+      "type": "integer[]"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_dice_name",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_dice_result",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_point",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "prize_pool_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "platform_fee_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_winnings_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "bank_covered",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "covered_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "current_player_seat",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_rerolls",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "roll_animation_start_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "roll_animation_duration_ms",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "no_short_stop",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_short_stops_used",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_short_stops_max",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "banker_roll_in_flight",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "roll_processing",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "roller_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "player_celo_offer",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "player_celo_expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "push",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "settlement_version",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "bank_at_round_start_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "player_roll_deadline_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "idle_preview_dice",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "terminal_bank_delta_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "terminal_room_bank_applied",
+      "type": "boolean"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "entry_snapshot",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "settlement_snapshot",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "roll_seq",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "pending_roll_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "pending_roll_payload",
+      "type": "jsonb"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "pending_roll_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "last_roll_dice",
+      "type": "integer[]"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "last_roll_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "last_roll_name",
+      "type": "text"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "last_roll_point",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_rounds",
+      "attname": "last_roll_outcome",
+      "type": "text"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "round_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "creator_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "acceptor_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "bet_type",
+      "type": "text"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "target_player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "specific_point",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "amount_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "odds_multiplier",
+      "type": "numeric"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "platform_fee_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "payout_sc",
+      "type": "integer"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "settled_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "creator_debit_ref",
+      "type": "text"
+    },
+    {
+      "relname": "celo_side_bets",
+      "attname": "acceptor_debit_ref",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "advertiser_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "category",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "image_url",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "target_url",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "location",
+      "type": "text"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "budget",
+      "type": "numeric"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "reward_per_view",
+      "type": "numeric"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "is_featured",
+      "type": "boolean"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "classified_campaigns",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "mode",
+      "type": "text"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "bet_amount_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "house_cut_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "creator_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "creator_side",
+      "type": "text"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "opponent_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "result",
+      "type": "text"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "resolved_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "total_pot_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "winner_payout_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "loser_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "settled_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_flip_games",
+      "attname": "is_referral_flip",
+      "type": "boolean"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "gold_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "gpay_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "reference",
+      "type": "text"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "reversed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "coin_transactions",
+      "attname": "reversal_reference",
+      "type": "text"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "strength",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "speed",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "stamina",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "difficulty",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "style",
+      "type": "text"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "avatar",
+      "type": "text"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "defense",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "chin",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "special",
+      "type": "integer"
+    },
+    {
+      "relname": "cpu_fighters",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "creator_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "video_url",
+      "type": "text"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "thumbnail_url",
+      "type": "text"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "target_demo",
+      "type": "jsonb"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "budget_gpc",
+      "type": "integer"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "spent_gpc",
+      "type": "integer"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "views_count",
+      "type": "integer"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "approved_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "creator_videos",
+      "attname": "approved_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "date",
+      "type": "date"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "advertiser_revenue_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "member_payouts_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "deferred_payouts_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "profit_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "profit_margin_percent",
+      "type": "numeric"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "daily_profit_summary",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "daily_rewards",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "daily_rewards",
+      "attname": "last_claim_date",
+      "type": "date"
+    },
+    {
+      "relname": "daily_rewards",
+      "attname": "reward_amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "daily_rewards",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "deposits",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "deposits",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "deposits",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "deposits",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "deposits",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "deposits",
+      "attname": "stripe_session_id",
+      "type": "text"
+    },
+    {
+      "relname": "deposits",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "earnings",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "earnings",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "earnings",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "earnings",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "earnings",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "session_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "flag_type",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "notes",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "reviewed_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "reviewed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_flags",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "session_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "error_message",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "reviewed_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "reviewed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "paid_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_payouts",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "flagged_suspicious",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "updated_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_player_status",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "puzzle_name",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "clue_transaction_id",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "clue_formula",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "clue_terminal_text",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "clue_cabinet_text",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "correct_pin",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "difficulty_level",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "active_date",
+      "type": "date"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "preview_text",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "created_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "updated_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_puzzles",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "player_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "mode",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "stake_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "ended_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "countdown_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "server_elapsed_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "escape_time_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "result",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "timer_valid",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "puzzle_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "puzzle_progress",
+      "type": "jsonb"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "entered_pin",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "prize_pool_window",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "platform_fee_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "projected_payout_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "payout_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "payout_status",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "payout_reference",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "suspicious",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "suspicious_reason",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "device_fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "user_agent",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_sessions",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "id",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "free_play_enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "stake_mode_enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "min_stake_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "max_stake_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "platform_fee_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "top1_split_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "top2_split_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "top3_split_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "countdown_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "daily_puzzle_rotation_enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "maintenance_banner",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "suspicious_min_escape_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "large_payout_alert_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "email_alert_large_payout",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "email_alert_suspicious",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "email_alert_wallet_errors",
+      "type": "boolean"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "updated_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_settings",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "attname": "id",
+      "type": "bigint"
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "attname": "session_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "attname": "event_type",
+      "type": "text"
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "attname": "server_time",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "escape_room_timer_logs",
+      "attname": "payload",
+      "type": "jsonb"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "choice",
+      "type": "text"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fight_bets",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "fight_escrow",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "player1",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "player2",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "winner",
+      "type": "uuid"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "bet_amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "platform_fee_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fight_history",
+      "attname": "knockout",
+      "type": "boolean"
+    },
+    {
+      "relname": "fighters",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fighters",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fighters",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "fighters",
+      "attname": "speed",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "power",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "defense",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "wins",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "losses",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "level",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "earnings",
+      "type": "bigint"
+    },
+    {
+      "relname": "fighters",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fighters",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fighters",
+      "attname": "stamina",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "experience",
+      "type": "integer"
+    },
+    {
+      "relname": "fighters",
+      "attname": "gender",
+      "type": "text"
+    },
+    {
+      "relname": "fighters",
+      "attname": "skin_tone",
+      "type": "text"
+    },
+    {
+      "relname": "fighters",
+      "attname": "gloves",
+      "type": "text"
+    },
+    {
+      "relname": "fighters",
+      "attname": "shorts",
+      "type": "text"
+    },
+    {
+      "relname": "fighters",
+      "attname": "shoes",
+      "type": "text"
+    },
+    {
+      "relname": "fights",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "host_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "opponent_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "entry_fee",
+      "type": "bigint"
+    },
+    {
+      "relname": "fights",
+      "attname": "platform_fee",
+      "type": "bigint"
+    },
+    {
+      "relname": "fights",
+      "attname": "total_pot",
+      "type": "bigint"
+    },
+    {
+      "relname": "fights",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "fights",
+      "attname": "winner_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fights",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "fights",
+      "attname": "fighter1_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "fighter2_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "fights",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "claimed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "free_entries",
+      "attname": "month_year",
+      "type": "text"
+    },
+    {
+      "relname": "game_config",
+      "attname": "game_name",
+      "type": "text"
+    },
+    {
+      "relname": "game_config",
+      "attname": "house_edge_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "game_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "game_rewards",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "game_rewards",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "game_rewards",
+      "attname": "reward_type",
+      "type": "text"
+    },
+    {
+      "relname": "game_rewards",
+      "attname": "reward_amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "game_rewards",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "game_slug",
+      "type": "text"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "score",
+      "type": "integer"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "weekly_key",
+      "type": "text"
+    },
+    {
+      "relname": "game_station_scores",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "game_waitlist",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "game_waitlist",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "game_waitlist",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "games_rewards",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "games_rewards",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "games_rewards",
+      "attname": "game_type",
+      "type": "text"
+    },
+    {
+      "relname": "games_rewards",
+      "attname": "reward_amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "games_rewards",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gamification",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification",
+      "attname": "points",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification",
+      "attname": "level",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "spin_cost",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "scratch_cost",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "mystery_box_cost",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "boxing_cost",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "pinball_cost",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "house_edge",
+      "type": "numeric"
+    },
+    {
+      "relname": "gamification_config",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "reward_type",
+      "type": "text"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "referral_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "used_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gamification_rewards",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ad_banned_users",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_banned_users",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_banned_users",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ad_blocked_keywords",
+      "attname": "id",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ad_blocked_keywords",
+      "attname": "keyword",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_blocked_keywords",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "engagement_type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "duration_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "user_earned",
+      "type": "numeric(10,6)"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "admin_earned",
+      "type": "numeric(10,6)"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "advertiser_charged",
+      "type": "numeric(10,6)"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "device_type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_engagements",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ad_fraud_flags",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ad_streak",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ad_streak",
+      "attname": "last_activity_date",
+      "type": "date"
+    },
+    {
+      "relname": "garmon_ad_streak",
+      "attname": "streak_days",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ad_streak",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "advertiser_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "ad_type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "media_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "thumbnail_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "destination_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "instagram_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "tiktok_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "youtube_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "twitter_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "facebook_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "twitch_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "total_budget",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "remaining_budget",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "cost_per_view",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "cost_per_click",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "cost_per_follow",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "cost_per_share",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "target_age_min",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "target_age_max",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "target_locations",
+      "type": "text[]"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "target_interests",
+      "type": "text[]"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "rejection_reason",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "views",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "clicks",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "follows",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "shares",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "total_paid_to_users",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "total_admin_cut",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "starts_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "ends_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_ads",
+      "attname": "ad_package_id",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "advertiser_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "platform",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "profile_url",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "handle",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "follower_count",
+      "type": "integer"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "is_verified",
+      "type": "boolean"
+    },
+    {
+      "relname": "garmon_advertiser_social_links",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_blocked_ips",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_blocked_ips",
+      "attname": "ip_prefix",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_blocked_ips",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_blocked_ips",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "engagement_type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "consumed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_engagement_sessions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "body",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "read_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_notifications",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "ad_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "engagement_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "amount",
+      "type": "numeric(10,6)"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "engagement_type",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "credited_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmon_user_ad_earnings",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "room_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "move_seq",
+      "type": "integer"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "col",
+      "type": "integer"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "row",
+      "type": "integer"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "reference",
+      "type": "text"
+    },
+    {
+      "relname": "garmondrop_moves",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "creator_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "opponent_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "entry_amount_minor",
+      "type": "integer"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "board_state",
+      "type": "jsonb"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "current_turn",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "pot_total_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "platform_fee_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "winner_payout_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "move_seq",
+      "type": "integer"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "garmondrop_rooms",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "gold_coins_spent",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "gpay_coins_received",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "conversion_rate",
+      "type": "numeric"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "gc_conversions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "price_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "gold_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "bonus_gpc",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "bonus_sweeps_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "bonus_label",
+      "type": "text"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "is_featured",
+      "type": "boolean"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "stripe_price_id",
+      "type": "text"
+    },
+    {
+      "relname": "gc_packages",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "available_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "pending_claim_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "claimed_lifetime_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "lifetime_earned_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_balances",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "amount_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "idempotency_key",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "requested_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "reviewed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "reviewer_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "reject_reason",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_claims",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "event_type",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "amount_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "delta_available_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "delta_pending_claim_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "delta_claimed_lifetime_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "delta_lifetime_earned_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "available_after_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "pending_claim_after_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "claimed_lifetime_after_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "lifetime_earned_after_minor",
+      "type": "bigint"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "reference",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "gpay_ledger",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "gpay_coins_spent",
+      "type": "integer"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "gpay_tokens_received",
+      "type": "integer"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "wallet_address",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "custodial",
+      "type": "boolean"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "transaction_signature",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "gpay_redemptions",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "item_key",
+      "type": "text"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "label",
+      "type": "text"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "completed",
+      "type": "boolean"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "completed_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "sort_order",
+      "type": "integer"
+    },
+    {
+      "relname": "launch_checklist",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "bonus_type",
+      "type": "text"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "from_tier",
+      "type": "text"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "to_tier",
+      "type": "text"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "gpc_amount",
+      "type": "integer"
+    },
+    {
+      "relname": "membership_bonuses",
+      "attname": "credited_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "display_order",
+      "type": "integer"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "price_monthly_usd",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "ad_rate_per_ad",
+      "type": "numeric(12,4)"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "referral_commission_pct",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "min_withdrawal_usd",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "features",
+      "type": "jsonb"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "is_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "membership_plan_catalog",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "mission_completions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "mission_completions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "mission_completions",
+      "attname": "mission_code",
+      "type": "text"
+    },
+    {
+      "relname": "mission_completions",
+      "attname": "completed_date",
+      "type": "date"
+    },
+    {
+      "relname": "mission_completions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "code",
+      "type": "text"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "reward_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "daily_limit_per_user",
+      "type": "integer"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "daily_global_limit",
+      "type": "integer"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "active",
+      "type": "boolean"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "mission_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "daily_total_budget_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "reward_types",
+      "type": "text[]"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "reward_balance_cents",
+      "type": "smallint[]"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "reward_ad_credit_cents",
+      "type": "smallint[]"
+    },
+    {
+      "relname": "mystery_box_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "open_date",
+      "type": "date"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "reward_type",
+      "type": "text"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "mystery_box_opens",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "owner_config",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "owner_config",
+      "attname": "pause_ads",
+      "type": "boolean"
+    },
+    {
+      "relname": "owner_config",
+      "attname": "pause_withdrawals",
+      "type": "boolean"
+    },
+    {
+      "relname": "owner_config",
+      "attname": "maintenance_mode",
+      "type": "boolean"
+    },
+    {
+      "relname": "owner_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "packages",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "packages",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "packages",
+      "attname": "price",
+      "type": "numeric"
+    },
+    {
+      "relname": "packages",
+      "attname": "impressions",
+      "type": "integer"
+    },
+    {
+      "relname": "packages",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "mode",
+      "type": "text"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "score",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "balls_used",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "duration_seconds",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "garmon_completions",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "jackpot_hit",
+      "type": "boolean"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "coins_earned",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "cash_earned_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "hit_log",
+      "type": "jsonb"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_games",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "current_amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "last_won_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "last_winner_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "total_contributed_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "pinball_jackpot",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "username",
+      "type": "text"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "highest_score",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "total_score",
+      "type": "bigint"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "games_played",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "level",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "level_name",
+      "type": "text"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "wins",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "losses",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "total_earned_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "pinball_leaderboard",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "session_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "score",
+      "type": "integer"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "weekly_key",
+      "type": "text"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "pinball_scores",
+      "attname": "daily_key",
+      "type": "text"
+    },
+    {
+      "relname": "pinball_sessions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_sessions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "pinball_sessions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "activity_type",
+      "type": "text"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "platform_activities",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_balance",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "platform_balance",
+      "attname": "balance_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "platform_balance",
+      "attname": "total_revenue_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "platform_balance",
+      "attname": "total_rewards_paid_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "platform_balance",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "source_id",
+      "type": "text"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "round_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "fee_type",
+      "type": "text"
+    },
+    {
+      "relname": "platform_earnings",
+      "attname": "idempotency_key",
+      "type": "text"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "fight_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_revenue",
+      "attname": "boxing_match_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "id",
+      "type": "bigint"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "upgrade_basic_price",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "upgrade_pro_price",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "ad_click_value",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "ad_view_value",
+      "type": "numeric(10,4)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "withdrawal_minimum",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "withdrawal_fee",
+      "type": "numeric(10,2)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "ads_enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "withdrawals_enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "ad_reward_percent",
+      "type": "numeric(5,2)"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "earn_rate_multiplier",
+      "type": "numeric"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "daily_payout_cap_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "last_health_check",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "click_payout_target_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "view_payout_target_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "click_payout_effective_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "view_payout_effective_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "throttle_active",
+      "type": "boolean"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "throttle_last_run_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "throttle_last_margin_pct",
+      "type": "numeric"
+    },
+    {
+      "relname": "platform_settings",
+      "attname": "watch_payout_gpc",
+      "type": "integer"
+    },
+    {
+      "relname": "profiles",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "profiles",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "profiles",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "profiles",
+      "attname": "ad_credits",
+      "type": "numeric"
+    },
+    {
+      "relname": "profiles",
+      "attname": "total_earned",
+      "type": "numeric"
+    },
+    {
+      "relname": "profiles",
+      "attname": "total_withdrawn",
+      "type": "numeric"
+    },
+    {
+      "relname": "profiles",
+      "attname": "balance_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "profiles",
+      "attname": "referral_code",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "referred_by",
+      "type": "uuid"
+    },
+    {
+      "relname": "profiles",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "full_name",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "username",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "sweeps_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "profiles",
+      "attname": "gold_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "profiles",
+      "attname": "date_of_birth",
+      "type": "date"
+    },
+    {
+      "relname": "profiles",
+      "attname": "residence_state",
+      "type": "text"
+    },
+    {
+      "relname": "profiles",
+      "attname": "reportable_earnings_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "profiles",
+      "attname": "tax_info_submitted_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "profit",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "profit",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "profit",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "profit",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "code",
+      "type": "text"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "sort_order",
+      "type": "integer"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "min_earnings_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "min_referrals",
+      "type": "integer"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "earnings_multiplier",
+      "type": "numeric"
+    },
+    {
+      "relname": "rank_config",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "recovered_stripe_sessions",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "recovered_stripe_sessions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "recovered_stripe_sessions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "recovered_stripe_sessions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "referrer_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "referred_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "referral_bonus",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "referral_commission_config",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_commission_config",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "referral_commission_config",
+      "attname": "commission_percentage",
+      "type": "numeric"
+    },
+    {
+      "relname": "referral_commission_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "referred_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_commissions",
+      "attname": "subscription_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "reward_type",
+      "type": "text"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "amount",
+      "type": "numeric(12,2)"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "referral_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referral_rewards",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "referrals",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "referrer",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "referred",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "commission",
+      "type": "numeric"
+    },
+    {
+      "relname": "referrals",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "referrals",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "referred_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "referrals",
+      "attname": "earnings",
+      "type": "numeric"
+    },
+    {
+      "relname": "revenue",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "revenue",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "revenue",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "revenue",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "revenue_transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "revenue_transactions",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "revenue_transactions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "revenue_transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "revenue_transactions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "reward_budget",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "reward_budget",
+      "attname": "daily_limit",
+      "type": "numeric"
+    },
+    {
+      "relname": "reward_budget",
+      "attname": "daily_used",
+      "type": "numeric"
+    },
+    {
+      "relname": "reward_budget",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "daily_budget_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "weekly_budget_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "daily_used_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "weekly_used_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "daily_reset_at",
+      "type": "date"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "weekly_reset_at",
+      "type": "date"
+    },
+    {
+      "relname": "reward_budget_global",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "reward_spend_log",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "reward_spend_log",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "reward_spend_log",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "reward_spend_log",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "reward_spend_log",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "security_events",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "security_events",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "security_events",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "security_events",
+      "attname": "ip",
+      "type": "inet"
+    },
+    {
+      "relname": "security_events",
+      "attname": "ip_text",
+      "type": "text"
+    },
+    {
+      "relname": "security_events",
+      "attname": "event_type",
+      "type": "text"
+    },
+    {
+      "relname": "security_events",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "security_events",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "security_logs",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "security_logs",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "security_logs",
+      "attname": "action",
+      "type": "text"
+    },
+    {
+      "relname": "security_logs",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "security_logs",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "settings",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "settings",
+      "attname": "site_profit_percent",
+      "type": "numeric"
+    },
+    {
+      "relname": "settings",
+      "attname": "referral_percent",
+      "type": "numeric"
+    },
+    {
+      "relname": "settings",
+      "attname": "min_withdraw",
+      "type": "numeric"
+    },
+    {
+      "relname": "settings",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "task_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "completion_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "reason",
+      "type": "text"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "severity",
+      "type": "text"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "auto_detected",
+      "type": "boolean"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "resolved",
+      "type": "boolean"
+    },
+    {
+      "relname": "social_fraud_flags",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "task_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "proof_url",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "reward_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "trust_score",
+      "type": "integer"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "flagged",
+      "type": "boolean"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "flag_reason",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "verification_status",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "claimed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "reverified_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "submission_ip",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "submission_ua",
+      "type": "text"
+    },
+    {
+      "relname": "social_task_completions",
+      "attname": "submission_fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "title",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "platform",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "task_type",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "reward_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "min_tier",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "proof_required",
+      "type": "boolean"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "target_url",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "max_completions",
+      "type": "integer"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "completions",
+      "type": "integer"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "social_tasks",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "daily_spin_limit_per_user",
+      "type": "integer"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "daily_total_budget_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "reward_balance_cents",
+      "type": "smallint[]"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "reward_ad_credit_cents",
+      "type": "smallint[]"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "no_reward_weight",
+      "type": "integer"
+    },
+    {
+      "relname": "spin_wheel_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "spin_date",
+      "type": "date"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "reward_type",
+      "type": "text"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "amount_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "spin_wheel_spins",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "id",
+      "type": "text"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "enabled",
+      "type": "boolean"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "reward_per_day_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "max_streak_reward_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "daily_budget_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "streak_config",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "stripe_session_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "currency",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "product_type",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "stripe_payment_intent",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "stripe_payment_intent_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_payments",
+      "attname": "transaction_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "stripe_subscription_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "stripe_price_id",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "current_period_end",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "stripe_subscriptions",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "subscription_payments",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "subscription_payments",
+      "attname": "subscription_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "subscription_payments",
+      "attname": "period_end_date",
+      "type": "date"
+    },
+    {
+      "relname": "subscription_payments",
+      "attname": "paid_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "monthly_price",
+      "type": "bigint"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "next_billing_date",
+      "type": "date"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "subscriptions",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "team_members",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "team_members",
+      "attname": "team_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "team_members",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "team_members",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "team_members",
+      "attname": "joined_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "teams",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "teams",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "teams",
+      "attname": "owner_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "teams",
+      "attname": "total_score",
+      "type": "numeric"
+    },
+    {
+      "relname": "teams",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "id",
+      "type": "bigint"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "trigger",
+      "type": "text"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "margin_pct",
+      "type": "numeric"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "revenue_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "payout_cents",
+      "type": "bigint"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "band",
+      "type": "text"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "multiplier",
+      "type": "numeric"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "click_target_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "click_effective_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "view_target_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "view_effective_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "throttle_log",
+      "attname": "notes",
+      "type": "text"
+    },
+    {
+      "relname": "tournament_players",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "tournament_players",
+      "attname": "tournament_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "tournament_players",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "tournament_players",
+      "attname": "score",
+      "type": "integer"
+    },
+    {
+      "relname": "tournament_players",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "name",
+      "type": "text"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "game",
+      "type": "text"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "prize_pool",
+      "type": "numeric"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "entry_fee",
+      "type": "numeric"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "max_players",
+      "type": "integer"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "start_date",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "end_date",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "platform_profit",
+      "type": "numeric"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "reserve_balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "tournaments",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "transactions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "transactions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "transactions",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "transactions",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "transactions",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "description",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "reference_id",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "stripe_session",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "session_id",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "transactions",
+      "attname": "ad_id",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "ip_address",
+      "type": "text"
+    },
+    {
+      "relname": "transactions",
+      "attname": "metadata",
+      "type": "jsonb"
+    },
+    {
+      "relname": "user_badges",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_badges",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_badges",
+      "attname": "badge_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_badges",
+      "attname": "earned_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "user_referral_flip_welcome_bonus_claims",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_referral_flip_welcome_bonus_claims",
+      "attname": "claimed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "user_referral_flip_welcome_bonus_claims",
+      "attname": "ledger_reference",
+      "type": "text"
+    },
+    {
+      "relname": "user_referral_flip_welcome_bonus_claims",
+      "attname": "source_game_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_streaks",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "user_streaks",
+      "attname": "last_login_date",
+      "type": "date"
+    },
+    {
+      "relname": "user_streaks",
+      "attname": "current_streak_days",
+      "type": "integer"
+    },
+    {
+      "relname": "user_streaks",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "users",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "role",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "is_admin",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "is_super_admin",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "earnings",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "total_deposits",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "ad_credit_balance",
+      "type": "bigint"
+    },
+    {
+      "relname": "users",
+      "attname": "referral_code",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "referred_by",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "users",
+      "attname": "referral_count",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "stripe_account_id",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "banned",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "banned_reason",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "failed_login_attempts",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "locked_until",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "last_login_ip",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "last_login_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "registration_ip",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "arena_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "arena_free_generation_used",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "withdrawable_balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "pending_balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_earnings",
+      "type": "numeric"
+    },
+    {
+      "relname": "users",
+      "attname": "rank_code",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "referred_by_code",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "total_earnings",
+      "type": "bigint"
+    },
+    {
+      "relname": "users",
+      "attname": "total_referrals",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "membership",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "balance_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "kyc_verified",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "membership_tier",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "full_name",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "avatar_url",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "social_trust_score",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "social_strikes",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "social_banned",
+      "type": "boolean"
+    },
+    {
+      "relname": "users",
+      "attname": "sweeps_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "gold_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "social_strike_count",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "membership_expires_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "date_of_birth",
+      "type": "date"
+    },
+    {
+      "relname": "users",
+      "attname": "residence_state",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "stripe_subscription_id",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "subscription_status",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "membership_payment_source",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "gpay_coins",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_sc_earned",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "lifetime_gc_purchased",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "gpay_tokens",
+      "type": "integer"
+    },
+    {
+      "relname": "users",
+      "attname": "last_monthly_bonus_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "username",
+      "type": "text"
+    },
+    {
+      "relname": "users",
+      "attname": "membership_started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "users",
+      "attname": "membership_period_end",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "video_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "watch_session_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "gpc_awarded",
+      "type": "integer"
+    },
+    {
+      "relname": "video_watch_completions",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "video_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "started_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "completed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "video_watch_sessions",
+      "attname": "valid",
+      "type": "boolean"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "referrer_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "referred_user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "referral_code",
+      "type": "text"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "referrer_ip",
+      "type": "text"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "referred_ip",
+      "type": "text"
+    },
+    {
+      "relname": "viral_referrals",
+      "attname": "device_fingerprint",
+      "type": "text"
+    },
+    {
+      "relname": "waitlist",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "waitlist",
+      "attname": "email",
+      "type": "text"
+    },
+    {
+      "relname": "waitlist",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "waitlist",
+      "attname": "source",
+      "type": "text"
+    },
+    {
+      "relname": "waitlist",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "wallet",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallet",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallet",
+      "attname": "balance",
+      "type": "numeric"
+    },
+    {
+      "relname": "wallet",
+      "attname": "updated_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "wallet_balances",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallet_balances",
+      "attname": "balance",
+      "type": "bigint"
+    },
+    {
+      "relname": "wallet_balances",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "type",
+      "type": "text"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "amount",
+      "type": "bigint"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "balance_after",
+      "type": "bigint"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "reference",
+      "type": "text"
+    },
+    {
+      "relname": "wallet_ledger",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "wallets",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallets",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "wallets",
+      "attname": "balance",
+      "type": "bigint"
+    },
+    {
+      "relname": "wallets",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "wallets",
+      "attname": "updated_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "amount_cents",
+      "type": "integer"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "stripe_email",
+      "type": "text"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "processed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "notes",
+      "type": "text"
+    },
+    {
+      "relname": "withdrawal_requests",
+      "attname": "created_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "id",
+      "type": "uuid"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "user_id",
+      "type": "uuid"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "status",
+      "type": "text"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "created_at",
+      "type": "timestamp without time zone"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "platform_fee",
+      "type": "numeric"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "net_amount",
+      "type": "numeric"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "processed_at",
+      "type": "timestamp with time zone"
+    },
+    {
+      "relname": "withdrawals",
+      "attname": "ip_address",
+      "type": "text"
+    }
+  ],
+  "enum_values": null
+}

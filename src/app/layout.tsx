@@ -1,4 +1,6 @@
 import "./globals.css";
+import "./design-system.css";
+import "./solana.css";
 import { Inter } from "next/font/google";
 import { PublicNavbarWrapper } from "@/components/PublicNavbarWrapper";
 import { PublicFooterWrapper } from "@/components/PublicFooterWrapper";
@@ -24,7 +26,7 @@ export const viewport = {
 
 export const metadata = {
   title: "GarmonPay",
-  description: "Get Seen. Get Known. Get Rewarded.",
+  description: "Explore GarmonPay’s Solana ecosystem: token projects, prepaid advertising, verified participation and games. Financial features await activation.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -61,7 +63,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="font-sans antialiased flex min-h-screen flex-col">
+      <body className="gp-app font-sans antialiased flex min-h-screen flex-col">
         <ClientErrorBoundary>
           <AuthStateProvider>
             <PublicNavbarWrapper />

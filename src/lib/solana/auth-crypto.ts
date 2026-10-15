@@ -1,5 +1,6 @@
 import {ed25519} from "@noble/curves/ed25519";
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { SOLANA_AUTH_CHAIN_ID, authNetwork, type AuthNetwork } from "./auth-chain";
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 export function decodeBase58(value: string): Buffer {
   if (!value || value.length > 100) throw new Error("Invalid base58");
@@ -19,8 +20,22 @@ export function authOrigin() {
   if (origin.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname))) throw new Error("Secure site origin required");
   return origin.origin;
 }
-export function challengeMessage(wallet: string, nonce: string, origin: string, issuedAt: string, expiresAt: string) {
-  return `${new URL(origin).host} wants you to sign in with your Solana account:\n${wallet}\n\nSign in to GarmonPay. This does not authorize a transaction or transfer.\n\nURI: ${origin}\nVersion: 1\nChain ID: solana:mainnet\nNonce: ${nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${expiresAt}`;
+export function challengeMessage(wallet: string, nonce: string, origin: string, issuedAt: string, expiresAt: string, network: AuthNetwork = SOLANA_AUTH_CHAIN_ID) {
+  const site = new URL(origin).origin;
+  const chain = authNetwork(network);
+  return [
+    "GarmonPay.com wants you to prove you own this wallet:",
+    wallet,
+    "",
+    site,
+    "",
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+    `Expiration Time: ${expiresAt}`,
+    `Network: ${chain}`,
+    "",
+    "This does not authorize a transaction or transfer.",
+  ].join("\n");
 }
 export function verifyWalletSignature(address: string, message: string, signature: string): boolean {
   try {

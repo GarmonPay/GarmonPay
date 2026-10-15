@@ -34,7 +34,7 @@ export default function ArenaDailyPage() {
     if (!s) return;
     setSession(s);
     const token = s.accessToken ?? s.userId;
-    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token };
+    const headers: Record<string, string> = s.accessToken ? { Authorization: `Bearer ${token}` } : {};
     const [loginRes, spinRes, jackpotRes, meRes] = await Promise.all([
       fetch(`${getApiRoot()}/arena/daily-login`, { headers, credentials: "include" }),
       fetch(`${getApiRoot()}/arena/spin`, { headers, credentials: "include" }),
@@ -58,7 +58,7 @@ export default function ArenaDailyPage() {
     setError(null);
     setClaiming(true);
     const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : {}) };
     const res = await fetch(`${getApiRoot()}/arena/daily-login`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) fetchAll();
@@ -72,7 +72,7 @@ export default function ArenaDailyPage() {
     setSpinResult(null);
     setSpinning(true);
     const token = session.accessToken ?? session.userId;
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : { "X-User-Id": token }) };
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...(session.accessToken ? { Authorization: `Bearer ${token}` } : {}) };
     const res = await fetch(`${getApiRoot()}/arena/spin`, { method: "POST", headers, credentials: "include", body: "{}" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {

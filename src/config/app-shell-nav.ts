@@ -6,7 +6,6 @@ export const APP_SHELL_LINKS = {
   home: "/dashboard",
   gamesLobby: "/games",
   gamesHub: "/dashboard/games",
-  celo: "/dashboard/games/celo",
   /** Connect Four PvP lobby (same shell as other dashboard games). */
   garmondrop: "/dashboard/games/garmondrop",
   coinFlip: "/dashboard/coinflip",

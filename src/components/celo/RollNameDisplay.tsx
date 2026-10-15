@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   rollName: string | null;
@@ -108,6 +108,7 @@ function getStyle(rollName: string) {
 }
 
 export default function RollNameDisplay({ rollName, point, onComplete }: Props) {
+  const completeRef=useRef(onComplete);completeRef.current=onComplete;
   const [visible, setVisible] = useState(false);
   const [opacity, setOpacity] = useState(0);
   const [scale, setScale] = useState(0.9);
@@ -159,7 +160,7 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
       setScale(0.8);
       setTimeout(() => {
         setVisible(false);
-        onComplete?.();
+        completeRef.current?.();
       }, 300);
     }, holdMs);
 
@@ -168,7 +169,7 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
       clearTimeout(phaseTimer);
       clearTimeout(timer);
     };
-  }, [rollName, point, onComplete]);
+  }, [rollName, point]);
 
   if (!visible || !rollName) return null;
 
@@ -186,9 +187,12 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
         }
       `}</style>
       <div
+        className="celo-roll-name"
         style={{
           position: "absolute",
-          inset: 0,
+          left: 8,
+          right: 8,
+          top: 36,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -207,13 +211,16 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
             alignItems: "center",
             gap: isMobile ? 4 : 6,
             fontFamily: "var(--font-cinzel-decorative), 'Cinzel Decorative', ui-serif, serif",
-            fontSize: isMobile ? style.mobileSize : style.size,
+            fontSize: isMobile ? 17 : 24,
             fontWeight: 900,
             textAlign: "center",
             transform: `scale(${scale})`,
             transition: "transform 0.28s ease",
-            animation: style.shake ? "screenShake 0.5s ease-in-out" : "none",
-            padding: "0 12px",
+            animation: "none",
+            padding: "8px 12px",
+            borderRadius: 10,
+            background: "rgba(15,5,25,.9)",
+            border: "1px solid rgba(245,200,66,.5)",
             lineHeight: 1.1,
             letterSpacing: "0.02em",
           }}
@@ -232,6 +239,9 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
           >
             {rollName}
           </div>
+          {typeof point === "number" &&
+          Number.isFinite(point) &&
+          !/\bPOINT\s*\d+/i.test(rollName) ? (
           <div
             style={{
               fontFamily: "var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif",
@@ -244,13 +254,9 @@ export default function RollNameDisplay({ rollName, point, onComplete }: Props) 
               letterSpacing: "0.06em",
             }}
           >
-            {rollName}
-            {typeof point === "number" &&
-            Number.isFinite(point) &&
-            !/\bPOINT\s*\d+/i.test(rollName)
-              ? ` • POINT ${point}`
-              : ""}
+            {`POINT ${point}`}
           </div>
+          ) : null}
           <div
             style={{
               fontFamily: "var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif",

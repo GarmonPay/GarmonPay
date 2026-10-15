@@ -16,12 +16,12 @@ function hasAdminRole(row: { role?: string; is_super_admin?: boolean } | null | 
 }
 
 /** Resolves Supabase auth user id when the user has an admin role; else null. */
-export async function getAdminAuthUserId(request: Request): Promise<string | null> {
+async function resolveAdminIdentity(request: Request, superAdminOnly: boolean): Promise<string | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !anonKey) return null;
+  if (!url || !anonKey || !serviceKey) return null;
 
   let token: string | null = null;
   try {
@@ -42,12 +42,10 @@ export async function getAdminAuthUserId(request: Request): Promise<string | nul
   const { data: { user }, error: authError } = await authClient.auth.getUser();
   if (authError || !user) return null;
 
-  const roleClient = serviceKey
-    ? createClient(url, serviceKey)
-    : authClient;
+  const roleClient = createClient(url, serviceKey);
   const { data, error } = await roleClient
     .from("users")
-    .select("role, is_super_admin")
+    .select("role, is_super_admin, banned")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -55,11 +53,21 @@ export async function getAdminAuthUserId(request: Request): Promise<string | nul
     if (error) console.error("Admin auth users query error:", error);
     return null;
   }
-  if (!hasAdminRole(data as { role?: string; is_super_admin?: boolean })) return null;
+  const row = data as { role?: string; is_super_admin?: boolean; banned?: boolean };
+  if (row.banned !== false) return null;
+  if (superAdminOnly ? !(row.is_super_admin === true || row.role?.toLowerCase() === "super_admin") : !hasAdminRole(row)) return null;
   return user.id;
 }
 
 /** Returns true if request has valid admin. Server-side only. */
 export async function isAdmin(request: Request): Promise<boolean> {
   return (await getAdminAuthUserId(request)) !== null;
+}
+
+export async function getAdminAuthUserId(request: Request): Promise<string | null> {
+  return resolveAdminIdentity(request, false);
+}
+
+export async function isSuperAdminRequest(request: Request): Promise<boolean> {
+  return (await resolveAdminIdentity(request, true)) !== null;
 }

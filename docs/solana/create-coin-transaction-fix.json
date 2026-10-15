@@ -1,0 +1,122 @@
+{
+  "date": "2026-10-14",
+  "productionBefore": "dpl_BsoEB33cPgfEK1zQBLUzcw1YMXoB",
+  "liveUrl": "https://garmonpay.com/solana/create",
+  "rootCause": "The deployed platform validator required exactly one instruction; unsigned platform setup omitted compute budget instructions, meeting Phantom priority-fee augmentation conditions. Wallet-returned extra instructions trigger the shape guard after signing and before sendRawTransaction. Original signed bytes were not retained in logs; exact added instruction data cannot be independently recovered.",
+  "stage": "Platform config setup, before mint generation and before RPC broadcast",
+  "network": "devnet",
+  "signedFormat": "Solana legacy Transaction",
+  "approvedEnvelope": "setComputeUnitLimit 400000; setComputeUnitPrice 0; exactly one Devnet LaunchLab instruction, exact fee payer/accounts/signers/message validation",
+  "programId": "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6",
+  "platformId": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+  "rpcEvidence": {
+    "network": "devnet",
+    "genesisVerified": true,
+    "platformId": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+    "platformExists": false,
+    "configOwner": "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6",
+    "blockhashValid": true,
+    "submitted": false,
+    "signature": null,
+    "tokenCreated": false,
+    "step": "platform",
+    "simulationPassed": true,
+    "networkFeeLamports": 5000,
+    "estimatedRentLamports": 5445760,
+    "priorityFeeLamports": 0
+  },
+  "costs": {
+    "platformRentDevnetSol": 0.00544576,
+    "platformNetworkFeeDevnetSol": 5e-06,
+    "platformPriorityFeeDevnetSol": 0,
+    "applicationFeeDevnetSol": 0
+  },
+  "tests": {
+    "focusedWithRealDevnetConfig": 15,
+    "readOnlyDevnetPreflight": 1,
+    "fullRegressionPassed": 497,
+    "optionalSkipped": 2,
+    "productionBuildPassed": true
+  },
+  "signature": null,
+  "transactionId": null,
+  "actualMint": null,
+  "onChainTokenCreated": false,
+  "physicalPhantomLaunchRetestPassed": false,
+  "mainnetOperationsEnabled": false,
+  "databaseMigrationsApplied": false,
+  "references": [
+    "https://docs.phantom.com/developer-powertools/solana-priority-fees",
+    "https://github.com/raydium-io/raydium-sdk-V2/blob/master/src/raydium/launchpad/instrument.ts"
+  ],
+  "deploymentStatus": "READY",
+  "deploymentId": "dpl_Dik4eG7jCvpW6QL3UbkXm1mvxXk1",
+  "deploymentUrl": "https://garmon-7h057pz2j-garmonpays-projects.vercel.app",
+  "livePreparationSimulationPassed": true,
+  "liveCostReviewRendered": true,
+  "liveCancellationBeforeSignaturePassed": true,
+  "walletSignatureRequestedDuringAcceptance": false,
+  "originalWalletSelectedNetwork": "Not retained in production logs; application construction and submission are pinned to Devnet",
+  "gpaySuffixEnforcedBeforeSigning": true,
+  "envelope": {
+    "format": "legacy",
+    "network": "devnet",
+    "feePayer": "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE",
+    "requiredSigners": [
+      "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE"
+    ],
+    "signaturesPresent": false,
+    "instructionCount": 3,
+    "programIds": [
+      "ComputeBudget111111111111111111111111111111",
+      "ComputeBudget111111111111111111111111111111",
+      "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6"
+    ],
+    "launchLabAccounts": [
+      {
+        "address": "HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE",
+        "signer": true,
+        "writable": true
+      },
+      {
+        "address": "3hJxH4AQYMf9rC45zSDDnFcMP4Ywqi2R9mKAKr3uaAKG",
+        "signer": false,
+        "writable": false
+      },
+      {
+        "address": "2xv49RSdmb9UnbAbfyULM5TnCZg7CB8TwWRjX65C1ccN",
+        "signer": false,
+        "writable": false
+      },
+      {
+        "address": "5ruSwxF3qUdMpiDPPSXus2RJc82n6Jmxcf4UuPehGVNF",
+        "signer": false,
+        "writable": true
+      },
+      {
+        "address": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+        "signer": false,
+        "writable": true
+      },
+      {
+        "address": "11111111111111111111111111111111",
+        "signer": false,
+        "writable": false
+      },
+      {
+        "address": "11111111111111111111111111111111",
+        "signer": false,
+        "writable": false
+      },
+      {
+        "address": "5WxHPiUZaiB6KNPg61figSRX2rXbRLnZqwtLKEhqSenn",
+        "signer": false,
+        "writable": false
+      }
+    ],
+    "computeLimit": 400000,
+    "computePriceMicroLamports": "0",
+    "directSolTransfer": false
+  },
+  "screenshot": "docs/design/live-fixes/production-create-coin-devnet-cost-review.png"
+}

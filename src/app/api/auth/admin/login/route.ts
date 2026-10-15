@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     console.log("Admin login env: service role loaded =", !!serviceKey, "url =", !!url, "anon =", !!anonKey);
   }
 
-  if (!url || !anonKey) {
+  if (!url || !anonKey || !serviceKey) {
     return NextResponse.json(
       { ok: false, message: "Supabase URL and anon key required" },
       { status: 503 }
@@ -65,12 +65,10 @@ export async function POST(request: Request) {
 
   // 2) Verify admin: select role from public.users where id = auth.uid()
   // Prefer SERVICE ROLE; if not set, use signed-in user's token (RLS may allow own row)
-  const roleClient = serviceKey
-    ? createClient(url, serviceKey)
-    : createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${accessToken}` } } });
+  const roleClient = createClient(url, serviceKey);
   const { data: profile, error: profileError } = await roleClient
     .from("users")
-    .select("role, is_super_admin")
+    .select("role, is_super_admin, banned")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -90,7 +88,7 @@ export async function POST(request: Request) {
     role === "game_admin" ||
     role === "super_admin";
 
-  if (!isAdmin) {
+  if (!isAdmin || (profile as { banned?: boolean } | null)?.banned !== false) {
     return NextResponse.json(
       {
         ok: false,

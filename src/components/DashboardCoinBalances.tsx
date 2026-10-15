@@ -24,81 +24,11 @@ export function DashboardCoinBalances({
   if (!hasToken) return null;
 
   if (compact) {
-    return (
-      <div className="w-full min-w-0 tablet:max-w-[min(92vw,32rem)]">
-        {loading ? (
-          <span className="text-[10px] text-fintech-muted tablet:text-[11px]">Loading…</span>
-        ) : (
-          <div className="flex flex-col gap-1 tablet:flex-row tablet:flex-wrap tablet:items-center tablet:justify-end tablet:gap-1.5">
-            <div
-              className="grid w-full grid-cols-3 gap-1 tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1"
-              role="group"
-              aria-label="Wallet summary: Gold Coins, GPay Coins, GPAY Tokens"
-            >
-              <div
-                className="rounded-md border border-amber-500/20 bg-black/50 px-1.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-amber-400/35 tablet:rounded-md tablet:px-1.5 tablet:py-0.5"
-                title="Gold Coins"
-              >
-                <span className="text-[8px] font-bold uppercase tracking-wider text-amber-200/70 tablet:text-[9px]">
-                  Gold
-                </span>
-                <span className="ml-1 font-mono text-[11px] font-semibold tabular-nums text-amber-300 tablet:ml-1.5 tablet:text-[12px]">
-                  {localeInt(goldCoins)}
-                </span>
-              </div>
-              <div
-                className="rounded-md border border-violet-500/25 bg-black/50 px-1.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-violet-400/40 tablet:rounded-md tablet:px-1.5 tablet:py-0.5"
-                title="GPay Coins (GPC)"
-              >
-                <span className="text-[8px] font-bold uppercase tracking-wider text-violet-300/80 tablet:text-[9px]">
-                  GPC
-                </span>
-                <span className="ml-1 font-mono text-[11px] font-semibold tabular-nums text-violet-200 tablet:ml-1.5 tablet:text-[12px]">
-                  {localeInt(gpayCoins)}
-                </span>
-              </div>
-              <div
-                className="rounded-md border border-emerald-500/20 bg-black/50 px-1.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-emerald-400/35 tablet:rounded-md tablet:px-1.5 tablet:py-0.5"
-                title="$GPAY Tokens"
-              >
-                <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-300/75 tablet:text-[9px]">
-                  $GPAY
-                </span>
-                <span className="ml-1 font-mono text-[11px] font-semibold tabular-nums text-emerald-200 tablet:ml-1.5 tablet:text-[12px]">
-                  {localeInt(gpayTokens)}
-                </span>
-              </div>
-            </div>
-            <div
-                className={
-                hideCompactActionsOnMobile
-                  ? "hidden tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1"
-                  : "grid w-full grid-cols-3 gap-1 tablet:flex tablet:w-auto tablet:flex-wrap tablet:justify-end tablet:gap-1"
-              }
-            >
-              <Link
-                href="/dashboard/wallet"
-                className="inline-flex min-h-[28px] items-center justify-center rounded-md bg-gradient-to-b from-amber-100 to-amber-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a0610] shadow-sm ring-1 ring-amber-300/40 transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-amber-400/50 tablet:min-h-[30px] tablet:rounded-md tablet:px-2 tablet:py-1 tablet:text-[10px]"
-              >
-                Buy GC
-              </Link>
-              <Link
-                href="/dashboard/wallet#convert"
-                className="inline-flex min-h-[28px] items-center justify-center rounded-md border border-violet-500/45 bg-violet-950/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-100 transition hover:border-violet-400/60 hover:bg-violet-900/80 focus:outline-none focus:ring-2 focus:ring-violet-500/40 tablet:min-h-[30px] tablet:rounded-md tablet:px-2 tablet:py-1 tablet:text-[10px]"
-              >
-                Convert
-              </Link>
-              <Link
-                href="/dashboard/redeem"
-                className="inline-flex min-h-[28px] items-center justify-center rounded-md border border-emerald-500/40 bg-emerald-950/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/55 hover:bg-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/35 tablet:min-h-[30px] tablet:rounded-md tablet:px-2 tablet:py-1 tablet:text-[10px]"
-              >
-                Redeem
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return <div className="gp-balance-strip" role="group" aria-label="Wallet summary">
+      <Link href="/dashboard/wallet" className="gp-balance-chip gp-balance-gold" aria-label="Gold Coins wallet"><span>GC</span><strong>{loading ? "—" : localeInt(goldCoins)}</strong></Link>
+      <Link href="/dashboard/wallet#convert" className="gp-balance-chip gp-balance-violet" aria-label="GPay Coins wallet"><span>GPC</span><strong>{loading ? "—" : localeInt(gpayCoins)}</strong></Link>
+      <Link href="/dashboard/redeem" className="gp-balance-chip" aria-label="$GPAY balance, redemption coming soon"><span>$GPAY</span><strong>{loading ? "—" : localeInt(gpayTokens)}</strong></Link>
+    </div>;
   }
 
   return (

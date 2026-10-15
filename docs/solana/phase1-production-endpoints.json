@@ -1,0 +1,30 @@
+{
+  "productionWrites": false,
+  "checks": [
+    {
+      "path": "/api/solana/members",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/solana/members/me",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "path": "/api/solana/members/me",
+      "method": "PATCH",
+      "status": 503
+    },
+    {
+      "path": "/api/solana/members/follow",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "path": "/api/solana/auth/challenge",
+      "method": "POST",
+      "status": 503
+    }
+  ]
+}

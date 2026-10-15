@@ -1,3 +1,4 @@
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { processAllDueReferralCommissions } from "@/lib/referral-commissions-db";
@@ -8,10 +9,7 @@ import { processAllDueReferralCommissions } from "@/lib/referral-commissions-db"
  * Secure with CRON_SECRET: set header X-Cron-Secret or Authorization: Bearer <CRON_SECRET>.
  */
 export async function POST(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const secret = (request.headers.get("x-cron-secret") ?? (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "")).trim();
-  const expected = process.env.CRON_SECRET?.trim();
-  if (expected && secret !== expected) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   if (!createAdminClient()) {

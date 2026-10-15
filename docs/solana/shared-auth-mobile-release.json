@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-13",
+  "productionBeforeDeployment": "dpl_8oQKee9oAXPGRJ6JJtHqJJ7ZWMAp",
+  "confirmedDesktopCause": "Phantom UI explicitly reported Testnet Mode while the shared server-issued message used mainnet.",
+  "productionChallengeBeforeFix": "mainnet",
+  "stagingChallengeBeforeFix": "mainnet",
+  "activeInjectedMethod": "connect + signMessage",
+  "walletStandardSignMessageChainParameter": "none; API accepts account and raw message bytes",
+  "walletStandardSignInActive": false,
+  "correctIdentifiers": {
+    "mainnet": {
+      "message": "mainnet",
+      "standard": "solana:mainnet",
+      "mobileCluster": "mainnet-beta"
+    },
+    "devnet": {
+      "message": "devnet",
+      "standard": "solana:devnet",
+      "mobileCluster": "devnet"
+    }
+  },
+  "actualDesktopPhantomStagingAccepted": true,
+  "actualDesktopAcceptedMessageNetwork": "devnet",
+  "physicalIphoneNewNetworkRetestPassed": false,
+  "profileStaging": {
+    "HolyGhostPersistence": true,
+    "biographyPersistence": true,
+    "optionalHandlePreservesAccount": true,
+    "invalidDisplayNameDenied": true,
+    "crossAccountEditDenied": true,
+    "referralDuplicatesDenied": true,
+    "hiddenWalletNotExposed": true
+  },
+  "mobileViewportChecks": {
+    "width": 390,
+    "documentWidth": 390,
+    "dialogLeft": 12,
+    "dialogRight": 378,
+    "allFiveActionsVisible": true,
+    "reducedHeight": 390,
+    "disconnectReachableByKeyboard": true
+  },
+  "productionDatabaseMigrationApplied": true,
+  "privacyDefaultAppliedToStagingOnly": false,
+  "productionFinancialOperationsEnabled": false,
+  "tests": {
+    "unitPassed": 481,
+    "unitSkipped": 1,
+    "routeSqlIntegrationPassed": 24,
+    "stagingBuildPassed": true,
+    "scopedReleaseBuildPassed": true,
+    "stagingSecretNotInBrowserAssets": true,
+    "stagingSecurityAdvisorWarnings": 0
+  },
+  "productionActualSignInBlocked": null,
+  "deploymentId": "dpl_BgJSBkDc5J8d7ommKHrmr2L74FTm",
+  "deploymentStatus": "READY",
+  "productionUrl": "https://garmonpay.com/solana/members",
+  "productionChecks": {
+    "membersPage": 200,
+    "launchpadPage": 200,
+    "publicMemberNames": 200,
+    "unsignedOwnProfile": 401,
+    "mobileWidth": 390,
+    "documentWidth": 390,
+    "walletMenuBounds": {
+      "left": 12,
+      "right": 378,
+      "bottom": 832
+    },
+    "walletChoicesDeduplicated": true
+  },
+  "productionMigrationScope": "Approved wallet_public default false only; existing member count and full row digest unchanged",
+  "productionMemberSecurityAdvisorWarnings": 0,
+  "productionActualWalletAcceptance": "PASSED actual existing desktop Phantom signMessage Mainnet; user unlocked and approved; authenticated profile persisted after two reloads; server session active.",
+  "sessionPersistenceCorrection": {
+    "cause": "Deployed WalletSignIn treated injected provider disconnect as explicit server logout. Production session revoked approximately 10 seconds after creation.",
+    "change": "Remove provider disconnect server revocation; preserve explicit user logout and server session validation. Temporary polling errors preserve local UI state.",
+    "stagingReloadPassed": true,
+    "productionRetestPassed": true,
+    "activeProductionSessionAfterReload": true,
+    "existingProductionMembersUnchanged": true,
+    "productionMemberCount": 2,
+    "evidence": "docs/design/live-fixes/production-phantom-authenticated-profile.png"
+  },
+  "deploymentUrl": "https://garmon-hiss9bo84-garmonpays-projects.vercel.app",
+  "actualDesktopPhantomProductionAccepted": true,
+  "fontBuildRepair": "Bundled existing identical DM Sans Latin asset with its OFL license for two game-page declarations after repeated Google font URL processing failures; financial game code unchanged.",
+  "remainingActualDeviceChecks": [
+    "Physical iPhone Phantom updated release sign-in/reload",
+    "Native iPhone photo selection/save/reload",
+    "Native share sheet"
+  ]
+}

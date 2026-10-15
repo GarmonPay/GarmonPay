@@ -57,7 +57,7 @@ export default function GodModePage() {
       return;
     }
     setAllowed(true);
-    fetch(`${API_BASE}/god-mode`, { headers: { "X-Admin-Id": session.adminId } })
+    fetch(`${API_BASE}/god-mode`, { credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -77,7 +77,8 @@ export default function GodModePage() {
     try {
       const res = await fetch(`${API_BASE}/god-mode/controls`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Admin-Id": session.adminId },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ [key]: next }),
       });
       const data = await res.json().catch(() => ({}));

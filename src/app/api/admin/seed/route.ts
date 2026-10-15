@@ -1,3 +1,4 @@
+import { isAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { createUserWithEmailPassword, findUserByEmail, listUsers, setUserRole, getUserRole } from "@/lib/auth-store";
@@ -13,6 +14,9 @@ function hashPassword(password: string): string {
  * Disabled in production unless ADMIN_SEED_ENABLED=true.
  */
 export async function POST(request: Request) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
   if (process.env.NODE_ENV === "production" && process.env.ADMIN_SEED_ENABLED !== "true") {
     return NextResponse.json(
       { message: "Admin seed is disabled in production (set ADMIN_SEED_ENABLED=true to allow)." },

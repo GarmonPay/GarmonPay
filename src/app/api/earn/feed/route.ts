@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase";
 import { getAuthUserId } from "@/lib/auth-request";
 import {
   dailyCapForTier,
@@ -23,11 +24,26 @@ export async function GET(request: Request) {
       getUserGpcEarnedToday(userId),
     ]);
     const dailyCap = dailyCapForTier(tier);
+    // Display names only. Optional presentation enrichment cannot block reward rules.
+    const creatorNames = new Map<string, string>();
+    try {
+      const admin = createAdminClient();
+      const ids = Array.from(new Set(videos.map(video => video.creator_id)));
+      if (admin && ids.length) {
+        const { data } = await admin.from("users").select("id,full_name,username").in("id", ids);
+        for (const creator of data ?? []) {
+          const name = creator.username?.trim() || creator.full_name?.trim();
+          if (name) creatorNames.set(creator.id, name);
+        }
+      }
+    } catch { /* A missing display name does not affect feed eligibility or payouts. */ }
+
 
     return NextResponse.json({
       videos: videos.map((v) => ({
         id: v.id,
         title: v.title,
+        creatorName: creatorNames.get(v.creator_id) ?? null,
         videoUrl: v.video_url,
         thumbnailUrl: v.thumbnail_url,
         viewsCount: v.views_count,

@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "syntheticOnly": true,
+  "endpoint": "http://127.0.0.1:18899",
+  "publicChainAccess": false,
+  "checks": [
+    "actual finalized System transfer",
+    "trusted RPC decoder",
+    "duplicate submission credits destination once",
+    "amount mismatch rejection",
+    "actual finalized insufficient-funds failure",
+    "failure leaves destination unchanged",
+    "no automatic reservation release"
+  ],
+  "checkedAt": "2026-10-12T17:22:50.945Z"
+}

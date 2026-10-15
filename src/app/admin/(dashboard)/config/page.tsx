@@ -172,7 +172,7 @@ function AdminConfigInner() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="p-6 space-y-6">
         <p className="text-fintech-muted">Loading…</p>
       </div>
     );

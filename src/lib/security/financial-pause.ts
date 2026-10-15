@@ -11,6 +11,14 @@ const reviewedMutations: Readonly<Record<string, readonly string[]>> = {
   "/api/notifications": ["PATCH"],
   "/api/waitlist": ["POST"],
   "/api/solana/launches/validate": ["POST"],
+  "/api/solana/launches/suggest": ["POST"],
+  "/api/solana/launches/artwork": ["POST", "DELETE"],
+  "/api/solana/launches/draft": ["POST"],
+  "/api/solana/launches/vanity": ["POST"],
+  "/api/solana/launches/platform": ["POST"],
+  "/api/solana/launches/platform/submit": ["POST"],
+  "/api/solana/launches/devnet": ["POST"],
+  "/api/solana/devnet/trade": ["POST"],
   "/api/solana/auth/logout": ["POST"],
 };
 

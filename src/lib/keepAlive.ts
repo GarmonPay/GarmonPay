@@ -1,34 +1,40 @@
-const FIGHT_SERVER = process.env.NEXT_PUBLIC_FIGHT_SERVER_URL;
-
-/** Base URL for fight server HTTP (health pings). Prefers NEXT_PUBLIC_FIGHT_SERVER_URL, else derives from WS URL. */
-export function getFightServerHealthUrl(): string | undefined {
-  if (FIGHT_SERVER) return FIGHT_SERVER;
-  const ws = process.env.NEXT_PUBLIC_ARENA_WS_URL;
-  if (!ws) return undefined;
-  try {
-    const u = new URL(ws);
-    u.protocol = "https:";
-    return u.origin;
-  } catch {
-    return undefined;
-  }
-}
-
-export function startKeepAlive() {
-  if (typeof window === "undefined") return;
-
-  const base = getFightServerHealthUrl();
-  if (!base) return;
-
-  const ping = async () => {
+/** Browser health pings consume only a sanitized public origin; deployment
+ * environment values are resolved on the server and never bundled here.
+ */
+export function startKeepAlive(): () => void {
+  if (typeof window === "undefined") return () => {};
+  let active: AbortController | null = null;
+  let requestTimeout: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let stopped = false;
+  async function ping(base: string) {
+    if (stopped || active) return;
+    const controller = new AbortController(); active = controller;
+    const timeout = setTimeout(() => controller.abort(), 55000); requestTimeout = timeout;
     try {
-      await fetch(`${base}/health`);
-      console.log("Fight server alive");
-    } catch (e) {
-      console.log("Fight server ping failed");
-    }
-  };
-
-  ping();
-  setInterval(ping, 14 * 60 * 1000);
+      // Opaque GET sends no credentials and reads no worker response data.
+      await fetch(`${base}/health`, { signal: controller.signal, credentials: "omit", mode: "no-cors", cache: "no-store" });
+    } catch { /* Best-effort transport check, never financial certification. */ }
+    finally { clearTimeout(timeout); if (requestTimeout === timeout) requestTimeout = null; if (active === controller) active = null; }
+  }
+  async function initialize() {
+    const controller = new AbortController(); active = controller;
+    const timeout = setTimeout(() => controller.abort(), 8000); requestTimeout = timeout;
+    let base: string | undefined;
+    try {
+      const response = await fetch("/api/arena/health-origin", { credentials: "omit", cache: "no-store", signal: controller.signal });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (typeof data.healthOrigin !== "string") return;
+      const url = new URL(data.healthOrigin);
+      if(url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) return;
+      base = url.origin;
+    } catch { return; }
+    finally { clearTimeout(timeout); if(requestTimeout === timeout) requestTimeout = null; if(active === controller) active = null; }
+    if (stopped || !base) return;
+    void ping(base);
+    timer = setInterval(() => void ping(base!), 14 * 60 * 1000);
+  }
+  void initialize();
+  return () => { stopped = true; if(timer) clearInterval(timer); if(requestTimeout) clearTimeout(requestTimeout); active?.abort(); };
 }

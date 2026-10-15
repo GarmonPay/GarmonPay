@@ -1,4 +1,6 @@
+import { AUTH_NETWORKS, type AuthNetwork } from "./auth-chain";
 import nacl from "tweetnacl";
+import { referralToken } from "./referral-token";
 import type { WalletApp } from "./wallet-environment";
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -11,6 +13,7 @@ const SOLFLARE_BROWSE = "https://solflare.com/ul/v1/browse/";
 const LINK_KEY = "gp-solana-mobile-link";
 
 export type LinkSession = {
+  network?: AuthNetwork;
   createdAt?: number;
   state?: string;
   app: WalletApp;
@@ -30,14 +33,14 @@ export type WalletReturn =
 
 export function encodeBase58(bytes: Uint8Array): string {
   let n = BigInt(0);
-  for (const byte of bytes) n = (n << BigInt(8)) + BigInt(byte);
+  for (let index = 0; index < bytes.length; index += 1) n = (n << BigInt(8)) + BigInt(bytes[index]);
   let result = "";
   while (n > BigInt(0)) {
     result = ALPHABET[Number(n % BigInt(58))] + result;
     n /= BigInt(58);
   }
-  for (const byte of bytes) {
-    if (byte !== 0) break;
+  for (let index = 0; index < bytes.length; index += 1) {
+    if (bytes[index] !== 0) break;
     result = "1" + result;
   }
   return result;
@@ -124,7 +127,8 @@ export function memberRedirect(origin: string, pathname: string, referral: strin
   url.pathname = pathname;
   url.search = "";
   url.hash = "";
-  if (referral && /^[0-9a-f]{32}$/.test(referral)) url.searchParams.set("ref", referral);
+  const token = referralToken(referral);
+  if (token) url.searchParams.set("ref", token);
   return url.toString();
 }
 
@@ -133,12 +137,12 @@ function endpoint(app: WalletApp, method: "connect" | "signMessage"): string {
   return method === "connect" ? SOLFLARE_CONNECT : SOLFLARE_SIGN;
 }
 
-export function connectLink(app: WalletApp, input: { appUrl: string; dappPublicKey: string; redirectLink: string }): string {
+export function connectLink(app: WalletApp, input: { appUrl: string; dappPublicKey: string; redirectLink: string; network?: AuthNetwork }): string {
   const url = new URL(endpoint(app, "connect"));
   url.searchParams.set("app_url", input.appUrl);
   url.searchParams.set("dapp_encryption_public_key", input.dappPublicKey);
   url.searchParams.set("redirect_link", input.redirectLink);
-  url.searchParams.set("cluster", "mainnet-beta");
+  url.searchParams.set("cluster", AUTH_NETWORKS[input.network ?? "mainnet"].cluster);
   return url.toString();
 }
 
@@ -178,7 +182,7 @@ export function signatureBase64(signature: string): string {
   const bytes = decodeBase58(signature);
   if (bytes.length !== 64) throw new Error("Invalid wallet signature response.");
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
   const encoded = btoa(binary);
   if (!/^[A-Za-z0-9+/]{86}==$/.test(encoded)) throw new Error("Invalid wallet signature response.");
   return encoded;

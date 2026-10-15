@@ -1,0 +1,17 @@
+{
+  "origin": "https://handed-teens-shortcuts-kent.trycloudflare.com",
+  "automatedTestWallets": true,
+  "applicationRestartPersistence": true,
+  "realWalletApplicationAcceptance": false,
+  "physicalMobileAcceptance": false,
+  "supabaseHttpAcceptance": true,
+  "productionAccess": false,
+  "checks": [
+    "Independent signed test wallets create separate permanent accounts over HTTPS with secure session cookies",
+    "Profile photo normalization, reload persistence, unique usernames and cross-account write rejection",
+    "Wallet privacy, idempotent follow/unfollow and first-signup-only referrals",
+    "Consumed challenge replay and forged signatures rejected; Origin protection, fixture/admin exclusion, denied financial mutations and logout revocation",
+    "Application restart preserves wallet identity, member ID, profile photo, privacy, referral code and existing valid session",
+    "Actual isolated Supabase REST confirms the HTTPS-created account IDs, photo and privacy; anonymous table and RPC access denied"
+  ]
+}

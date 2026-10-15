@@ -1,0 +1,25 @@
+{
+  "runtime": "native PostgreSQL",
+  "syntheticOnly": true,
+  "productionAccess": false,
+  "checks": [
+    "12 independent deposit requests produce exactly one journal",
+    "Concurrent cross-intent receipt replay rejected; loser retries safely with distinct evidence",
+    "12 independent nonce consumptions return exactly one challenge",
+    "Independent IP requests obey the shared five-challenge wallet limit",
+    "Native posting failure rolls back receipt and authorization status; retry succeeds",
+    "Native session rotation preserves old session on failure and revokes it on successful replacement",
+    "Reconciliation remains exact after concurrent posting and retries",
+    "Verified views: ownership, fraud/timing, separate funding, crash rollback/retry, twelve concurrent idempotent claims, full viewer reward plus 50% match, completion, immutable awards, populated rollback protection and browser role denial"
+  ],
+  "version": "18.4",
+  "reconciliation": {
+    "receipt_count": "4",
+    "journal_count": "4",
+    "posted_intent_count": "4",
+    "orphan_journal_count": "0",
+    "mismatch_count": "0"
+  },
+  "passed": true,
+  "checkedAt": "2026-10-12T16:46:01.630Z"
+}

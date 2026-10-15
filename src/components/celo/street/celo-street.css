@@ -1,0 +1,835 @@
+/* CeeLo presentation. The environment is /images/celo/garmonpay-ceelo-environment.jpg.
+   Gameplay does not depend on the artwork. */
+
+.celo-street-root {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background: #07040d;
+  max-width: none;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  width: calc(100% + 2rem);
+  color: #f6f1e6;
+}
+
+.celo-layer { position: relative; z-index: 1; }
+
+.celo-street-root header {
+  background: rgba(8, 4, 14, 0.42);
+  border-color: rgba(245, 200, 66, 0.16);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.celo-game-stage {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.celo-hud {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto 0.35rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.celo-hud .grid > div {
+  padding: 0.35rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(8, 6, 14, 0.55);
+  border: 1px solid rgba(245, 200, 66, 0.32);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.celo-banker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.12rem 0.45rem 0.12rem 0.22rem;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 200, 66, 0.55);
+  background: rgba(16, 10, 6, 0.62);
+}
+
+.celo-banker-badge b {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #1a1208;
+  background: linear-gradient(135deg, #f8e7a8, #d4a017);
+  border-radius: 999px;
+  padding: 0.12rem 0.35rem;
+}
+
+.celo-banker-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #f5e7b8;
+}
+
+.celo-takeover-callout {
+  width: min(100%, 36rem);
+  margin: 0 auto 0.3rem;
+  padding: 0.22rem 0.6rem 0.26rem;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 200, 66, 0.35);
+  background: rgba(12, 8, 6, 0.48);
+  backdrop-filter: blur(8px);
+}
+
+.celo-takeover-line {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f8e7a8;
+}
+
+.celo-takeover-sub {
+  margin: 0.04rem 0 0;
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(244, 236, 214, 0.82);
+}
+
+.celo-game-stage,
+.celo-game-stage > div,
+.celo-layout > main {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: stretch;
+}
+
+.celo-table-stage {
+  container-type: inline-size;
+  position: relative;
+  flex: 0 0 auto !important;
+  align-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  height: auto !important;
+  aspect-ratio: 4 / 5;
+  max-height: min(440px, 54dvh);
+  margin: 0 auto;
+  padding: 0 !important;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.celo-scene-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 46%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.celo-table-stage > p {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.35rem;
+  z-index: 4;
+  margin: 0;
+  pointer-events: none;
+}
+
+.celo-table,
+.celo-table.is-throwing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  transform: none;
+  animation: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.celo-table-rail,
+.celo-table-felt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  aspect-ratio: auto;
+}
+
+.celo-table-rail::before,
+.celo-table-rail::after,
+.celo-felt-mark,
+.celo-felt-word,
+.celo-table-front,
+.celo-table-underglow {
+  display: none;
+}
+
+.celo-table { z-index: 2; }
+
+@property --lift {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --hit {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* Collision box is the inner felt. JS sets left/top/width/height from the stage crop. */
+.celo-dice-row,
+.celo-felt-play {
+  position: absolute;
+  z-index: 3;
+  transform: none;
+  pointer-events: none;
+  overflow: hidden;
+  container-type: size;
+  container-name: celo-felt;
+  perspective: 900px;
+}
+
+.celo-photo-die {
+  --lift: 0;
+  --hit: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: clamp(44px, 16cqw, 78px);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.celo-photo-die[data-lane="0"] { transform: translate3d(4cqw, 18cqh, 0); }
+.celo-photo-die[data-lane="1"] { transform: translate3d(38cqw, 22cqh, 0); }
+.celo-photo-die[data-lane="2"] { transform: translate3d(68cqw, 16cqh, 0); }
+
+.celo-die-shadow {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 6%;
+  height: 16%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.72);
+  filter: blur(calc(2px + var(--lift) * 6px));
+  opacity: calc(0.78 - var(--lift) * 0.5);
+  transform: scaleX(calc(1 + var(--lift) * 0.7));
+  pointer-events: none;
+}
+
+.celo-die-body {
+  position: absolute;
+  inset: 0;
+  transform: rotateZ(var(--die-tilt, 0deg));
+  transform-style: preserve-3d;
+  transform-origin: center center;
+}
+
+.celo-die-flash {
+  position: absolute;
+  inset: 8%;
+  border-radius: 18%;
+  background: radial-gradient(circle, rgba(245, 200, 66, 0.55), rgba(109, 40, 217, 0.28) 46%, transparent 70%);
+  opacity: var(--hit);
+  pointer-events: none;
+}
+
+.celo-photo-face,
+.celo-photo-blank {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.celo-photo-die:not(:has(.celo-photo-face)) {
+  display: none;
+}
+
+.celo-photo-reflect {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 82%;
+  z-index: 0;
+  width: 80%;
+  height: 32%;
+  object-fit: contain;
+  transform: scaleY(-1);
+  opacity: 0.3;
+  filter: blur(0.6px);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 78%);
+  pointer-events: none;
+}
+
+.celo-photo-die.is-live .celo-photo-reflect { opacity: 0; }
+
+.celo-felt-play.is-throwing,
+.celo-felt-play.is-hand-hold {
+  overflow: visible;
+  z-index: 6;
+}
+
+.celo-felt-play.is-hand-hold .celo-photo-die {
+  visibility: hidden;
+}
+
+.celo-impact-glow {
+  position: absolute;
+  inset: 6% 4%;
+  border-radius: 46%;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(245, 200, 66, 0.28), rgba(109, 40, 217, 0.16) 42%, transparent 72%);
+}
+
+.celo-felt-play.is-throwing {
+  animation: celo-felt-nudge 1.2s linear both;
+}
+
+.celo-felt-play.is-throwing .celo-impact-glow {
+  animation: celo-impact-glow 1.2s linear both;
+}
+
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="0"][data-variant="0"] { animation: celo-die-appear 0.18s linear both, celo-ground-0 1.2s linear both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="1"][data-variant="0"] { animation: celo-die-appear 0.18s linear 0.14s both, celo-ground-1 1.2s linear 0.14s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="2"][data-variant="0"] { animation: celo-die-appear 0.18s linear 0.26s both, celo-ground-2 1.2s linear 0.26s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="0"][data-variant="1"] { animation: celo-die-appear 0.18s linear both, celo-ground-0b 1.2s linear both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="1"][data-variant="1"] { animation: celo-die-appear 0.18s linear 0.14s both, celo-ground-1b 1.2s linear 0.14s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="2"][data-variant="1"] { animation: celo-die-appear 0.18s linear 0.26s both, celo-ground-2b 1.2s linear 0.26s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="0"][data-variant="2"] { animation: celo-die-appear 0.18s linear both, celo-ground-0c 1.2s linear both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="1"][data-variant="2"] { animation: celo-die-appear 0.18s linear 0.14s both, celo-ground-1c 1.2s linear 0.14s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="2"][data-variant="2"] { animation: celo-die-appear 0.18s linear 0.26s both, celo-ground-2c 1.2s linear 0.26s both; }
+
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="0"] .celo-die-body { animation: celo-hop-0 1.2s linear both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="1"] .celo-die-body { animation: celo-hop-1 1.2s linear 0.14s both; }
+.celo-felt-play.is-throwing .celo-photo-die[data-lane="2"] .celo-die-body { animation: celo-hop-2 1.2s linear 0.26s both; }
+
+/* Player hand. Comes up from the near rail and reaches over the felt. */
+.celo-hand-preload {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.celo-throw-hand {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  z-index: 16;
+  width: clamp(190px, 64cqw, 440px);
+  aspect-ratio: 5 / 4;
+  pointer-events: none;
+  transform: translate3d(-50%, 48%, 0);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.celo-throw-hand img,
+.celo-palm-dice img {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+.celo-hand-hold,
+.celo-hand-shake,
+.celo-hand-release {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+}
+
+/* Closed fist stays whole. Its artwork already cups the dice under the fingers.
+   A second set of dice is only drawn while the hand opens, then those dice leave. */
+.celo-hand-layer-back { z-index: 1; }
+.celo-hand-layer-front { z-index: 3; }
+
+.celo-hand-shake,
+.celo-hand-release,
+.celo-palm-dice {
+  opacity: 0;
+}
+
+.celo-palm-dice {
+  position: absolute;
+  left: 31%;
+  top: 36%;
+  z-index: 2;
+  width: 40%;
+  height: 34%;
+}
+
+.celo-palm-dice img {
+  z-index: 2;
+  width: 42%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.55));
+}
+
+.celo-palm-dice img:nth-child(1) { left: 2%; top: 22%; }
+.celo-palm-dice img:nth-child(2) { left: 30%; top: 2%; }
+.celo-palm-dice img:nth-child(3) { left: 50%; top: 28%; }
+
+.celo-throw-hand.is-shake,
+.celo-throw-hand.is-release {
+  opacity: 1;
+}
+
+.celo-throw-hand.is-shake {
+  animation: celo-hand-enter 0.28s ease-out both, celo-hand-shake 0.86s linear 0.28s infinite;
+}
+
+.celo-throw-hand.is-shake .celo-hand-hold,
+.celo-throw-hand.is-shake .celo-palm-dice { opacity: 0; }
+.celo-throw-hand.is-shake .celo-hand-shake { opacity: 1; }
+
+.celo-throw-hand.is-release {
+  z-index: 4;
+}
+
+.celo-throw-hand.is-release .celo-hand-hold,
+.celo-throw-hand.is-release .celo-hand-shake { opacity: 0; }
+
+.celo-throw-hand.is-release .celo-palm-dice {
+  opacity: 1;
+  z-index: 5;
+}
+
+.celo-throw-hand.is-release .celo-palm-dice img:nth-child(1) {
+  animation: celo-die-exit-0 0.2s ease-in both;
+}
+.celo-throw-hand.is-release .celo-palm-dice img:nth-child(2) {
+  animation: celo-die-exit-1 0.2s ease-in both;
+}
+.celo-throw-hand.is-release .celo-palm-dice img:nth-child(3) {
+  animation: celo-die-exit-2 0.2s ease-in 0.02s both;
+}
+
+.celo-throw-hand.is-release {
+  animation: celo-hand-release 0.36s ease-in both;
+}
+
+.celo-throw-hand.is-release .celo-hand-release {
+  z-index: 4;
+  animation: celo-hand-open-fade 0.36s linear both;
+  clip-path: inset(0 0 36% 0);
+}
+
+.celo-fund-card {
+  border-color: rgba(245, 200, 66, 0.45) !important;
+  background: rgba(12, 8, 6, 0.72) !important;
+  box-shadow: 0 0 22px rgba(109, 40, 217, 0.22);
+  scroll-margin-bottom: 7rem;
+}
+
+.celo-fund-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #f5c842;
+}
+
+.celo-table-stage:has([data-celo-hand="shake"]) .celo-scene-result,
+.celo-table-stage:has([data-celo-hand="release"]) .celo-scene-result,
+.celo-table-stage:has(.celo-felt-play.is-throwing) .celo-scene-result,
+.celo-table-stage:has([data-celo-hand="shake"]) .celo-roll-name,
+.celo-table-stage:has([data-celo-hand="release"]) .celo-roll-name,
+.celo-table-stage:has(.celo-felt-play.is-throwing) .celo-roll-name {
+  visibility: hidden;
+}
+
+.celo-scene-result {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 6%;
+  z-index: 22;
+  margin: 0 !important;
+  max-width: none;
+  pointer-events: none;
+  text-align: center;
+}
+
+.celo-scene-result p:first-child {
+  font-size: clamp(0.82rem, 4.4cqw, 1.2rem) !important;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+}
+
+.celo-scene-result p:last-child {
+  font-size: clamp(0.62rem, 2.6cqw, 0.85rem) !important;
+  line-height: 1.25;
+}
+
+.celo-controls {
+  width: min(100%, 36rem);
+  margin-inline: auto;
+  border: 0;
+  background: transparent;
+}
+
+.celo-controls button {
+  min-height: 52px;
+}
+
+.celo-result-win {
+  box-shadow: 0 0 40px rgba(245, 200, 66, 0.28), 0 24px 80px rgba(0, 0, 0, 0.88);
+}
+
+.celo-result-loss {
+  border-color: rgba(161, 161, 170, 0.35) !important;
+}
+
+.celo-chat-rail {
+  border-color: rgba(245, 200, 66, 0.18);
+  background: rgba(8, 5, 15, 0.92);
+}
+
+.celo-empty-die {
+  box-shadow:
+    0 12px 8px rgba(0, 0, 0, 0.55),
+    inset 0 7px 8px rgba(255, 255, 255, 0.14),
+    inset 0 -10px 12px rgba(0, 0, 0, 0.55) !important;
+}
+
+.celo-mobile-chat {
+  position: relative;
+  z-index: 2;
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+@media (max-width: 639px) {
+  .celo-street-root header {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+  }
+  .celo-hud {
+    margin-bottom: 0.25rem;
+  }
+  .celo-controls {
+    padding-top: 0.4rem;
+  }
+}
+
+@keyframes celo-await-spin {
+  from { transform: rotateX(62deg) rotateY(0deg) rotateZ(-18deg); }
+  to { transform: rotateX(62deg) rotateY(360deg) rotateZ(18deg); }
+}
+
+@keyframes celo-die-appear {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes celo-felt-nudge {
+  0%, 20%, 24%, 48%, 54%, 100% { transform: none; }
+  22% { transform: translate3d(0.4px, 1px, 0); }
+  51% { transform: translate3d(-0.4px, 0.6px, 0); }
+}
+
+@keyframes celo-impact-glow {
+  0%, 16%, 28%, 44%, 58%, 100% { opacity: 0; }
+  22% { opacity: 0.85; }
+  50% { opacity: 0.45; }
+  78% { opacity: 0.28; }
+}
+
+@keyframes celo-hand-enter {
+  0% { transform: translate3d(-50%, 62%, 0) rotate(-8deg) scale(0.88); opacity: 0; }
+  100% { transform: translate3d(-50%, 0, 0) rotate(-2deg) scale(1); opacity: 1; }
+}
+
+@keyframes celo-hand-shake {
+  0% { transform: translate3d(-50%, 0, 0) rotate(-2deg) scale(1); }
+  12% { transform: translate3d(calc(-50% - 8%), 3%, 0) rotate(-14deg) scale(1.05); }
+  26% { transform: translate3d(calc(-50% + 9%), -2%, 0) rotate(13deg) scale(0.95); }
+  40% { transform: translate3d(calc(-50% + 4%), -7%, 0) rotate(7deg) scale(1.07); }
+  54% { transform: translate3d(calc(-50% - 7%), 5%, 0) rotate(-11deg) scale(0.94); }
+  68% { transform: translate3d(calc(-50% + 6%), 1%, 0) rotate(8deg) scale(1.04); }
+  82% { transform: translate3d(calc(-50% - 3%), -3%, 0) rotate(-5deg) scale(0.98); }
+  100% { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+}
+
+@keyframes celo-hand-release {
+  0% { transform: translate3d(-50%, 0, 0) rotate(-2deg) scale(1); opacity: 1; }
+  32% { transform: translate3d(-50%, -16%, 0) rotate(8deg) scale(1.06); opacity: 1; }
+  100% { transform: translate3d(-50%, 64%, 0) rotate(-8deg) scale(0.9); opacity: 0; }
+}
+
+@keyframes celo-die-exit-0 {
+  0% { transform: translate3d(0, 0, 0) rotate(-8deg); opacity: 1; }
+  55% { transform: translate3d(-6%, -36%, 0) rotate(-20deg); opacity: 1; }
+  100% { transform: translate3d(-10%, -62%, 0) rotate(-32deg); opacity: 0; }
+}
+
+@keyframes celo-die-exit-1 {
+  0% { transform: translate3d(0, 0, 0) rotate(6deg); opacity: 1; }
+  55% { transform: translate3d(4%, -42%, 0) rotate(18deg); opacity: 1; }
+  100% { transform: translate3d(8%, -70%, 0) rotate(28deg); opacity: 0; }
+}
+
+@keyframes celo-die-exit-2 {
+  0% { transform: translate3d(0, 0, 0) rotate(4deg); opacity: 1; }
+  55% { transform: translate3d(12%, -30%, 0) rotate(16deg); opacity: 1; }
+  100% { transform: translate3d(18%, -58%, 0) rotate(26deg); opacity: 0; }
+}
+
+@keyframes celo-hand-open-fade {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  48% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes celo-burst {
+  0% { opacity: 0; transform: translate3d(0, 10%, 0) scale(0.9); }
+  30% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(0, -22%, 0) scale(1.04); }
+}
+
+@keyframes celo-ground-0 {
+  0% { transform: translate3d(46cqw, 62cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.42, 0.02, 0.82, 0.4); }
+  16% { transform: translate3d(52cqw, 36cqh, 0); --lift: 0; --hit: 0.9; animation-timing-function: cubic-bezier(0.12, 0.72, 0.28, 1); }
+  30% { transform: translate3d(64cqw, 12cqh, 0); --lift: 0.62; --hit: 0; animation-timing-function: cubic-bezier(0.5, 0.05, 0.9, 0.4); }
+  44% { transform: translate3d(76cqw, 28cqh, 0); --lift: 0.08; --hit: 0.75; animation-timing-function: cubic-bezier(0.15, 0.68, 0.3, 1); }
+  60% { transform: translate3d(40cqw, 14cqh, 0); --lift: 0.28; --hit: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.8, 0.45); }
+  76% { transform: translate3d(18cqw, 34cqh, 0); --lift: 0; --hit: 0.35; animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  100% { transform: translate3d(4cqw, 18cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-1 {
+  0% { transform: translate3d(32cqw, 70cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.45, 0.02, 0.85, 0.35); }
+  18% { transform: translate3d(22cqw, 34cqh, 0); --lift: 0; --hit: 0.8; animation-timing-function: cubic-bezier(0.12, 0.7, 0.28, 1); }
+  28% { transform: translate3d(2cqw, 22cqh, 0); --lift: 0.15; --hit: 0.75; animation-timing-function: cubic-bezier(0.15, 0.65, 0.3, 1); }
+  44% { transform: translate3d(16cqw, 10cqh, 0); --lift: 0.4; --hit: 0; animation-timing-function: cubic-bezier(0.5, 0.05, 0.9, 0.4); }
+  62% { transform: translate3d(30cqw, 34cqh, 0); --lift: 0; --hit: 0.35; animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  78% { transform: translate3d(40cqw, 26cqh, 0); --lift: 0.12; --hit: 0; }
+  100% { transform: translate3d(38cqw, 22cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-2 {
+  0% { transform: translate3d(54cqw, 66cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.32, 0.04, 0.7, 0.4); }
+  22% { transform: translate3d(60cqw, 32cqh, 0); --lift: 0; --hit: 0.85; animation-timing-function: cubic-bezier(0.14, 0.7, 0.28, 1); }
+  30% { transform: translate3d(72cqw, 4cqh, 0); --lift: 0; --hit: 0.8; animation-timing-function: cubic-bezier(0.14, 0.7, 0.3, 1); }
+  46% { transform: translate3d(50cqw, 12cqh, 0); --lift: 0.3; --hit: 0; animation-timing-function: cubic-bezier(0.5, 0.05, 0.9, 0.4); }
+  62% { transform: translate3d(42cqw, 34cqh, 0); --lift: 0; --hit: 0.4; animation-timing-function: cubic-bezier(0.16, 0.65, 0.3, 1); }
+  78% { transform: translate3d(60cqw, 22cqh, 0); --lift: 0.16; --hit: 0; }
+  100% { transform: translate3d(68cqw, 16cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-0b {
+  0% { transform: translate3d(40cqw, 68cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.45, 0.02, 0.85, 0.35); }
+  14% { transform: translate3d(14cqw, 34cqh, 0); --lift: 0; --hit: 0.8; animation-timing-function: cubic-bezier(0.12, 0.7, 0.28, 1); }
+  30% { transform: translate3d(2cqw, 18cqh, 0); --lift: 0.2; --hit: 0.7; animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  48% { transform: translate3d(18cqw, 34cqh, 0); --lift: 0; --hit: 0.35; animation-timing-function: cubic-bezier(0.2, 0.65, 0.35, 1); }
+  66% { transform: translate3d(8cqw, 24cqh, 0); --lift: 0.15; --hit: 0; }
+  100% { transform: translate3d(4cqw, 18cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-1b {
+  0% { transform: translate3d(28cqw, 60cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.4, 0.04, 0.85, 0.4); }
+  16% { transform: translate3d(52cqw, 34cqh, 0); --lift: 0; --hit: 0.75; animation-timing-function: cubic-bezier(0.15, 0.7, 0.3, 1); }
+  32% { transform: translate3d(78cqw, 20cqh, 0); --lift: 0.1; --hit: 0.8; animation-timing-function: cubic-bezier(0.16, 0.65, 0.3, 1); }
+  50% { transform: translate3d(55cqw, 8cqh, 0); --lift: 0.35; --hit: 0; animation-timing-function: cubic-bezier(0.5, 0.05, 0.9, 0.45); }
+  70% { transform: translate3d(42cqw, 32cqh, 0); --lift: 0; --hit: 0.3; }
+  100% { transform: translate3d(38cqw, 22cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-2b {
+  0% { transform: translate3d(50cqw, 72cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.3, 0.05, 0.72, 0.4); }
+  18% { transform: translate3d(70cqw, 26cqh, 0); --lift: 0.2; --hit: 0.35; animation-timing-function: cubic-bezier(0.35, 0.05, 0.8, 0.45); }
+  34% { transform: translate3d(76cqw, 4cqh, 0); --lift: 0; --hit: 0.85; animation-timing-function: cubic-bezier(0.14, 0.7, 0.3, 1); }
+  52% { transform: translate3d(48cqw, 10cqh, 0); --lift: 0.28; --hit: 0; animation-timing-function: cubic-bezier(0.5, 0.05, 0.9, 0.4); }
+  70% { transform: translate3d(58cqw, 34cqh, 0); --lift: 0; --hit: 0.35; }
+  100% { transform: translate3d(68cqw, 16cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-0c {
+  0% { transform: translate3d(48cqw, 64cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.4, 0.03, 0.8, 0.4); }
+  18% { transform: translate3d(58cqw, 34cqh, 0); --lift: 0; --hit: 0.85; animation-timing-function: cubic-bezier(0.12, 0.7, 0.28, 1); }
+  34% { transform: translate3d(74cqw, 16cqh, 0); --lift: 0.4; --hit: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.85, 0.4); }
+  48% { transform: translate3d(78cqw, 26cqh, 0); --lift: 0; --hit: 0.8; animation-timing-function: cubic-bezier(0.15, 0.68, 0.3, 1); }
+  66% { transform: translate3d(36cqw, 12cqh, 0); --lift: 0.22; --hit: 0; }
+  82% { transform: translate3d(12cqw, 32cqh, 0); --lift: 0; --hit: 0.25; }
+  100% { transform: translate3d(4cqw, 18cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-1c {
+  0% { transform: translate3d(34cqw, 74cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.42, 0.04, 0.82, 0.38); }
+  16% { transform: translate3d(16cqw, 34cqh, 0); --lift: 0; --hit: 0.8; animation-timing-function: cubic-bezier(0.12, 0.7, 0.28, 1); }
+  32% { transform: translate3d(2cqw, 18cqh, 0); --lift: 0.12; --hit: 0.75; animation-timing-function: cubic-bezier(0.16, 0.68, 0.3, 1); }
+  50% { transform: translate3d(24cqw, 8cqh, 0); --lift: 0.34; --hit: 0; }
+  70% { transform: translate3d(36cqw, 32cqh, 0); --lift: 0; --hit: 0.3; }
+  100% { transform: translate3d(38cqw, 22cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-ground-2c {
+  0% { transform: translate3d(56cqw, 68cqh, 0); --lift: 1; --hit: 0; animation-timing-function: cubic-bezier(0.3, 0.05, 0.7, 0.42); }
+  24% { transform: translate3d(66cqw, 30cqh, 0); --lift: 0; --hit: 0.7; animation-timing-function: cubic-bezier(0.16, 0.68, 0.3, 1); }
+  40% { transform: translate3d(74cqw, 4cqh, 0); --lift: 0.1; --hit: 0.85; animation-timing-function: cubic-bezier(0.14, 0.7, 0.28, 1); }
+  58% { transform: translate3d(48cqw, 14cqh, 0); --lift: 0.26; --hit: 0; }
+  78% { transform: translate3d(60cqw, 32cqh, 0); --lift: 0; --hit: 0.28; }
+  100% { transform: translate3d(68cqw, 16cqh, 0); --lift: 0; --hit: 0; }
+}
+
+@keyframes celo-hop-0 {
+  0% { transform: translate3d(0, -14cqh, 0) rotateX(78deg) rotateY(-40deg) rotateZ(-30deg) scale(0.96); animation-timing-function: cubic-bezier(0.55, 0.04, 0.9, 0.35); }
+  12% { transform: translate3d(0, 0, 0) rotateX(14deg) rotateY(80deg) rotateZ(24deg) scale(1.07, 0.88); animation-timing-function: cubic-bezier(0.12, 0.75, 0.25, 1); }
+  24% { transform: translate3d(0, -8cqh, 0) rotateX(64deg) rotateY(160deg) rotateZ(-16deg); animation-timing-function: cubic-bezier(0.55, 0.05, 0.9, 0.4); }
+  38% { transform: translate3d(0, 0, 0) rotateX(10deg) rotateY(230deg) scale(1.04, 0.93); animation-timing-function: cubic-bezier(0.15, 0.7, 0.3, 1); }
+  52% { transform: translate3d(0, -4cqh, 0) rotateY(300deg) rotateZ(8deg); animation-timing-function: cubic-bezier(0.5, 0.05, 0.85, 0.45); }
+  64% { transform: translate3d(0, 0, 0) rotateX(6deg) rotateY(20deg) rotateZ(14deg) scale(0.92, 1.06); animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  78% { transform: translate3d(0, -3cqh, 0) rotateY(70deg) rotateZ(-6deg); }
+  90% { transform: translate3d(0, 0, 0) rotateX(2deg) rotateZ(4deg) scale(1.02, 0.98); }
+  100% { transform: rotateZ(var(--die-tilt, 0deg)); }
+}
+
+@keyframes celo-hop-1 {
+  0% { transform: translate3d(0, -16cqh, 0) rotateX(84deg) rotateY(30deg) rotateZ(20deg); animation-timing-function: cubic-bezier(0.55, 0.04, 0.9, 0.35); }
+  12% { transform: translate3d(0, 0, 0) rotateX(8deg) rotateY(110deg) scale(1.06, 0.9); animation-timing-function: cubic-bezier(0.12, 0.75, 0.25, 1); }
+  28% { transform: translate3d(0, -2cqh, 0) rotateY(200deg) rotateZ(-12deg) scale(0.93, 1.05); animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  44% { transform: translate3d(0, -7cqh, 0) rotateX(50deg) rotateY(280deg); animation-timing-function: cubic-bezier(0.55, 0.05, 0.9, 0.4); }
+  62% { transform: translate3d(0, 0, 0) rotateX(6deg) rotateY(340deg) scale(1.03, 0.95); animation-timing-function: cubic-bezier(0.16, 0.65, 0.3, 1); }
+  78% { transform: translate3d(0, -3cqh, 0) rotateY(40deg); }
+  100% { transform: rotateZ(var(--die-tilt, 0deg)); }
+}
+
+@keyframes celo-hop-2 {
+  0% { transform: translate3d(0, -6cqh, 0) rotateX(40deg) rotateY(-20deg) rotateZ(16deg); animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1); }
+  16% { transform: translate3d(0, -2cqh, 0) rotateX(70deg) rotateY(90deg) rotateZ(-20deg); animation-timing-function: cubic-bezier(0.45, 0.05, 0.85, 0.4); }
+  30% { transform: translate3d(0, 0, 0) rotateY(160deg) scale(0.94, 1.05); animation-timing-function: cubic-bezier(0.14, 0.7, 0.28, 1); }
+  46% { transform: translate3d(0, -5cqh, 0) rotateX(48deg) rotateY(240deg); animation-timing-function: cubic-bezier(0.55, 0.05, 0.9, 0.4); }
+  62% { transform: translate3d(0, 0, 0) rotateX(8deg) rotateY(300deg) scale(1.04, 0.94); animation-timing-function: cubic-bezier(0.16, 0.7, 0.3, 1); }
+  78% { transform: translate3d(0, -2cqh, 0) rotateY(20deg) rotateZ(6deg); }
+  100% { transform: rotateZ(var(--die-tilt, 0deg)); }
+}
+
+@keyframes celo-reduced-settle {
+  from { transform: translate3d(0, -6px, 0) rotateZ(-16deg); }
+  to { transform: rotateZ(var(--die-tilt, 0deg)); }
+}
+
+/* Tablet: wider than a phone, still a compact table window. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .celo-street-root .celo-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .celo-table-stage {
+    width: 100%;
+    aspect-ratio: 5 / 6;
+    max-height: 620px;
+    border-radius: 0;
+  }
+  .celo-scene-art { object-position: center 50%; }
+  .celo-scene-result { bottom: 16%; }
+  .celo-scene-result p:first-child {
+    font-size: clamp(1rem, 3.2cqw, 1.45rem) !important;
+  }
+}
+
+/* Desktop: cinematic stage, chat beside the game only when the column can stay wide. */
+@media (min-width: 1024px) {
+  .celo-street-root {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+  .celo-table-stage {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    max-height: min(640px, calc(100dvh - 13rem));
+    border-radius: 0;
+  }
+  .celo-scene-art { object-position: center 52%; }
+  .celo-scene-result { bottom: 10%; }
+  .celo-scene-result p:first-child {
+    font-size: clamp(1.15rem, 2.6cqw, 1.85rem) !important;
+  }
+  .celo-scene-result p:last-child {
+    font-size: clamp(0.75rem, 1.5cqw, 1rem) !important;
+  }
+  .celo-controls {
+    width: min(100%, 28rem);
+  }
+}
+
+/* This app's md breakpoint is 414px, which would split the table beside chat too early. */
+@media (max-width: 1279px) {
+  .celo-street-root .celo-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .celo-street-root .celo-layout > aside {
+    width: 100%;
+    max-width: 42rem !important;
+    margin-inline: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celo-felt-play.is-throwing,
+  .celo-felt-play.is-throwing .celo-impact-glow,
+  .celo-felt-play.is-throwing .celo-photo-die,
+  .celo-felt-play.is-throwing .celo-die-body,
+  .celo-throw-hand,
+  .celo-throw-hand.is-shake,
+  .celo-throw-hand.is-release,
+  .celo-throw-hand.is-release .celo-hand-release,
+  .celo-throw-hand.is-release .celo-palm-dice img {
+    animation: none;
+  }
+  .celo-throw-hand.is-shake,
+  .celo-throw-hand.is-release {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+  }
+  .celo-throw-hand.is-shake .celo-hand-shake,
+  .celo-throw-hand.is-release .celo-hand-release,
+  .celo-throw-hand.is-release .celo-palm-dice {
+    opacity: 1;
+  }
+  .celo-throw-hand.is-shake .celo-palm-dice { opacity: 0; }
+  .celo-felt-play.is-throwing .celo-die-body {
+    animation: celo-reduced-settle 0.4s ease-out both;
+  }
+  .celo-felt-play.is-throwing .celo-photo-die {
+    animation: celo-die-appear 0.16s linear both;
+  }
+}

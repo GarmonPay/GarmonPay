@@ -1,0 +1,75 @@
+{
+  "productionFiles": [
+    {
+      "path": "src/components/solana/WorkspaceUI.tsx",
+      "sha256": "a26155e0f26dc55782a1cca7dd99e1b5ee7d178847d342c9aae1bf8caa029493"
+    },
+    {
+      "path": "src/components/solana/PlatformWorkspace.tsx",
+      "sha256": "8a7f68219834846e602532d94b5f3bf0633cf656e285f57199f9ecab22ab898b"
+    },
+    {
+      "path": "src/components/solana/Spotlight.tsx",
+      "sha256": "720375ae34b1bfb85ebb8d30d2cfb74826a65f9d98ef1ddd2ee9d14d032cad3f"
+    },
+    {
+      "path": "src/components/solana/TokenWizard.tsx",
+      "sha256": "3457bb682230d14817b8301e6733474fce354d3fea85ac59e432570c1b613ee9"
+    },
+    {
+      "path": "src/components/solana/SolanaHome.tsx",
+      "sha256": "7e70b66ce05b86841d15e10f6da38d056be43f9b65a024063b423a019538a245"
+    },
+    {
+      "path": "src/app/solana/[section]/page.tsx",
+      "sha256": "4713b4d76c6f85558a4610df059e1ef799bf8decc9222ba106bad757f062278e"
+    },
+    {
+      "path": "src/app/solana.css",
+      "sha256": "73655d3437c2f7394bd2d7a2fff08b9b63a97f4c749c5407b2ccf2624155990b"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha256": "6befdb84701a7ba6f7c8ab9843cab39d6b67e85f3e107088564c279522a2fe93"
+    },
+    {
+      "path": "src/components/Footer.tsx",
+      "sha256": "3597ebf624ef4bdb79e0a1ca8184df81b8a1ddf00c111d70591a50f156454f50"
+    },
+    {
+      "path": "src/components/PwaInstallPrompt.tsx",
+      "sha256": "281bff4e3bcb539ddb2e2767276eaa38acecf89cb5ebe3c43b6d2bee236c88c9"
+    },
+    {
+      "path": "src/components/ui/GameCatalog.tsx",
+      "sha256": "9802d2c310323d18cc842c7a672473b6c0f051ae55013cc466827c7262e39a07"
+    },
+    {
+      "path": "src/components/ui/GameCard.tsx",
+      "sha256": "2e2bc17e800ccdd89f7e5dcd267963777371237d0d7703ca0f6e6ac7f12edac8"
+    },
+    {
+      "path": "src/app/games/page.tsx",
+      "sha256": "11d593ab1499b539ea03c648cf67fbcc5d58245e2f45815a6b542c01756dd18f"
+    }
+  ],
+  "localOnly": [
+    "src/lib/solana/advertising-accounting.ts",
+    "src/lib/solana/advertising-accounting.test.ts",
+    "server/fight-server.js",
+    "src/lib/security/arena-worker.test.ts",
+    "supabase/security/proposals/phase2-catalog-ddl.sql",
+    "supabase/security/phase2-catalog-ddl-rollback.sql",
+    "scripts/security/validate-phase2-catalog-ddl.mjs"
+  ],
+  "releaseTestFiles": [
+    "src/components/PwaInstallPrompt.test.ts",
+    "src/components/solana/Spotlight.test.ts"
+  ],
+  "verificationFiles": [
+    "src/components/PwaInstallPrompt.test.ts",
+    "src/components/solana/Spotlight.test.ts",
+    "scripts/security/smoke-security-release.mjs"
+  ],
+  "hashesVerifiedAfterDeployment": true
+}

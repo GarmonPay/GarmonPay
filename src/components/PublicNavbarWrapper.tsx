@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import {isPublicGameRoute} from '@/config/public-game-routes';
 
 /** Renders the marketing Navbar only on public routes (hidden in app shell routes). */
 export function PublicNavbarWrapper() {
@@ -9,7 +10,7 @@ export function PublicNavbarWrapper() {
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/games")
+    (pathname.startsWith("/games") && !isPublicGameRoute(pathname))
   ) {
     return null;
   }

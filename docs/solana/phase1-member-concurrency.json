@@ -1,0 +1,11 @@
+{
+  "runtime": "native PostgreSQL",
+  "syntheticOnly": true,
+  "productionAccess": false,
+  "checks": [
+    "12 independent wallet logins retain exactly one permanent account",
+    "Concurrent unique username claims have exactly one winner",
+    "12 concurrent follows create one relationship",
+    "Access hold denies server reads/RPC; restore preserves exact accounts, profiles, identities and follow rows; browser roles stay denied and account deletion remains denied"
+  ]
+}

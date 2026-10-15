@@ -1,24 +1,14 @@
 {
   "buildCommand": "npm run build",
-  "crons": [
-    {
-      "path": "/api/cron/membership-renewal",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/celo/rooms/cleanup-abandoned",
-      "schedule": "5 8 * * *"
-    },
-    {
-      "path": "/api/celo/cron/player-timeouts",
-      "schedule": "10 8 * * *"
-    }
-  ],
+  "crons": [],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
       ]
     }
   ]

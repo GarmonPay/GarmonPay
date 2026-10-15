@@ -12,10 +12,10 @@ export interface AdminSession {
   accessToken?: string;
 }
 
-/** Headers for admin API calls. Cookie is sent automatically with same-origin fetch; X-Admin-Id helps logging. */
+/** Headers for admin API calls. Cookie is sent automatically with same-origin fetch; identity is verified from that cookie. */
 export function adminApiHeaders(session: AdminSession | null): Record<string, string> {
   if (!session) return {};
-  return { "X-Admin-Id": session.adminId };
+  return {};
 }
 
 /**

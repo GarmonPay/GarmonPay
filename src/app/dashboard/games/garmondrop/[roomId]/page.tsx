@@ -1,9 +1,11 @@
 "use client";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Cinzel_Decorative, DM_Sans } from "next/font/google";
+import { Cinzel_Decorative } from "next/font/google";
+import localFont from "next/font/local";
 import { createBrowserClient } from "@/lib/supabase";
 import { CELO_USER_PROFILE_FIELDS } from "@/lib/celo-player-state";
 import { resolveDisplayName } from "@/lib/display-name";
@@ -26,7 +28,7 @@ import { GPAY_COINS_TICKER } from "@/lib/gpay-coins-branding";
 import { getReferralLink } from "@/lib/site-url";
 
 const cinzel = Cinzel_Decorative({ subsets: ["latin"], weight: ["400", "700"] });
-const dm = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
+const dm = localFont({ src: "../../../../../assets/fonts/dm-sans-latin.woff2", weight: "100 1000", style: "normal", display: "swap" });
 
 const API = "/api/garmondrop";
 const DROP_ANIM_MS = 450;
@@ -34,6 +36,7 @@ const DROP_ANIM_MS = 450;
 type UserEmbed = {
   id?: string;
   email?: string | null;
+  avatar_url?: string | null;
   full_name?: string | null;
   username?: string | null;
 };
@@ -95,10 +98,10 @@ function ClassicDisc({
   ghost?: boolean;
   className?: string;
 }) {
-  const fill = piece === 1 ? "#f5c842" : "#dc2626";
+  const fill = piece === 1 ? "#e8c477" : "#a16dec";
   return (
     <div
-      className={`rounded-full ${className}`}
+      className={`gp-disc ${piece === 2 ? "gp-disc-violet" : ""} ${highlighted ? "gp-disc-winning" : ""} rounded-full ${className}`}
       style={{
         background: fill,
         border: "1px solid rgba(255,255,255,0.25)",
@@ -910,7 +913,7 @@ export default function GarmonDropRoomPage() {
 
   return (
     <div
-      className={`min-h-screen w-full pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-white tablet:pb-8 ${dm.className}`}
+      className={`gp-garmondrop-screen min-h-screen w-full pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-white tablet:pb-8 ${dm.className}`}
       style={{ background: "#0e0118" }}
     >
       {gameResult && (
@@ -929,7 +932,7 @@ export default function GarmonDropRoomPage() {
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-2xl px-3 pt-5 sm:px-4">
+      <div className="gp-drop-layout mx-auto w-full px-3 pt-5 sm:px-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <Link href="/dashboard/games/garmondrop" className="text-sm text-[#7c3aed] underline">
             ← Lobby
@@ -939,76 +942,16 @@ export default function GarmonDropRoomPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#7c3aed]/35 bg-black/25 p-4">
-          <div className="flex flex-wrap gap-5 text-sm">
-            <div className="flex min-w-0 items-start gap-2.5">
-              <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
-                <ClassicDisc piece={1} className="h-full w-full" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-white/45">Host</p>
-                <p className="font-semibold text-[#f5c842]">{creatorName}</p>
-              </div>
-            </div>
-            <div className="flex min-w-0 items-start gap-2.5">
-              <div className="mt-0.5 h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
-                <ClassicDisc piece={2} className="h-full w-full" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-white/45">Guest</p>
-                <p className="font-semibold text-[#c4b5fd]">{opponentName}</p>
-              </div>
-            </div>
-          </div>
-          {gameResult ? (
-            <p className="mt-3 text-sm text-white/70">Game over</p>
-          ) : (
-            <p className="mt-3 text-sm text-white/70">{turnLabel}</p>
-          )}
+        <div className="gp-drop-match">
+          <div className="gp-drop-players"><div className="gp-drop-player"><PlayerAvatar name={creatorName} url={room.creator?.avatar_url}/><div><small>Host · Gold</small><strong>{creatorName}</strong></div></div><span className="gp-drop-vs">VS</span><div className="gp-drop-player"><div><small>Guest · Violet</small><strong>{opponentName}</strong></div><PlayerAvatar name={opponentName} url={room.opponent?.avatar_url} violet/></div></div>
+          <p role="status" aria-live="polite" className={`gp-drop-turn ${room.current_turn===userId && room.status==="active" && !gameResult ? "is-your-turn" : ""}`}>{gameResult ? "MATCH COMPLETE" : room.status==="active" ? (room.current_turn===userId ? "YOUR TURN" : "OPPONENT TURN") : turnLabel}</p>
           <p className="mt-3 font-mono text-xs text-white/55 sm:mt-2">
             Entry {entry.toLocaleString()} GPC each · Pot {totalPotGpc.toLocaleString()} GPC · Fee{" "}
             {platformFeeGpc.toLocaleString()} GPC (10%) · Winner takes {winnerPayoutGpc.toLocaleString()} GPC
           </p>
           <p className="mt-1 text-xs text-white/45">Your balance: {formatGPC(sweepsCoins)}</p>
 
-          {room.creator_id === userId &&
-            (room.status === "waiting" || room.status === "active") && (
-              <div className="mt-4 space-y-2 border-t border-[#7c3aed]/25 pt-4">
-                <p className="text-xs text-white/55">
-                  {room.status === "waiting"
-                    ? "Share this link so your opponent can join — they need the same stake in the lobby or this URL."
-                    : "Invite link — send this URL to your opponent if they need to reopen the room."}
-                </p>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1 rounded-lg border border-[#7c3aed]/45 bg-black/35 px-3 py-2">
-                    <p
-                      className="select-text truncate font-mono text-[11px] leading-snug text-white/95 sm:text-xs"
-                      title={roomUrl || undefined}
-                    >
-                      {roomUrl || "…"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyRoomLink()}
-                      className="rounded-lg border border-[#f5c842]/55 bg-[#f5c842]/12 px-3 py-1.5 text-xs font-medium text-[#f5c842] transition hover:bg-[#f5c842]/22 sm:px-4 sm:py-2 sm:text-sm"
-                    >
-                      {copyLinkDone ? "Copied!" : "Copy invite link"}
-                    </button>
-                    {canNativeShare && (
-                      <button
-                        type="button"
-                        onClick={() => void handleNativeShareRoom()}
-                        className="rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:bg-[#7c3aed]/28 sm:px-4 sm:py-2 sm:text-sm"
-                      >
-                        Share
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+
         </div>
 
         {oppDisconnected && (
@@ -1030,13 +973,13 @@ export default function GarmonDropRoomPage() {
         {room.status === "active" && !isGameEnded && (
           <p className="mt-6 text-center text-xs text-white/50">
             Tap a column to drop — you are{" "}
-            <span className="font-semibold text-[#f5c842]">{myPiece === 1 ? "Heads" : "Tails"}</span>
+            <span className="font-semibold text-[#f5c842]">{myPiece === 1 ? "Gold" : "Violet"}</span>
           </p>
         )}
 
         <div className={`${room.status === "active" ? "mt-3" : "mt-6"} flex justify-center`}>
           <div
-            className="inline-flex gap-1 rounded-2xl p-2 sm:gap-1.5 sm:p-3"
+            className="gp-drop-board-wrap"
             style={{
               background: "linear-gradient(180deg, rgba(124,58,237,0.25), rgba(14,1,24,0.9))",
               border: "1px solid rgba(245,200,66,0.15)",
@@ -1073,7 +1016,7 @@ export default function GarmonDropRoomPage() {
                       void handleMove(c);
                     }
                   }}
-                  className={`flex flex-col gap-1 rounded-lg p-0.5 outline-none transition ${
+                  className={`gp-drop-column flex flex-col gap-1 rounded-lg p-0.5 transition ${
                     canClickCol
                       ? "cursor-pointer focus-visible:ring-2 focus-visible:ring-[#f5c842]/50"
                       : "cursor-not-allowed"
@@ -1089,7 +1032,7 @@ export default function GarmonDropRoomPage() {
                     return (
                       <div
                         key={`${r}-${c}`}
-                        className="pointer-events-none flex h-9 w-9 items-center justify-center rounded-lg sm:h-11 sm:w-11"
+                        className="gp-drop-cell pointer-events-none flex items-center justify-center"
                         style={{
                           background: "rgba(0,0,0,0.35)",
                           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.45)",
@@ -1147,13 +1090,51 @@ export default function GarmonDropRoomPage() {
               type="button"
               disabled={busy}
               onClick={() => void handleForfeit()}
-              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-200/90"
+              className="gp-button gp-forfeit border-red-500/30 text-red-200/90"
             >
               Forfeit
             </button>
           </div>
         )}
 
+          {room.creator_id === userId &&
+            (room.status === "waiting" || room.status === "active") && (
+              <details className="gp-drop-invite mt-4 space-y-2 border-t border-[#7c3aed]/25 pt-4"><summary className="cursor-pointer text-xs text-violet-200">Invite link & sharing</summary>
+                <p className="text-xs text-white/55">
+                  {room.status === "waiting"
+                    ? "Share this link so your opponent can join — they need the same stake in the lobby or this URL."
+                    : "Invite link — send this URL to your opponent if they need to reopen the room."}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1 rounded-lg border border-[#7c3aed]/45 bg-black/35 px-3 py-2">
+                    <p
+                      className="select-text truncate font-mono text-[11px] leading-snug text-white/95 sm:text-xs"
+                      title={roomUrl || undefined}
+                    >
+                      {roomUrl || "…"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyRoomLink()}
+                      className="rounded-lg border border-[#f5c842]/55 bg-[#f5c842]/12 px-3 py-1.5 text-xs font-medium text-[#f5c842] transition hover:bg-[#f5c842]/22 sm:px-4 sm:py-2 sm:text-sm"
+                    >
+                      {copyLinkDone ? "Copied!" : "Copy invite link"}
+                    </button>
+                    {canNativeShare && (
+                      <button
+                        type="button"
+                        onClick={() => void handleNativeShareRoom()}
+                        className="rounded-lg border border-[#7c3aed]/70 bg-[#7c3aed]/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:bg-[#7c3aed]/28 sm:px-4 sm:py-2 sm:text-sm"
+                      >
+                        Share
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </details>
+            )}
       </div>
     </div>
   );
