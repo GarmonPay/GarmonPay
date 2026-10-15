@@ -13,9 +13,9 @@ Every trade at 5.00% impact or more is blocked, including the 0.00001 SOL FOXNEW
 ## 1. Current status and Git revision
 
 - Repository: `/Users/bishop/Desktop/GarmonPay`
-- Branch: `fix/phantom-ios-browse`
-- HEAD: `29ae908` — Require a tap before Phantom's in-app connect.
-- No commit and no push in this session. The working tree is still dirty.
+- Branch: `integrate/member-platform`
+- HEAD: `f40a08c` — Record the production deployment of the Devnet trade safeguards.
+- Local commits only. This branch has not been pushed. The member worktree at `/Users/bishop/Desktop/garmonpay-member-platform` remains on `cursor/member-platform`.
 - Production: https://garmonpay.com
 - Production deployment: `dpl_AmUcC1t8qQeCyHQuY2V9nqkgtcL2`, aliased to https://garmonpay.com. It replaces `dpl_CkG65Vvcd2QGzXnfSWGgGK4J98zr`.
 - Inspector: https://vercel.com/garmonpays-projects/garmon-pay/AmUcC1t8qQeCyHQuY2V9nqkgtcL2
