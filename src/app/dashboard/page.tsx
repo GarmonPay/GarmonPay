@@ -203,6 +203,10 @@ export default function DashboardPage() {
         >
           Welcome back, {firstName}! 👑
         </h1>
+        <p className="mt-3 text-sm text-violet-200">
+          <Link href="/member" className="font-semibold text-amber-300">Open your member workspace</Link>
+          {" "}for profile, referrals, advertising, and paper trading. This page remains your existing GPC account.
+        </p>
       </header>
 
       {/* Three-tier coin balances */}

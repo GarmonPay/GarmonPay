@@ -25,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@babylonjs/core": "^8.54.1",
     "@babylonjs/loaders": "^8.54.1",
+    "@noble/curves": "1.9.7",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@stripe/react-stripe-js": "^5.6.0",
@@ -45,7 +46,8 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "stripe": "^20.3.1",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "tweetnacl": "1.0.3"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

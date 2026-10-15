@@ -6,6 +6,7 @@ import { GarmonPayWordmark } from "@/components/GarmonPayWordmark";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
+  { href: "/member", label: "Member" },
   { href: "/dashboard/earn", label: "Earn" },
   { href: "/referral", label: "Refer" },
   { href: "/advertise", label: "Advertise" },

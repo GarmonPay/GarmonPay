@@ -42,3 +42,6 @@ mobile/.packages
 
 # Supabase CLI local link state (do not commit)
 supabase/.temp/
+
+# Local member staging records. Not production data.
+data/member-platform-staging.json

@@ -9,7 +9,8 @@ export function PublicNavbarWrapper() {
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/games")
+    pathname.startsWith("/games") ||
+    pathname.startsWith("/member")
   ) {
     return null;
   }
