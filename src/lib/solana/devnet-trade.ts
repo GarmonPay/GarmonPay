@@ -31,11 +31,11 @@ function bn(value: { toString(): string }) {
   return new BN(value.toString());
 }
 
-export function tradeAmount(side: TradeSide, raw: string) {
+export function tradeAmount(side: TradeSide, raw: string, buyMin = BUY_MIN) {
   if (!/^[0-9]+$/.test(raw)) throw new Error("Trade amount is invalid");
   const amount = new BN(raw);
   if (amount.lte(new BN(0))) throw new Error("Trade amount is invalid");
-  if (side === "buy" && (amount.lt(new BN(BUY_MIN)) || amount.gt(new BN(BUY_MAX)))) throw new Error("A Devnet buy must be between 0.00001 and 1 SOL");
+  if (side === "buy" && (amount.lt(new BN(buyMin)) || amount.gt(new BN(BUY_MAX)))) throw new Error(`A Devnet buy must be between ${buyMin === BUY_MIN ? "0.00001" : "0.000000001"} and 1 SOL`);
   if (side === "sell" && amount.gt(new BN(SELL_MAX))) throw new Error("Sell amount is too large");
   return amount;
 }
@@ -209,7 +209,7 @@ export function quoteDevnetTrade(input: {
 }
 
 function resolveBuyAmount(raw: string, loaded: Awaited<ReturnType<typeof readDevnetPoolState>>) {
-  if (loaded.venue !== "curve") return tradeAmount("buy", raw);
+  if (loaded.venue !== "curve") return tradeAmount("buy", raw, loaded.venue === "cpmm" ? 1 : BUY_MIN);
   if (!/^[0-9]+$/.test(raw)) throw new Error("Trade amount is invalid");
   const requested = new BN(raw);
   if (requested.lte(new BN(0)) || requested.gt(new BN(BUY_MAX))) throw new Error("A Devnet buy must be between 0.00001 and 1 SOL");

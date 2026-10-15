@@ -1,7 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { CpmmConfigInfoLayout, DEV_LAUNCHPAD_PROGRAM, LaunchpadConfig, LaunchpadPool, PlatformConfig, getPdaCreatorVault, getPdaLaunchpadPoolId } from "@raydium-io/raydium-sdk-v2";
 import { DEVNET_CPMM_CONFIG, DEVNET_RPC } from "./launchlab-flow";
-import { DEVNET_CPMM_PROGRAM, discoverDevnetCpmmPool } from "./devnet-cpmm";
+import { DEVNET_CPMM_PROGRAM, cpmmBuyWindow, cpmmCreatorFeeOnInput, discoverDevnetCpmmPool } from "./devnet-cpmm";
 import { authorizedPlatformWallets, garmonPlatformId } from "./platform-setup";
 import { curveCompletionAsk, quoteDevnetTrade, tradeAmount } from "./devnet-trade";
 import { tradeVenue } from "./trade-venue";
@@ -189,6 +189,15 @@ export async function readDevnetMarket(mint: string) {
   const reservePrice = reserves ? cpmmReserveValue(BigInt(reserves[0].value.amount), BigInt(reserves[1].value.amount), supply, pool.mintDecimalsA) : null;
   const priced = reservePrice ?? (pool.status === 2 ? null : curveMarketValue(virtualA, virtualB, realA, realB, supply, pool.mintDecimalsA));
   const cpmmConfig = cpmmConfigAccount && cpmmConfigAccount.owner.equals(DEVNET_CPMM_PROGRAM) ? CpmmConfigInfoLayout.decode(cpmmConfigAccount.data) : null;
+  const cpmmBuy = reserves && cpmm && cpmmConfig ? cpmmBuyWindow({
+    solReserve: BigInt(reserves[0].value.amount),
+    tokenReserve: BigInt(reserves[1].value.amount),
+    tradeFeeRate: BigInt(cpmmConfig.tradeFeeRate.toString()),
+    creatorFeeRate: BigInt(cpmmConfig.creatorFeeRate.toString()),
+    protocolFeeRate: BigInt(cpmmConfig.protocolFeeRate.toString()),
+    fundFeeRate: BigInt(cpmmConfig.fundFeeRate.toString()),
+    creatorOnInput: cpmmCreatorFeeOnInput(cpmm.pool.feeOn, cpmm.pool.mintA.equals(WRAPPED_SOL)),
+  }) : null;
   const creatorFeeField = cpmm ? (cpmm.pool.mintA.equals(WRAPPED_SOL) ? cpmm.pool.creatorFeesMintA : cpmm.pool.creatorFeesMintB) : null;
   const decoded = await readPoolActivity(connection, activity.filter(entry => entry.err == null).map(entry => entry.signature), {
     curveSol: pool.vaultB,
@@ -263,6 +272,7 @@ export async function readDevnetMarket(mint: string) {
     priceSol: priced?.priceSol ?? null,
     supply: supply.toString(),
     liquidityLamports: priced?.liquidityLamports ?? null,
+    cpmmBuy,
     volumeLamports: tradingVolume(decoded.moves, decoded.complete),
     volumeLabel: pool.status === 2
       ? "SOL moved by the latest confirmed buys and sells. Liquidity migration is not included."

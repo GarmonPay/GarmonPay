@@ -6,7 +6,8 @@ import { Transaction } from "@solana/web3.js";
 import { coinJson, coinOperation } from "@/lib/solana/coin-launch-client";
 import { formatFeePercent } from "@/lib/solana/launch-fees";
 import { classifySessionResponse } from "@/lib/solana/session-client";
-import { SELL_TEST_AMOUNTS, buyAmountChoices, parseSlippagePercent, priceImpactDecision, rawToDecimal, slippageWarning, toRawUnits } from "@/lib/solana/trade-form";
+import { SELL_TEST_AMOUNTS, buyAmountChoices, cpmmBuyChoices, parseSlippagePercent, priceImpactDecision, rawToDecimal, slippageWarning, toRawUnits } from "@/lib/solana/trade-form";
+import type { CpmmBuyWindow } from "@/lib/solana/devnet-cpmm";
 
 type Side = "buy" | "sell";
 type Phase = "idle" | "reviewing" | "ready" | "signing" | "submitting" | "confirmed";
@@ -65,7 +66,7 @@ function sol(lamports: string | null | undefined) {
 }
 
 export function DevnetTrade({
-  mint, symbol, tradingOpen, status, venue = "curve", suggestedBuy, graduationSpend, remainingLamports, progress, raisedLamports, targetLamports,
+  mint, symbol, tradingOpen, status, venue = "curve", suggestedBuy, graduationSpend, remainingLamports, progress, raisedLamports, targetLamports, cpmmBuy = null,
 }: {
   mint: string;
   symbol: string;
@@ -78,9 +79,11 @@ export function DevnetTrade({
   progress: number;
   raisedLamports: string;
   targetLamports: string;
+  cpmmBuy?: CpmmBuyWindow | null;
 }) {
   const ticker = tickerOf(symbol);
-  const openingBuy = venue === "cpmm" ? "0.00001" : suggestedBuy;
+  const presetSol = cpmmBuy?.presetLamports ? rawToDecimal(cpmmBuy.presetLamports, 9) : "";
+  const openingBuy = venue === "cpmm" ? presetSol : suggestedBuy;
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState(openingBuy);
   const [slippageMode, setSlippageMode] = useState<"0.5" | "1" | "2" | "custom">("1");
@@ -92,7 +95,7 @@ export function DevnetTrade({
   const [signature, setSignature] = useState("");
   const slippage = slippageMode === "custom" ? parseSlippagePercent(customSlippage) : { bps: Math.round(Number(slippageMode) * 100) };
   const room = context?.remainingLamports ?? remainingLamports;
-  const choices = buyAmountChoices(room || "0", venue !== "cpmm");
+  const choices = venue === "cpmm" ? cpmmBuyChoices(cpmmBuy?.maximumLamports ?? null, cpmmBuy?.tradable === true) : buyAmountChoices(room || "0", true);
   useEffect(() => {
     if (!tradingOpen) return;
     let live = true;
@@ -121,7 +124,7 @@ export function DevnetTrade({
   }
   function chooseSide(next: Side) {
     setSide(next);
-    setAmount(next === "buy" ? (venue === "cpmm" ? "0.00001" : (context?.suggestedBuySol || suggestedBuy)) : "");
+    setAmount(next === "buy" ? (venue === "cpmm" ? presetSol : (context?.suggestedBuySol || suggestedBuy)) : "");
     setError("");
     clearQuote();
   }
@@ -134,6 +137,10 @@ export function DevnetTrade({
   const slippageError = slippageMode === "custom" && customSlippage.trim() !== "" && "error" in slippage ? slippage.error : "";
   const slippageReady = "bps" in slippage;
   const warning = "bps" in slippage ? slippageWarning(slippage.bps) : "";
+  const buyRaw = side === "buy" && !amountError && amount.trim() ? amountRaw() : "";
+  const overImpact = Boolean(venue === "cpmm" && cpmmBuy?.tradable && cpmmBuy.maximumLamports && buyRaw && BigInt(buyRaw) > BigInt(cpmmBuy.maximumLamports));
+  const underMin = Boolean(venue === "cpmm" && cpmmBuy?.tradable && cpmmBuy.minimumLamports && buyRaw && BigInt(buyRaw) < BigInt(cpmmBuy.minimumLamports));
+  const buyClosed = venue === "cpmm" && cpmmBuy?.tradable === false && side === "buy";
   const overCurve = side === "buy" && !amountError && room ? BigInt(amountRaw()) > BigInt(room) : false;
   const signedIn = context?.signedIn === true;
   function buttonLabel() {
@@ -149,7 +156,7 @@ export function DevnetTrade({
   }
   const label = buttonLabel();
   const busy = phase === "reviewing" || phase === "signing" || phase === "submitting";
-  const disabled = busy || phase === "confirmed" || context === null || (signedIn && (!!amountError || !slippageReady));
+  const disabled = busy || phase === "confirmed" || context === null || buyClosed || overImpact || underMin || (signedIn && (!!amountError || !slippageReady));
   async function review() {
     if (!("bps" in slippage)) { setError(slippage.error); return; }
     const wallet = provider();
@@ -246,6 +253,10 @@ export function DevnetTrade({
     </label>
     {side === "buy" ? <div className="gp-trade-chips" role="group" aria-label="Buy amounts">{choices.map(choice => <button type="button" key={choice.sol} aria-pressed={amount === choice.sol} disabled={choice.disabled} title={choice.reason} onClick={() => { setAmount(choice.sol); setError(""); clearQuote(); }}>{choice.sol}</button>)}{graduationSpend ? <button type="button" aria-pressed={amount === rawToDecimal(graduationSpend, 9)} onClick={() => { setAmount(rawToDecimal(graduationSpend, 9)); setError(""); clearQuote(); }}>Finish curve</button> : null}</div> : <div className="gp-trade-chips" role="group" aria-label="Sell test amounts">{SELL_TEST_AMOUNTS.map(tokens => <button type="button" key={tokens} aria-pressed={amount === tokens} onClick={() => { setAmount(tokens); setError(""); clearQuote(); }}>{tokens}</button>)}</div>}
     {side === "buy" && venue !== "cpmm" && room ? <p className="gp-trade-meta">{suggestedBuy ? `Suggested ${suggestedBuy} SOL. This curve has ${sol(room)} left.` : `This curve has ${sol(room)} left. Spending only that amount does not finish the curve, because the trading fees are taken out of the buy.`}</p> : null}
+    {venue === "cpmm" && cpmmBuy?.tradable && cpmmBuy.minimumLamports && cpmmBuy.maximumLamports ? <p className="gp-trade-meta">This pool holds {sol(cpmmBuy.solReserve)}. Buys from {sol(cpmmBuy.minimumLamports)} to {sol(cpmmBuy.maximumLamports)} stay under the 5.00% price-impact limit.{choices.some(choice => choice.sol === "0.00001" && choice.disabled) ? " 0.00001 SOL is above that limit for this pool." : ""}</p> : null}
+    {overImpact && cpmmBuy?.maximumLamports ? <p className="gp-trade-warn" role="alert">Price impact for this amount is above the 5.00% Devnet limit in this pool. The largest buy still under the limit is {sol(cpmmBuy.maximumLamports)}. No order was created.</p> : null}
+    {underMin && cpmmBuy?.minimumLamports ? <p className="gp-trade-warn" role="alert">That amount is smaller than the smallest buy this pool can quote under the 5.00% limit ({sol(cpmmBuy.minimumLamports)}).</p> : null}
+    {buyClosed ? <p className="gp-trade-warn" role="alert">This pool cannot quote a buy under the 5.00% price-impact limit. Buy stays off.</p> : null}
     {overCurve && venue !== "cpmm" ? <p className="gp-trade-warn">This amount is larger than the SOL left on the curve. Review quotes only what the curve can accept. A buy that finishes the remaining tokens changes the pool to Migrating. It does not create the Raydium CPMM pool.</p> : null}
     {graduationSpend && amount === rawToDecimal(graduationSpend, 9) ? <p className="gp-trade-warn">Finish curve spends {sol(graduationSpend)}. The quoted fees are inside that amount. A Devnet simulation of this buy changes the pool to Migrating and does not create a CPMM pool. Nothing is sent until you approve it in your wallet.</p> : null}
     <div className="gp-trade-slip" role="group" aria-label="Slippage">
@@ -258,6 +269,15 @@ export function DevnetTrade({
     {slippageError ? <p role="alert">{slippageError}</p> : null}
     {warning ? <p className="gp-trade-warn">{warning}</p> : null}
     <p className="gp-trade-meta">Slippage is the worst price this transaction will accept. It is not the trading fee.</p>
+    {side === "buy" && cpmmBuy?.tradable && cpmmBuy.preset && amount === presetSol && slippageReady && !quote ? <dl className="gp-trade-preview">
+      <div><dt>Spend</dt><dd>{presetSol} SOL</dd></div>
+      <div><dt>Estimated receive</dt><dd>{rawToDecimal(cpmmBuy.preset.expectedOut, context?.tokenDecimals ?? 6)} {ticker}</dd></div>
+      <div><dt>Minimum after slippage</dt><dd>{rawToDecimal(((BigInt(cpmmBuy.preset.expectedOut) * BigInt(10000 - ("bps" in slippage ? slippage.bps : 100))) / BigInt(10000)).toString(), context?.tokenDecimals ?? 6)} {ticker}</dd></div>
+      <div><dt>Trade fee</dt><dd>{cpmmBuy.preset.tradeFee} lamports</dd></div>
+      <div><dt>Creator fee</dt><dd>{cpmmBuy.preset.creatorFee} raw tokens</dd></div>
+      <div><dt>Price impact</dt><dd>{cpmmBuy.preset.priceImpact ?? "—"}</dd></div>
+      <div><dt>Network fee</dt><dd>Shown after simulation, before wallet approval</dd></div>
+    </dl> : null}
     {quote ? <dl className="gp-trade-preview">
       <div><dt>{quote.side === "buy" ? "You spend" : "You sell"}</dt><dd>{quote.side === "buy" ? sol(quote.amountIn) : `${rawToDecimal(quote.amountIn, 6)} ${ticker}`}</dd></div>
       <div><dt>Estimated receive</dt><dd>{quote.side === "buy" ? `${rawToDecimal(quote.expectedOut, 6)} ${ticker}` : sol(quote.expectedOut)}</dd></div>

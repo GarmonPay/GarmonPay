@@ -5,6 +5,7 @@ import { CoinMark } from "./CoinMark";
 import { DevnetTrade } from "./DevnetTrade";
 import { formatCoinAge, formatDevnetLaunchTime } from "@/lib/solana/coin-launch-client";
 import { formatFeePercent } from "@/lib/solana/launch-fees";
+import type { CpmmBuyWindow } from "@/lib/solana/devnet-cpmm";
 import { rawToDecimal, suggestedBuySol } from "@/lib/solana/trade-form";
 import { graduationFacts } from "@/lib/solana/trade-venue";
 
@@ -35,6 +36,7 @@ type Market = {
   holders: { count: number; exact: boolean } | null;
   holdersNote?: string | null;
   graduationSpendLamports?: string | null;
+  cpmmBuy?: CpmmBuyWindow | null;
   creatorFeeLamports: string;
   cpmmCreatorFeeLamports?: string | null;
   points: { progress: number; price: number }[];
@@ -221,7 +223,7 @@ export function TokenStage({
       <p><a href={`https://explorer.solana.com/address/${mint}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View the mint</a>{signature ? <> · <a href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View the launch</a></> : null}</p>
     </section>
     <aside className="gp-token-side">
-      {shown ? <DevnetTrade mint={mint} symbol={symbol || "TOKEN"} tradingOpen={shown.tradingOpen} status={shown.status} venue={shown.venue === "cpmm" ? "cpmm" : "curve"} suggestedBuy={suggestedBuySol(room)} graduationSpend={shown.graduationSpendLamports} remainingLamports={room} progress={shown.progress} raisedLamports={shown.raisedLamports} targetLamports={shown.targetLamports} /> : <section className="gp-trade-panel"><h3>Devnet trade</h3><p>The pool could not be read, so no buy or sell is offered.</p></section>}
+      {shown ? <DevnetTrade mint={mint} symbol={symbol || "TOKEN"} tradingOpen={shown.tradingOpen} status={shown.status} venue={shown.venue === "cpmm" ? "cpmm" : "curve"} suggestedBuy={suggestedBuySol(room)} graduationSpend={shown.graduationSpendLamports} remainingLamports={room} progress={shown.progress} raisedLamports={shown.raisedLamports} targetLamports={shown.targetLamports} cpmmBuy={shown.cpmmBuy} /> : <section className="gp-trade-panel"><h3>Devnet trade</h3><p>The pool could not be read, so no buy or sell is offered.</p></section>}
     </aside>
   </div>;
 }

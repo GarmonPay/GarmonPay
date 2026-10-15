@@ -10,6 +10,7 @@ import {
 } from "@raydium-io/raydium-sdk-v2";
 import { DEVNET_CPMM_CONFIG } from "./launchlab-flow";
 import { formatFeePercent } from "./launch-fees";
+import { priceImpactBps } from "./trade-form";
 
 const WRAPPED_SOL = new PublicKey("So11111111111111111111111111111111111111112");
 
@@ -32,6 +33,106 @@ export async function discoverDevnetCpmmPool(rpc: Connection, mint: PublicKey, c
     return { poolId, pool };
   }
   return null;
+}
+
+export function cpmmCreatorFeeOnInput(feeOn: number, inputIsA: boolean) {
+  return feeOn === 0 || feeOn === (inputIsA ? 2 : 1);
+}
+
+export function quoteCpmmExactIn(input: {
+  amount: bigint;
+  inputReserve: bigint;
+  outputReserve: bigint;
+  tradeFeeRate: bigint;
+  creatorFeeRate: bigint;
+  protocolFeeRate: bigint;
+  fundFeeRate: bigint;
+  creatorOnInput: boolean;
+  slippageBps: number;
+}) {
+  const quoted = CurveCalculator.swapBaseInput(
+    new BN(input.amount.toString()), new BN(input.inputReserve.toString()), new BN(input.outputReserve.toString()),
+    new BN(input.tradeFeeRate.toString()), new BN(input.creatorFeeRate.toString()),
+    new BN(input.protocolFeeRate.toString()), new BN(input.fundFeeRate.toString()), input.creatorOnInput,
+  );
+  const output = BigInt(quoted.outputAmount.toString());
+  const minimum = input.slippageBps >= 0 && input.slippageBps <= 10000
+    ? (output * BigInt(10000 - input.slippageBps)) / BigInt(10000)
+    : BigInt(0);
+  return {
+    output,
+    minimum,
+    tradeFee: BigInt(quoted.tradeFee.toString()),
+    creatorFee: BigInt(quoted.creatorFee.toString()),
+    protocolFee: BigInt(quoted.protocolFee.toString()),
+    fundFee: BigInt(quoted.fundFee.toString()),
+    priceImpact: impactPercent(input.inputReserve, input.outputReserve, input.amount, output),
+  };
+}
+
+export type CpmmBuyWindow = {
+  tradable: boolean;
+  solReserve: string;
+  minimumLamports: string | null;
+  maximumLamports: string | null;
+  presetLamports: string | null;
+  preset: { expectedOut: string; minimumOut: string; priceImpact: string | null; tradeFee: string; creatorFee: string } | null;
+};
+
+/** Smallest and largest CPMM buys that stay under the 5.00% impact block at 1% slippage. */
+export function cpmmBuyWindow(input: {
+  solReserve: bigint;
+  tokenReserve: bigint;
+  tradeFeeRate: bigint;
+  creatorFeeRate: bigint;
+  protocolFeeRate: bigint;
+  fundFeeRate: bigint;
+  creatorOnInput: boolean;
+}): CpmmBuyWindow {
+  const absoluteMax = BigInt("1000000000");
+  const rates = {
+    inputReserve: input.solReserve, outputReserve: input.tokenReserve,
+    tradeFeeRate: input.tradeFeeRate, creatorFeeRate: input.creatorFeeRate,
+    protocolFeeRate: input.protocolFeeRate, fundFeeRate: input.fundFeeRate, creatorOnInput: input.creatorOnInput, slippageBps: 100,
+  };
+  const allowed = (amount: bigint) => {
+    if (amount <= BigInt(0) || amount > absoluteMax) return false;
+    const quote = quoteCpmmExactIn({ ...rates, amount });
+    const bps = priceImpactBps(quote.priceImpact);
+    return quote.output > BigInt(0) && quote.minimum > BigInt(0) && bps !== null && bps >= 0 && bps < 500;
+  };
+  const scanCap = input.solReserve > BigInt(0) && input.solReserve < BigInt(200000) ? input.solReserve : BigInt(200000);
+  let minimum: bigint | null = null;
+  for (let amount = BigInt(1); amount <= scanCap; amount += BigInt(1)) {
+    if (allowed(amount)) { minimum = amount; break; }
+  }
+  const empty: CpmmBuyWindow = { tradable: false, solReserve: input.solReserve.toString(), minimumLamports: null, maximumLamports: null, presetLamports: null, preset: null };
+  if (minimum === null) return empty;
+  let low = minimum;
+  let high = input.solReserve > BigInt(0) && input.solReserve < absoluteMax ? input.solReserve : absoluteMax;
+  let maximum = minimum;
+  while (low <= high) {
+    const mid = (low + high) / BigInt(2);
+    if (allowed(mid)) { maximum = mid; low = mid + BigInt(1); }
+    else high = mid - BigInt(1);
+  }
+  const presets = [BigInt(5000), BigInt(10000), BigInt(50000)];
+  const presetAmount = presets.find(amount => amount >= minimum && amount <= maximum) ?? maximum;
+  const preset = quoteCpmmExactIn({ ...rates, amount: presetAmount });
+  return {
+    tradable: true,
+    solReserve: input.solReserve.toString(),
+    minimumLamports: minimum.toString(),
+    maximumLamports: maximum.toString(),
+    presetLamports: presetAmount.toString(),
+    preset: {
+      expectedOut: preset.output.toString(),
+      minimumOut: preset.minimum.toString(),
+      priceImpact: preset.priceImpact,
+      tradeFee: preset.tradeFee.toString(),
+      creatorFee: preset.creatorFee.toString(),
+    },
+  };
 }
 
 function impactPercent(inputReserve: bigint, outputReserve: bigint, input: bigint, output: bigint) {
@@ -74,14 +175,21 @@ export async function buildDevnetCpmmTrade(input: {
   const outputProgram = inputIsA ? input.cpmm.pool.mintProgramB : input.cpmm.pool.mintProgramA;
   const inputReserve = new BN(inputIsA ? vaultA.value.amount : vaultB.value.amount);
   const outputReserve = new BN(inputIsA ? vaultB.value.amount : vaultA.value.amount);
-  const creatorOnInput = input.cpmm.pool.feeOn === 0 || input.cpmm.pool.feeOn === (inputIsA ? 2 : 1);
+  const creatorOnInput = cpmmCreatorFeeOnInput(input.cpmm.pool.feeOn, inputIsA);
   const amount = new BN(input.amount.toString());
-  const quoted = CurveCalculator.swapBaseInput(
-    amount, inputReserve, outputReserve, config.tradeFeeRate, config.creatorFeeRate,
-    config.protocolFeeRate, config.fundFeeRate, creatorOnInput,
-  );
-  const minimum = quoted.outputAmount.mul(new BN(10000 - input.slippage)).div(new BN(10000));
-  if (minimum.lte(new BN(0))) throw new Error("The quoted amount is too small for this slippage");
+  const exact = quoteCpmmExactIn({
+    amount: BigInt(amount.toString()),
+    inputReserve: BigInt(inputReserve.toString()),
+    outputReserve: BigInt(outputReserve.toString()),
+    tradeFeeRate: BigInt(config.tradeFeeRate.toString()),
+    creatorFeeRate: BigInt(config.creatorFeeRate.toString()),
+    protocolFeeRate: BigInt(config.protocolFeeRate.toString()),
+    fundFeeRate: BigInt(config.fundFeeRate.toString()),
+    creatorOnInput,
+    slippageBps: input.slippage,
+  });
+  if (exact.minimum <= BigInt(0)) throw new Error("The quoted amount is too small for this slippage");
+  const minimum = new BN(exact.minimum.toString());
   const tokenProgram = input.cpmm.pool.mintA.equals(input.mintKey) ? input.cpmm.pool.mintProgramA : input.cpmm.pool.mintProgramB;
   const tokenAccount = getAssociatedTokenAddressSync(input.mintKey, input.payer, false, tokenProgram);
   const solAccount = getAssociatedTokenAddressSync(WRAPPED_SOL, input.payer, false, TOKEN_PROGRAM_ID);
@@ -119,15 +227,15 @@ export async function buildDevnetCpmmTrade(input: {
     transaction,
     quote: {
       venue: "cpmm" as const,
-      expectedOut: quoted.outputAmount.toString(),
+      expectedOut: exact.output.toString(),
       minimumOut: minimum.toString(),
       amountIn: amount.toString(),
       requestedAmount: amount.toString(),
       graduates: false,
-      priceImpact: impactPercent(BigInt(inputReserve.toString()), BigInt(outputReserve.toString()), BigInt(amount.toString()), BigInt(quoted.outputAmount.toString())),
+      priceImpact: exact.priceImpact,
       fees: { platform: "0", creator: creatorRate, protocol: tradeRate, denominator: "1000000" },
-      split: { platform: quoted.fundFee.toString(), creator: quoted.creatorFee.toString(), protocol: quoted.tradeFee.toString() },
-      feeNote: `Raydium CPMM trade fee ${formatFeePercent(tradeRate)} (${quoted.tradeFee.toString()} ${tradeUnit}). Creator fee ${formatFeePercent(creatorRate)} (${quoted.creatorFee.toString()} ${creatorUnit}) is taken from ${creatorSide}. Protocol takes ${formatFeePercent(protocolRate)} of the trade fee and the fund fee takes ${formatFeePercent(fundRate)} of the trade fee. This order does not use the LaunchLab bonding curve.`,
+      split: { platform: exact.fundFee.toString(), creator: exact.creatorFee.toString(), protocol: exact.tradeFee.toString() },
+      feeNote: `Raydium CPMM trade fee ${formatFeePercent(tradeRate)} (${exact.tradeFee.toString()} ${tradeUnit}). Creator fee ${formatFeePercent(creatorRate)} (${exact.creatorFee.toString()} ${creatorUnit}) is taken from ${creatorSide}. Protocol takes ${formatFeePercent(protocolRate)} of the trade fee and the fund fee takes ${formatFeePercent(fundRate)} of the trade fee. This order does not use the LaunchLab bonding curve.`,
     },
   };
 }

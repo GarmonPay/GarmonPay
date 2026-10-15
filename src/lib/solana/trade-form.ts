@@ -59,6 +59,25 @@ export function assertPriceImpactAllowed(label: string | null | undefined) {
   if (decision.blocked) throw new Error(`Price impact is ${label}. That is above the 5.00% Devnet limit, so no order was created.`);
 }
 
+export const CPMM_BUY_PRESETS = [
+  { sol: "0.000005", lamports: 5_000 },
+  { sol: "0.00001", lamports: 10_000 },
+  { sol: "0.00005", lamports: 50_000 },
+] as const;
+
+export function cpmmBuyChoices(maximumLamports: string | null, tradable = true) {
+  let maximum: bigint | null = null;
+  if (maximumLamports && /^[0-9]+$/.test(maximumLamports)) maximum = BigInt(maximumLamports);
+  return CPMM_BUY_PRESETS.map(choice => {
+    const over = !tradable || maximum === null || BigInt(choice.lamports) > maximum;
+    return {
+      sol: choice.sol,
+      disabled: over,
+      reason: over ? "This amount is above the 5.00% Devnet price-impact limit for this pool." : "",
+    };
+  });
+}
+
 export function buyAmountChoices(remainingLamports: string, curveLimited = true) {
   let remaining = BigInt(0);
   try { remaining = BigInt(remainingLamports); }

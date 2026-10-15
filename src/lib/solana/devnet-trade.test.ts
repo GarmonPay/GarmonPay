@@ -2,10 +2,10 @@ import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { DEV_LAUNCHPAD_PROGRAM } from "@raydium-io/raydium-sdk-v2";
 import { describe, expect, it } from "vitest";
-import { priceImpactDecision } from "./trade-form";
+import { priceImpactDecision, toRawUnits } from "./trade-form";
 import { AUTHORIZED_PLATFORM_ADDRESSES } from "./platform-setup";
 import { DEVNET_RPC } from "./launchlab-flow";
-import { DEVNET_CPMM_PROGRAM } from "./devnet-cpmm";
+import { DEVNET_CPMM_PROGRAM, cpmmBuyWindow, quoteCpmmExactIn } from "./devnet-cpmm";
 import { readDevnetMarket } from "./devnet-market";
 import { buildDevnetTrade, curveCompletionAsk, prepareDevnetTrade, readDevnetPoolState, simulateDevnetGraduation, simulateDevnetRoundTrip, slippageBps, tradeAmount } from "./devnet-trade";
 
@@ -35,6 +35,37 @@ describe("Devnet trade guards", () => {
     expect(curveCompletionAsk(BigInt(310))?.toString()).toBe("10000");
     expect(curveCompletionAsk(BigInt(17688))?.toString()).toBe("35376");
     expect(curveCompletionAsk(BigInt(0))).toBeNull();
+    expect(() => tradeAmount("buy", "5000")).toThrow(/between/);
+    expect(tradeAmount("buy", "5000", 1).toString()).toBe("5000");
+    expect(toRawUnits("0.000009936", 9)).toBe("9936");
+  });
+
+  it("keeps the FOXNEW pool inside the 5.00% limit without lowering the limit", () => {
+    const reserves = {
+      solReserve: BigInt(209293),
+      tokenReserve: BigInt("10000000000000"),
+      tradeFeeRate: BigInt(2500),
+      creatorFeeRate: BigInt(2500),
+      protocolFeeRate: BigInt(120000),
+      fundFeeRate: BigInt(40000),
+      creatorOnInput: false,
+    };
+    const window = cpmmBuyWindow(reserves);
+    expect(window.tradable).toBe(true);
+    expect(window.minimumLamports).toBe("22");
+    expect(window.maximumLamports).toBe("9936");
+    expect(window.presetLamports).toBe("5000");
+    const quote = (amount: bigint) => quoteCpmmExactIn({ ...reserves, inputReserve: reserves.solReserve, outputReserve: reserves.tokenReserve, amount, slippageBps: 100 });
+    expect(quote(BigInt(1)).output).toBe(BigInt(0));
+    expect(priceImpactDecision(quote(BigInt(21)).priceImpact).blocked).toBe(true);
+    expect(priceImpactDecision(quote(BigInt(22)).priceImpact).blocked).toBe(false);
+    expect(quote(BigInt(5000)).priceImpact).toBe("2.82%");
+    expect(quote(BigInt(9936)).priceImpact).toBe("4.99%");
+    expect(priceImpactDecision(quote(BigInt(9937)).priceImpact).blocked).toBe(true);
+    expect(quote(BigInt(10000)).priceImpact).toBe("5.02%");
+    expect(priceImpactDecision("5.02%").blocked).toBe(true);
+    expect(quote(BigInt(5000)).output.toString()).toBe("232151040693");
+    expect(quote(BigInt(5000)).minimum.toString()).toBe("229829530286");
   });
 });
 
@@ -63,6 +94,16 @@ describe.runIf(process.env.RUN_DEVNET_READ_TESTS === "1")("FOXNEW Devnet verific
     expect(migration?.venue).toBe("migration");
     expect(market?.trades.some(trade => trade.signature.startsWith("5ywEKvwu") && trade.side === "sell")).toBe(true);
     await expect(retryDevnet(() => prepareDevnetTrade({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX, side: "buy", amount: "10000", slippage: 100 }))).rejects.toThrow(/5\.00% Devnet limit/);
+    const prepared = await retryDevnet(() => prepareDevnetTrade({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX, side: "buy", amount: "5000", slippage: 100 }));
+    expect(prepared.simulationPassed).toBe(true);
+    expect(prepared.submitted).toBe(false);
+    expect(prepared.amountIn).toBe("5000");
+    expect(priceImpactDecision(prepared.priceImpact).blocked).toBe(false);
+    expect(BigInt(prepared.expectedOut) > BigInt(prepared.minimumOut)).toBe(true);
+    expect(prepared.networkFeeLamports).toBeGreaterThan(0);
+    expect(prepared.unsignedTransaction.length).toBeGreaterThan(0);
+    expect(market?.cpmmBuy?.tradable).toBe(true);
+    expect(market?.cpmmBuy?.presetLamports).toBe("5000");
     const sell = await retryDevnet(() => buildDevnetTrade({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX, side: "sell", amount: "100000000", slippage: 100 }));
     expect(sell.quote.venue).toBe("cpmm");
     expect(BigInt(sell.quote.expectedOut) > BigInt(sell.quote.minimumOut)).toBe(true);
@@ -82,7 +123,7 @@ describe.runIf(process.env.RUN_DEVNET_READ_TESTS === "1")("FOXNEW Devnet verific
         if (instruction.programId.equals(TOKEN_PROGRAM_ID)) expect([4, 6]).not.toContain(instruction.data[0]);
       }
     }
-    await expect(simulateDevnetGraduation({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX })).rejects.toThrow(/not on the bonding curve/);
+    await expect(retryDevnet(() => simulateDevnetGraduation({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX }))).rejects.toThrow(/not on the bonding curve/);
     await expect(retryDevnet(() => prepareDevnetTrade({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX, side: "sell", amount: "1000000000000", slippage: 100 }))).rejects.toThrow(/5\.00% Devnet limit|too small|could not be calculated|No order was created/);
     await expect(retryDevnet(() => prepareDevnetTrade({ payer: AUTHORIZED_PLATFORM_ADDRESSES.admin, mint: FOX, side: "buy", amount: "50000", slippage: 100 }))).rejects.toThrow(/5\.00% Devnet limit/);
   }, 180000);

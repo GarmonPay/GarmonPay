@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SELL_TEST_AMOUNTS, assertPriceImpactAllowed, buyAmountChoices, parseSlippagePercent, percentOfRaw, priceImpactDecision, rawToDecimal, slippageWarning, suggestedBuySol, toRawUnits } from "./trade-form";
+import { SELL_TEST_AMOUNTS, assertPriceImpactAllowed, buyAmountChoices, cpmmBuyChoices, parseSlippagePercent, percentOfRaw, priceImpactDecision, rawToDecimal, slippageWarning, suggestedBuySol, toRawUnits } from "./trade-form";
 
 describe("trade form amounts", () => {
   it("suggests the smallest Devnet buy and does not fill the remaining curve", () => {
@@ -12,6 +12,13 @@ describe("trade form amounts", () => {
     expect(choices.every(choice => !choice.disabled)).toBe(true);
     expect(buyAmountChoices("40000").find(choice => choice.sol === "0.00005")?.disabled).toBe(true);
     expect(buyAmountChoices("1", false).every(choice => !choice.disabled)).toBe(true);
+    const thin = cpmmBuyChoices("9936", true);
+    expect(thin.map(choice => choice.sol)).toEqual(["0.000005", "0.00001", "0.00005"]);
+    expect(thin.find(choice => choice.sol === "0.000005")?.disabled).toBe(false);
+    expect(thin.find(choice => choice.sol === "0.00001")?.disabled).toBe(true);
+    expect(thin.find(choice => choice.sol === "0.00005")?.disabled).toBe(true);
+    expect(cpmmBuyChoices(null, false).every(choice => choice.disabled)).toBe(true);
+    expect(cpmmBuyChoices("100000", true).every(choice => !choice.disabled)).toBe(true);
   });
 
   it("warns at 1% price impact and blocks 5% or more", () => {
@@ -42,6 +49,9 @@ describe("trade form amounts", () => {
     expect(slippageWarning(100)).toBe("");
     expect(slippageWarning(500)).toMatch(/separate from the trading fees/);
     expect(toRawUnits("0.0005", 9)).toBe("500000");
+    expect(toRawUnits("0.000005", 9)).toBe("5000");
+    expect(toRawUnits("0.000009936", 9)).toBe("9936");
+    expect(toRawUnits("0.000000022", 9)).toBe("22");
     expect(rawToDecimal("315", 9)).toBe("0.000000315");
     expect(toRawUnits("0.000000315", 9)).toBe("315");
     expect(toRawUnits(rawToDecimal("310", 9), 9)).toBe("310");
