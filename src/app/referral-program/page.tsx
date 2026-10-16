@@ -18,7 +18,10 @@ export default function ReferralProgramTermsPage() {
         >
           GarmonPay Referral Program Terms
         </h1>
-        <p className="text-sm text-[#c4b5fd] mb-10">Last updated: April 2026</p>
+        <p className="text-sm text-[#c4b5fd] mb-4">Last updated: April 2026</p>
+        <p className="mb-10 rounded-2xl border border-[#e8c47a]/40 bg-black/30 px-4 py-3 text-sm leading-6 text-[#f6f1e6]">
+          These terms describe an older referral program. Payouts are paused. GarmonPay has not launched an official GPAY token, and nothing on this page turns payments on.
+        </p>
 
         <div className="space-y-10 text-[#e9e1f5] text-base leading-relaxed">
           <section>

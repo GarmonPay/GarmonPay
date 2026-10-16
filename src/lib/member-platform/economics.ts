@@ -1,9 +1,11 @@
 /** Server-authoritative member economics. Versioned so a quote can be audited. Not a live payout. */
-export const ECONOMICS_VERSION = "2026-10-14-member-v2";
-export const ADVERTISER_FIRST_PURCHASE_BPS = 2000;
-export const ADVERTISER_SUBSEQUENT_PURCHASE_BPS = 1000;
-export const VIEWER_MATCH_BPS = 10000;
-export const PACKAGE_VIEWS = 500;
+export const ECONOMICS_VERSION = "2026-10-16-launch-config";
+export const ADVERTISER_FIRST_PURCHASE_BPS = 1000;
+export const ADVERTISER_SUBSEQUENT_PURCHASE_BPS = 500;
+export const VIEWER_MATCH_BPS = 5000;
+export const PACKAGE_VIEWS = 1000;
+export const MIN_PURCHASE_MICROUSD = 9_990_000;
+export const MIN_PAYOUT_MICROUSD = 2_000_000;
 export const PAPER_STARTING_LAMPORTS = BigInt("10000000000");
 export const LAMPORTS_PER_SOL = BigInt("1000000000");
 export const PAYMENT_ENABLED = false;
@@ -46,6 +48,21 @@ export function formatLamports(value: string | bigint): string {
   const whole = absolute / LAMPORTS_PER_SOL;
   const fraction = (absolute % LAMPORTS_PER_SOL).toString().padStart(9, "0").replace(/0+$/, "");
   return `${negative ? "-" : ""}${whole.toString()}${fraction ? `.${fraction}` : ""}`;
+}
+
+/** Purchases stay off until price, viewer rewards, referral obligations, and processing cost are all proven. */
+export function purchaseEnablement() {
+  return {
+    enabled: false as const,
+    minimumPurchaseMicrousd: MIN_PURCHASE_MICROUSD,
+    minimumPayoutMicrousd: MIN_PAYOUT_MICROUSD,
+    blockers: [
+      "Payments are paused.",
+      "No per-view viewer reward is configured.",
+      "Processing cost is not configured.",
+      "A package cannot be sold until its price is shown to cover viewer rewards, the 50% viewer referral match, the advertiser referral commission, and processing cost.",
+    ],
+  };
 }
 
 export function assertNotFinancialSettlement(action: { pays: boolean; charges: boolean; broadcasts: boolean }) {

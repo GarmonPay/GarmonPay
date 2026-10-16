@@ -1,14 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Cinzel_Decorative } from "next/font/google";
-
-const cinzel = Cinzel_Decorative({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
-});
-
 type Section = {
   title: string;
   items: { q: string; a: string }[];
@@ -20,57 +12,53 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "What is GarmonPay?",
-        a: "GarmonPay is a rewards platform where members earn real money by watching ads, completing tasks, playing games, and referring friends. It is completely free to join with no credit card required.",
+        a: "GarmonPay is a Solana platform for launching a coin, promoting it, and discovering projects. Members can learn, play free games, and practice with virtual SOL. Purchases, payouts, deposits, withdrawals, and Mainnet trading are paused.",
       },
       {
-        q: "Is GarmonPay free to join?",
-        a: "Yes. Creating an account and earning on GarmonPay is completely free. We offer optional paid membership plans that multiply your earning rates, but free members earn from day one.",
+        q: "How do I join?",
+        a: "The wallet workspace uses Phantom, Solflare, Backpack, or another compatible Solana wallet. Connect Wallet signs a message. It does not require an email password and it does not approve a transaction. Older email accounts remain available and are not merged into the wallet profile.",
       },
       {
         q: "What countries can join?",
-        a: "GarmonPay is open to members worldwide except countries that are subject to international sanctions or restrictions.",
+        a: "Availability can be limited by sanctions and local law. You must be at least 18.",
       },
       {
         q: "How old do I have to be?",
-        a: "You must be at least 18 years old to create a GarmonPay account.",
+        a: "You must be at least 18 years old.",
       },
     ],
   },
   {
-    title: "Earning",
+    title: "Rewards",
     items: [
       {
-        q: "How do I earn money on GarmonPay?",
-        a: "You earn by watching ads, clicking tasks, completing daily missions, playing games, and referring new members. Every action is tracked and credited to your balance in real time.",
+        q: "Can I earn money on GarmonPay today?",
+        a: "No live reward balance is available. Eligible rewards would require a funded campaign and server-verified participation. Watching the homepage, playing a free game, or finishing a practice quiz does not create a payout.",
       },
       {
         q: "How much can I earn per day?",
-        a: "Earnings vary based on your activity level and membership plan. Free members typically earn between $0.50 and $3.00 per day from personal activity. With an active referral network your earnings can grow significantly beyond that.",
+        a: "GarmonPay does not publish a daily earnings amount. There is no guaranteed range, and referral activity does not create a withdrawable balance while payouts are paused.",
       },
       {
-        q: "Is there a limit to how much I can earn?",
-        a: "No. There is no cap on your total earnings. The more active you are and the larger your referral network the more you earn. Elite members with large networks regularly earn thousands per month.",
-      },
-      {
-        q: "When are earnings credited?",
-        a: "Earnings are credited to your GarmonPay balance in real time as you complete actions.",
+        q: "When are rewards credited?",
+        a: "Nothing is credited as available money while financial operations are paused. A future eligible reward would be separate from a pending check.",
       },
     ],
   },
   {
-    title: "$GPAY redemption",
+    title: "Tokens and older coins",
     items: [
       {
-        q: "How do I redeem my winnings?",
-        a: "USD bank or Stripe cash-outs are not offered. Winnings stay in-app as Gold Coins / GPay Coins until you redeem GPC for the official $GPAY SPL token on Solana — opening soon.",
+        q: "Is there an official GPAY token?",
+        a: "No. GarmonPay has not launched an official GPAY token. Do not treat an older GPC or Gold Coin balance as SOL or as a promised token redemption.",
       },
       {
-        q: "When will $GPAY redemption go live?",
-        a: "The $GPAY token and redemption flow are in development. Use Dashboard → Redeem ($GPAY) for launch updates.",
+        q: "What happened to GPC?",
+        a: "Older GPC and Gold Coin records stay in the legacy account system. They are not part of the wallet platform, and this site does not convert them.",
       },
       {
-        q: "Are there redemption fees?",
-        a: "Any chain or platform fees will be communicated at launch. Membership plans may include perks that affect earning rates — not payout rails.",
+        q: "Can I withdraw?",
+        a: "Withdrawals are unavailable. Virtual paper SOL cannot be withdrawn.",
       },
     ],
   },
@@ -78,33 +66,33 @@ const SECTIONS: Section[] = [
     title: "Referrals",
     items: [
       {
-        q: "How does the referral program work?",
-        a: "When someone signs up using your unique referral link you instantly earn $0.50. When they upgrade their membership plan you earn a percentage of their upgrade price. Free members earn 10 percent. Starter members earn 20 percent. Growth members earn 30 percent. Pro members earn 40 percent. Elite members earn 50 percent. You do not earn from their ad views or clicks. Only from sign ups and membership upgrades.",
+        q: "Are referral payouts active?",
+        a: "No. Referral payouts are paused. Older pages may describe membership commissions or a code-recorded advertising match. Those descriptions are not an active offer.",
       },
       {
-        q: "Is there a limit on how many people I can refer?",
-        a: "No limit. You can refer unlimited people and earn from all of them indefinitely.",
+        q: "Is there a limit on invitations?",
+        a: "An invitation can be shared, but sharing it does not pay a commission while payouts are paused.",
       },
       {
-        q: "When do I get paid for referrals?",
-        a: "Referral commissions are credited to your balance in real time whenever your referral completes an earning action.",
+        q: "When would a referral be paid?",
+        a: "Not now. A future commission would require a qualifying event, a fraud review, and a separate decision to turn payouts on.",
       },
     ],
   },
   {
-    title: "Membership Plans",
+    title: "Membership pages",
     items: [
       {
-        q: "Do I need a paid plan to earn?",
-        a: "No. Free members earn from day one. Paid plans multiply your earning rates and unlock higher referral commissions and exclusive features.",
+        q: "Do I need a paid plan?",
+        a: "No. The wallet workspace does not require a paid membership. The pricing page keeps an older catalog for reference. It is not a promise of live earnings.",
       },
       {
-        q: "Can I cancel my membership?",
-        a: "Yes. You can cancel your paid membership at any time from your account settings. Your account remains active on the Free plan after cancellation.",
+        q: "Can I cancel a membership?",
+        a: "Older paid memberships, if you have one, are managed from the legacy account settings. Canceling a plan does not create a SOL withdrawal.",
       },
       {
-        q: "What happens to my earnings if I cancel?",
-        a: "Your coins and balances stay linked to your account regardless of plan status. Cash withdrawal is not available; redemption will be via $GPAY when live.",
+        q: "What happens to an older balance?",
+        a: "Historical account records stay stored. They are not converted into SOL and they are not redeemed for an official token.",
       },
     ],
   },
@@ -112,16 +100,16 @@ const SECTIONS: Section[] = [
     title: "Trust and Safety",
     items: [
       {
-        q: "Is GarmonPay legit?",
-        a: "Yes. GarmonPay is a real platform that pays real members. All payments are processed through Stripe. Every transaction is logged and visible in your dashboard.",
+        q: "Does GarmonPay hold my wallet?",
+        a: "No. Wallet sign-in proves you control an address. GarmonPay does not ask for a seed phrase or private key. If a wallet warns that a request is blocked, stop.",
       },
       {
-        q: "How does GarmonPay prevent cheating?",
-        a: "We use browser fingerprinting, server-side timer validation, VPN and bot detection, and anomaly scoring to ensure every earn action is legitimate. Accounts that attempt to cheat are suspended and earnings are forfeited.",
+        q: "How are games handled?",
+        a: "Free play is available. Paid entry, wagers, and prize payouts stay off.",
       },
       {
         q: "Is my personal information safe?",
-        a: "Yes. We use industry-standard encryption and Stripe for all payment processing. We never sell your personal data. See our Privacy Policy for full details.",
+        a: "Read the Privacy Policy for what the site stores. Wallet sign-in uses the wallet address as the stable id. GarmonPay does not sell that as a promise of payment processing.",
       },
     ],
   },
@@ -134,11 +122,11 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium text-white transition hover:text-[#fde047] sm:text-base"
+        className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium text-white transition hover:text-[#e8c47a] sm:text-base"
         aria-expanded={open}
       >
         <span>{q}</span>
-        <span className="shrink-0 text-[#eab308]">{open ? "−" : "+"}</span>
+        <span className="shrink-0 text-[#e8c47a]">{open ? "−" : "+"}</span>
       </button>
       {open && <p className="pb-4 text-sm leading-relaxed text-violet-200/85">{a}</p>}
     </div>
@@ -147,23 +135,18 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
 
 export default function FaqPage() {
   return (
-    <main className="min-h-screen bg-[#05020a] text-white">
-      <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
-        <h1
-          className={`${cinzel.className} text-center text-3xl font-bold sm:text-4xl md:text-5xl`}
-        >
-          <span className="bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#a16207] bg-clip-text text-transparent">
-            Frequently Asked Questions
-          </span>
-        </h1>
+    <main id="main-content" className="gp-sol-page">
+      <div className="mx-auto max-w-3xl">
+        <p className="gp-sol-eyebrow">GARMONPAY</p>
+        <h1>Frequently Asked Questions</h1>
         <p className="mx-auto mt-4 max-w-xl text-center text-sm text-violet-200/85">
-          Everything you need to know about earning, redemption, and trust on GarmonPay.
+          Answers about the wallet platform, paused payouts, and older account pages. Nothing here turns payments on.
         </p>
 
         <div className="mt-14 space-y-12">
           {SECTIONS.map((section) => (
             <section key={section.title}>
-              <h2 className={`${cinzel.className} text-2xl font-bold text-[#fde047]`}>{section.title}</h2>
+              <h2>{section.title}</h2>
               <div className="mt-4 rounded-2xl border border-white/[0.08] bg-[#12081f]/90 px-4 shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)] sm:px-6">
                 {section.items.map((item) => (
                   <AccordionItem key={item.q} q={item.q} a={item.a} />

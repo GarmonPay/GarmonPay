@@ -1,0 +1,359 @@
+/* Kingdom design tokens. Loaded only by the local design preview. */
+.gp-kingdom-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  overflow: auto;
+  background: #09060f;
+  color: #f6f1e6;
+  font-family: var(--font-inter), "Inter", "Segoe UI", sans-serif;
+}
+
+.gp-kingdom {
+  --kingdom-bg: #100818;
+  --kingdom-bg-raised: #1a1028;
+  --kingdom-bg-sunken: #09060f;
+  --kingdom-ink: #f6f1e6;
+  --kingdom-muted: #d5cbe2;
+  --kingdom-line: rgba(232, 196, 122, 0.38);
+  --kingdom-violet: #6d28d9;
+  --kingdom-violet-deep: #3b0764;
+  --kingdom-gold: #e8c47a;
+  --kingdom-gold-deep: #8a6424;
+  --kingdom-gold-ink: #24180a;
+  --kingdom-positive: #d8f8e4;
+  --kingdom-positive-bg: #14532d;
+  --kingdom-warning: #fff3c4;
+  --kingdom-warning-bg: #713f12;
+  --kingdom-danger: #ffe1e1;
+  --kingdom-danger-bg: #7f1d1d;
+  --kingdom-info: #ece4ff;
+  --kingdom-info-bg: #3b0764;
+  --kingdom-focus: #f6e7bf;
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 480px at 10% -10%, rgba(109, 40, 217, 0.28), transparent 60%),
+    var(--kingdom-bg);
+  color: var(--kingdom-ink);
+}
+
+.gp-kingdom * { box-sizing: border-box; }
+
+.gp-kingdom-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.gp-kingdom-skip {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  transform: translateY(-140%);
+  background: var(--kingdom-gold);
+  color: var(--kingdom-gold-ink);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  z-index: 2;
+}
+
+.gp-kingdom-skip:focus { transform: none; }
+
+.gp-kingdom-header,
+.gp-kingdom-main,
+.gp-kingdom-footer {
+  width: min(1120px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.gp-kingdom-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 18px 0;
+}
+
+.gp-kingdom-brand {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.gp-kingdom-brand span {
+  color: var(--kingdom-gold);
+}
+
+.gp-kingdom-main { padding-bottom: 48px; }
+
+.gp-kingdom-kicker {
+  margin: 0 0 8px;
+  color: var(--kingdom-gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.gp-kingdom-hero h1,
+.gp-kingdom-section h2,
+.gp-kingdom-card h3 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.gp-kingdom-hero h1 { font-size: clamp(2rem, 5vw, 3.4rem); max-width: 14ch; }
+
+.gp-kingdom-slogan {
+  margin: 14px 0 0;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  font-weight: 700;
+  color: var(--kingdom-ink);
+}
+
+.gp-kingdom-copy {
+  margin: 12px 0 0;
+  max-width: 62ch;
+  color: var(--kingdom-muted);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.gp-kingdom-section { margin-top: 36px; }
+.gp-kingdom-section h2 { font-size: clamp(1.4rem, 2vw, 1.8rem); }
+
+.gp-kingdom-grid {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+@media (min-width: 720px) {
+  .gp-kingdom-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gp-kingdom-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.gp-kingdom-card {
+  background: var(--kingdom-bg-raised);
+  border: 1px solid var(--kingdom-line);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.gp-kingdom-card p:last-child { margin-bottom: 0; }
+
+.gp-kingdom-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.gp-kingdom-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gp-kingdom-button:focus-visible,
+.gp-kingdom-menu:focus-visible,
+.gp-kingdom-nav button:focus-visible,
+.gp-kingdom-field input:focus-visible {
+  outline: 3px solid var(--kingdom-focus);
+  outline-offset: 2px;
+}
+
+.gp-kingdom-button-primary {
+  background: linear-gradient(180deg, #f3d792, var(--kingdom-gold) 45%, #c9963e);
+  color: var(--kingdom-gold-ink);
+}
+
+.gp-kingdom-button-secondary {
+  background: transparent;
+  color: var(--kingdom-ink);
+  border-color: var(--kingdom-gold);
+}
+
+.gp-kingdom-button-ghost {
+  background: transparent;
+  color: var(--kingdom-muted);
+  border-color: transparent;
+}
+
+.gp-kingdom-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.gp-kingdom-nav { display: contents; }
+
+.gp-kingdom-menu {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--kingdom-line);
+  background: var(--kingdom-bg-raised);
+  color: var(--kingdom-ink);
+  font: inherit;
+  font-weight: 700;
+  padding: 0 16px;
+}
+
+.gp-kingdom-nav ul {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  gap: 4px;
+  background: var(--kingdom-bg-sunken);
+  border: 1px solid var(--kingdom-line);
+  border-radius: 16px;
+  width: 100%;
+}
+
+.gp-kingdom-nav ul.is-open { display: grid; }
+
+.gp-kingdom-nav button {
+  width: 100%;
+  text-align: left;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--kingdom-ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 0 12px;
+}
+
+.gp-kingdom-nav button[aria-current="page"] {
+  background: var(--kingdom-violet-deep);
+  color: var(--kingdom-ink);
+}
+
+@media (min-width: 960px) {
+  .gp-kingdom-menu { display: none; }
+  .gp-kingdom-nav { display: block; }
+  .gp-kingdom-nav ul,
+  .gp-kingdom-nav ul.is-open {
+    display: flex;
+    width: auto;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    flex-wrap: wrap;
+  }
+  .gp-kingdom-nav button { width: auto; }
+}
+
+.gp-kingdom-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gp-kingdom-status-working,
+.gp-kingdom-status-success { background: var(--kingdom-positive-bg); color: var(--kingdom-positive); }
+.gp-kingdom-status-paused,
+.gp-kingdom-status-warning { background: var(--kingdom-warning-bg); color: var(--kingdom-warning); }
+.gp-kingdom-status-incomplete,
+.gp-kingdom-status-info { background: var(--kingdom-info-bg); color: var(--kingdom-info); }
+.gp-kingdom-status-planned { background: #292033; color: var(--kingdom-muted); }
+.gp-kingdom-status-danger { background: var(--kingdom-danger-bg); color: var(--kingdom-danger); }
+
+.gp-kingdom-field { display: grid; gap: 6px; margin-top: 12px; }
+.gp-kingdom-field label { font-weight: 700; }
+.gp-kingdom-field input {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--kingdom-line);
+  background: var(--kingdom-bg-sunken);
+  color: var(--kingdom-ink);
+  font: inherit;
+  padding: 0 12px;
+}
+.gp-kingdom-field input[aria-invalid="true"] { border-color: #f0a8a8; }
+.gp-kingdom-hint,
+.gp-kingdom-error { margin: 0; font-size: 0.92rem; }
+.gp-kingdom-hint { color: var(--kingdom-muted); }
+.gp-kingdom-error { color: #ffd0d0; }
+
+.gp-kingdom-table-wrap { overflow-x: auto; margin-top: 14px; }
+.gp-kingdom-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+.gp-kingdom-table th,
+.gp-kingdom-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(232, 196, 122, 0.18);
+  vertical-align: top;
+}
+.gp-kingdom-table th { color: var(--kingdom-gold); font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.gp-kingdom-empty,
+.gp-kingdom-error-panel {
+  border: 1px dashed var(--kingdom-line);
+  border-radius: 18px;
+  padding: 22px;
+  background: rgba(9, 6, 15, 0.45);
+}
+
+.gp-kingdom-empty h3,
+.gp-kingdom-error-panel h3,
+.gp-kingdom-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.gp-kingdom-loading {
+  height: 14px;
+  width: min(240px, 70%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #241633, #3a2458, #241633);
+  background-size: 200% 100%;
+  animation: gp-kingdom-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes gp-kingdom-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.gp-kingdom-footer {
+  padding: 8px 0 28px;
+  color: var(--kingdom-muted);
+  font-size: 0.92rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-kingdom-loading { animation: none; }
+}

@@ -1,27 +1,4 @@
 import Link from "next/link";
 import { GarmonPayWordmark } from "./GarmonPayWordmark";
-
-export default function Footer() {
-  return (
-    <footer className="gp-public-footer">
-      <div className="gp-footer-inner">
-        <div className="gp-footer-platform"><div><GarmonPayWordmark href="/" /><p>Discover projects. Prepare your next idea.<br />Explore with clear expectations.</p></div><nav aria-label="Footer ecosystem"><Link href="/solana/launchpad">Launchpad</Link><Link href="/solana/trade">Trade</Link><Link href="/solana/earn">Earn</Link><Link href="/solana/advertise">Advertise</Link><Link href="/solana/referrals">Referrals</Link><Link href="/games">Games</Link></nav></div>
-        <nav className="gp-footer-legal" aria-label="Legal">
-          <Link href="/solana/fees">Fees</Link>
-          <Link href="/terms">Terms of Service</Link>
-          <Link href="/privacy">Privacy Policy</Link>
-          <Link href="/risk">Risk Disclosures</Link>
-          <Link href="/income-disclaimer">Income Disclaimer</Link>
-          <Link href="/referral-program">Referral Program Terms</Link>
-          <Link href="/terms#sweepstakes">Sweepstakes Rules</Link>
-          <Link href="/free-entry">Free Entry</Link>
-        </nav>
-        <p className="mt-8 text-center text-gray-500 text-xs leading-relaxed max-w-2xl mx-auto">
-          GarmonPay is a sweepstakes entertainment platform. No purchase necessary to play. Must be 18+.
-          Void where prohibited. Not available in Washington State. © 2026 GarmonPay LLC. All rights
-          reserved.
-        </p>
-      </div>
-    </footer>
-  );
-}
+const groups=[{title:"Explore",links:[["Launchpad","/solana/launchpad"],["Trade & discovery","/solana/trade"],["Games","/games"],["Paper trading","/member/paper"]]},{title:"Participate",links:[["Watch & Earn","/solana/earn"],["Learn","/solana/learn"],["Advertising","/solana/advertise"],["Spotlight","/solana/spotlight"]]},{title:"Your community",links:[["Member Dashboard","/member"],["Top Traders","/member/traders"],["Community","/member/community"],["Referrals","/solana/referrals"]]}];
+export default function Footer(){return <footer className="gp-public-footer"><div className="gp-footer-inner"><div className="gp-footer-top"><div><GarmonPayWordmark href="/"/><p>GET SEEN. GET KNOWN. GET PAID.<br/>Exposure, discovery, learning and participation.<br/>Financial operations remain paused.</p></div>{groups.map(g=><nav className="gp-footer-column" key={g.title} aria-label={g.title}><h2>{g.title}</h2>{g.links.map(([label,href])=><Link href={href} key={href}>{label}</Link>)}</nav>)}</div><nav className="gp-footer-legal" aria-label="Legal"><Link href="/about">About</Link><Link href="/faq">FAQ</Link><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/risk">Risk disclosures</Link><Link href="/income-disclaimer">Income disclaimer</Link><Link href="/referral-program">Referral terms</Link><Link href="/solana/fees">Fees</Link><Link href="/terms#sweepstakes">Sweepstakes rules</Link><Link href="/free-entry">Free entry</Link></nav><p className="gp-footer-disclosure">No purchase necessary for eligible sweepstakes play. Must be 18+. Void where prohibited; not available in Washington State. Trading involves risk. Rewards are conditional on funded opportunities, verification and eligibility. The gold G coin is branding only. © 2026 GarmonPay LLC.</p></div></footer>}

@@ -1,4 +1,5 @@
-export const PAPER_SYMBOLS = ["BTC", "ETH"] as const;
+export const PAPER_ASSETS = Object.freeze({ BTC: "bitcoin", ETH: "ethereum", JUP: "jupiter-exchange-solana", RAY: "raydium" });
+export const PAPER_SYMBOLS = ["JUP", "RAY", "BTC", "ETH"] as const;
 export type PaperSymbol = (typeof PAPER_SYMBOLS)[number];
 
 export function applyPaperFill(input: {
@@ -52,6 +53,23 @@ export function displayToMicroUnits(raw: string): bigint | null {
   const [whole, frac = ""] = text.split(".");
   const units = BigInt(whole) * BigInt("1000000") + BigInt(frac.padEnd(6, "0"));
   return units > BigInt("0") ? units : null;
+}
+
+/** Virtual amounts sent to Postgres stay inside a signed 64-bit value and a JavaScript safe integer. */
+export const PAPER_AMOUNT_MAX = BigInt("1000000000000");
+
+export function virtualAmount(value: bigint): string {
+  if (value <= BigInt("0") || value > PAPER_AMOUNT_MAX) {
+    throw new Error("That amount is outside the virtual paper limit. Nothing was recorded.");
+  }
+  return value.toString();
+}
+
+export function virtualPrice(value: bigint): string {
+  if (value <= BigInt("0") || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("That price cannot be recorded safely. Nothing was recorded.");
+  }
+  return value.toString();
 }
 
 export const PAPER_DISCLOSURE = "Paper fills use virtual SOL. They are not real assets, wallet balances, or Mainnet trades, and they cannot be withdrawn.";

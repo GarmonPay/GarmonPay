@@ -43,7 +43,7 @@ export async function finishVerifiedView(_input: { memberId?: string; watchId: s
   return { ok: false as const, status: "rejected" as const, reason: "Verified views are not funded.", funded: false as const, payoutsEnabled: false as const, error: "Verified views are not funded." };
 }
 
-export async function submitPaperFill(input: { memberId?: string; symbol: string; side: "buy" | "sell"; amount: string }) {
+export async function submitPaperFill(input: { memberId?: string; symbol: string; side: "buy" | "sell"; amount: string; requestId: string }) {
   try {
     const recorded = await recordWalletPaperFill(input);
     return { ok: true as const, cashLamports: recorded.cashLamports, priceSource: recorded.priceSource, virtual: true as const };

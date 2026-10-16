@@ -7,10 +7,10 @@ describe("Staging campaign allocation", () => {
     expect(result).toMatchObject({ viewerReserveLamports: "300000", viewerReferralReserveLamports: "150000", commissionLamports: "300000", operatingReserveLamports: "100000", residualLamports: "2150000", paymentEnabled: false, payoutsEnabled: false });
     expect(BigInt(result.viewerReserveLamports) + BigInt(result.viewerReferralReserveLamports) + BigInt(result.commissionLamports) + BigInt(result.operatingReserveLamports) + BigInt(result.residualLamports)).toBe(BigInt(result.grossLamports));
   });
-  it("uses 10% for every qualifying purchase and zero without attribution", () => {
-    expect(reviewCampaignAllocation({ ...input, referral: { ...input.referral!, purchaseKind: "subsequent", commissionBps: 1000 } }).commissionLamports).toBe("300000");
+  it("uses 10% on the first purchase, 5% after that, and zero without attribution", () => {
+    expect(reviewCampaignAllocation({ ...input, referral: { ...input.referral!, purchaseKind: "subsequent", commissionBps: 500 } }).commissionLamports).toBe("150000");
     expect(reviewCampaignAllocation({ ...input, referral: null }).commissionLamports).toBe("0");
-    expect(() => reviewCampaignAllocation({ ...input, referral: { ...input.referral!, purchaseKind: "subsequent", commissionBps: 500 } })).toThrow(/terms/);
+    expect(() => reviewCampaignAllocation({ ...input, referral: { ...input.referral!, purchaseKind: "subsequent", commissionBps: 1000 } })).toThrow(/terms/);
   });
   it.each([0, 999, 1001, 1000001, 1000.1, NaN, Infinity])("rejects invalid view allocation %s", eligibleViews => {
     expect(() => reviewCampaignAllocation({ ...input, eligibleViews })).toThrow();

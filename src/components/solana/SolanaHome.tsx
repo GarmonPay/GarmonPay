@@ -7,10 +7,10 @@ const entrypoints = [
   { href: "/solana/launchpad", icon: Rocket, label: "CREATE", title: "Your idea. Your token.", text: "Prepare your next Solana project. Review the details, costs and launch requirements before any transaction." },
   { href: "/solana/trade", icon: Compass, label: "TRADE", title: "Markets, without invented prices.", text: "Search and trading stay closed until a supported route, simulation, and reconciliation pass review." },
   { href: "/solana/earn", icon: Play, label: "EARN", title: "Watch and learn, when funded.", text: "Verified views and courses will pay only from funded campaigns. No reward balance is shown until it is reconciled." },
-  { href: "/solana/advertise", icon: Compass, label: "REACH", title: "Find your community.", text: "Compare prepaid packages of 500 views or clicks, from $6.99 to $24.99. There is no subscription. Funding remains paused." },
+  { href: "/solana/advertise", icon: Compass, label: "REACH", title: "Find your community.", text: "Compare prepaid packages of 1,000 views or clicks, from $9.99 to $24.99. There is no subscription. Funding remains paused." },
   { href: "/member", icon: Wallet, label: "MEMBERS", title: "A profile for your wallet.", text: "Connect and sign in to open My Dashboard. Usernames, referrals, and paper trading stay tied to that signed wallet." },
   { href: "/games", icon: Gamepad2, label: "PLAY", title: "Games already in the product.", text: "Free Connect Four is open. Paid entry and prize modes stay disabled until their rules are approved." },
-  { href: "/solana/referrals", icon: ShieldCheck, label: "REFERRALS", title: "One introduction. Two programs.", text: "Advertiser commission is 20% on the first qualifying purchase and 10% after that. Viewer match is a separate 100%. Payouts are not active." },
+  { href: "/solana/referrals", icon: ShieldCheck, label: "REFERRALS", title: "One introduction. Two programs.", text: "Advertiser commission is 10% on the first eligible purchase and 5% after that. Viewer match is a separate 50%. Payouts are not active." },
   { href: "/solana/leaderboard", icon: Layers3, label: "EARNERS", title: "Rankings from real records.", text: "No scores are published until verified earnings exist. Volume and unrealized gains are not earnings." },
   { href: "/solana/fees", icon: BookOpen, label: "FEES", title: "See the caps first.", text: "A basic launch fee is not charged. LaunchLab caps a platform fee at 5% and a creator fee at 0.50%." },
 ];
@@ -48,7 +48,7 @@ export function SolanaHome() {
     <section className="gp-sol-panel gp-home-games gp-sol-section-space" aria-label="Games showcase"><div><p className="gp-sol-eyebrow">TAKE A DIFFERENT KIND OF BREAK</p><h2>A collection built for play.</h2><p className="gp-sol-muted">Play free Connect Four with someone beside you. No account, entry fee or prize. Existing account games remain separate; their financial operations are paused.</p><Link href="/games/connect-four" className="gp-button">Play free Connect Four <Gamepad2 size={18} aria-hidden="true" /></Link></div><div className="gp-home-games-art" aria-hidden="true"><img src="/images/garmon-master/garmondrop.webp" width={640} height={426} alt="" loading="lazy" decoding="async" /></div></section>
     <section className="gp-sol-principles">
       <div><p className="gp-sol-eyebrow">PARTICIPATION WITH PRINCIPLES</p><h2>Honest feedback.<br /><span>Clear expectations.</span></h2></div>
-      <div><p className="gp-sol-muted">Compensated participation will be disclosed. Rewards will never require a favorable review. Legacy GPC balances remain separate from SOL and transferable tokens.</p><Link href="/solana/learn" className="gp-sol-text-link">Open the free learning library <ArrowUpRight size={16} aria-hidden="true" /></Link></div>
+      <div><p className="gp-sol-muted">Compensated participation will be disclosed. Rewards will never require a favorable review. Older account balances remain separate from SOL and transferable tokens.</p><Link href="/solana/learn" className="gp-sol-text-link">Open the free learning library <ArrowUpRight size={16} aria-hidden="true" /></Link></div>
     </section>
   </main>;
 }

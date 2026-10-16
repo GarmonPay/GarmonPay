@@ -1,3 +1,4 @@
+import { assertUsernameChange } from "@/lib/member-platform/username-cooldown";
 import { createAdminClient } from '@/lib/supabase';
 import { json,sameOrigin,smallJson } from '@/lib/solana/http';
 import { memberSessionHash,profileInput,memberActorId } from '@/lib/solana/members';
@@ -17,6 +18,13 @@ export async function PATCH(request:Request){
  const {data:actor,error:actorError}=await db.rpc('gp_sol_member_me',{p_hash:hash});
  if(actorError)return json({error:'Profiles unavailable'},503);if(!actor)return json({error:'Wallet sign-in required'},401);
  if(actor.id!==actorId)return json({error:'Wallet session changed. Refresh before saving.'},409);
+ if(input.p_username && input.p_username!==actor.username){
+  const policy=await db.rpc('gp_sol_username_policy');
+  if(policy.error||policy.data!=='seven-day-atomic-v1')return json({error:'Username changes await the reviewed seven-day database policy. Your current username was preserved.'},409);
+  const history=await db.from('gp_sol_members').select('username,wallet_address,username_changed_at').eq('id',actor.id).maybeSingle();
+  if(history.error||!history.data)return json({error:'Username history is unavailable. Nothing was changed.'},503);
+  assertUsernameChange({currentHandle:history.data.username,nextHandle:input.p_username,walletAddress:actor.wallet,recordedWalletAddress:history.data.wallet_address,lastChangedAt:history.data.username_changed_at,nowMs:Date.now()});
+ }
  input.p_picture=await normalizeMemberPicture(input.p_picture as string|null);
  let {error}=await db.rpc('gp_sol_member_save',{p_hash:hash,...input});
  if(error?.code==='PGRST202'){

@@ -5,7 +5,7 @@ import { finishVerifiedView, openVerifiedView, pulseVerifiedView } from "@/app/m
 import { useMember } from "@/components/member/useMember";
 
 export default function WatchPage() {
-  const { id, snapshot, ready } = useMember();
+  const { id, snapshot, ready, error: loadError } = useMember();
   const [watchId, setWatchId] = useState<string | null>(null);
   const [required, setRequired] = useState(0);
   const [message, setMessage] = useState("");
@@ -30,7 +30,8 @@ export default function WatchPage() {
     setError("error" in result ? result.error : "Verified views are not funded.");
   }
 
-  if (!ready || !snapshot) return <p className="text-violet-200">Loading Watch & Earn…</p>;
+  if (!ready) return <p className="text-violet-200">Loading Watch & Earn…</p>;
+  if (!snapshot) return <p className="text-violet-200">{loadError || "Watch & Earn could not be loaded."}</p>;
   return (
     <div className="space-y-6">
       <header>

@@ -6,7 +6,7 @@ import { assertCampaignDraft, quoteCampaignSol } from "./advertising";
 import { completeWatch, createMember, heartbeatWatch, recordCommissionRefund, recordPaperFill, recordQualifyingPurchase, saveCampaign, setFollow, startWatch, updateMember } from "./books";
 import { artworkPrompt } from "./coin-creator";
 import { buildPublicProfile, buildSnapshot } from "./dashboard";
-import { ADVERTISER_FIRST_PURCHASE_BPS, ADVERTISER_SUBSEQUENT_PURCHASE_BPS, PAPER_STARTING_LAMPORTS, PAYMENT_ENABLED, PAYOUTS_ENABLED, VIEWER_MATCH_BPS, advertiserCommission, assertNotFinancialSettlement, parseSolToLamports } from "./economics";
+import { ADVERTISER_FIRST_PURCHASE_BPS, ADVERTISER_SUBSEQUENT_PURCHASE_BPS, MIN_PAYOUT_MICROUSD, MIN_PURCHASE_MICROUSD, PAPER_STARTING_LAMPORTS, PAYMENT_ENABLED, PAYOUTS_ENABLED, VIEWER_MATCH_BPS, advertiserCommission, assertNotFinancialSettlement, parseSolToLamports, purchaseEnablement } from "./economics";
 import { LEGACY_REFERRAL_COOKIE, LEGACY_REFERRAL_REDIRECT, joinPath } from "./invites";
 import { rankPaperTraders, rankVerifiedLive } from "./leaderboard";
 import { applyPaperFill } from "./paper";
@@ -16,9 +16,13 @@ import { emptyLedger } from "./types";
 
 describe("member economics and referrals", () => {
   it("keeps the agreed rates and refuses settlement", () => {
-    expect(ADVERTISER_FIRST_PURCHASE_BPS).toBe(2000);
-    expect(ADVERTISER_SUBSEQUENT_PURCHASE_BPS).toBe(1000);
-    expect(VIEWER_MATCH_BPS).toBe(10000);
+    expect(ADVERTISER_FIRST_PURCHASE_BPS).toBe(1000);
+    expect(ADVERTISER_SUBSEQUENT_PURCHASE_BPS).toBe(500);
+    expect(VIEWER_MATCH_BPS).toBe(5000);
+    expect(MIN_PURCHASE_MICROUSD).toBe(9_990_000);
+    expect(MIN_PAYOUT_MICROUSD).toBe(2_000_000);
+    expect(purchaseEnablement().enabled).toBe(false);
+    expect(purchaseEnablement().blockers.join(" ")).toMatch(/viewer reward|processing cost/);
     expect(PAYMENT_ENABLED).toBe(false);
     expect(PAYOUTS_ENABLED).toBe(false);
     expect(FINANCIAL_OPERATIONS_PAUSED).toBe(true);
@@ -29,18 +33,18 @@ describe("member economics and referrals", () => {
     expect(() => assertNotFinancialSettlement({ pays: true, charges: false, broadcasts: false })).toThrow(/paused/);
   });
 
-  it("calculates 20% on the first purchase, 10% after that, and a separate 100% viewer match", () => {
+  it("calculates 10% on the first purchase, 5% after that, and a separate 50% viewer match", () => {
     const first = quoteReferral({ purchaseLamports: BigInt("1000000000"), verifiedEarningLamports: BigInt("200000000"), priorQualifyingPurchases: 0 });
     const later = quoteReferral({ purchaseLamports: BigInt("1000000000"), verifiedEarningLamports: BigInt("0"), priorQualifyingPurchases: 1 });
     expect(first.sequence).toBe("first");
-    expect(first.advertiserBps).toBe(2000);
-    expect(first.commissionLamports).toBe("200000000");
+    expect(first.advertiserBps).toBe(1000);
+    expect(first.commissionLamports).toBe("100000000");
     expect(first.viewerLamports).toBe("200000000");
-    expect(first.viewerMatchLamports).toBe("200000000");
+    expect(first.viewerMatchLamports).toBe("100000000");
     expect(later.sequence).toBe("subsequent");
-    expect(later.commissionLamports).toBe("100000000");
+    expect(later.commissionLamports).toBe("50000000");
     expect(first.payoutsEnabled).toBe(false);
-    expect(advertiserCommission(BigInt("2000000000"), 1).toString()).toBe("200000000");
+    expect(advertiserCommission(BigInt("2000000000"), 1).toString()).toBe("100000000");
   });
 
   it("rejects self-referrals, duplicates, unverified purchases, and pays nothing", () => {
@@ -53,12 +57,12 @@ describe("member economics and referrals", () => {
     const first = accrueQualifyingPurchase({
       referrerId: "a", advertiserId: "b", advertiserVerified: true, purchaseId: "purchase_1", grossLamports: BigInt("1000000000"), priorQualifyingPurchases: 0, existingPurchaseIds: [],
     });
-    expect(first.rateBps).toBe(2000);
+    expect(first.rateBps).toBe(1000);
     expect(first.payoutsEnabled).toBe(false);
     const second = accrueQualifyingPurchase({
       referrerId: "a", advertiserId: "b", advertiserVerified: true, purchaseId: "purchase_2", grossLamports: BigInt("1000000000"), priorQualifyingPurchases: 1, existingPurchaseIds: ["purchase_1"],
     });
-    expect(second.rateBps).toBe(1000);
+    expect(second.rateBps).toBe(500);
     expect(() => accrueQualifyingPurchase({
       referrerId: "a", advertiserId: "b", advertiserVerified: true, purchaseId: "purchase_1", grossLamports: BigInt("1000000000"), priorQualifyingPurchases: 1, existingPurchaseIds: ["purchase_1"],
     })).toThrow(/already attributed/);
@@ -84,7 +88,7 @@ describe("member economics and referrals", () => {
       referrerId: "a", advertiserId: "b", advertiserVerified: true, purchaseId: "purchase_2", grossLamports: BigInt("100"), priorQualifyingPurchases: prior, existingPurchaseIds: ["purchase_1"],
     });
     expect(next.sequence).toBe("first");
-    expect(next.rateBps).toBe(2000);
+    expect(next.rateBps).toBe(1000);
   });
 
   it("attributes one direct referrer and does not let staging profiles accrue a payable commission", () => {
@@ -105,17 +109,17 @@ describe("member economics and referrals", () => {
 });
 
 describe("advertising and verified views", () => {
-  it("enforces the 500-view packages without enabling payment", () => {
-    expect(() => assertCampaignDraft({ title: "Launch", url: "https://example.com", tier: "seconds5", views: 1000 })).toThrow(/500/);
-    const draft = assertCampaignDraft({ title: "Desk", url: "https://example.com/ad", tier: "seconds60", views: 500 });
+  it("enforces the 1,000-view packages without enabling payment", () => {
+    expect(() => assertCampaignDraft({ title: "Launch", url: "https://example.com", tier: "seconds5", views: 500 })).toThrow(/1,000/);
+    const draft = assertCampaignDraft({ title: "Desk", url: "https://example.com/ad", tier: "seconds60", views: 1000 });
     expect(draft.purchaseMicrousd).toBe("24990000");
     expect(draft.seconds).toBe(60);
-    const quote = quoteCampaignSol({ tier: "seconds5", views: 500, solPriceMicrousd: "150000000", rateObservedAt: 1_000, now: 1_000 });
+    const quote = quoteCampaignSol({ tier: "seconds5", views: 1000, solPriceMicrousd: "150000000", rateObservedAt: 1_000, now: 1_000 });
     expect(quote.paymentEnabled).toBe(false);
     expect(quote.viewerRewardConfigured).toBe(false);
-    expect(quote.viewerMatchBps).toBe(10000);
-    expect(quote.grossLamports).toBe("46600000");
-    expect(quote.views).toBe(500);
+    expect(quote.viewerMatchBps).toBe(5000);
+    expect(quote.grossLamports).toBe("66600000");
+    expect(quote.views).toBe(1000);
   });
 
   it("rejects duplicate, rushed, automated, and self-owned view claims", () => {
@@ -124,7 +128,7 @@ describe("advertising and verified views", () => {
     state = createMember(state, { displayName: "Bea", handle: "bea" }).state;
     const viewer = state.members.find((member) => member.handle === "bea");
     if (!viewer) throw new Error("missing viewer");
-    const saved = saveCampaign(state, owner.id, { title: "Desk", url: "https://example.com/ad", tier: "seconds5", views: 500 });
+    const saved = saveCampaign(state, owner.id, { title: "Desk", url: "https://example.com/ad", tier: "seconds5", views: 1000 });
     state = saved.state;
     expect(saved.campaign.paymentEnabled).toBe(false);
     expect(() => startWatch(state, owner.id, saved.campaign.id)).toThrow(/own campaign/);
@@ -230,7 +234,7 @@ describe("paper trading, rankings, and privacy", () => {
   it("refuses a missing price instead of inventing one", async () => {
     const missing = await lookupUsdPrice("DOGE", async () => new Response("{}", { status: 404 }));
     expect(missing).toBeNull();
-    const price = await lookupUsdPrice("SOL", async () => Response.json({ solana: { usd: 150.25 } }));
+    const price = await lookupUsdPrice("SOL", async () => Response.json({ solana: { usd: 150.25, last_updated_at: 1 } }), 1000);
     expect(price?.microusd).toBe("150250000");
     expect(price?.source).toBe("coingecko");
   });

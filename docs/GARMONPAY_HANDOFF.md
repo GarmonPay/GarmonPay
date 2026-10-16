@@ -1,6 +1,8 @@
 # GarmonPay handoff
 
-Updated October 14, 2026, after production deployment of the uniform price-impact limit, sell controls, sign-in disclosure, and wallet-deeplink compile fix. No secrets belong in this file. The pending `gp_sol_devnet_launches` registry SQL was not executed. Mainnet financial operations stay disabled.
+Updated October 16, 2026. The live visual deployment is `dpl_9yUjcqWnoHmg2gw1Dy6NSXfFt1dJ` at https://garmonpay.com. For the Kingdom artwork handoff, read `docs/kingdom-visual-handoff.md` first. The sections below keep the earlier FOXNEW and member-workspace record. Do not treat `dpl_AShCXC3MTgAss4Bvbipa4KF1Ef9h` or `dpl_6aLaE9fCTX8RhDSpQ3vRWJgrV4BB` as the current production deployment.
+
+Updated October 14, 2026, after production deployment of the member workspace on the current FOXNEW trade source. No secrets belong in this file. The pending `gp_sol_devnet_launches` registry SQL was not executed. The member review SQL in `supabase/security/review/20261015_member_wallet_workspace.sql` was not applied. Mainnet financial operations stay disabled.
 
 The domain-review draft is `docs/solana/phantom-domain-review.md`. It has not been emailed or submitted. Do not tell anyone to proceed past Phantom’s warning.
 
@@ -8,17 +10,15 @@ Sign-in defaults to message network `mainnet` and mobile cluster `mainnet-beta` 
 
 Admin wallet `HLQyS1fLfboSvY5jwQwmpk394QfZhuWMZWmGZ2Bj7QUE` still has Devnet token account `Ah9UJqSHzfa6Rq5SoLndXpHDbjB39hEqgwUzpe2mYUkd`. Its FOXNEW balance is 0. Confirmed Devnet transaction `5fubPJ87zLZVxiBXeuQyqo9FsFCYhbFxKFAWNJPx7HoN2GYCsWHzVCPxBkZWesnfYwYpAPBKG89A6awyYgdEVRy7` at 2026-10-15T01:05:24Z is a CPMM `SwapBaseInput`. It moved 7,931,000 FOXNEW from that wallet into pool authority `CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq` and credited the wallet about 0.000790706 SOL. The mint does not exist on Mainnet. The tokens were sold into the Devnet pool. They were not found on another network.
 
-Every trade at 5.00% impact or more is blocked, including the 0.00001 SOL FOXNEW buy. A 100 FOXNEW unsigned sell still quotes under 5%. Nothing was signed or broadcast. Production is `dpl_AmUcC1t8qQeCyHQuY2V9nqkgtcL2`, aliased to https://garmonpay.com. It replaces `dpl_CkG65Vvcd2QGzXnfSWGgGK4J98zr`. Inspector: https://vercel.com/garmonpays-projects/garmon-pay/AmUcC1t8qQeCyHQuY2V9nqkgtcL2.
+Every trade at 5.00% impact or more is blocked. The FOXNEW page can offer 0.000005 SOL when that quote stays under the limit. A 100 FOXNEW unsigned sell still quotes under 5%. Nothing was signed or broadcast. Production is `dpl_6aLaE9fCTX8RhDSpQ3vRWJgrV4BB`, aliased to https://garmonpay.com. It replaces `dpl_AmUcC1t8qQeCyHQuY2V9nqkgtcL2`. Inspector: https://vercel.com/garmonpays-projects/garmon-pay/6aLaE9fCTX8RhDSpQ3vRWJgrV4BB.
 
 ## 1. Current status and Git revision
 
 - Repository: `/Users/bishop/Desktop/GarmonPay`
-- Branch: `integrate/member-platform`
-- HEAD: `f40a08c` — Record the production deployment of the Devnet trade safeguards.
-- Local commits only. This branch has not been pushed. The member worktree at `/Users/bishop/Desktop/garmonpay-member-platform` remains on `cursor/member-platform`.
+- Production source branch: `integrate/member-platform` at `3900614`, plus the member-workspace changes in `/Users/bishop/Desktop/garmonpay-member-platform` on `cursor/member-wallet-accounts`. Those member changes are deployed and not yet committed. Not pushed.
 - Production: https://garmonpay.com
-- Production deployment: `dpl_AmUcC1t8qQeCyHQuY2V9nqkgtcL2`, aliased to https://garmonpay.com. It replaces `dpl_CkG65Vvcd2QGzXnfSWGgGK4J98zr`.
-- Inspector: https://vercel.com/garmonpays-projects/garmon-pay/AmUcC1t8qQeCyHQuY2V9nqkgtcL2
+- Production deployment: `dpl_6aLaE9fCTX8RhDSpQ3vRWJgrV4BB`, aliased to https://garmonpay.com. It replaces `dpl_AmUcC1t8qQeCyHQuY2V9nqkgtcL2`.
+- Inspector: https://vercel.com/garmonpays-projects/garmon-pay/6aLaE9fCTX8RhDSpQ3vRWJgrV4BB
 - Do not roll back to `dpl_GP1TbxdKHnBp3PZUUprvPxfKuqy9`.
 - Deploy from a git-free copy at `/private/tmp/garmonpay-web-upload`. Do not upload `.env.local`. Do not set `GARMONPAY_DEVNET_LAUNCH`, `GARMONPAY_VANITY_WORKER`, or a wallet-auth flag on Vercel.
 

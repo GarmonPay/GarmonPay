@@ -1,13 +1,17 @@
+import { checkRateLimit } from "@/lib/rate-limit";
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase";
 import { memberSessionHash } from "@/lib/solana/members";
 import { normalizeDisplayName, normalizeHandle } from "@/lib/solana/profile-name";
 import { assertCampaignDraft } from "./advertising";
 import { buildSnapshot } from "./dashboard";
 import { memberIdentityContract } from "./identity";
-import { PAPER_SYMBOLS, displayToMicroUnits, type PaperSymbol } from "./paper";
+import { PAPER_ASSETS, PAPER_SYMBOLS, displayToMicroUnits, virtualAmount, virtualPrice, type PaperSymbol } from "./paper";
 import { lookupUsdPrice } from "./prices";
 import { parseSolToLamports } from "./economics";
 import { emptyLedger, type CampaignDraft, type LedgerState, type Member, type PaperFill } from "./types";
+import { assertUsernameChange } from "./username-cooldown";
 import { assertSessionActor, PAPER_PERSISTENCE_MESSAGE, reviewedSchemaMissing } from "./wallet-guard";
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
@@ -19,14 +23,21 @@ type SolMe = {
   biography: string;
   picture: string | null;
   walletPublic: boolean;
+  wallet: string;
   referralSlug: string | null;
+  referralCode: string;
+  referrals: number;
 };
 
 type Workspace = {
   ready?: boolean;
+  schemaVersion?: string;
+  valuation?: { available: boolean; equityLamports?: string; unrealizedLamports?: string; realizedLamports?: string; reason?: string };
+  history?: { available: boolean; at?: string; equityLamports?: string }[];
   cashLamports?: string;
+  fillCount?: number;
   positions?: { symbol: string; microUnits: string }[];
-  fills?: { symbol: string; side: "buy" | "sell"; at: string; priceSource: string; realizedLamports: string }[];
+  fills?: { id: string; virtualLamports: string; microUnits: string; priceMicrousd: string; solPriceMicrousd: string; symbol: string; side: "buy" | "sell"; at: string; priceSource: string; realizedLamports: string }[];
   drafts?: { id: string; title: string; url: string; tier: CampaignDraft["tier"]; views: number; paymentEnabled: false }[];
   activity?: { text: string; at: string }[];
 };
@@ -70,12 +81,13 @@ export function bindClaim(sessionMemberId: string, claimedMemberId?: string | nu
 
 async function referralRows(db: Admin, memberId: string) {
   const { data, error } = await db.from("gp_sol_members").select("username, display_name, created_at").eq("referred_by", memberId).order("created_at", { ascending: true }).limit(100);
-  if (error) return [];
+  if (error) throw new Error("Your referral records could not be loaded. Nothing was estimated.");
   return (data ?? []) as { username: string; display_name: string; created_at: string }[];
 }
 
 async function followerCounts(db: Admin, hash: string, username: string) {
-  const { data } = await db.rpc("gp_sol_member_directory", { p_query: null, p_username: username, p_hash: hash });
+  const { data, error } = await db.rpc("gp_sol_member_directory", { p_query: null, p_username: username, p_hash: hash });
+  if (error) throw new Error("Member connections could not be loaded. Retry in a moment.");
   const row = Array.isArray(data) ? data[0] : null;
   return { followers: Number(row?.followers ?? 0), following: Number(row?.following ?? 0) };
 }
@@ -94,7 +106,7 @@ function ledgerFor(member: SolMe, referrals: { username: string; display_name: s
     positions,
   });
   self.biography = member.biography ?? "";
-  self.inviteCode = member.referralSlug && /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(member.referralSlug) ? member.referralSlug : self.inviteCode;
+  self.inviteCode = member.referralSlug && /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(member.referralSlug) ? member.referralSlug : member.referralCode;
   self.profilePublic = member.walletPublic !== false;
   const directs = referrals.map((item, index) => stubMember({
     id: `${member.id}-ref-${index}`,
@@ -103,15 +115,15 @@ function ledgerFor(member: SolMe, referrals: { username: string; display_name: s
     referredBy: member.id,
     createdAt: item.created_at,
   }));
-  const fills: PaperFill[] = (workspace?.fills ?? []).map((fill, index) => ({
-    id: `${member.id}-fill-${index}`,
+  const fills: PaperFill[] = (workspace?.fills ?? []).filter(fill => fill.id && fill.virtualLamports && fill.microUnits && fill.priceMicrousd && fill.solPriceMicrousd).map((fill) => ({
+    id: fill.id,
     memberId: member.id,
     symbol: fill.symbol,
     side: fill.side,
-    virtualLamports: "0",
-    microUnits: "0",
-    priceMicrousd: "0",
-    solPriceMicrousd: "0",
+    virtualLamports: fill.virtualLamports,
+    microUnits: fill.microUnits,
+    priceMicrousd: fill.priceMicrousd,
+    solPriceMicrousd: fill.solPriceMicrousd,
     priceSource: fill.priceSource,
     realizedLamports: fill.realizedLamports,
     at: fill.at,
@@ -152,12 +164,13 @@ export async function loadMemberSnapshot() {
   const db = createAdminClient();
   if (!hash || !db) {
     const snapshot = buildSnapshot(emptyLedger(), null);
-    return { ...snapshot, actorId: null as string | null, walletConnected: false, identity: memberIdentityContract(false), paperPersistence: "signed-out" as const };
+    return { ...snapshot, actorId: null as string | null, walletConnected: false, paper: null, identity: memberIdentityContract(false), referralTotal: null, paperValuation: null, paperHistory: [] as NonNullable<Workspace["history"]>, paperPersistence: "signed-out" as const };
   }
   const { data, error } = await db.rpc("gp_sol_member_me", { p_hash: hash });
-  if (error || !data?.id) {
+  if (error) throw new Error("Your signed wallet could not be checked. Retry in a moment.");
+  if (!data?.id) {
     const snapshot = buildSnapshot(emptyLedger(), null);
-    return { ...snapshot, actorId: null as string | null, walletConnected: false, identity: memberIdentityContract(false), paperPersistence: "signed-out" as const };
+    return { ...snapshot, actorId: null as string | null, walletConnected: false, paper: null, identity: memberIdentityContract(false), referralTotal: null, paperValuation: null, paperHistory: [] as NonNullable<Workspace["history"]>, paperPersistence: "signed-out" as const };
   }
   const member = data as SolMe;
   const [referrals, counts, workspaceResult] = await Promise.all([
@@ -165,7 +178,7 @@ export async function loadMemberSnapshot() {
     followerCounts(db, hash, member.username),
     db.rpc("gp_member_workspace", { p_hash: hash }),
   ]);
-  const persistenceReady = !workspaceResult.error && workspaceResult.data?.ready === true;
+  const persistenceReady = !workspaceResult.error && workspaceResult.data?.ready === true && workspaceResult.data?.schemaVersion === "paper-v1-equity";
   if (workspaceResult.error && !reviewedSchemaMissing(workspaceResult.error)) {
     throw new Error("Member workspace could not be loaded.");
   }
@@ -176,7 +189,10 @@ export async function loadMemberSnapshot() {
     actorId: member.id,
     walletConnected: true,
     identity: memberIdentityContract(true),
-    paper: persistenceReady ? snapshot.paper : null,
+    paper: persistenceReady ? { ...snapshot.paper!, fillCount: workspace?.fillCount ?? null } : null,
+    referralTotal: member.referrals,
+    paperValuation: workspace?.valuation ?? null,
+    paperHistory: (workspace?.history ?? []).filter(point => point?.available && point.equityLamports && point.at),
     paperPersistence: persistenceReady ? "ready" as const : "awaiting-review" as const,
   };
 }
@@ -189,6 +205,19 @@ export async function saveWalletProfile(input: { memberId?: string | null; displ
   if (typeof input.biography !== "string" || input.biography.length > 280 || typeof input.walletPublic !== "boolean") {
     throw new Error("Biography must be 280 characters or fewer.");
   }
+  // A column alone cannot prove that the database enforces the cooldown.
+  const policy = handle && handle !== actor.member.username
+    ? await actor.db.rpc("gp_sol_username_policy") : null;
+  if (policy && (policy.error || policy.data !== "seven-day-atomic-v1")) {
+    throw new Error("Public username changes stay locked until the reviewed seven-day database policy is installed. Your current username was not changed.");
+  }
+  const current = await actor.db.from("gp_sol_members").select("username, wallet_address, username_changed_at").eq("id", actor.member.id).maybeSingle();
+  if (handle && handle !== actor.member.username) {
+    if (current.error || !current.data) throw new Error("The username history could not be confirmed. Nothing was changed.");
+    assertUsernameChange({ currentHandle: current.data.username, nextHandle: handle,
+      walletAddress: actor.member.wallet, recordedWalletAddress: current.data.wallet_address,
+      lastChangedAt: current.data.username_changed_at, nowMs: Date.now() });
+  }
   const { error } = await actor.db.rpc("gp_sol_member_save", {
     p_hash: actor.hash,
     p_username: handle,
@@ -198,6 +227,7 @@ export async function saveWalletProfile(input: { memberId?: string | null; displ
     p_display: displayName,
   });
   if (error) throw new Error("Unable to save that profile. The public handle may already be taken.");
+
 }
 
 export async function followWalletHandle(input: { memberId?: string | null; handle: string; follow: boolean }) {
@@ -227,41 +257,80 @@ export async function saveWalletDraft(input: { memberId?: string | null; title: 
   return { id: String(data), paymentEnabled: false as const };
 }
 
-export async function recordWalletPaperFill(input: { memberId?: string | null; symbol: string; side: "buy" | "sell"; amount: string }) {
+export async function recordWalletPaperFill(input: { memberId?: string | null; symbol: string; side: "buy" | "sell"; amount: string; requestId: string }) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.requestId)) throw new Error("A valid paper request ID is required.");
   const symbol = input.symbol.toUpperCase();
-  if (!PAPER_SYMBOLS.includes(symbol as PaperSymbol)) throw new Error("Choose BTC or ETH. Other symbols have no verified price here.");
+  if (input.side !== "buy" && input.side !== "sell") throw new Error("Invalid paper side.");
+  if (!PAPER_SYMBOLS.includes(symbol as PaperSymbol)) throw new Error("Choose a supported paper asset. Other assets have no verified price here.");
   const actor = await requireWalletMember();
   bindClaim(actor.member.id, input.memberId);
-  const [sol, token] = await Promise.all([lookupUsdPrice("SOL"), lookupUsdPrice(symbol)]);
-  if (!sol || !token) throw new Error("A live price is unavailable. No paper fill was recorded.");
   const spend = input.side === "buy" ? parseSolToLamports(input.amount) : null;
   const sell = input.side === "sell" ? displayToMicroUnits(input.amount) : null;
   if (input.side === "buy" && !spend) throw new Error("Enter a virtual SOL amount.");
   if (input.side === "sell" && !sell) throw new Error("Enter a paper token amount.");
+  const previous = await actor.db.rpc("gp_member_paper_request", {
+    p_hash: actor.hash, p_request_id: input.requestId, p_symbol: symbol, p_side: input.side,
+    p_spend_lamports: spend ? virtualAmount(spend) : null,
+    p_sell_micro_units: sell ? virtualAmount(sell) : null,
+  });
+  if (reviewedSchemaMissing(previous.error)) throw new Error(PAPER_PERSISTENCE_MESSAGE);
+  if (previous.error) throw new Error(safeDbMessage(previous.error, "The paper request could not be checked. Nothing new was recorded."));
+  if (previous.data?.virtual) return { cashLamports: String(previous.data.cashLamports), priceSource: "stored observation", virtual: true as const };
+  if (!checkRateLimit(actor.member.id, "member-paper-order", 20).allowed) throw new Error("Too many paper orders. Wait one minute before trying again.");
+  const [sol, token] = await Promise.all([lookupUsdPrice("SOL"), lookupUsdPrice(symbol)]);
+  if (!sol || !token) throw new Error("A live price is unavailable. No paper fill was recorded.");
+  // Separate server-only credential with the gp_member_price_publisher role.
+  // Never fall back to the general service role or accept browser quote fields.
+  const publisherToken = process.env.MEMBER_PRICE_PUBLISHER_JWT;
+  const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!publisherToken || !apiKey || !url) throw new Error("Verified paper pricing is not configured. Nothing was recorded.");
+  const publisher = createClient(url, apiKey, {
+    global: { headers: { Authorization: `Bearer ${publisherToken}`, Prefer: "return=minimal" } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const observationId = randomUUID();
+  // The server already knows observationId. Do not chain .select() or ask PostgREST
+  // to return the row: the publisher credential is INSERT-only.
+  const published = await publisher.from("gp_member_price_observations").insert({
+    id: observationId, symbol, asset_id: PAPER_ASSETS[symbol as PaperSymbol], source: "coingecko",
+    token_microusd: virtualPrice(BigInt(token.microusd)), sol_microusd: virtualPrice(BigInt(sol.microusd)),
+    observed_at: new Date(token.observedAt).toISOString(), sol_observed_at: new Date(sol.observedAt).toISOString(),
+  });
+  if (published.error) throw new Error("Verified price observation was rejected. Nothing was recorded.");
   const { data, error } = await actor.db.rpc("gp_member_record_paper_fill", {
     p_hash: actor.hash,
     p_symbol: symbol,
     p_side: input.side,
-    p_spend_lamports: spend ? Number(spend) : null,
-    p_sell_micro_units: sell ? Number(sell) : null,
-    p_token_microusd: Number(token.microusd),
-    p_sol_microusd: Number(sol.microusd),
-    p_price_source: token.source.slice(0, 80),
+    p_spend_lamports: spend ? virtualAmount(spend) : null,
+    p_sell_micro_units: sell ? virtualAmount(sell) : null,
+    p_request_id: input.requestId,
+    p_observation_id: observationId,
   });
   if (reviewedSchemaMissing(error)) throw new Error(PAPER_PERSISTENCE_MESSAGE);
   if (error || !data?.virtual) throw new Error(safeDbMessage(error, "That paper order was rejected. Nothing was recorded."));
   return { cashLamports: String(data.cashLamports), priceSource: token.source, virtual: true as const };
 }
 
-export async function loadPaperRankings(period: "daily" | "weekly" | "monthly") {
+export async function loadPaperRankings(period: "daily" | "weekly" | "monthly", archiveStart?: string) {
   const db = createAdminClient();
   if (!db) return { rows: [], persistence: "unavailable" as const };
-  const { data, error } = await db.rpc("gp_member_paper_rankings", { p_period: period });
+  const { data: response, error } = archiveStart
+    ? await db.rpc("gp_member_rank_archive", { p_period: period, p_start: archiveStart })
+    : await db.rpc("gp_member_paper_rankings", { p_period: period });
+  const data = archiveStart ? response?.rows : response;
   if (reviewedSchemaMissing(error)) return { rows: [], persistence: "awaiting-review" as const };
   if (error || !Array.isArray(data)) return { rows: [], persistence: "unavailable" as const };
+  if (data.some(row => row.formula !== "net-liquidation-sol-v1" || !row.memberId || !Number.isFinite(Number(row.returnBps)))) {
+    return { rows: [], persistence: "awaiting-review" as const };
+  }
   return {
-    rows: data.map((row: { handle: string; displayName: string; realizedLamports: string; fills: number }, index: number) => ({
+    rows: data.map((row: { handle: string; displayName: string; realizedLamports: string; fills: number; memberId: string; unrealizedLamports: string; equityLamports: string; returnBps: string }, index: number) => ({
       rank: index + 1,
+      memberId: row.memberId,
+      unrealizedLamports: row.unrealizedLamports,
+      equityLamports: row.equityLamports,
+      returnBps: row.returnBps,
       handle: row.handle,
       displayName: row.displayName,
       realizedLamports: row.realizedLamports,

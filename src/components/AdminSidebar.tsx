@@ -71,7 +71,7 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-white/[0.06] bg-fintech-bg-card/50 flex flex-col md:min-h-screen py-4 px-3">
+    <aside className="gp-admin-nav w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-[#e8c47a]/30 bg-[#1a1028] flex flex-col md:min-h-screen py-4 px-3">
       <div className="mb-3 md:mb-4 pb-3 border-b border-white/[0.06] md:border-b-0 md:pb-0">
         <Link href="/admin/dashboard" className="text-lg font-bold text-white">
           GarmonPay Admin
@@ -90,6 +90,7 @@ export function AdminSidebar() {
                   <Link
                     key={href}
                     href={href}
+                    aria-current={active ? "page" : undefined}
                     className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       active
                         ? "text-white bg-[#7c3aed]/25 border border-[#7c3aed]/35"

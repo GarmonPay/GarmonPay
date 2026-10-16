@@ -32,7 +32,10 @@ describe("reviewed member schema", () => {
     expect(sql).toContain("FROM PUBLIC, anon, authenticated");
     expect(sql).not.toMatch(/GRANT .* TO anon/i);
     expect(sql).not.toMatch(/GRANT .* TO authenticated/i);
-    expect(sql).toContain("CHECK (views = 500)");
+    expect(sql).toContain("CHECK (views = 1000)");
+    expect(sql).toContain("9990000");
+    expect(sql).not.toContain("6990000");
+    expect(sql).toContain("NEW.member_id IS DISTINCT FROM OLD.member_id");
     expect(sql).toContain("CHECK (payment_enabled = false)");
     expect(sql).toContain("10000000000");
     expect(sql).toContain("Paper fills cannot be changed or deleted");

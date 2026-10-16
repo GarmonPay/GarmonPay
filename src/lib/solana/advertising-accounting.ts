@@ -33,9 +33,9 @@ export function reviewCampaignAllocation(input: CampaignAllocationInput) {
     identifier(referral.referrerId); identifier(referral.attributionId);
     if (referral.referrerId === input.advertiserId) throw new Error("Self-referral denied");
     if (referral.purchaseKind !== "first" && referral.purchaseKind !== "subsequent") throw new Error("Verified purchase classification required");
-    // Lifetime 10% on every qualifying prepaid purchase. Payouts stay paused.
-    if (referral.commissionBps !== 1000) throw new Error("Referral terms differ from approved model");
-    commission = gross * BigInt(1000) / BigInt(10000);
+    const approvedBps = referral.purchaseKind === "first" ? 1000 : 500;
+    if (referral.commissionBps !== approvedBps) throw new Error("Referral terms differ from approved model");
+    commission = gross * BigInt(approvedBps) / BigInt(10000);
   }
   const residual = gross - viewerReserve - viewerReferralReserve - commission - operatingReserve;
   if (residual < BigInt(0)) throw new Error("Funding cannot cover viewer, referral and operating reserves");

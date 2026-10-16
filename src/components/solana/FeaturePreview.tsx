@@ -34,7 +34,7 @@ export function DashboardPreview() {
   return <>
     <div className="gp-sol-grid gp-sol-grid-two">
       <SolanaSurface title="SOL account" description="Wallet sign-in is paused. No verified SOL session or account balance is available."><FeatureStatus>Not connected</FeatureStatus><Link href="/solana/wallet" className="gp-sol-text-link">Wallet requirements <ArrowUpRight size={16} aria-hidden="true" /></Link></SolanaSurface>
-      <SolanaSurface title="Existing account history" description="Your legacy GPC and USD records remain separate. This upgrade does not convert or change your balances."><Link href="/login" className="gp-button">Open legacy account</Link></SolanaSurface>
+      <SolanaSurface title="Existing account history" description="Older account records remain separate. This page does not convert or change balances."><Link href="/login" className="gp-button">Open legacy account</Link></SolanaSurface>
     </div>
     <SolanaSurface title="Activation status" className="gp-sol-section-space" description="Launches, trading, advertising payments, rewards, referrals and withdrawals remain paused. Security review and explicit activation approval are required.">
       <div className="gp-sol-actions"><Link href="/solana/launchpad" className="gp-button">Prepare a launch</Link><Link href="/solana/earn" className="gp-button">Explore participation</Link></div>

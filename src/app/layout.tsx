@@ -1,6 +1,7 @@
 import "./globals.css";
 import "./design-system.css";
 import "./solana.css";
+import "./kingdom-site.css";
 import { Inter } from "next/font/google";
 import { PublicNavbarWrapper } from "@/components/PublicNavbarWrapper";
 import { PublicFooterWrapper } from "@/components/PublicFooterWrapper";
@@ -21,7 +22,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#7C3AED",
+  themeColor: "#100818",
 };
 
 export const metadata = {
@@ -56,7 +57,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#7C3AED" />
+        <meta name="theme-color" content="#100818" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="GarmonPay" />

@@ -27,7 +27,7 @@ const AD_TYPES = [
   { id: "product", label: "Link Ad", desc: "Drive traffic to your site" },
 ] as const;
 
-const MIN_BUDGET = 5;
+const MIN_BUDGET = 9.99;
 const TITLE_MAX = 50;
 const DESC_MAX = 200;
 
@@ -613,7 +613,7 @@ export default function AdvertisePage() {
       {hasAdvertiser && (
         <div className="card-lux p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Billing</h2>
-          <p className="text-sm text-fintech-muted">Add funds via Stripe when you create an ad. Minimum $5 to run. Unused budget refundable minus 10% processing fee.</p>
+          <p className="text-sm text-fintech-muted">Advertising checkout is paused. The prepared minimum is $9.99 for a one-time prepaid package. Nothing is charged from this page.</p>
         </div>
       )}
     </div>

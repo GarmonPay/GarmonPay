@@ -368,9 +368,9 @@ export default function PricingPage() {
   return (
     <main className="gp-pricing-page min-h-screen text-white">
       <div className="border-b border-[#eab308]/40 bg-gradient-to-r from-[#fde047] via-[#eab308] to-[#fbbf24] px-4 py-5 text-center shadow-[0_8px_40px_-8px_rgba(234,179,8,0.45)]">
-        <p className="mx-auto max-w-4xl text-base font-bold leading-snug text-[#0c0618] sm:text-lg md:text-xl">
-          Free members earn from day one. Paid plans multiply your earnings. No credit card ever required to start.
-        </p>
+          <p className="mx-auto max-w-4xl text-base font-bold leading-snug text-[#0c0618] sm:text-lg md:text-xl">
+            Legacy membership catalog. Purchases are paused. These plans are not the wallet platform and do not pay live earnings.
+          </p>
       </div>
       <div className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
         <header className="text-center">
@@ -382,8 +382,7 @@ export default function PricingPage() {
             </span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base text-violet-200/90 sm:text-lg">
-            Upgrade your membership and unlock higher earnings, better referral commissions,
-            and exclusive perks.
+            This page keeps the older membership catalog for reference. Checkout is paused, and GPC is not part of the wallet platform.
           </p>
           <div className="mx-auto mt-6 max-w-xl rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-3 text-sm text-violet-100/95">
             <span className="font-semibold text-white">Gold Coins &amp; GPay Coins</span> are separate from membership —{" "}
@@ -488,8 +487,8 @@ export default function PricingPage() {
                         href="/register"
                         className="block w-full rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:from-violet-500 hover:to-violet-400 sm:text-base"
                       >
-                        <span className="hidden sm:inline">Start Earning Free — No Credit Card Needed</span>
-                        <span className="sm:hidden">Start Earning Free</span>
+                        <span className="hidden sm:inline">Open a legacy account</span>
+                        <span className="sm:hidden">Legacy account</span>
                       </Link>
                     ) : (
                       <>

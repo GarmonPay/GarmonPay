@@ -47,11 +47,11 @@
   --gp-purple: #8b5cf6;
   --gp-purple-deep: #6d28d9;
   --gp-purple-glow: rgba(139, 92, 246, 0.35);
-  --gp-gold: #eab308;
-  --gp-gold-rich: #d4af37;
-  --gp-gold-muted: rgba(234, 179, 8, 0.85);
-  --fintech-bg: #0c0618;
-  --fintech-bg-card: #150d24;
+  --gp-gold: #e8c47a;
+  --gp-gold-rich: #f3ddb0;
+  --gp-gold-muted: rgba(232, 196, 122, 0.86);
+  --fintech-bg: #100818;
+  --fintech-bg-card: #1a1028;
   --fintech-accent: var(--gp-purple);
   --fintech-accent-gold: var(--gp-gold);
   --fintech-success: #22c55e;
@@ -83,7 +83,7 @@ body {
       var(--gp-purple-glow) 0%,
       transparent 55%
     ),
-    linear-gradient(180deg, #0c0618 0%, #07030f 100%);
+    linear-gradient(180deg, #140c22 0%, #09060f 100%);
   color: var(--fintech-text);
   font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;

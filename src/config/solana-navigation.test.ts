@@ -10,18 +10,14 @@ describe("public navigation", () => {
   it("keeps every primary destination in one header", () => {
     expect(SOLANA_NAVIGATION.map((item) => item.href)).toEqual([
       "/",
-      "/member",
-      "/solana/members",
+      "/solana/spotlight",
       "/solana/launchpad",
       "/solana/trade",
       "/solana/earn",
       "/solana/advertise",
       "/games",
-      "/solana/referrals",
-      "/solana/leaderboard",
-      "/solana/fees",
-      "/solana/spotlight",
-      "/solana/dashboard",
+      "/member/community",
+      "/member",
     ]);
     expect(new Set(SOLANA_NAVIGATION.map((item) => item.href)).size).toBe(SOLANA_NAVIGATION.length);
   });

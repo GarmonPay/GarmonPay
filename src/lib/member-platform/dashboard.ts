@@ -64,7 +64,10 @@ export function buildSnapshot(state: LedgerState, memberId: string | null, nowMs
       cashSol: formatLamports(member.paperCashLamports),
       label: "virtual SOL",
       positions: Object.entries(member.positions).map(([symbol, position]) => ({ symbol, microUnits: position.microUnits })),
-      fills: state.paperFills.filter((item) => item.memberId === member.id).slice(-8).reverse().map((item) => ({
+      fills: state.paperFills.filter((item) => item.memberId === member.id).sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).slice(0, 100).map((item) => ({
+        id: item.id,
+        microUnits: item.microUnits,
+        virtualLamports: item.virtualLamports,
         symbol: item.symbol,
         side: item.side,
         at: item.at,

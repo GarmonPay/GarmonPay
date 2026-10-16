@@ -1,0 +1,14 @@
+---
+description: Keep the approved GarmonPay.com appearance locked
+alwaysApply: true
+---
+
+# Locked website design
+
+The live appearance of https://garmonpay.com as of October 16, 2026, deployment `dpl_4uk81s2hFGDtd7qg7Wt5H7SSWHbA`, is approved. Do not redesign it. The gold crown with blue gemstones beside the wordmark, and the navy, cyan, and gold header and navigation, are part of that approved appearance.
+
+Preserve the homepage imagery, animations, layout, navigation, buttons, cards, typography, and the midnight-navy, electric-cyan, blue, and metallic-gold colors already in production. Use those existing tokens. Do not invent a new palette or replace working visual components.
+
+Color fixes are limited to pages that still diverge from that live scheme. Do not restyle the approved homepage.
+
+Functionality, broken routes, and inaccurate information may be repaired. Deploy only validated changes that do not unexpectedly change the approved appearance. Keep financial operations paused. Do not change financial calculations, authentication security, trading fees, or apply unreviewed database migrations.

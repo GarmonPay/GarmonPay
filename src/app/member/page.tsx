@@ -16,6 +16,7 @@ export default function MemberDashboardPage() {
     if (!id) return;
     setFormError("");
     const form = new FormData(event.currentTarget);
+    try {
     const result = await saveMemberProfile({
       memberId: id,
       displayName: String(form.get("displayName") ?? ""),
@@ -26,6 +27,7 @@ export default function MemberDashboardPage() {
     if (!result.ok) { setFormError(result.error); return; }
     await reload();
     setMessage("Profile saved for this signed wallet.");
+    } catch { setFormError("The save response could not be confirmed. Refresh your profile before retrying."); }
   }
 
   if (!ready || !snapshot) {
@@ -40,7 +42,7 @@ export default function MemberDashboardPage() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-100">{snapshot.identity.note}</p>
       </header>
 
-      <WalletSignIn />
+      <details className="gp-member-signin"><summary>Connect to your member workspace</summary><WalletSignIn /></details>
 
       {!snapshot.walletConnected && (
         <p className="rounded-2xl border border-white/10 bg-[#150d24] p-4 text-sm text-violet-100">Sign in above to open your profile, referrals, and paper trading. Nothing on this page accepts a saved browser ID as a member.</p>
@@ -49,9 +51,10 @@ export default function MemberDashboardPage() {
       {snapshot.profile && (
         <form onSubmit={saveProfile} className="grid gap-3 rounded-2xl border border-white/10 bg-[#150d24] p-4 sm:p-6">
           <h2 className="text-lg font-semibold">Profile</h2>
+          <Link href="/solana/members" className="text-sm text-amber-300">Edit profile photo in your member profile</Link>
           <p className="text-sm text-violet-200">@{snapshot.profile.handle} · Signed wallet · {snapshot.profile.followers} followers</p>
           <label className="grid gap-1 text-sm">Display name<input name="displayName" defaultValue={snapshot.profile.displayName === "Member" ? "" : snapshot.profile.displayName} maxLength={32} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-          <label className="grid gap-1 text-sm">Public handle<input name="handle" placeholder={snapshot.profile.handle} maxLength={24} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
+          <label className="grid gap-1 text-sm">Public handle<input name="handle" placeholder={snapshot.profile.handle} maxLength={24} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /><span className="text-xs text-violet-200">A public username can change once every seven days. The signed wallet stays the account.</span></label>
           <label className="grid gap-1 text-sm">Biography<textarea name="biography" defaultValue={snapshot.profile.biography} maxLength={280} className="min-h-24 rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="walletPublic" defaultChecked={snapshot.profile.profilePublic} /> Show my wallet address on the public Solana directory</label>
           {formError && <p className="text-sm text-red-300">{formError}</p>}
@@ -72,7 +75,7 @@ export default function MemberDashboardPage() {
         <article className="rounded-2xl border border-white/10 bg-[#150d24] p-4">
           <h2 className="text-sm uppercase tracking-wide text-violet-300">Referrals</h2>
           <p className="mt-3 text-2xl font-semibold">{snapshot.profile ? snapshot.referrals.direct.length : "—"}</p>
-          <p className="mt-2 text-sm text-violet-200">Direct referrals. The first qualifying purchase is 20%. Later qualifying purchases are 10% for the life of the relationship. Viewer match is a separate 100%.</p>
+          <p className="mt-2 text-sm text-violet-200">Direct referrals stay with the signed wallet. The current code records 10% then 5% for advertisers and a separate 50% viewer match. Nothing is paid.</p>
           <Link href="/member/referrals" className="mt-4 inline-block text-amber-300">Open referrals</Link>
         </article>
         <article className="rounded-2xl border border-white/10 bg-[#150d24] p-4">
@@ -94,7 +97,7 @@ export default function MemberDashboardPage() {
 
       <section className="rounded-2xl border border-amber-300/20 bg-[#150d24] p-4 sm:p-6">
         <h2 className="text-lg font-semibold text-amber-200">Paper trading</h2>
-        {snapshot.paper ? <p className="mt-2 text-sm text-violet-100">{snapshot.paper.cashSol} virtual SOL. This is not a real asset and cannot be withdrawn.</p> : <p className="mt-2 text-sm text-violet-200">{snapshot.walletConnected ? "10 virtual SOL is issued when the reviewed paper ledger is approved. None is stored yet, and none of it is real SOL." : "Connect your wallet to open a free paper account of 10 virtual SOL. It is not real SOL."}</p>}
+        {snapshot.paper ? <p className="mt-2 text-sm text-violet-100">{snapshot.paper.cashSol} virtual SOL. This is not a real asset and cannot be withdrawn.</p> : <p className="mt-2 text-sm text-violet-200">{snapshot.walletConnected ? "10 virtual SOL is issued when the reviewed paper ledger is approved. None is stored yet, and none of it is real SOL." : "The planned paper account starts with 10 virtual SOL after ledger activation. No virtual balance has been issued here."}</p>}
         <Link href="/member/paper" className="mt-3 inline-block text-amber-300">Open paper trading</Link>
       </section>
 
@@ -108,7 +111,7 @@ export default function MemberDashboardPage() {
       </section>
       {message && <p className="text-sm text-emerald-300">{message}</p>}
       {formError && snapshot.profile && <p className="text-sm text-red-300">{formError}</p>}
-      <p className="text-sm text-violet-300">Existing GPC account stays separate. <Link href="/dashboard" className="text-amber-300">Open existing account</Link></p>
+      <p className="text-sm text-violet-300">Older email accounts stay separate. <Link href="/dashboard" className="text-amber-300">Open existing account</Link></p>
     </div>
   );
 }

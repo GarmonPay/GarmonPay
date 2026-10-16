@@ -11,7 +11,7 @@ function dollars(micro: string) {
 }
 
 export default function AdvertisingPage() {
-  const { id, snapshot, ready, reload } = useMember();
+  const { id, snapshot, ready, error: loadError, reload } = useMember();
   const [tier, setTier] = useState("seconds15");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -19,44 +19,50 @@ export default function AdvertisingPage() {
 
   async function preview() {
     setError("");
-    const response = await fetch(`/api/member-platform/advertising/quote?tier=${tier}&views=500`);
+    try {
+    const selected = ADVERTISING_TIERS[tier as keyof typeof ADVERTISING_TIERS];
+    const response = await fetch(`/api/member-platform/advertising/quote?tier=${tier}&views=${selected.views}`, { signal: AbortSignal.timeout(10000) });
     const body = await response.json();
     if (!response.ok) { setQuote(""); setError(body.error ?? "The package could not be quoted."); return; }
     const usd = dollars(body.purchaseMicrousd);
     setQuote(body.solAvailable
-      ? `${usd} for 500 verified views or clicks. Staging conversion is ${formatLamports(body.grossLamports)} SOL. A 100% viewer match is reserved separately only after a verified earning exists. Payment is off. This is not a balance.`
-      : `${usd} for 500 verified views or clicks. A live SOL rate is unavailable, so no SOL amount is shown. Payment is off.`);
+      ? `${usd} for 1,000 verified views or clicks in the current code. Staging conversion is ${formatLamports(body.grossLamports)} SOL. A recorded 50% viewer match is not an active offer. Payment is off. This is not a balance.`
+      : `${usd} for 1,000 verified views or clicks in the current code. A live SOL rate is unavailable, so no SOL amount is shown. Payment is off. This is not an active offer.`);
+    } catch { setQuote(""); setError("The accounting preview could not be loaded. Nothing was charged."); }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!id) { setError("Connect and sign in with your wallet before saving a draft."); return; }
     const form = new FormData(event.currentTarget);
+    try {
     const result = await saveAdvertisingDraft({
       memberId: id,
       title: String(form.get("title") ?? ""),
       url: String(form.get("url") ?? ""),
       tier,
-      views: 500,
+      views: ADVERTISING_TIERS[tier as keyof typeof ADVERTISING_TIERS].views,
     });
     if (!result.ok) { setError(result.error); return; }
     setMessage("Draft saved. No payment was collected.");
     await reload();
+    } catch { setError("The draft response could not be confirmed. Refresh your campaign list before retrying. Nothing was charged."); }
   }
 
-  if (!ready || !snapshot) return <p className="text-violet-200">Loading advertising…</p>;
+  if (!ready) return <p className="text-violet-200">Loading advertising…</p>;
+  if (!snapshot) return <p className="text-violet-200">{loadError || "The advertising workspace could not be loaded."}</p>;
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold text-amber-300">Advertising</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-100">One-time prepaid packages of 500 verified views or clicks. There is no subscription. Funding is paused, and no per-view dollar reward is configured.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-100">One-time prepaid packages of 1,000 verified views or clicks. The minimum package is $9.99. There is no subscription. Funding is paused, and no per-view dollar reward is configured.</p>
       </header>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(ADVERTISING_TIERS).map(([key, item]) => (
           <article key={key} className={`rounded-2xl border bg-[#150d24] p-4 ${tier === key ? "border-amber-300" : "border-white/10"}`}>
             <h2 className="font-semibold">{item.label}</h2>
             <p className="mt-2 text-2xl text-amber-200">{dollars(item.priceMicrousd)}</p>
-            <p className="text-sm text-violet-200">{item.views} verified views or clicks</p>
+            <p className="text-sm text-violet-200">{item.views.toLocaleString("en-US")} verified views or clicks</p>
             <button type="button" className="mt-4 min-h-11 rounded-xl border border-amber-300/40 px-3 py-2 text-sm text-amber-200" onClick={() => setTier(key)}>Use this package</button>
           </article>
         ))}
@@ -65,7 +71,7 @@ export default function AdvertisingPage() {
         <h2 className="text-lg font-semibold">Campaign draft</h2>
         <label className="grid gap-1 text-sm">Name<input name="title" required maxLength={80} className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
         <label className="grid gap-1 text-sm">HTTPS destination<input name="url" type="url" required placeholder="https://" className="rounded-xl border border-white/10 bg-black/30 px-3 py-3" /></label>
-        <p className="text-sm text-violet-200">Package size is fixed at 500. The selected duration is {ADVERTISING_TIERS[tier as keyof typeof ADVERTISING_TIERS].seconds} seconds.</p>
+        <p className="text-sm text-violet-200">Package size is fixed at {ADVERTISING_TIERS[tier as keyof typeof ADVERTISING_TIERS].views.toLocaleString("en-US")} verified views or clicks. The selected duration is {ADVERTISING_TIERS[tier as keyof typeof ADVERTISING_TIERS].seconds} seconds.</p>
         <div className="flex flex-wrap gap-3">
           <button type="button" className="min-h-11 rounded-xl border border-white/15 px-4 py-3" onClick={() => void preview()}>Preview accounting</button>
           <button type="submit" className="min-h-11 rounded-xl bg-amber-300 px-4 py-3 font-semibold text-black">Save draft</button>

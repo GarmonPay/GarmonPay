@@ -3,8 +3,9 @@ import { getAuthUserIdStrict } from "@/lib/auth-request";
 import { getStripe, isStripeConfigured, getCheckoutBaseUrl } from "@/lib/stripe-server";
 import { getGarmonAdById } from "@/lib/garmon-ads-db";
 import { createAdminClient } from "@/lib/supabase";
+import { FINANCIAL_OPERATIONS_PAUSED, financialPauseResponse } from "@/lib/security/financial-pause";
 
-const MIN_BUDGET_DOLLARS = 5;
+const MIN_BUDGET_DOLLARS = 9.99;
 const MAX_BUDGET_DOLLARS = 10_000;
 
 /**
@@ -13,6 +14,7 @@ const MAX_BUDGET_DOLLARS = 10_000;
  * Webhook credits ad budget and activates ad; user wallet is not credited.
  */
 export async function POST(request: Request) {
+  if (FINANCIAL_OPERATIONS_PAUSED) return financialPauseResponse();
   if (!isStripeConfigured()) {
     return NextResponse.json({ message: "Stripe is not configured" }, { status: 503 });
   }
