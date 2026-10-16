@@ -15,5 +15,5 @@ export function PublicFooterWrapper() {
   ) {
     return null;
   }
-  return <Footer />;
+  return <div className="gp-kingdom-stage"><Footer /></div>;
 }

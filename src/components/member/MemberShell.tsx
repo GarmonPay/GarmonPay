@@ -1,7 +1,10 @@
-"use client";
-import Link from "next/link";
-import {usePathname} from "next/navigation";
-import {GarmonPayWordmark} from "@/components/GarmonPayWordmark";
-import {WalletMenu} from "@/components/solana/WalletMenu";
-import {MEMBER_NAV} from "@/config/member-nav";
-export function MemberShell({children}:{children:React.ReactNode}){const pathname=usePathname()??"";return <div className="gp-member-kingdom min-h-screen text-white"><header className="border-b border-amber-200/20 bg-[#100b19]"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4"><GarmonPayWordmark href="/"/><div className="flex items-center gap-4"><span className="text-xs uppercase tracking-widest text-amber-200/80">Member workspace</span><WalletMenu/></div></div></header><div className="gp-member-layout"><nav aria-label="Member" className="gp-member-navigation"><p>YOUR WORKSPACE</p>{MEMBER_NAV.map(item=>{const active=item.href==='/member'?pathname==='/member':pathname.startsWith(item.href);return <Link key={item.href} href={item.href} aria-current={active?'page':undefined}>{item.label==='Paper'?'Paper Trading':item.label==='Top 100'?'Top Traders':item.label}</Link>})}<p>EXPLORE</p><Link href="/solana/wallet">Wallet & security</Link><Link href="/solana/launchpad">My coins & Launchpad</Link><Link href="/solana/learn">Learning</Link><Link href="/games">Games</Link><Link href="/dashboard/arena/tournaments">Contests · legacy account</Link><Link href="/">Back to Kingdom</Link></nav><main id="main-content" className="gp-member-content"><p className="mb-6 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-6 text-amber-100" role="status">Financial operations remain paused. Paper SOL is virtual and cannot be withdrawn. Your signed wallet identifies this workspace.</p>{children}</main></div></div>}
+export function MemberShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="gp-member-kingdom min-h-screen text-white">
+      <main id="main-content" className="gp-member-content">
+        <p className="mb-6 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-6 text-amber-100" role="status">Financial operations remain paused. Paper SOL is virtual and cannot be withdrawn. Your signed wallet identifies this workspace.</p>
+        {children}
+      </main>
+    </div>
+  );
+}

@@ -68,7 +68,7 @@ export default function RootLayout({
         <ClientErrorBoundary>
           <AuthStateProvider>
             <PublicNavbarWrapper />
-            {children}
+            <div className="gp-kingdom-stage">{children}</div>
           </AuthStateProvider>
         </ClientErrorBoundary>
         <KeepAlive />

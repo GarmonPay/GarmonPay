@@ -2,52 +2,9 @@
 import { useMember } from "@/components/member/useMember";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  ArrowLeftRight,
-  Compass,
-  Eye,
-  Gamepad2,
-  Home,
-  Medal,
-  Megaphone,
-  Rocket,
-  ScrollText,
-  Settings,
-  Sparkles,
-  Trophy,
-  UserPlus,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { Eye, Rocket, Trophy, UserPlus } from "lucide-react";
 import { readWalletSession } from "@/lib/solana/session-client";
-
-const side = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/solana/spotlight", label: "Discover Coins", icon: Compass },
-  { href: "/solana/launchpad", label: "Launchpad", icon: Rocket },
-  { href: "/solana/trade", label: "Trade", icon: ArrowLeftRight },
-  { href: "/member/paper", label: "Paper Trading", icon: ScrollText },
-  { href: "/solana/earn", label: "Earn", icon: Eye },
-  { href: "/solana/advertise", label: "Advertise", icon: Megaphone },
-  { href: "/games", label: "Games", icon: Gamepad2 },
-  { href: "/member/community", label: "Community", icon: Users },
-  { href: "/member/referrals", label: "Referrals", icon: UserPlus },
-  { href: "/member/traders", label: "Leaderboards", icon: Trophy },
-  { href: "/dashboard/arena/tournaments", label: "Contests", icon: Medal },
-  { href: "/solana/spotlight", label: "Spotlight", icon: Sparkles },
-  { href: "/member", label: "Wallet", icon: Wallet },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-] as const;
-
-const bottom = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/solana/spotlight", label: "Discover", icon: Compass },
-  { href: "/solana/launchpad", label: "Launchpad", icon: Rocket },
-  { href: "/solana/trade", label: "Trade", icon: ArrowLeftRight },
-  { href: "/solana/earn", label: "Earn", icon: Eye },
-] as const;
 
 const cards = [
   { href: "/solana/earn", title: "Watch & Earn", text: "Verified views when a campaign is funded. Nothing is paid now.", action: "Open Watch & Earn", image: "/images/kingdom/cards/watch-earn.webp", alt: "Glowing cyan holographic play portal with gold light trails." },
@@ -59,14 +16,19 @@ const cards = [
 
 const activityIcons = [Eye, Trophy, UserPlus, Rocket] as const;
 
-type Coin = { mint: string; name: string; symbol: string; tradingOpen?: boolean };
+type Coin = { mint: string; name: string; symbol: string; tradingOpen?: boolean; volumeLamports?: number | null };
+
+function volumeLabel(lamports: number | null | undefined) {
+  if (typeof lamports !== "number" || !Number.isFinite(lamports) || lamports < 0) return "No verified price";
+  const sol = lamports / 1_000_000_000;
+  return `${sol.toLocaleString("en-US", { maximumFractionDigits: 4 })} SOL Devnet volume`;
+}
 
 function shortWallet(wallet: string) {
   return wallet.length > 10 ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : wallet;
 }
 
 export function KingdomHome() {
-  const pathname = usePathname();
   const [wallet, setWallet] = useState<string | null>(null);
   const { snapshot: snap } = useMember();
   const [coins, setCoins] = useState<Coin[] | null>(null);
@@ -111,6 +73,7 @@ export function KingdomHome() {
   const views = snap?.earnings?.verifiedViews;
   const referrals = snap?.referralTotal;
   const fills = snap?.paper?.fillCount;
+  const paperSol = snap?.paper?.cashSol;
   const stats = [
     { label: "Verified views", value: wallet && typeof views === "number" ? String(views) : "—" },
     { label: "Referrals", value: wallet && typeof referrals === "number" ? String(referrals) : "—" },
@@ -120,19 +83,8 @@ export function KingdomHome() {
 
   return (
     <main id="main-content" className="gp-lock">
-      <aside className="gp-lock-side" aria-label="Kingdom">
-        {side.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.label} href={item.href} aria-current={pathname === item.href ? "page" : undefined}>
-              <Icon size={18} aria-hidden="true" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </aside>
-      <div className="gp-lock-main">
-        <section className="gp-lock-hero" aria-label="GarmonPay">
+      <section className="gp-lock-hero" aria-label="GarmonPay">
+        <div className="gp-lock-scene">
           <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} />
           <div className="gp-energy" aria-hidden="true">
             <span className="gp-energy-city" />
@@ -142,7 +94,11 @@ export function KingdomHome() {
             <span className="gp-energy-particles" />
             <span className="gp-energy-emblem" />
           </div>
-        </section>
+        </div>
+        <div className="gp-lock-mobile-actions">
+          <button type="button" onClick={() => window.dispatchEvent(new Event("garmonpay:open-wallet"))}>{wallet ? "Wallet connected" : "Connect Wallet"}</button>
+          <Link href="/solana/spotlight">Explore Coins</Link>
+        </div>
         <section className="gp-lock-cards" aria-label="Platform">
           {cards.map((card) => (
             <Link key={card.href} href={card.href}>
@@ -153,56 +109,46 @@ export function KingdomHome() {
             </Link>
           ))}
         </section>
-        <section className="gp-lock-panels" aria-label="Your account">
-          <article>
-            <h2>Your wallet</h2>
-            <p className="gp-lock-status">{wallet ? "Connected" : "Not connected"}</p>
-            <p className="gp-lock-address">{wallet ? shortWallet(wallet) : "Connect Wallet in the header to sign in."}</p>
-            <div className="gp-lock-paused">
-              <button type="button" disabled>Deposit</button>
-              <button type="button" disabled>Send</button>
-              <button type="button" disabled>Receive</button>
-            </div>
-            <p className="gp-lock-note">Deposits, sends, and payouts are paused. Connecting a wallet only signs a message.</p>
-            <Link href="/member">Open member dashboard</Link>
-          </article>
-          <article>
-            <h2>Your activity</h2>
-            <p className="gp-lock-note">{wallet ? "Counts from your signed wallet. They are not cash balances." : "Sign in to see verified activity. Sample scores are not shown."}</p>
-            <ul>
-              {stats.map((stat, index) => {
-                const Icon = activityIcons[index];
-                return <li key={stat.label}><span className="gp-lock-stat"><Icon size={16} aria-hidden="true" />{stat.label}</span><span>{stat.value}</span></li>;
-              })}
-            </ul>
-          </article>
-          <article>
-            <h2>Devnet coins</h2>
-            <p className="gp-lock-note">Listed from verified Devnet records. Prices are not invented.</p>
-            {coins === null ? <p>Loading coins…</p> : coinError ? <p>Coin discovery is temporarily unavailable. Refresh to retry.</p> : coins.length === 0 ? <p>No verified coins are listed yet.</p> : (
-              <ol>
-                {coins.map((coin) => (
-                  <li key={coin.mint}>
-                    <Link href={`/solana/token/${coin.mint}`}>{coin.symbol || coin.name}</Link>
-                    <span>{coin.tradingOpen ? "Devnet trading open" : "Devnet · not a live price"}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </article>
-        </section>
-      </div>
-      <nav className="gp-lock-bottom" aria-label="Kingdom mobile">
-        {bottom.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.label} href={item.href} aria-current={pathname === item.href ? "page" : undefined}>
-              <Icon size={18} aria-hidden="true" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      </section>
+      <section className="gp-lock-panels" aria-label="Your account">
+        <article>
+          <h2>Your wallet</h2>
+          <p className="gp-lock-status">{wallet ? "Connected" : "Not connected"}</p>
+          <p className="gp-lock-address">{wallet ? shortWallet(wallet) : "Connect Wallet to sign in with Phantom, Solflare, or Backpack."}</p>
+          <p className="gp-lock-note">{wallet && paperSol ? `${paperSol} virtual SOL. This is paper only and cannot be withdrawn.` : wallet ? "No virtual SOL is recorded for this wallet yet. An eligible new account receives 10 virtual SOL. It cannot be withdrawn." : "Paper trading starts with 10 virtual SOL after you sign in. Nothing is issued until then."}</p>
+          <div className="gp-lock-paused">
+            <button type="button" disabled>Deposit paused</button>
+            <button type="button" disabled>Send paused</button>
+            <button type="button" disabled>Receive paused</button>
+          </div>
+          <p className="gp-lock-note">Deposits, sends, and payouts are paused. Eligible withdrawals start at $2 and are not available. Connecting a wallet only signs a message.</p>
+          <Link href="/member">Open member dashboard</Link>
+        </article>
+        <article>
+          <h2>Your activity</h2>
+          <p className="gp-lock-note">{wallet ? "Counts from your signed wallet. They are not cash balances." : "Sign in to see verified activity. Sample scores are not shown."}</p>
+          <ul>
+            {stats.map((stat, index) => {
+              const Icon = activityIcons[index];
+              return <li key={stat.label}><span className="gp-lock-stat"><Icon size={16} aria-hidden="true" />{stat.label}</span><span>{stat.value}</span></li>;
+            })}
+          </ul>
+        </article>
+        <article>
+          <h2>Top coins</h2>
+          <p className="gp-lock-note">Verified Devnet listings only. A price is shown only when the market record includes volume.</p>
+          {coins === null ? <p>Loading coins…</p> : coinError ? <p>Coin discovery is temporarily unavailable. Refresh to retry.</p> : coins.length === 0 ? <p>No verified coins are listed yet.</p> : (
+            <ol>
+              {coins.map((coin) => (
+                <li key={coin.mint}>
+                  <Link href={`/solana/token/${coin.mint}`}>{coin.symbol || coin.name}</Link>
+                  <span>{coin.tradingOpen ? "Devnet trading open" : "Devnet · trading closed"} · {volumeLabel(coin.volumeLamports)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </article>
+      </section>
     </main>
   );
 }
