@@ -274,27 +274,16 @@ body.gp-app .glass-bar.gp-public-header.gp-kingdom-header{background:#070d18f8;b
 @media(max-width:900px){.gp-lock-scene{display:flex;flex-direction:column;height:auto}.gp-lock-scene>img{width:100%;flex:0 0 auto}.gp-city-motion-toggle{position:static;margin:8px;width:calc(100% - 16px);text-align:center;font-size:12px}.gp-lock-mobile-brand{margin-top:4px;padding-top:0;background:none}.gp-lock-community-art svg{height:50px}}
 @media(prefers-reduced-motion:reduce){.gp-board-scan::after,.gp-sky-glint,.gp-energy *{animation:none!important}.gp-sky-glint{opacity:.35}.gp-city-motion-toggle{display:none}}
 
-/* Independent separated vector motion. All coordinates share the source painting's 1030 x 497 space. */
+/* One screen in the painting's 1030 x 497 space. Painted cars, ships, and falls stay untouched. */
 .gp-city-motion{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
-.gp-flight-one{animation:gp-flight-one 17s linear infinite;transform:translate(25px,80px)}
-.gp-flight-two{animation:gp-flight-two 23s linear infinite;transform:translate(950px,54px);opacity:.8}
-@keyframes gp-flight-one{0%{transform:translate(-70px,104px) scale(.5)}100%{transform:translate(1080px,12px) scale(.85)}}
-@keyframes gp-flight-two{0%{transform:translate(1060px,70px) scale(.7)}100%{transform:translate(-60px,28px) scale(.4)}}
-.gp-traffic-one{animation:gp-road-one 11s linear infinite;transform:translate(750px,411px)}
-.gp-traffic-two{animation:gp-road-two 15s linear infinite;transform:translate(810px,411px)}
-@keyframes gp-road-one{0%{transform:translate(688px,407px) scale(.6)}100%{transform:translate(880px,420px) scale(1)}}
-@keyframes gp-road-two{0%{transform:translate(880px,408px) scale(-.7,.7)}100%{transform:translate(695px,409px) scale(-.5,.5)}}
-.gp-water-thread{fill:none;stroke:#d8faff;stroke-width:1.2;stroke-linecap:round;stroke-dasharray:5 20 12 28;opacity:.5;animation:gp-water-fall 1.6s linear infinite}
-.gp-water-thread-1{stroke:#81d6ef;stroke-width:2;opacity:.4;stroke-dasharray:9 16 4 36;animation-duration:2.1s;animation-delay:-.6s}
-.gp-water-thread-2{stroke-width:.7;stroke-dasharray:3 24 15 23;animation-duration:1.3s;animation-delay:-.9s}
-@keyframes gp-water-fall{to{stroke-dashoffset:-65}}
+.gp-screen-sheen{animation:gp-screen-sheen 7.6s ease-in-out infinite}
+@keyframes gp-screen-sheen{0%{transform:translateX(-30px)}100%{transform:translateX(250px)}}
 .gp-ad-slide{opacity:0;animation:gp-ad-change 18s linear infinite}
-.gp-ad-slide-one{opacity:1}.gp-ad-slide-two{animation-delay:-12s}.gp-ad-slide-three{animation-delay:-6s}
+.gp-ad-slide-two{animation-delay:-6s}.gp-ad-slide-three{animation-delay:-12s}
 .gp-ad-slide text{fill:#f7d987;font-family:Arial,sans-serif;font-size:20px;font-weight:700}.gp-ad-slide .gp-ad-caption{fill:#d8f7ff;font-size:8px;letter-spacing:1px}
-@keyframes gp-ad-change{0%,28%{opacity:1}33%,95%{opacity:0}100%{opacity:1}}
-/* Avoid running off-screen effects; no video decoding, frame loop or new dependency. */
+@keyframes gp-ad-change{0%,33%{opacity:1}33.01%,100%{opacity:0}}
 .gp-lock-scene[data-scene-visible=false] .gp-scene-stage *,.gp-lock-scene[data-scene-visible=false] .gp-scene-stage *::after{animation-play-state:paused!important}
-@media(prefers-reduced-motion:reduce){.gp-city-motion *{animation:none!important}.gp-flight,.gp-traffic,.gp-water-flow{display:none}.gp-ad-slide{opacity:0}.gp-ad-slide-one{opacity:1}}
+@media(prefers-reduced-motion:reduce){.gp-city-motion *{animation:none!important}.gp-screen-sheen{display:none}.gp-ad-slide{opacity:0}.gp-ad-slide-one{opacity:1}}
 
 @media(min-width:1400px){.gp-kingdom-header .gp-public-brand{flex-basis:330px}.gp-kingdom-header .gp-wordmark{font-size:34px}.gp-kingdom-header .gp-brand-crown,.gp-kingdom-header .gp-brand-crown svg{width:82px!important;height:76px!important}.gp-kingdom-header .gp-public-slogan{font-size:9px;padding-left:92px}.gp-kingdom-side a svg{width:24px;height:24px;flex-basis:24px;filter:drop-shadow(0 0 5px #22d3ee55)}.gp-kingdom-side a:nth-child(3n) svg{color:#f4ce73;filter:drop-shadow(0 0 5px #e4c16a55)}}
 
@@ -302,7 +291,7 @@ body.gp-app .glass-bar.gp-public-header.gp-kingdom-header{background:#070d18f8;b
 .gp-city-controls .gp-city-motion-toggle{position:static;width:auto;margin:0;border:0;background:none;padding:6px;min-height:44px}
 .gp-city-controls label{display:flex;align-items:center;gap:6px;min-height:44px;cursor:pointer}.gp-city-controls input{accent-color:#e4c16a}
 .gp-lock-scene[data-reduced-motion=true] .gp-scene-stage *,.gp-lock-scene[data-reduced-motion=true] .gp-scene-stage *::after{animation:none!important}
-.gp-lock-scene[data-reduced-motion=true] :is(.gp-flight,.gp-traffic,.gp-water-flow){display:none}
+.gp-lock-scene[data-reduced-motion=true] .gp-screen-sheen{display:none}
 .gp-lock-scene[data-reduced-motion=true] .gp-ad-slide{opacity:0}.gp-lock-scene[data-reduced-motion=true] .gp-ad-slide-one{opacity:1}
 @media(max-width:900px){.gp-city-controls{position:static;justify-content:center;margin:8px;flex-wrap:wrap}.gp-city-controls .gp-city-motion-toggle{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.gp-city-controls{display:none}}
