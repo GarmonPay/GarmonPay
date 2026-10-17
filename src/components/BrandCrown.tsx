@@ -24,7 +24,10 @@ export function BrandCrown() {
           <stop offset="1" stopColor="#e4c16a" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <path fill={`url(#${gold})`} d="M6 40 14 18l8 12 8-16 2-8 2 8 8 16 8-12 8 22-6 6H12Z" />
+      <path fill={`url(#${gold})`} d="M6 40 3 20l9 9 3-19 9 16 8-23 8 23 9-16 3 19 9-9-3 20-6 6H12Z" />
+      <path d="M7 38 5 23l9 10 3-17 8 16 7-23 7 23 8-16 3 17 9-10-2 15" fill="none" stroke="#fff2b2" strokeWidth="1.1" />
+      {[ [3,20], [15,10], [32,3], [49,10], [61,20] ].map(([cx,cy]) => <circle key={cx} cx={cx} cy={cy} r="1.8" fill={`url(#${gold})`} stroke="#fff1b7" strokeWidth=".6" />)}
+      <path d="m32 17 4 8-4 8-4-8Zm-15 3 3 7-3 5-2-6Zm30 0 2 6-2 6-3-5Z" fill={`url(#${gem})`} stroke="#fff1b7" strokeWidth=".8" />
       <path fill={`url(#${shine})`} d="M14 18 22 30l8-16 2-6v22H16Z" opacity=".55" />
       <path fill="none" stroke="#fff1c4" strokeWidth="1.1" d="M16 34c4-6 8-6 12 0s8 6 12 0 8-6 12 0" />
       <path fill="#f6e2a8" d="M30 6h4l1 6h-6Zm-1 5h6l-1 4h-4Z" />

@@ -3,15 +3,15 @@ import { useMember } from "@/components/member/useMember";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronRight, Eye, Rocket, Trophy, UserPlus } from "lucide-react";
+import { ChevronRight, Eye, Rocket, Trophy, UserPlus, Users } from "lucide-react";
 import { readWalletSession } from "@/lib/solana/session-client";
 
 const cards = [
-  { href: "/solana/earn", title: "Watch & Earn", text: "Verified views when a campaign is funded. Nothing is paid now.", action: "Open Watch & Earn", image: "/images/kingdom/cards/watch-earn.webp", alt: "Glowing cyan holographic play portal with gold light trails." },
-  { href: "/games", title: "Play Games", text: "Free play is open. Paid entry and prize payouts stay off.", action: "Open games", image: "/images/kingdom/cards/play-games.webp", alt: "Futuristic game controller with cyan circuitry and gold controls." },
-  { href: "/solana/launchpad", title: "Launch your coin", text: "Prepare a coin on LaunchLab. Mainnet launch stays paused.", action: "Open Launchpad", image: "/images/kingdom/cards/launch-coin.webp", alt: "Gold rocket rising through electric-blue energy." },
-  { href: "/solana/trade", title: "Trade & Follow", text: "Discover Devnet coins and follow traders. Mainnet trading is paused.", action: "Open trading", image: "/images/kingdom/cards/trade-follow.webp", alt: "Holographic cyan and gold candlesticks on a dark market panel." },
-  { href: "/solana/advertise", title: "Advertise", text: "Plan a campaign. Checkout is paused and views are not counted here.", action: "Plan a campaign", image: "/images/kingdom/cards/advertise.webp", alt: "Metallic gold megaphone sending blue energy toward a holographic display." },
+  { href: "/solana/launchpad", title: "Launch", text: "Create and launch on Devnet. Mainnet remains paused.", action: "Open Launchpad", image: "/images/kingdom/cards/launch-coin.webp", alt: "Gold rocket rising through electric-blue energy." },
+  { href: "/solana/trade", title: "Trade", text: "Discover verified coins. Mainnet trading remains paused.", action: "Explore markets", image: "/images/kingdom/cards/trade-follow.webp", alt: "Holographic cyan and gold candlesticks." },
+  { href: "/solana/earn", title: "Earn", text: "Explore watch, play and learning opportunities. Payouts paused.", action: "Explore earning", image: "/images/kingdom/cards/watch-earn.webp", alt: "Cyan holographic play portal with gold light trails." },
+  { href: "/solana/advertise", title: "Advertise", text: "Plan your campaign and grow your brand. Checkout paused.", action: "Plan a campaign", image: "/images/kingdom/cards/advertise.webp", alt: "Gold megaphone with blue energy." },
+  { href: "/member/community", title: "Community", text: "Follow, engage and grow together.", action: "Join the community", image: null, alt: "" },
 ] as const;
 
 const activityIcons = [Eye, Trophy, UserPlus, Rocket] as const;
@@ -32,6 +32,7 @@ function shortWallet(wallet: string) {
 }
 
 export function KingdomHome() {
+  const [motionPaused, setMotionPaused] = useState(false);
   const [wallet, setWallet] = useState<string | null>(null);
   const { snapshot: snap } = useMember();
   const [coins, setCoins] = useState<Coin[] | null>(null);
@@ -87,7 +88,7 @@ export function KingdomHome() {
   return (
     <main id="main-content" className="gp-lock">
       <section className="gp-lock-hero" aria-label="GarmonPay">
-        <div className="gp-lock-scene">
+        <div className="gp-lock-scene" data-motion-paused={motionPaused}>
           <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} fetchPriority="high" decoding="async" />
           <div className="gp-energy" aria-hidden="true">
             <span className="gp-energy-city" />
@@ -97,6 +98,12 @@ export function KingdomHome() {
             <span className="gp-energy-particles" />
             <span className="gp-energy-emblem" />
           </div>
+          <div className="gp-city-screen" aria-hidden="true">
+            <span className="gp-city-screen-slide">GARMON<span>PAY</span><small>GET SEEN. GET KNOWN.</small></span>
+            <span className="gp-city-screen-slide">DISCOVER<small>EXPLORE THE KINGDOM</small></span>
+            <span className="gp-city-screen-slide">COMMUNITY<small>CONNECT. CREATE. BELONG.</small></span>
+          </div>
+          <button type="button" className="gp-city-motion-toggle" aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? "Resume visual effects" : "Pause visual effects"}</button>
         </div>
         <div className="gp-lock-mobile-brand"><h1>GARMON<span>PAY</span></h1><p>GET SEEN. GET KNOWN. GET PAID.</p></div>
         <div className="gp-lock-mobile-actions">
@@ -106,7 +113,7 @@ export function KingdomHome() {
         <section className="gp-lock-cards" aria-label="Platform">
           {cards.map((card) => (
             <Link key={card.href} href={card.href}>
-              <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} loading="lazy" decoding="async" />
+              {card.image ? <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} loading="lazy" decoding="async" /> : <div className="gp-lock-community-art" aria-hidden="true"><Users size={72} /></div>}
               <h2>{card.title}</h2>
               <p>{card.text}</p>
               <span className="gp-lock-card-action">{card.action}</span>
