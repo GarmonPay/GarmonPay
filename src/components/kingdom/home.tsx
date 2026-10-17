@@ -1,9 +1,10 @@
 "use client";
+import { CityMotion } from "./CityMotion";
 import { useMember } from "@/components/member/useMember";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ChevronRight, Eye, Rocket, Trophy, UserPlus, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, Eye, Rocket, Trophy, UserPlus } from "lucide-react";
 import { readWalletSession } from "@/lib/solana/session-client";
 
 const cards = [
@@ -11,7 +12,7 @@ const cards = [
   { href: "/solana/trade", title: "Trade", text: "Discover verified coins. Mainnet trading remains paused.", action: "Explore markets", image: "/images/kingdom/cards/trade-follow.webp", alt: "Holographic cyan and gold candlesticks." },
   { href: "/solana/earn", title: "Earn", text: "Explore watch, play and learning opportunities. Payouts paused.", action: "Explore earning", image: "/images/kingdom/cards/watch-earn.webp", alt: "Cyan holographic play portal with gold light trails." },
   { href: "/solana/advertise", title: "Advertise", text: "Plan your campaign and grow your brand. Checkout paused.", action: "Plan a campaign", image: "/images/kingdom/cards/advertise.webp", alt: "Gold megaphone with blue energy." },
-  { href: "/member/community", title: "Community", text: "Follow, engage and grow together.", action: "Join the community", image: null, alt: "" },
+  { href: "/member/community", title: "Community", text: "Follow, engage and grow together.", action: "Join the community", image: "/images/kingdom/cards/community.svg", alt: "Three sapphire and gold community figures beneath a crown." },
 ] as const;
 
 const activityIcons = [Eye, Trophy, UserPlus, Rocket] as const;
@@ -32,12 +33,25 @@ function shortWallet(wallet: string) {
 }
 
 export function KingdomHome() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const [sceneVisible, setSceneVisible] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
   const [wallet, setWallet] = useState<string | null>(null);
   const { snapshot: snap } = useMember();
   const [coins, setCoins] = useState<Coin[] | null>(null);
   const [coinError, setCoinError] = useState(false);
   const [mine, setMine] = useState<number | null>(null);
+
+  useEffect(() => {
+    let inView = true;
+    const update = () => setSceneVisible(inView && !document.hidden);
+    const observer = new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; update(); });
+    if (sceneRef.current) observer.observe(sceneRef.current);
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => { observer.disconnect(); document.removeEventListener("visibilitychange", update); };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -88,7 +102,7 @@ export function KingdomHome() {
   return (
     <main id="main-content" className="gp-lock">
       <section className="gp-lock-hero" aria-label="GarmonPay">
-        <div className="gp-lock-scene" data-motion-paused={motionPaused}>
+        <div ref={sceneRef} className="gp-lock-scene" data-motion-paused={motionPaused} data-scene-visible={sceneVisible} data-reduced-motion={reducedMotion}>
           <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} fetchPriority="high" decoding="async" />
           <div className="gp-scene-stage" aria-hidden="true">
             <div className="gp-energy">
@@ -100,7 +114,7 @@ export function KingdomHome() {
               <span className="gp-energy-emblem" />
             </div>
             <span className="gp-board-scan gp-board-scan-left" />
-            <span className="gp-board-scan gp-board-scan-right" />
+            <CityMotion />
             <span className="gp-sky-glint" />
             <span className="gp-sky-glint" />
             <span className="gp-sky-glint" />
@@ -108,7 +122,7 @@ export function KingdomHome() {
             <span className="gp-sky-glint" />
             <span className="gp-sky-glint" />
           </div>
-          <button type="button" className="gp-city-motion-toggle" aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? "Resume visual effects" : "Pause visual effects"}</button>
+          <div className="gp-city-controls"><button type="button" className="gp-city-motion-toggle" aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? "Resume visual effects" : "Pause visual effects"}</button><label><input type="checkbox" checked={reducedMotion} onChange={event => setReducedMotion(event.target.checked)} />Reduced motion</label></div>
         </div>
         <div className="gp-lock-mobile-brand"><h1>GARMON<span>PAY</span></h1><p>GET SEEN. GET KNOWN. GET PAID.</p></div>
         <div className="gp-lock-mobile-actions">
@@ -118,7 +132,7 @@ export function KingdomHome() {
         <section className="gp-lock-cards" aria-label="Platform">
           {cards.map((card) => (
             <Link key={card.href} href={card.href}>
-              {card.image ? <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} loading="lazy" decoding="async" /> : <div className="gp-lock-community-art" aria-hidden="true"><Users size={72} /></div>}
+              <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} loading="lazy" decoding="async" />
               <h2>{card.title}</h2>
               <p>{card.text}</p>
               <span className="gp-lock-card-action">{card.action}</span>
