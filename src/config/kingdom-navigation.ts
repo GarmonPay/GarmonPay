@@ -1,3 +1,4 @@
+import { SOLANA_NAVIGATION } from "./solana-navigation";
 /** Shared destinations for the kingdom header, sidebar, and mobile bar. */
 export const KINGDOM_SIDE = [
   { href: "/", label: "Home" },
@@ -10,7 +11,11 @@ export const KINGDOM_SIDE = [
   { href: "/games", label: "Games" },
   { href: "/member/community", label: "Community" },
   { href: "/member/referrals", label: "Referrals" },
+  { href: "/member/traders", label: "Leaderboards" },
+  { href: "/dashboard/arena/tournaments", label: "Contests · legacy account" },
+  { href: "/solana/wallet", label: "Wallet" },
   { href: "/member", label: "Member Dashboard" },
+  { href: "/solana/members", label: "Profile & Settings" },
 ] as const;
 
 export const KINGDOM_BOTTOM = [
@@ -38,3 +43,8 @@ export function kingdomCurrent(pathname: string, href: string) {
   if (href === "/member") return pathname === "/member";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+/** One destination per menu; public, member and mobile chrome share these links. */
+export const KINGDOM_MENU = [...SOLANA_NAVIGATION, ...KINGDOM_SIDE, ...KINGDOM_MENU_EXTRA]
+  .filter((item, index, rows) => rows.findIndex(other => other.href === item.href) === index);
+export const KINGDOM_MORE = KINGDOM_MENU.filter(item => !SOLANA_NAVIGATION.slice(0, 8).some(primary => primary.href === item.href));

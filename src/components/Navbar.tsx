@@ -10,6 +10,9 @@ import {
   Gamepad2,
   Home,
   Megaphone,
+  Trophy,
+  Settings,
+  Medal,
   Menu,
   MoreHorizontal,
   Rocket,
@@ -23,7 +26,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { GarmonPayWordmark } from "@/components/GarmonPayWordmark";
 import { WalletMenu } from "@/components/solana/WalletMenu";
-import { KINGDOM_BOTTOM, KINGDOM_MENU_EXTRA, KINGDOM_SIDE, kingdomCurrent } from "@/config/kingdom-navigation";
+import { KINGDOM_BOTTOM, KINGDOM_MENU, KINGDOM_MORE, KINGDOM_SIDE, kingdomCurrent } from "@/config/kingdom-navigation";
 import { SOLANA_NAVIGATION } from "@/config/solana-navigation";
 import { isPublicGameRoute } from "@/config/public-game-routes";
 
@@ -39,6 +42,10 @@ const ICONS: Record<string, LucideIcon> = {
   "/member/community": Users,
   "/member/referrals": UserPlus,
   "/member": Wallet,
+  "/member/traders": Trophy,
+  "/solana/wallet": Wallet,
+  "/solana/members": Settings,
+  "/dashboard/arena/tournaments": Medal,
 };
 
 export default function Navbar() {
@@ -56,11 +63,15 @@ export default function Navbar() {
   }, [open]);
   const home = pathname === "/";
   const primary = SOLANA_NAVIGATION.slice(0, 8);
-  const more = SOLANA_NAVIGATION.slice(8);
+
   return <>
     <header className={`glass-bar gp-public-header gp-kingdom-header${home ? " gp-home-chrome" : ""}`}>
       {(home || pathname.startsWith("/solana/") || pathname.startsWith("/member") || isPublicGameRoute(pathname)) && <a href="#main-content" className="gp-skip-link">Skip to content</a>}
       <div className="gp-public-header-inner">
+          <button ref={toggle} type="button" className="gp-public-menu-toggle" aria-controls="gp-mobile-menu"
+            aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
+            {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+          </button>
         <div className="gp-public-brand">
           <GarmonPayWordmark href="/" />
           <p className="gp-public-slogan">GET SEEN. GET KNOWN. GET PAID.</p>
@@ -73,8 +84,7 @@ export default function Navbar() {
           <details className="gp-nav-more">
             <summary><MoreHorizontal size={15} aria-hidden="true" />More</summary>
             <div>
-              {more.map(({ href, label }) => <Link key={href} href={href} className="gp-public-nav-link">{label}</Link>)}
-              {KINGDOM_MENU_EXTRA.map(({ href, label }) => <Link key={label} href={href} className="gp-public-nav-link">{label}</Link>)}
+              {KINGDOM_MORE.map(({ href, label }) => <Link key={href} href={href} className="gp-public-nav-link">{label}</Link>)}
             </div>
           </details>
         </nav>
@@ -82,18 +92,12 @@ export default function Navbar() {
           <Link href="/solana/spotlight" className="gp-header-icon" aria-label="Search coins"><Search size={18} aria-hidden="true" /></Link>
           <Link href="/dashboard/notifications" className="gp-header-icon" aria-label="Notifications"><Bell size={18} aria-hidden="true" /></Link>
           <WalletMenu />
-          <button ref={toggle} type="button" className="gp-public-menu-toggle" aria-controls="gp-mobile-menu"
-            aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
-            {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-          </button>
+
         </div>
       </div>
       {open && <nav id="gp-mobile-menu" className="gp-public-mobile-nav" aria-label="Mobile">
-        {SOLANA_NAVIGATION.map(({ href, label }) => (
+        {KINGDOM_MENU.map(({ href, label }) => (
           <Link key={href} href={href} aria-current={kingdomCurrent(pathname, href) ? "page" : undefined} onClick={() => setOpen(false)} className="gp-public-nav-link">{label}</Link>
-        ))}
-        {KINGDOM_MENU_EXTRA.map(({ href, label }) => (
-          <Link key={label} href={href} className="gp-public-nav-link" onClick={() => setOpen(false)}>{label}</Link>
         ))}
       </nav>}
     </header>

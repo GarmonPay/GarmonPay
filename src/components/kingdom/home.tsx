@@ -3,7 +3,7 @@ import { useMember } from "@/components/member/useMember";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Eye, Rocket, Trophy, UserPlus } from "lucide-react";
+import { ChevronRight, Eye, Rocket, Trophy, UserPlus } from "lucide-react";
 import { readWalletSession } from "@/lib/solana/session-client";
 
 const cards = [
@@ -16,12 +16,15 @@ const cards = [
 
 const activityIcons = [Eye, Trophy, UserPlus, Rocket] as const;
 
-type Coin = { mint: string; name: string; symbol: string; tradingOpen?: boolean; volumeLamports?: number | null };
+type Coin = { mint: string; name: string; symbol: string; tradingOpen?: boolean; volumeLamports?: string | number | null };
 
-function volumeLabel(lamports: number | null | undefined) {
-  if (typeof lamports !== "number" || !Number.isFinite(lamports) || lamports < 0) return "No verified price";
-  const sol = lamports / 1_000_000_000;
-  return `${sol.toLocaleString("en-US", { maximumFractionDigits: 4 })} SOL Devnet volume`;
+function volumeLabel(lamports: string | number | null | undefined) {
+  const raw = typeof lamports === "number" && Number.isSafeInteger(lamports) ? String(lamports) : lamports;
+  if (typeof raw !== "string" || !/^\d{1,30}$/.test(raw)) return "Verified volume unavailable";
+  const value = BigInt(raw), scale = BigInt("1000000000");
+  if (value > BigInt(0) && value < BigInt("100000")) return "<0.0001 SOL Devnet volume";
+  const fraction = ((value % scale) / BigInt("100000")).toString().padStart(4, "0").replace(/0+$/, "");
+  return `${(value / scale).toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} SOL Devnet volume`;
 }
 
 function shortWallet(wallet: string) {
@@ -85,7 +88,7 @@ export function KingdomHome() {
     <main id="main-content" className="gp-lock">
       <section className="gp-lock-hero" aria-label="GarmonPay">
         <div className="gp-lock-scene">
-          <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} />
+          <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} fetchPriority="high" decoding="async" />
           <div className="gp-energy" aria-hidden="true">
             <span className="gp-energy-city" />
             <span className="gp-energy-lights" />
@@ -95,6 +98,7 @@ export function KingdomHome() {
             <span className="gp-energy-emblem" />
           </div>
         </div>
+        <div className="gp-lock-mobile-brand"><h1>GARMON<span>PAY</span></h1><p>GET SEEN. GET KNOWN. GET PAID.</p></div>
         <div className="gp-lock-mobile-actions">
           <button type="button" onClick={() => window.dispatchEvent(new Event("garmonpay:open-wallet"))}>{wallet ? "Wallet connected" : "Connect Wallet"}</button>
           <Link href="/solana/spotlight">Explore Coins</Link>
@@ -102,10 +106,11 @@ export function KingdomHome() {
         <section className="gp-lock-cards" aria-label="Platform">
           {cards.map((card) => (
             <Link key={card.href} href={card.href}>
-              <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} />
+              <img className="gp-lock-card-art" src={card.image} alt={card.alt} width={960} height={540} loading="lazy" decoding="async" />
               <h2>{card.title}</h2>
               <p>{card.text}</p>
               <span className="gp-lock-card-action">{card.action}</span>
+              <ChevronRight className="gp-lock-card-chevron" aria-hidden="true" size={18} />
             </Link>
           ))}
         </section>
@@ -115,7 +120,7 @@ export function KingdomHome() {
           <h2>Your wallet</h2>
           <p className="gp-lock-status">{wallet ? "Connected" : "Not connected"}</p>
           <p className="gp-lock-address">{wallet ? shortWallet(wallet) : "Connect Wallet to sign in with Phantom, Solflare, or Backpack."}</p>
-          <p className="gp-lock-note">{wallet && paperSol ? `${paperSol} virtual SOL. This is paper only and cannot be withdrawn.` : wallet ? "No virtual SOL is recorded for this wallet yet. An eligible new account receives 10 virtual SOL. It cannot be withdrawn." : "Paper trading starts with 10 virtual SOL after you sign in. Nothing is issued until then."}</p>
+          <p className="gp-lock-note">{wallet && paperSol ? `${paperSol} virtual SOL. This is paper only and cannot be withdrawn.` : wallet ? "No virtual SOL is recorded for this wallet yet. Eligible accounts start with 10 virtual SOL after ledger activation. It cannot be withdrawn." : "Paper trading requires the reviewed ledger. Eligible accounts start with 10 virtual SOL after activation."}</p>
           <div className="gp-lock-paused">
             <button type="button" disabled>Deposit paused</button>
             <button type="button" disabled>Send paused</button>
@@ -135,8 +140,8 @@ export function KingdomHome() {
           </ul>
         </article>
         <article>
-          <h2>Top coins</h2>
-          <p className="gp-lock-note">Verified Devnet listings only. A price is shown only when the market record includes volume.</p>
+          <div className="gp-lock-panel-heading"><h2>Discover coins</h2><Link href="/solana/spotlight">View all →</Link></div>
+          <p className="gp-lock-note">Verified Devnet listings only. Volume is shown when it is available. Listings are not a market ranking.</p>
           {coins === null ? <p>Loading coins…</p> : coinError ? <p>Coin discovery is temporarily unavailable. Refresh to retry.</p> : coins.length === 0 ? <p>No verified coins are listed yet.</p> : (
             <ol>
               {coins.map((coin) => (
