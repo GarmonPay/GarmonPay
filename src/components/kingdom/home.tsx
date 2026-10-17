@@ -90,18 +90,23 @@ export function KingdomHome() {
       <section className="gp-lock-hero" aria-label="GarmonPay">
         <div className="gp-lock-scene" data-motion-paused={motionPaused}>
           <img src="/images/kingdom/locked-hero.jpg" alt="Crowned golden lion with blue eyes and a gold G coin, in a futuristic midnight city. GARMONPAY. Get seen. Get known. Get paid." width={1030} height={497} fetchPriority="high" decoding="async" />
-          <div className="gp-energy" aria-hidden="true">
-            <span className="gp-energy-city" />
-            <span className="gp-energy-lights" />
-            <span className="gp-energy-billboard gp-energy-billboard-left" />
-            <span className="gp-energy-billboard gp-energy-billboard-right" />
-            <span className="gp-energy-particles" />
-            <span className="gp-energy-emblem" />
-          </div>
-          <div className="gp-city-screen" aria-hidden="true">
-            <span className="gp-city-screen-slide">GARMON<span>PAY</span><small>GET SEEN. GET KNOWN.</small></span>
-            <span className="gp-city-screen-slide">DISCOVER<small>EXPLORE THE KINGDOM</small></span>
-            <span className="gp-city-screen-slide">COMMUNITY<small>CONNECT. CREATE. BELONG.</small></span>
+          <div className="gp-scene-stage" aria-hidden="true">
+            <div className="gp-energy">
+              <span className="gp-energy-city" />
+              <span className="gp-energy-lights" />
+              <span className="gp-energy-billboard gp-energy-billboard-left" />
+              <span className="gp-energy-billboard gp-energy-billboard-right" />
+              <span className="gp-energy-particles" />
+              <span className="gp-energy-emblem" />
+            </div>
+            <span className="gp-board-scan gp-board-scan-left" />
+            <span className="gp-board-scan gp-board-scan-right" />
+            <span className="gp-sky-glint" />
+            <span className="gp-sky-glint" />
+            <span className="gp-sky-glint" />
+            <span className="gp-sky-glint" />
+            <span className="gp-sky-glint" />
+            <span className="gp-sky-glint" />
           </div>
           <button type="button" className="gp-city-motion-toggle" aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? "Resume visual effects" : "Pause visual effects"}</button>
         </div>
